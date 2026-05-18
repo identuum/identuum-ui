@@ -1,0 +1,23 @@
+{
+  "_comment": "Governor-only (AG-only) runtime config example. Copy to ui-runtime.json and adjust URLs.",
+  "_comment_mode": "governor-only = identuum-ui + identuum-ag only. No identuum-idp required.",
+  "_comment_management": "public_base_url / internal_base_url = AG management surface (port 7215 in dev).",
+  "_comment_management_detail": "Used for: /health, /admin/*, /version, MCP server.",
+  "_comment_identity": "identity_base_url / identity_internal_base_url = AG identity surface (port 7214 in dev).",
+  "_comment_identity_detail": "Used for: POST /login (operator authentication), /.well-known/openid-configuration.",
+  "_comment_health": "The AG /health endpoint is management-surface-only after Phase 5.1.",
+  "_comment_idp": "Set idp.enabled=true and idp.public_base_url to switch to hybrid mode.",
+  "configured": true,
+  "ui_origin": "http://localhost:7114",
+  "idp": {
+    "enabled": false,
+    "public_base_url": ""
+  },
+  "ag": {
+    "enabled": true,
+    "public_base_url": "http://localhost:7215",
+    "internal_base_url": "http://identuum-ag:7215",
+    "identity_base_url": "http://localhost:7214",
+    "identity_internal_base_url": "http://identuum-ag:7214"
+  }
+}

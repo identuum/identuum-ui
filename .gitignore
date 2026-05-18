@@ -1,0 +1,35 @@
+# deps
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# next.js
+.next/
+out/
+
+# production
+build/
+
+# runtime config (never committed — written by identuum-ui-setup)
+config/ui-runtime.json
+
+# env files
+.env*.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+.gograph/
+
+
+# test artifacts
+playwright-report/
+test-results/
+
+# local agent instructions
+CLAUDE.md

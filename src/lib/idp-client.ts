@@ -1,0 +1,209 @@
+/**
+ * Browser-side typed client for IdP API calls.
+ *
+ * All calls go through the same-origin /api/idp/... proxy — never to the
+ * IdP public URL directly. The proxy strips browser-supplied X-Forwarded-*
+ * headers, rewrites Set-Cookie (Domain stripped, SameSite=None→Lax), and
+ * routes to the IdP using internal_base_url when configured.
+ *
+ * Functions in this module must only be called when idp.enabled === true in
+ * the runtime config. In AG-only deployments, the login page is not rendered
+ * and none of these functions are reached.
+ *
+ * Tokens remain cookie-only. No localStorage/sessionStorage usage here.
+ */
+
+import { IDP_PATHS } from "./idp-paths";
+import type { OrgConfig, UserRole, ValidateResponse } from "./types";
+import { ApiError } from "./ui-api";
+
+// Re-export paths as IDP for backward compatibility with existing callers.
+export const IDP = IDP_PATHS;
+
+/**
+ * Looks up an organization by domain.
+ * Returns null when no organization matches (HTTP 404).
+ * Throws ApiError for unexpected errors.
+ */
+export async function orgLookup(domain: string): Promise<OrgConfig | null> {
+  const res = await fetch(`${IDP.orgLookup}?domain=${encodeURIComponent(domain)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new ApiError(res.status, "Organization lookup failed");
+  return res.json() as Promise<OrgConfig>;
+}
+
+export type LoginOutcome =
+  | { kind: "mfa_enrollment_required"; sessionId: string }
+  | { kind: "mfa_required"; sessionId: string }
+  | { kind: "success"; role: UserRole };
+
+interface LoginPayload {
+  email: string;
+  password: string;
+  remember_me: boolean;
+  org_slug?: string;
+}
+
+/**
+ * Submits password credentials.
+ * Returns a discriminated union:
+ *   { kind: "mfa_required", sessionId } — caller should start MFA step
+ *   { kind: "success", role }           — login complete, caller routes by role
+ * Throws ApiError on HTTP error (401 = invalid credentials).
+ *
+ * IMPORTANT: The IdP returns HTTP 200 with success:false when MFA is required.
+ * success:false does NOT mean login failed — it means the flow is not yet complete.
+ * We check mfa_required BEFORE checking !res.ok or body.success to avoid
+ * mis-treating a valid MFA-required response as a failure.
+ */
+export async function login(payload: LoginPayload): Promise<LoginOutcome> {
+  const res = await fetch(IDP.login, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+
+  // Parse body before checking res.ok.
+  // The IdP returns HTTP 200 with { mfa_required: true, session_id: "...", success: false }
+  // for a valid password that requires MFA. success:false here means the full login
+  // is not yet complete — it is NOT a failure indicator.
+  // biome-ignore lint/suspicious/noExplicitAny: raw API response, discriminated below
+  const body: any = await res.json();
+
+  // MFA enrollment required (more specific): valid admin credentials but no TOTP
+  // configured — must go through first-login enrollment before access is granted.
+  // Check this BEFORE the generic mfa_required branch.
+  if (body.mfa_required === true && body.mfa_enrollment_required === true) {
+    if (typeof body.session_id === "string" && body.session_id.length > 0) {
+      return { kind: "mfa_enrollment_required", sessionId: body.session_id };
+    }
+    throw new ApiError(0, "MFA enrollment required but server did not return a session token");
+  }
+
+  // MFA required: valid credentials, next step is TOTP verification.
+  // session_id must be a non-empty string to be usable.
+  if (body.mfa_required === true) {
+    if (typeof body.session_id === "string" && body.session_id.length > 0) {
+      return { kind: "mfa_required", sessionId: body.session_id };
+    }
+    // mfa_required but no usable session_id — unexpected backend state.
+    throw new ApiError(0, "MFA required but server did not return a session token");
+  }
+
+  // Non-2xx status means authentication failure (e.g. 401 = wrong password).
+  if (!res.ok) {
+    throw new ApiError(res.status, "Invalid credentials");
+  }
+
+  return { kind: "success", role: body.role ?? "org_user" };
+}
+
+/**
+ * Submits the TOTP code to complete MFA login.
+ * Returns { role } on success.
+ * Throws ApiError; message is "SESSION_EXPIRED" when the IdP signals the
+ * pending session is gone — callers should redirect to /login?reason=session_expired.
+ */
+export async function mfaLogin(sessionId: string, code: string): Promise<{ role: UserRole }> {
+  const res = await fetch(IDP.mfaLogin, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ session_id: sessionId, code }),
+  });
+  if (!res.ok) {
+    let errMsg = "";
+    try {
+      const b = await res.json();
+      errMsg = String(b?.error ?? "");
+    } catch {
+      // Ignore non-JSON body.
+    }
+    if (errMsg.includes("session invalid") || errMsg.includes("session not found")) {
+      throw new ApiError(res.status, "SESSION_EXPIRED");
+    }
+    throw new ApiError(res.status, "Invalid verification code");
+  }
+  const body = await res.json();
+  return { role: body.role ?? "org_user" };
+}
+
+/**
+ * Validates the current session.
+ * Returns null when unauthenticated (HTTP 401) — caller should redirect to login.
+ * Throws ApiError for unexpected server errors.
+ */
+export async function validateSession(): Promise<ValidateResponse | null> {
+  const res = await fetch(IDP.validate, { credentials: "include" });
+  if (res.status === 401) return null;
+  if (!res.ok) throw new ApiError(res.status, "Session validation failed");
+  return res.json() as Promise<ValidateResponse>;
+}
+
+/**
+ * Logs out by POSTing to the IdP logout endpoint via proxy.
+ * Used programmatically (e.g., after session expiry). The dashboard layout
+ * uses a <form> POST for the user-visible Sign out button.
+ */
+export async function logout(): Promise<void> {
+  await fetch(IDP.logout, {
+    method: "POST",
+    credentials: "include",
+  });
+}
+
+/**
+ * Initiates TOTP enrollment for an admin user who has no OTP configured.
+ * Returns the TOTP secret and the otpauth:// provisioning URL.
+ * The secret MUST be kept only in component state — never in localStorage/sessionStorage.
+ */
+export async function mfaEnrollInitiate(
+  sessionId: string
+): Promise<{ secret: string; otpauthUrl: string }> {
+  const res = await fetch(IDP.mfaEnrollInitiate, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, "Failed to initiate MFA enrollment");
+  }
+  const body = await res.json();
+  return { secret: body.secret, otpauthUrl: body.qr_code_url };
+}
+
+/**
+ * Completes TOTP enrollment by verifying the code the user entered after
+ * scanning the provisioning URL or entering the secret manually.
+ * Returns the user role on success so the caller can route to the dashboard.
+ * Throws ApiError with message "SESSION_EXPIRED" when the pending session
+ * has expired — callers should redirect to /login?reason=session_expired.
+ */
+export async function mfaEnrollComplete(
+  sessionId: string,
+  code: string
+): Promise<{ role: UserRole }> {
+  const res = await fetch(IDP.mfaEnrollComplete, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ session_id: sessionId, code }),
+  });
+  if (!res.ok) {
+    let errMsg = "";
+    try {
+      const b = await res.json();
+      errMsg = String(b?.error ?? "");
+    } catch {
+      // Ignore non-JSON body.
+    }
+    if (errMsg.includes("session invalid") || errMsg.includes("session not found")) {
+      throw new ApiError(res.status, "SESSION_EXPIRED");
+    }
+    throw new ApiError(res.status, "Invalid verification code");
+  }
+  const body = await res.json();
+  return { role: body.role ?? "org_user" };
+}

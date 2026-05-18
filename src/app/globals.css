@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+/* ── Identuum brand design tokens ───────────────────────────────────────────
+   Light-first palette sourced from the identuum.ai marketing site.
+   Admin content uses warm stone backgrounds; the sidebar remains dark navy.
+   ────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Page / content backgrounds */
+  --background: #fafaf9; /* stone-50  — warm off-white page bg */
+  --background-card: #ffffff; /* white     — card / table surfaces */
+  --background-muted: #f5f4f2; /* stone-100 — muted / subtle surfaces */
+
+  /* Sidebar (dark navy — kept dark intentionally for admin shell) */
+  --background-sidebar: #082f49; /* sky-950   — dark navy sidebar */
+
+  /* Text */
+  --foreground: #082f49; /* sky-950   — primary text */
+  --foreground-muted: #78716c; /* stone-500 — muted text */
+  --foreground-subtle: #a8a29e; /* stone-400 — subtle / placeholder text */
+  --foreground-on-dark: #f8fafc; /* near-white on dark sidebar */
+
+  /* Brand accent */
+  --accent: #0284c7; /* sky-600   — primary action */
+  --accent-hover: #0369a1; /* sky-700   — primary action hover */
+  --accent-dark: #082f49; /* sky-950   — dark CTA / sidebar */
+  --accent-light: #f0f9ff; /* sky-50    — light accent tint */
+
+  /* Borders */
+  --border: #e7e5e2; /* stone-200 — warm border */
+  --border-dark: #1c3a52; /* dark sidebar border */
+
+  /* Semantic */
+  --color-success: #10b981; /* emerald-500 */
+  --color-error: #ef4444; /* red-500 */
+  --color-warning: #f59e0b; /* amber-500 */
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(
+    --font-geist-sans,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif
+  );
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Focus ring — sky brand colour for keyboard accessibility */
+:focus-visible {
+  outline: 2px solid #0284c7;
+  outline-offset: 2px;
+}
