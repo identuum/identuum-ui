@@ -1,7 +1,7 @@
 ##############################################################################
 # Stage 1: install dependencies
 ##############################################################################
-FROM node:20-bookworm-slim AS deps
+FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 
 # pnpm
@@ -13,7 +13,7 @@ RUN pnpm install --frozen-lockfile
 ##############################################################################
 # Stage 2: build
 ##############################################################################
-FROM node:20-bookworm-slim AS builder
+FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@10.20.0 --activate
@@ -27,7 +27,7 @@ RUN pnpm build
 ##############################################################################
 # Stage 3: production runner (Next.js standalone)
 ##############################################################################
-FROM node:20-bookworm-slim AS runner
+FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production

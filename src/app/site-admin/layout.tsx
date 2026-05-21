@@ -81,6 +81,16 @@ export default async function SiteAdminLayout({ children }: { children: React.Re
             usePathname() to determine which item is active. */}
         <SiteAdminNav />
 
+        {/* Platform status link */}
+        <div className="px-3 py-1">
+          <a
+            href="/platform-status"
+            className="flex items-center rounded-lg px-3 py-2 text-xs text-sky-800 hover:text-sky-400 transition-colors"
+          >
+            Platform status
+          </a>
+        </div>
+
         {/* Logout */}
         <div className="px-3 py-4 border-t border-sky-900/60">
           {/* Logout: POST to the UI-side logout handler which proxies to IdP
@@ -112,21 +122,28 @@ export default async function SiteAdminLayout({ children }: { children: React.Re
 
 function IdpRequiredMessage({ configured }: { configured: boolean }) {
   return (
-    <div className="max-w-lg">
-      <h1 className="text-lg font-bold text-sky-950 mb-2 tracking-tight">
-        Site administration unavailable
+    <div className="max-w-lg space-y-3">
+      <h1 className="text-lg font-bold text-sky-950 tracking-tight">
+        Identity administration unavailable
       </h1>
       <p className="text-sm text-stone-500 leading-relaxed">
         {configured
-          ? "This deployment is configured without an IdP backend (AG-only mode). Site administration requires identuum-idp to be enabled."
+          ? "identuum-idp is not enabled in the current runtime configuration. Site administration requires identuum-idp to be enabled."
           : "identuum-ui has not been configured yet. Run identuum-ui-setup to write the runtime configuration."}
       </p>
-      <a
-        href="/login"
-        className="mt-4 inline-block text-sm text-sky-600 hover:text-sky-700 underline"
-      >
-        Return to login
-      </a>
+      <div className="flex gap-4">
+        <a href="/" className="text-sm text-sky-600 hover:text-sky-700 underline">
+          Return to home
+        </a>
+        {configured && (
+          <a
+            href="/platform-status"
+            className="text-sm text-stone-400 hover:text-stone-500 underline"
+          >
+            View platform status
+          </a>
+        )}
+      </div>
     </div>
   );
 }

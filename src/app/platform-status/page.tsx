@@ -1,0 +1,345 @@
+/**
+ * /platform-status
+ *
+ * Runtime composition status page. Shows the current platform mode and
+ * the live discovery state of each configured backend.
+ *
+ * This page calls the backend /api/v1/component endpoints server-side via
+ * getServerRuntimeState(). It is the intended entry point when the root
+ * page detects a misconfigured state.
+ *
+ * Security: no internal backend URLs, tokens, session data, or stack
+ * traces are rendered. Only public metadata from each backend is shown.
+ */
+import { fetchAgAuthProviders } from "@/lib/ag-auth-providers";
+import { getServerRuntimeState } from "@/lib/server-runtime-state";
+import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
+import type {
+  AgAuthProviderDiscoveryState,
+  BackendComponentState,
+  PlatformMode,
+} from "@/lib/types";
+import type { Metadata } from "next";
+
+export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Platform Status — Identuum" };
+
+export default async function PlatformStatusPage() {
+  const state = await getServerRuntimeState();
+  const cfg = loadRuntimeConfig();
+  const agUrl = cfg?.ag.enabled ? agBaseUrl(cfg) : null;
+  const agProviders = await fetchAgAuthProviders(agUrl);
+
+  if (!state) {
+    return <SetupRequiredPrompt />;
+  }
+
+  return (
+    <div className="min-h-screen bg-stone-50 px-4 py-12">
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-xl font-bold text-sky-950 tracking-tight">Platform Status</h1>
+          <p className="text-sm text-stone-500 mt-1">
+            Live discovery state of configured Identuum backends.
+          </p>
+        </div>
+
+        <ModeBadge mode={state.mode} />
+
+        <div className="space-y-4">
+          <BackendCard
+            label="Identity (IDP)"
+            abbreviation="IDP"
+            backend={state.components.idp}
+            expectedComponent="identuum-idp"
+          />
+          <BackendCard
+            label="Agent Governance (AG)"
+            abbreviation="AG"
+            backend={state.components.ag}
+            expectedComponent="identuum-ag"
+          />
+          {/* AG auth provider discovery — shown when AG is configured */}
+          {(cfg?.ag.enabled || agProviders.available || agProviders.error_code) && (
+            <AgAuthProviderCard providers={agProviders} />
+          )}
+        </div>
+
+        <div className="border-t border-stone-200 pt-4">
+          <a href="/" className="text-sm text-sky-600 hover:text-sky-700 underline">
+            Return to home
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModeBadge({ mode }: { mode: PlatformMode }) {
+  const config: Record<PlatformMode, { label: string; colorClass: string; description: string }> = {
+    "full-platform": {
+      label: "Full Platform",
+      colorClass: "bg-emerald-100 text-emerald-800 border-emerald-200",
+      description: "Both Identity and Agent Governance backends are operational.",
+    },
+    "identity-only": {
+      label: "Identity Only",
+      colorClass: "bg-sky-100 text-sky-800 border-sky-200",
+      description: "Only the Identity backend is configured and operational.",
+    },
+    "agent-governance-only": {
+      label: "Agent Governance Only",
+      colorClass: "bg-sky-100 text-sky-800 border-sky-200",
+      description: "Only the Agent Governance backend is configured and operational.",
+    },
+    "degraded-idp-unavailable": {
+      label: "Degraded — Identity Unavailable",
+      colorClass: "bg-amber-100 text-amber-800 border-amber-200",
+      description:
+        "The Identity backend is configured but is not responding correctly. Agent Governance is operational.",
+    },
+    "degraded-ag-unavailable": {
+      label: "Degraded — AG Unavailable",
+      colorClass: "bg-amber-100 text-amber-800 border-amber-200",
+      description:
+        "The Agent Governance backend is configured but is not responding correctly. Identity is operational.",
+    },
+    misconfigured: {
+      label: "Misconfigured",
+      colorClass: "bg-red-100 text-red-800 border-red-200",
+      description:
+        "Both backends are configured but neither is responding correctly. Check backend connectivity.",
+    },
+    unconfigured: {
+      label: "Unconfigured",
+      colorClass: "bg-stone-100 text-stone-600 border-stone-200",
+      description:
+        "No backends are configured. Run identuum-ui-setup to write the runtime configuration.",
+    },
+  };
+
+  const { label, colorClass, description } = config[mode] ?? config.misconfigured;
+
+  return (
+    <div className={`rounded-xl border px-4 py-3 ${colorClass}`}>
+      <p className="text-sm font-semibold">{label}</p>
+      <p className="text-xs mt-0.5 opacity-80">{description}</p>
+    </div>
+  );
+}
+
+function BackendCard({
+  label,
+  abbreviation,
+  backend,
+  expectedComponent,
+}: {
+  label: string;
+  abbreviation: string;
+  backend: BackendComponentState;
+  expectedComponent: string;
+}) {
+  const statusColor = backend.usable
+    ? "text-emerald-600"
+    : backend.configured
+      ? "text-amber-600"
+      : "text-stone-400";
+
+  const statusLabel = backend.usable
+    ? "Operational"
+    : backend.configured
+      ? "Unavailable"
+      : "Not configured";
+
+  return (
+    <div className="rounded-xl border border-stone-200 bg-white p-5 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="h-8 w-8 rounded-lg bg-sky-100 flex items-center justify-center shrink-0">
+            <span className="text-[10px] font-bold text-sky-700">{abbreviation}</span>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-sky-950">{label}</p>
+            {backend.component && backend.component !== expectedComponent && (
+              <p className="text-xs text-red-600 mt-0.5">
+                Wrong component: returned &ldquo;{backend.component}&rdquo;
+              </p>
+            )}
+          </div>
+        </div>
+        <span className={`text-xs font-medium ${statusColor}`}>{statusLabel}</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <StatusRow label="Configured" value={backend.configured ? "Yes" : "No"} />
+        <StatusRow label="Reachable" value={backend.reachable ? "Yes" : "No"} />
+        <StatusRow label="Usable" value={backend.usable ? "Yes" : "No"} />
+        <StatusRow
+          label="License"
+          value={backend.license.status === "unknown" ? "—" : backend.license.status}
+        />
+        {backend.version && <StatusRow label="Version" value={backend.version} />}
+        {backend.error && (
+          <StatusRow label="Error" value={backend.error} valueClass="text-amber-700 font-mono" />
+        )}
+      </div>
+
+      {backend.capabilities && Object.keys(backend.capabilities).length > 0 && (
+        <CapabilitiesList capabilities={backend.capabilities} />
+      )}
+    </div>
+  );
+}
+
+function StatusRow({
+  label,
+  value,
+  valueClass = "text-stone-600",
+}: {
+  label: string;
+  value: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-stone-400 uppercase tracking-wide text-[10px]">{label}</span>
+      <span className={`font-medium mt-0.5 ${valueClass}`}>{value}</span>
+    </div>
+  );
+}
+
+function CapabilitiesList({ capabilities }: { capabilities: Record<string, boolean> }) {
+  const enabled = Object.entries(capabilities)
+    .filter(([, v]) => v)
+    .map(([k]) => k.replace(/_/g, " "));
+
+  if (enabled.length === 0) return null;
+
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wide text-stone-400 mb-1.5">Capabilities</p>
+      <div className="flex flex-wrap gap-1.5">
+        {enabled.map((cap) => (
+          <span
+            key={cap}
+            className="rounded-md bg-stone-100 border border-stone-200 px-2 py-0.5 text-[10px] font-medium text-stone-600"
+          >
+            {cap}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AgAuthProviderCard({ providers }: { providers: AgAuthProviderDiscoveryState }) {
+  const featureUnavailable =
+    providers.login_available === false && providers.unavailable_reason === "forbidden_feature";
+
+  const statusLabel = providers.available
+    ? featureUnavailable
+      ? "Feature unavailable"
+      : "Available"
+    : providers.error_code
+      ? "Discovery failed"
+      : "Not configured";
+  const statusColor = providers.available
+    ? featureUnavailable
+      ? "text-amber-600"
+      : "text-emerald-600"
+    : providers.error_code
+      ? "text-amber-600"
+      : "text-stone-400";
+
+  return (
+    <div className="rounded-xl border border-stone-200 bg-white p-5 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-sky-950">AG Login Providers</p>
+          <p className="text-xs text-stone-500 mt-0.5">
+            Human/operator authentication options for AG.
+          </p>
+        </div>
+        <span className={`text-xs font-medium ${statusColor}`}>{statusLabel}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="flex flex-col">
+          <span className="text-stone-400 uppercase tracking-wide text-[10px]">Auth Mode</span>
+          <span className="font-medium text-stone-600 mt-0.5 font-mono">
+            {providers.auth_mode ?? "—"}
+          </span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-stone-400 uppercase tracking-wide text-[10px]">Providers</span>
+          <span className="font-medium text-stone-600 mt-0.5">{providers.provider_count}</span>
+        </div>
+        {providers.login_available !== null && (
+          <div className="flex flex-col">
+            <span className="text-stone-400 uppercase tracking-wide text-[10px]">Login</span>
+            <span
+              className={`font-medium mt-0.5 ${providers.login_available ? "text-emerald-600" : "text-amber-600"}`}
+            >
+              {providers.login_available ? "Available" : "Unavailable"}
+            </span>
+          </div>
+        )}
+        {providers.unavailable_reason && (
+          <div className="flex flex-col">
+            <span className="text-stone-400 uppercase tracking-wide text-[10px]">Reason</span>
+            <span className="font-medium text-amber-700 mt-0.5 font-mono">
+              {providers.unavailable_reason}
+            </span>
+          </div>
+        )}
+        {providers.error_code && (
+          <div className="flex flex-col col-span-2">
+            <span className="text-stone-400 uppercase tracking-wide text-[10px]">Error</span>
+            <span className="font-medium text-amber-700 mt-0.5 font-mono">
+              {providers.error_code}
+            </span>
+          </div>
+        )}
+      </div>
+      {providers.providers.length > 0 && (
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-stone-400 mb-1.5">
+            Configured providers
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {providers.providers.map((p) => (
+              <span
+                key={p.id}
+                className={`rounded-md border px-2 py-0.5 text-[10px] font-medium ${
+                  p.enabled
+                    ? "bg-stone-100 border-stone-200 text-stone-600"
+                    : "bg-amber-50 border-amber-200 text-amber-700"
+                }`}
+              >
+                {p.display_name}
+                {!p.enabled && p.unavailable_reason && (
+                  <span className="ml-1 font-mono opacity-70">({p.unavailable_reason})</span>
+                )}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SetupRequiredPrompt() {
+  return (
+    <div className="min-h-screen bg-stone-50 flex items-center justify-center px-4">
+      <div className="max-w-sm text-center space-y-3">
+        <p className="text-sm font-semibold text-sky-950">UI not configured</p>
+        <p className="text-xs text-stone-500 leading-relaxed">
+          Run identuum-ui-setup to write the runtime configuration before accessing this page.
+        </p>
+        <a href="/" className="text-sm text-sky-600 hover:text-sky-700 underline">
+          Return to home
+        </a>
+      </div>
+    </div>
+  );
+}

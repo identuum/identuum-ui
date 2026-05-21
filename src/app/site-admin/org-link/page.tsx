@@ -1,0 +1,191 @@
+/**
+ * /site-admin/org-link
+ *
+ * Organization-only AG↔IDP link planning and action page.
+ *
+ * SCOPE: organizations only.
+ * NOT IN SCOPE — never shown, never imported, never linked:
+ *   - Users, org admins, or site admins
+ *   - Passwords or MFA state
+ *   - Role bindings or permission grants
+ *   - Reviewers, auditors, or approval state
+ *   - Credentials of any kind
+ *
+ * Security: no internal backend URLs, no tokens, no credentials are rendered.
+ */
+import type { Metadata } from "next";
+import type { IDPOrgSummaryForLink } from "@/lib/org-link-types";
+import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
+import { listOrganizations } from "@/lib/idp-admin-client";
+import { fetchAGOrgLinkPlan } from "@/lib/ag-org-client";
+import { hasAgSession } from "@/lib/ag-client";
+import { OrgLinkActions } from "./org-link-actions";
+
+export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Organization Link — Identuum" };
+
+export default async function OrgLinkPlanPage() {
+  const cfg = loadRuntimeConfig();
+  const idpEnabled = Boolean(cfg?.idp.enabled);
+  const agEnabled = Boolean(cfg?.ag.enabled);
+
+  let idpOrgs: IDPOrgSummaryForLink[] = [];
+  let idpAvailable = false;
+  if (idpEnabled) {
+    try {
+      const result = await listOrganizations({ limit: 100 });
+      if (result) {
+        idpAvailable = true;
+        idpOrgs = result.organizations.map((o) => ({
+          id: o.id,
+          name: o.name,
+          slug: o.slug,
+          domain: o.domain,
+          active: o.active,
+          deleted: o.deleted,
+          has_admin: o.has_admin,
+        }));
+      }
+    } catch {
+      // IDP unreachable
+    }
+  }
+
+  const agUrl = agEnabled ? agBaseUrl(cfg!) : null;
+  const agPlan = await fetchAGOrgLinkPlan(agUrl);
+  const agAvailable = agPlan !== null;
+  const agSession = await hasAgSession();
+
+  // Actions are only available when both backends are reachable, an AG operator
+  // session exists, and AG reports the write path as available.
+  const canAct =
+    idpAvailable &&
+    agAvailable &&
+    agSession &&
+    Boolean(agPlan?.import_available) &&
+    idpOrgs.filter((o) => o.active && !o.deleted).length > 0;
+
+  return (
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <h1 className="text-xl font-bold text-sky-950 tracking-tight">
+          Organization Link
+        </h1>
+        <p className="text-sm text-stone-500 mt-1">
+          Link AG organizations to IDP organizations. Organization scope only.
+        </p>
+      </div>
+
+      <ScopeWarning />
+
+      {!idpAvailable && !agAvailable && (
+        <div className="rounded-xl border border-stone-200 bg-white p-5">
+          <p className="text-sm text-stone-500">
+            Neither IDP nor AG backends are currently reachable.
+          </p>
+        </div>
+      )}
+
+      {agAvailable && !agPlan?.import_available && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-xs font-medium text-amber-800">Link actions unavailable</p>
+          <p className="text-xs text-amber-700 mt-0.5">
+            {agPlan?.unavailable_reason === "not_configured"
+              ? "AG org-link write path is not configured."
+              : "AG reports link operations are not available."}
+          </p>
+        </div>
+      )}
+
+      {agAvailable && agSession === false && (
+        <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3">
+          <p className="text-xs text-stone-500">
+            AG operator session required for link/unlink actions.{" "}
+            <a href="/ag-admin/login" className="text-sky-600 hover:underline">
+              Sign in to AG
+            </a>
+          </p>
+        </div>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <IDPOrgCard orgs={idpOrgs} available={idpAvailable} />
+      </div>
+
+      <div>
+        <h2 className="text-sm font-semibold text-sky-950 mb-3">
+          AG Organizations
+          {agAvailable && (
+            <span className="ml-2 text-[10px] font-normal text-stone-400 uppercase tracking-wide">
+              {agPlan?.import_available ? "actions available" : "read-only"}
+            </span>
+          )}
+        </h2>
+        {!agAvailable ? (
+          <p className="text-xs text-stone-400">AG is not configured or not reachable.</p>
+        ) : (
+          <OrgLinkActions
+            agOrgs={agPlan?.organizations ?? []}
+            idpOrgs={idpOrgs}
+            canAct={canAct}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ScopeWarning() {
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 space-y-1">
+      <p className="text-xs font-semibold text-amber-800">Organization scope only</p>
+      <p className="text-xs text-amber-700 leading-relaxed">
+        This page links organizations only. Users, org admins, passwords, MFA state,
+        role bindings, and all credential or identity data are never imported or linked here.
+        Admin assignment is a separate explicit workflow performed after organizations are linked.
+      </p>
+    </div>
+  );
+}
+
+function IDPOrgCard({ orgs, available }: { orgs: IDPOrgSummaryForLink[]; available: boolean }) {
+  return (
+    <div className="rounded-xl border border-stone-200 bg-white p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-sky-950">IDP Organizations</p>
+        <span
+          className={`text-xs font-medium ${available ? "text-emerald-600" : "text-stone-400"}`}
+        >
+          {available ? `${orgs.length} found` : "Unavailable"}
+        </span>
+      </div>
+      {!available && (
+        <p className="text-xs text-stone-400">IDP is not configured or not reachable.</p>
+      )}
+      {available && orgs.length === 0 && (
+        <p className="text-xs text-stone-400">No IDP organizations found.</p>
+      )}
+      {orgs.length > 0 && (
+        <ul className="space-y-1">
+          {orgs.slice(0, 10).map((o) => (
+            <li key={o.id} className="flex items-center gap-2 text-xs">
+              <span
+                className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
+                  o.active && !o.deleted ? "bg-emerald-500" : "bg-stone-300"
+                }`}
+              />
+              <span className="font-medium text-stone-700">{o.name}</span>
+              {o.domain && <span className="text-stone-400">{o.domain}</span>}
+              {!o.has_admin && (
+                <span className="text-amber-600 text-[10px]">no admin</span>
+              )}
+            </li>
+          ))}
+          {orgs.length > 10 && (
+            <li className="text-xs text-stone-400">…and {orgs.length - 10} more</li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}

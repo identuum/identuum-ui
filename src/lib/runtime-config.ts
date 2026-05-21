@@ -86,9 +86,14 @@ export function idpBaseUrl(cfg: RuntimeConfig): string {
 }
 
 // agBaseUrl returns the URL the UI server uses to call the AG management surface.
-// Used for health checks and admin API calls.
+// Used for health checks and admin API calls. Never exposed to the browser.
+// Priority: internal_base_url → management_base_url (legacy alias) → public_base_url.
 export function agBaseUrl(cfg: RuntimeConfig): string {
-  return cfg.ag.internal_base_url?.trim() || cfg.ag.public_base_url;
+  return (
+    cfg.ag.internal_base_url?.trim() ||
+    cfg.ag.management_base_url?.trim() ||
+    cfg.ag.public_base_url
+  );
 }
 
 // agIdentityBaseUrl returns the URL the UI server uses to call the AG identity
@@ -98,4 +103,13 @@ export function agIdentityBaseUrl(cfg: RuntimeConfig): string {
   return (
     cfg.ag.identity_internal_base_url?.trim() || cfg.ag.identity_base_url?.trim() || agBaseUrl(cfg)
   );
+}
+
+// agIdentityPublicUrl returns the browser-facing public URL for the AG identity
+// surface. Used for 302 redirects into AG OIDC login flows — the browser must
+// be able to reach this URL, so internal_base_url is intentionally skipped.
+// Falls back to ag.public_base_url when identity_base_url is not configured.
+// Never exposes internal_base_url to the browser.
+export function agIdentityPublicUrl(cfg: RuntimeConfig): string {
+  return cfg.ag.identity_base_url?.trim() || cfg.ag.public_base_url;
 }
