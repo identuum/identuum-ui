@@ -1010,7 +1010,8 @@ export type RevokeSessionResult =
  */
 export async function revokeOwnSession(sessionId: string): Promise<RevokeSessionResult> {
   const cfg = loadRuntimeConfig();
-  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, forbidden: false, notFound: false };
+  if (!cfg || !cfg.idp.enabled)
+    return { ok: false, status: 503, forbidden: false, notFound: false };
 
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/revoke`, {
@@ -1113,7 +1114,10 @@ export async function listAuditEvents(opts?: {
       try {
         // biome-ignore lint/suspicious/noExplicitAny: raw API response before typing
         const body: any = await res.json();
-        if (typeof body?.message === "string" && body.message.toLowerCase().includes("license tier")) {
+        if (
+          typeof body?.message === "string" &&
+          body.message.toLowerCase().includes("license tier")
+        ) {
           featureUnavailable = true;
         }
       } catch {
@@ -1122,7 +1126,8 @@ export async function listAuditEvents(opts?: {
       return { ok: false, status: 403, featureUnavailable, forbidden: !featureUnavailable };
     }
 
-    if (!res.ok) return { ok: false, status: res.status, featureUnavailable: false, forbidden: false };
+    if (!res.ok)
+      return { ok: false, status: res.status, featureUnavailable: false, forbidden: false };
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json();

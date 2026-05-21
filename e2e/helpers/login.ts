@@ -326,7 +326,9 @@ async function completeTOTPWithRetry(
         .then(() => true)
         .catch(() => false);
       if (lateSuccess) return;
-      throw new Error("TOTP retry: MFA input gone and success URL not reached; partial session may have expired");
+      throw new Error(
+        "TOTP retry: MFA input gone and success URL not reached; partial session may have expired"
+      );
     }
     await inputAfterWait.fill(generateTOTP(secret));
     await page.getByRole("button", { name: "Verify" }).click();

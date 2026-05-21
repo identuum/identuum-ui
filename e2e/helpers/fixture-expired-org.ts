@@ -42,8 +42,7 @@ const FIXTURE_ADMIN_EMAIL = "expired-admin@playwright-expired.local";
 const IDP_PROXY = "http://localhost:7114/api/idp";
 
 // Local dev DB — credentials are public in deployment/docker-compose.local.yml
-const PSQL =
-  "PGPASSWORD=idp_local_password psql -h localhost -p 5432 -U idp_user -d identuum_idp";
+const PSQL = "PGPASSWORD=idp_local_password psql -h localhost -p 5432 -U idp_user -d identuum_idp";
 
 type AdminState = "active" | "valid-pending" | "expired-pending" | "none";
 
@@ -137,13 +136,8 @@ function resetActiveUserToExpiredPending(): void {
 
 // ── API helpers (via /api/idp/ proxy) ─────────────────────────────────────────
 
-async function findOrgByDomain(
-  ctx: BrowserContext,
-  domain: string
-): Promise<string | null> {
-  const res = await ctx.request.get(
-    `${IDP_PROXY}/api/v1/organizations?limit=100&deleted=false`
-  );
+async function findOrgByDomain(ctx: BrowserContext, domain: string): Promise<string | null> {
+  const res = await ctx.request.get(`${IDP_PROXY}/api/v1/organizations?limit=100&deleted=false`);
   if (!res.ok()) return null;
   const data = await res.json();
   const orgs: Array<{ id: string; domain: string }> = data.organizations ?? [];
@@ -176,7 +170,8 @@ async function createFixtureOrgWithAdmin(ctx: BrowserContext): Promise<string> {
   if (res.status() === 409) {
     // Org already exists (domain conflict) — find it, create user via claim+consume
     const orgId = await findOrgByDomain(ctx, FIXTURE_ORG_DOMAIN);
-    if (!orgId) throw new Error("Fixture org domain conflict but org not found — manual cleanup needed");
+    if (!orgId)
+      throw new Error("Fixture org domain conflict but org not found — manual cleanup needed");
     await createUserViaClaimConsume(ctx, orgId);
     return orgId;
   }
@@ -197,15 +192,11 @@ async function createFixtureOrgWithAdmin(ctx: BrowserContext): Promise<string> {
  * For determinism, this function explicitly calls resetActiveUserToExpiredPending
  * immediately after consuming.
  */
-async function createUserViaClaimConsume(
-  ctx: BrowserContext,
-  orgId: string
-): Promise<void> {
+async function createUserViaClaimConsume(ctx: BrowserContext, orgId: string): Promise<void> {
   // Generate invitation claim
-  const invRes = await ctx.request.post(
-    `${IDP_PROXY}/api/v1/organizations/${orgId}/invitations`,
-    { data: { recipient_email: FIXTURE_ADMIN_EMAIL } }
-  );
+  const invRes = await ctx.request.post(`${IDP_PROXY}/api/v1/organizations/${orgId}/invitations`, {
+    data: { recipient_email: FIXTURE_ADMIN_EMAIL },
+  });
   if (!invRes.ok()) {
     throw new Error(`Failed to generate fixture claim: HTTP ${invRes.status()}`);
   }
@@ -214,16 +205,13 @@ async function createUserViaClaimConsume(
   if (!token) throw new Error("Fixture claim generation returned no token");
 
   // Consume the claim — sets email_verified=true
-  const consumeRes = await ctx.request.post(
-    `http://localhost:7113/api/v1/auth/claim`,
-    {
-      data: {
-        token,
-        email: FIXTURE_ADMIN_EMAIL,
-        password: "FixturePassw0rd_Local!",
-      },
-    }
-  );
+  const consumeRes = await ctx.request.post(`http://localhost:7113/api/v1/auth/claim`, {
+    data: {
+      token,
+      email: FIXTURE_ADMIN_EMAIL,
+      password: "FixturePassw0rd_Local!",
+    },
+  });
   if (!consumeRes.ok()) {
     throw new Error(`Failed to consume fixture claim: HTTP ${consumeRes.status()}`);
   }

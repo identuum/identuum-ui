@@ -47,9 +47,7 @@ export function SetupLinkPanel({ link, title, description, compact = false }: Se
     return (
       <div className="space-y-1.5 min-w-[260px]">
         <p className="text-[10px] font-semibold text-amber-700">{title}</p>
-        {description && (
-          <p className="text-[10px] text-stone-400 leading-tight">{description}</p>
-        )}
+        {description && <p className="text-[10px] text-stone-400 leading-tight">{description}</p>}
         <div className="flex items-center gap-1.5">
           <input
             ref={inputRef}
@@ -98,9 +96,7 @@ export function SetupLinkPanel({ link, title, description, compact = false }: Se
           aria-label={copied ? "Link copied" : "Copy setup link"}
           className={[
             "shrink-0 rounded-lg px-3 py-2 text-xs font-semibold transition-colors",
-            copied
-              ? "bg-emerald-600 text-white"
-              : "bg-sky-600 text-white hover:bg-sky-700",
+            copied ? "bg-emerald-600 text-white" : "bg-sky-600 text-white hover:bg-sky-700",
           ].join(" ")}
         >
           {copied ? "Copied!" : "Copy link"}

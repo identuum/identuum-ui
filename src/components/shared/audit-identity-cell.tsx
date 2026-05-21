@@ -67,9 +67,7 @@ export function AuditIdentityCell({ value, fallback }: AuditIdentityCellProps) {
   }
 
   if (!isHmac(value)) {
-    return (
-      <span className="text-xs text-stone-600 block truncate max-w-[140px]">{value}</span>
-    );
+    return <span className="text-xs text-stone-600 block truncate max-w-[140px]">{value}</span>;
   }
 
   const short = shortHmac(value);
@@ -127,9 +125,7 @@ export function AuditIdentityCell({ value, fallback }: AuditIdentityCellProps) {
             onClick={handleCopy}
             className={[
               "shrink-0 rounded px-1.5 py-1 text-[10px] font-semibold transition-colors",
-              copied
-                ? "bg-emerald-600 text-white"
-                : "bg-sky-600 text-white hover:bg-sky-700",
+              copied ? "bg-emerald-600 text-white" : "bg-sky-600 text-white hover:bg-sky-700",
             ].join(" ")}
           >
             {copied ? "Copied!" : "Copy"}

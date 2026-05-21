@@ -84,9 +84,7 @@ export function AuditFilterPanel({ basePath, filters, eventTypeGroups }: AuditFi
 
   // If the current eventType is set but not in the known list, show it as a custom option.
   const showCustomEventType =
-    filters.eventType !== null &&
-    filters.eventType !== "" &&
-    !knownValues.has(filters.eventType);
+    filters.eventType !== null && filters.eventType !== "" && !knownValues.has(filters.eventType);
 
   return (
     <details
@@ -94,9 +92,7 @@ export function AuditFilterPanel({ basePath, filters, eventTypeGroups }: AuditFi
       className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden"
     >
       <summary className="px-5 py-3.5 text-xs font-semibold text-sky-950 cursor-pointer select-none flex items-center justify-between gap-2 hover:bg-stone-50 transition-colors list-none">
-        <span>
-          Filters{activeFilters && <span className="ml-1 text-sky-600">· active</span>}
-        </span>
+        <span>Filters{activeFilters && <span className="ml-1 text-sky-600">· active</span>}</span>
         <svg
           className="h-3.5 w-3.5 text-stone-400"
           viewBox="0 0 20 20"
@@ -132,9 +128,7 @@ export function AuditFilterPanel({ basePath, filters, eventTypeGroups }: AuditFi
           >
             <option value="">All events</option>
             {/* If the current value is an unknown/custom type, surface it at the top */}
-            {showCustomEventType && (
-              <option value={filters.eventType!}>{filters.eventType}</option>
-            )}
+            {showCustomEventType && <option value={filters.eventType!}>{filters.eventType}</option>}
             {resolvedGroups.map((group) => (
               <optgroup key={group.label} label={group.label}>
                 {group.types.map((t) => (
@@ -171,12 +165,7 @@ export function AuditFilterPanel({ basePath, filters, eventTypeGroups }: AuditFi
           <label htmlFor="af-window" className="block text-xs font-semibold text-stone-600">
             Time range
           </label>
-          <select
-            id="af-window"
-            name="window"
-            defaultValue={windowVal}
-            className={inputCls}
-          >
+          <select id="af-window" name="window" defaultValue={windowVal} className={inputCls}>
             {WINDOW_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
@@ -189,9 +178,7 @@ export function AuditFilterPanel({ basePath, filters, eventTypeGroups }: AuditFi
         <div className="space-y-1">
           <label htmlFor="af-start" className="block text-xs font-semibold text-stone-600">
             From{" "}
-            {!isCustom && (
-              <span className="font-normal text-stone-400">(custom range only)</span>
-            )}
+            {!isCustom && <span className="font-normal text-stone-400">(custom range only)</span>}
           </label>
           <input
             id="af-start"
@@ -206,9 +193,7 @@ export function AuditFilterPanel({ basePath, filters, eventTypeGroups }: AuditFi
         <div className="space-y-1">
           <label htmlFor="af-end" className="block text-xs font-semibold text-stone-600">
             To{" "}
-            {!isCustom && (
-              <span className="font-normal text-stone-400">(custom range only)</span>
-            )}
+            {!isCustom && <span className="font-normal text-stone-400">(custom range only)</span>}
           </label>
           <input
             id="af-end"

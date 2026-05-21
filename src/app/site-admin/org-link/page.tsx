@@ -19,7 +19,7 @@ import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 import { listOrganizations } from "@/lib/idp-admin-client";
 import { fetchAGOrgLinkPlan } from "@/lib/ag-org-client";
 import { hasAgSession } from "@/lib/ag-client";
-import { OrgLinkActions } from "./org-link-actions";
+import { OrgLinkActions, IDPImportSection } from "./org-link-actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Organization Link — Identuum" };
@@ -55,6 +55,13 @@ export default async function OrgLinkPlanPage() {
   const agPlan = await fetchAGOrgLinkPlan(agUrl);
   const agAvailable = agPlan !== null;
   const agSession = await hasAgSession();
+
+  // Set of IDP org IDs already linked to an AG org, used to filter import candidates.
+  const linkedIDPOrgIds = new Set<string>(
+    (agPlan?.organizations ?? [])
+      .filter((o) => o.linked_idp_org_id)
+      .map((o) => o.linked_idp_org_id as string)
+  );
 
   // Actions are only available when both backends are reachable, an AG operator
   // session exists, and AG reports the write path as available.
@@ -131,6 +138,24 @@ export default async function OrgLinkPlanPage() {
           />
         )}
       </div>
+
+      {idpAvailable && agAvailable && Boolean(agPlan?.import_available) && (
+        <div>
+          <h2 className="text-sm font-semibold text-sky-950 mb-1">
+            Import IDP Organizations into AG
+          </h2>
+          <p className="text-xs text-stone-500 mb-3">
+            IDP organizations not yet linked to an AG organization. Import creates a new AG
+            organization and links it. Organizations only — no users, admins, or credentials
+            are imported.
+          </p>
+          <IDPImportSection
+            idpOrgs={idpOrgs}
+            linkedIDPOrgIds={linkedIDPOrgIds}
+            canAct={canAct}
+          />
+        </div>
+      )}
     </div>
   );
 }

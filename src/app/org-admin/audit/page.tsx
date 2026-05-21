@@ -48,9 +48,11 @@ function parsePage(raw: string | string[] | undefined): number {
   return n;
 }
 
-function parseAuditFilters(
-  params: Record<string, string | string[] | undefined>
-): { filters: AuditFilterValues; startDateISO: string | null; endDateISO: string | null } {
+function parseAuditFilters(params: Record<string, string | string[] | undefined>): {
+  filters: AuditFilterValues;
+  startDateISO: string | null;
+  endDateISO: string | null;
+} {
   const eventType = str(params, "event_type", 64);
   const subjectType = str(params, "subject_type", 32);
   const window = str(params, "window", 8);
@@ -303,7 +305,11 @@ function formatDate(iso: string): string {
   }
 }
 
-function PaginationLink({ href, label, disabled }: { href?: string; label: string; disabled: boolean }) {
+function PaginationLink({
+  href,
+  label,
+  disabled,
+}: { href?: string; label: string; disabled: boolean }) {
   if (disabled || !href)
     return (
       <span className="text-xs text-stone-300 px-3 py-1.5 rounded-lg cursor-not-allowed select-none">
@@ -336,7 +342,9 @@ function ForbiddenPanel() {
   return (
     <div className="bg-white border border-red-100 rounded-[1.5rem] px-6 py-8 shadow-sm">
       <p className="text-sm font-semibold text-red-600">Access denied</p>
-      <p className="text-xs text-stone-400 mt-1">You do not have permission to view audit events.</p>
+      <p className="text-xs text-stone-400 mt-1">
+        You do not have permission to view audit events.
+      </p>
     </div>
   );
 }

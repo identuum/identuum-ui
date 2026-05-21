@@ -72,7 +72,10 @@ export function InvitationFormClient({
           </p>
         </div>
         <div className="pt-1">
-          <a href="/login" className="text-sm font-semibold text-sky-600 hover:text-sky-700 underline">
+          <a
+            href="/login"
+            className="text-sm font-semibold text-sky-600 hover:text-sky-700 underline"
+          >
             Go to sign in
           </a>
         </div>
@@ -86,9 +89,7 @@ export function InvitationFormClient({
 
       <div className="space-y-1">
         <h2 className="text-lg font-bold text-sky-950 tracking-tight">Set up your account</h2>
-        <p className="text-sm text-stone-500">
-          Choose a password to activate your account.
-        </p>
+        <p className="text-sm text-stone-500">Choose a password to activate your account.</p>
       </div>
 
       {state.error && (

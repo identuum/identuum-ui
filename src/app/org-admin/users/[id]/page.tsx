@@ -23,8 +23,7 @@ import { RegenerateInviteLink, ResetMFAButton, UserRowActions } from "../user-ro
 
 export const metadata: Metadata = { title: "User — Identuum Org Admin" };
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isNoEmailSentinel(email: string): boolean {
   return email.startsWith("noemail+") && email.endsWith("@no-email.internal");
@@ -93,8 +92,7 @@ export default async function OrgAdminUserDetailPage({
   // will enforce the guard if the action is attempted.
   const activeAdminCount =
     allUsers?.filter((u) => u.role === "org_admin" && u.active && !u.deleted).length ?? 0;
-  const isSoleActiveAdmin =
-    user.role === "org_admin" && user.active && activeAdminCount <= 1;
+  const isSoleActiveAdmin = user.role === "org_admin" && user.active && activeAdminCount <= 1;
   const isManualInvite =
     (user.invitation_pending && !user.invitation_email_bound) ||
     (!user.invitation_email_bound && isNoEmailSentinel(user.email));
@@ -121,10 +119,8 @@ export default async function OrgAdminUserDetailPage({
     cls: "text-stone-500 bg-stone-100 border-stone-200",
   };
 
-  const showLifecycleActions =
-    !user.deleted && user.role !== "site_admin" && status !== "pending";
-  const showRegenerate =
-    status === "pending" && !user.deleted && user.role !== "site_admin";
+  const showLifecycleActions = !user.deleted && user.role !== "site_admin" && status !== "pending";
+  const showRegenerate = status === "pending" && !user.deleted && user.role !== "site_admin";
   // MFA reset: only for active org_user targets with MFA enabled.
   const showMFAReset =
     user.role === "org_user" && user.mfa_enabled && !user.deleted && status !== "pending";
@@ -147,13 +143,11 @@ export default async function OrgAdminUserDetailPage({
             {isManualInvite ? (
               <span className="text-amber-700">{user.name ?? "Manual invite pending"}</span>
             ) : (
-              displayEmail ?? <span className="text-stone-400 italic">No email</span>
+              (displayEmail ?? <span className="text-stone-400 italic">No email</span>)
             )}
           </h1>
         </div>
-        {user.name && displayEmail && (
-          <p className="text-sm text-stone-500">{user.name}</p>
-        )}
+        {user.name && displayEmail && <p className="text-sm text-stone-500">{user.name}</p>}
         <div className="flex items-center gap-2 flex-wrap pt-1">
           <span
             className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${sBadge.cls}`}
@@ -211,7 +205,9 @@ export default async function OrgAdminUserDetailPage({
             <span className="text-xs text-sky-950">{user.email_verified ? "Yes" : "No"}</span>
           </DetailRow>
           <DetailRow label="MFA">
-            <span className="text-xs text-sky-950">{user.mfa_enabled ? "Enabled" : "Disabled"}</span>
+            <span className="text-xs text-sky-950">
+              {user.mfa_enabled ? "Enabled" : "Disabled"}
+            </span>
           </DetailRow>
           <DetailRow label="Joined">
             <span className="text-xs text-stone-500">{formatDate(user.created_at)}</span>
@@ -250,8 +246,8 @@ export default async function OrgAdminUserDetailPage({
                     Cannot disable the last active organization admin
                   </p>
                   <p className="text-xs text-stone-500 leading-relaxed">
-                    Assign another administrator before suspending this account.{" "}
-                    This organization must always have at least one active admin.
+                    Assign another administrator before suspending this account. This organization
+                    must always have at least one active admin.
                   </p>
                 </div>
               </div>
@@ -274,8 +270,8 @@ export default async function OrgAdminUserDetailPage({
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-stone-600">Setup link</p>
                 <p className="text-xs text-stone-400 leading-relaxed max-w-[280px]">
-                  Regenerate a new one-time setup link for this invitation.
-                  The previous link will be invalidated.
+                  Regenerate a new one-time setup link for this invitation. The previous link will
+                  be invalidated.
                 </p>
                 <div className="pt-1">
                   <RegenerateInviteLink userId={user.id} />
@@ -286,8 +282,8 @@ export default async function OrgAdminUserDetailPage({
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-stone-600">MFA enrollment</p>
                 <p className="text-xs text-stone-400 leading-relaxed max-w-[280px]">
-                  Clear this user{"'"}s TOTP authenticator. Their active sessions will be
-                  revoked and they will be prompted to re-enroll on next sign-in.
+                  Clear this user{"'"}s TOTP authenticator. Their active sessions will be revoked
+                  and they will be prompted to re-enroll on next sign-in.
                 </p>
                 <div className="pt-1">
                   <ResetMFAButton userId={user.id} />

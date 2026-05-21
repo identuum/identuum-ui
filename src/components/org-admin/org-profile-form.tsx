@@ -76,9 +76,7 @@ export function OrgProfileForm({ currentName, domain }: OrgProfileFormProps) {
       {/* Domain — read-only */}
       {domain && (
         <div className="space-y-1.5">
-          <label className="block text-sm font-semibold text-stone-700">
-            Primary domain
-          </label>
+          <label className="block text-sm font-semibold text-stone-700">Primary domain</label>
           <div className="flex items-center gap-2">
             <p className="flex-1 rounded-xl border border-stone-200 bg-stone-100 px-4 py-2.5 text-sm text-stone-500 font-mono cursor-default">
               {domain}

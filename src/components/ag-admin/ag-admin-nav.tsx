@@ -13,6 +13,8 @@ const NAV_LINKS: NavLink[] = [
   { label: "Agent Registry", href: "/ag-admin/agents", match: "prefix" },
   { label: "Agent Sessions", href: "/ag-admin/sessions", match: "prefix" },
   { label: "HITL / CBAA", href: "/ag-admin/hitl", match: "prefix" },
+  { label: "Revocations", href: "/ag-admin/revocations", match: "prefix" },
+  { label: "Audit / Activity", href: "/ag-admin/audit", match: "prefix" },
   { label: "MCP Server", href: "/ag-admin/mcp", match: "prefix" },
 ];
 

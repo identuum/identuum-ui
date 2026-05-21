@@ -46,7 +46,10 @@ export async function updateMFAPolicyAction(
   // include the org ID field depending on how the validate response is mapped.
   const org = await getOwnOrganization();
   if (!org?.id) {
-    return { phase: "error", error: "Could not resolve your organization. Please sign out and sign in again." };
+    return {
+      phase: "error",
+      error: "Could not resolve your organization. Please sign out and sign in again.",
+    };
   }
 
   const rawPolicy = ((formData.get("mfa_policy") as string | null) ?? "").trim();
@@ -90,7 +93,10 @@ export async function updateOrgProfileAction(
 
   const org = await getOwnOrganization();
   if (!org?.id) {
-    return { phase: "error", error: "Could not resolve your organization. Please sign out and sign in again." };
+    return {
+      phase: "error",
+      error: "Could not resolve your organization. Please sign out and sign in again.",
+    };
   }
 
   const rawName = ((formData.get("name") as string | null) ?? "").trim();
@@ -98,7 +104,11 @@ export async function updateOrgProfileAction(
     return { phase: "error", error: "", fieldErrors: { name: "Organization name is required." } };
   }
   if (rawName.length > 100) {
-    return { phase: "error", error: "", fieldErrors: { name: "Organization name must be 100 characters or fewer." } };
+    return {
+      phase: "error",
+      error: "",
+      fieldErrors: { name: "Organization name must be 100 characters or fewer." },
+    };
   }
 
   const result = await updateOrganization(org.id, { name: rawName });

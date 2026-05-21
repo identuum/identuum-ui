@@ -54,9 +54,7 @@ export default async function ReactivateOrganizationPage({
         <Breadcrumb orgName={org.name} />
         <div className="bg-white border border-stone-200 rounded-[1.5rem] px-5 py-4 shadow-sm">
           <p className="text-sm font-semibold text-stone-700">Already active</p>
-          <p className="text-xs text-stone-400 mt-1">
-            This organization is already active.
-          </p>
+          <p className="text-xs text-stone-400 mt-1">This organization is already active.</p>
         </div>
         <a
           href="/site-admin/organizations"

@@ -55,10 +55,12 @@ export function InviteUserSection() {
           {state.noEmail ? (
             /* No-email / manual invite: setup link MUST be shared out-of-band */
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-sm font-semibold text-amber-800">Manual invite — share the setup link</p>
+              <p className="text-sm font-semibold text-amber-800">
+                Manual invite — share the setup link
+              </p>
               <p className="text-xs text-stone-600 mt-1">
-                No email was provided. Copy this one-time setup link and send it to the
-                person out of band (e.g. Slack, SMS). It expires in 24 hours.
+                No email was provided. Copy this one-time setup link and send it to the person out
+                of band (e.g. Slack, SMS). It expires in 24 hours.
               </p>
             </div>
           ) : (
@@ -103,7 +105,9 @@ export function InviteUserSection() {
           <div className="space-y-1">
             <label htmlFor="invite-email" className="block text-xs font-semibold text-stone-600">
               Email{" "}
-              <span className="text-stone-400 font-normal">(optional — leave blank to get a link for manual delivery)</span>
+              <span className="text-stone-400 font-normal">
+                (optional — leave blank to get a link for manual delivery)
+              </span>
             </label>
             <input
               id="invite-email"
@@ -120,8 +124,7 @@ export function InviteUserSection() {
 
           <div className="space-y-1">
             <label htmlFor="invite-name" className="block text-xs font-semibold text-stone-600">
-              Display name{" "}
-              <span className="text-stone-400 font-normal">(optional)</span>
+              Display name <span className="text-stone-400 font-normal">(optional)</span>
             </label>
             <input
               id="invite-name"

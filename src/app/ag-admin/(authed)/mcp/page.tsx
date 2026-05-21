@@ -20,6 +20,7 @@ import { agRequest } from "@/lib/ag-client";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "MCP Server — Identuum AG" };
 
 /** Safe subset of MCPStatusDTO from identuum-ag handlers/mcp_admin.go */
@@ -55,7 +56,8 @@ export default async function McpPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-3xl">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-sky-950">MCP Server</h1>
@@ -66,6 +68,21 @@ export default async function McpPage() {
         <span className="text-xs font-medium text-stone-400 bg-stone-100 px-2.5 py-1 rounded-full">
           Read-only
         </span>
+      </div>
+
+      {/* Explanation */}
+      <div className="bg-sky-50 border border-sky-100 rounded-2xl px-5 py-4 space-y-1.5">
+        <p className="text-xs font-semibold text-sky-800">What is the AG MCP Server?</p>
+        <p className="text-xs text-sky-700 leading-relaxed">
+          The Identuum AG management MCP server exposes operator tools for governing agents,
+          sessions, and HITL/CBAA review items through a natural-language interface. Connect an
+          MCP-compatible client (e.g., Claude Desktop, Cursor) to the AG management surface to
+          inspect and govern agent activity without writing code.
+        </p>
+        <p className="text-xs text-sky-700 leading-relaxed">
+          MCP governance is constrained by agent policy — allowed tools, readonly mode, session
+          context, and HITL/CBAA gates all apply. Governed MCP actions appear as agent sessions.
+        </p>
       </div>
 
       {result === "unavailable" ? (
@@ -79,6 +96,14 @@ export default async function McpPage() {
           )}
         </div>
       )}
+
+      {/* Quick links */}
+      <div className="flex flex-wrap gap-2 pt-2">
+        <QuickLink href="/ag-admin/sessions">Agent Sessions</QuickLink>
+        <QuickLink href="/ag-admin/agents">Agent Registry</QuickLink>
+        <QuickLink href="/ag-admin/hitl">HITL / CBAA</QuickLink>
+        <QuickLink href="/ag-admin">Dashboard</QuickLink>
+      </div>
     </div>
   );
 }
@@ -150,14 +175,39 @@ function ToolCategoriesCard({ categories }: { categories: string[] }) {
   );
 }
 
+function QuickLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      className="text-xs px-3 py-1.5 rounded-lg border border-stone-200 bg-white text-stone-600 hover:bg-sky-50 hover:border-sky-200 hover:text-sky-700 font-medium transition-colors"
+    >
+      {children}
+    </a>
+  );
+}
+
 function UnavailableState() {
   return (
     <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm px-6 py-10 text-center">
       <p className="text-sm font-semibold text-sky-950">MCP Server status unavailable</p>
       <p className="text-xs text-stone-400 mt-1.5 max-w-xs mx-auto leading-relaxed">
-        Could not reach the AG management surface. Check that identuum-ag is running and the runtime
-        configuration points to the correct management URL.
+        Could not reach the AG management surface. Check that identuum-ag is running and the
+        runtime configuration points to the correct management URL.
       </p>
+      <div className="flex flex-wrap justify-center gap-2 mt-4">
+        <a href="/ag-admin/sessions" className="text-xs text-sky-600 hover:underline">
+          Agent Sessions →
+        </a>
+        <a href="/ag-admin/agents" className="text-xs text-sky-600 hover:underline">
+          Agent Registry →
+        </a>
+        <a href="/ag-admin/hitl" className="text-xs text-sky-600 hover:underline">
+          HITL / CBAA →
+        </a>
+        <a href="/ag-admin" className="text-xs text-sky-600 hover:underline">
+          Dashboard →
+        </a>
+      </div>
     </div>
   );
 }

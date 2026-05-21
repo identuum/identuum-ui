@@ -71,12 +71,10 @@ async function loadSystemStatus(): Promise<ServiceStatus[]> {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function SiteAdminSettingsPage() {
-  const services = await loadSystemStatus().catch(
-    (): ServiceStatus[] => [
-      { name: "Identity Provider (IdP)", enabled: false, healthy: null },
-      { name: "Agentic Governor (AG)", enabled: false, healthy: null },
-    ]
-  );
+  const services = await loadSystemStatus().catch((): ServiceStatus[] => [
+    { name: "Identity Provider (IdP)", enabled: false, healthy: null },
+    { name: "Agentic Governor (AG)", enabled: false, healthy: null },
+  ]);
 
   return (
     <div className="space-y-8 max-w-2xl">

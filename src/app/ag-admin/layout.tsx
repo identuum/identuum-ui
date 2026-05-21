@@ -1,21 +1,14 @@
 /**
- * AG governance segment layout.
+ * AG governance segment layout — configuration guard only.
  *
- * This layout:
- *   1. Loads runtime config; shows an appropriate guard when ag.enabled is false.
- *   2. Renders the AG shell (sidebar + content) for all AG routes.
- *
- * Runtime config is the fast static check. A link to /platform-status lets
- * operators see the live discovery state (reachability, license, error codes)
- * without adding backend calls to every page load in this shell.
- *
- * Session guard is handled by the (authed) route group layout which covers
- * /ag-admin protected pages. /ag-admin/login sits outside the (authed) group.
+ * This layout checks whether AG is configured in the runtime config and shows
+ * an appropriate message when it is not. It does NOT render the sidebar; the
+ * sidebar is rendered by the (authed) route group layout so that the login
+ * page (/ag-admin/login) can render without navigation.
  *
  * Security: no tokens, credentials, or internal URLs are passed to client
- * components. The sidebar only exposes public route paths.
+ * components.
  */
-import { AgAdminNav } from "@/components/ag-admin/ag-admin-nav";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
 import type { Metadata } from "next";
 
@@ -42,32 +35,7 @@ export default function AgAdminLayout({ children }: { children: React.ReactNode 
     );
   }
 
-  return (
-    <div className="min-h-screen bg-stone-50 flex">
-      {/* Sidebar */}
-      <aside className="hidden lg:flex lg:flex-col w-56 bg-sky-950 flex-shrink-0">
-        <div className="px-5 py-5 border-b border-sky-900">
-          <p className="text-xs font-bold uppercase tracking-widest text-sky-400">AG Governance</p>
-          <p className="text-[10px] text-sky-700 mt-0.5">Agentic Governor</p>
-        </div>
-        <AgAdminNav />
-        {/* Platform status link — lets operators check backend state */}
-        <div className="px-3 py-3 border-t border-sky-900/60">
-          <a
-            href="/platform-status"
-            className="flex items-center rounded-lg px-3 py-2 text-xs text-sky-800 hover:text-sky-400 transition-colors"
-          >
-            Platform status
-          </a>
-        </div>
-      </aside>
-
-      {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        <div className="max-w-5xl mx-auto px-6 py-8">{children}</div>
-      </main>
-    </div>
-  );
+  return <>{children}</>;
 }
 
 type AgUnavailableReason = "not_configured" | "not_enabled";

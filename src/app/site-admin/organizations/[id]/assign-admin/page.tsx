@@ -59,9 +59,7 @@ export default async function AssignAdminPage({
       <div className="max-w-lg space-y-4">
         <Breadcrumb orgName={org.name} />
         <div className="bg-white border border-stone-200 rounded-[1.5rem] px-5 py-4 shadow-sm">
-          <p className="text-sm font-semibold text-stone-700">
-            Recovery delegation not available
-          </p>
+          <p className="text-sm font-semibold text-stone-700">Recovery delegation not available</p>
           <p className="text-xs text-stone-400 mt-1">
             <span className="font-medium text-sky-950">{org.name}</span> has an active administrator
             account or a pending setup link that has not yet expired. Recovery delegation is only
@@ -87,8 +85,8 @@ export default async function AssignAdminPage({
           Assign administrator
         </h1>
         <p className="text-sm text-stone-500 mt-0.5">
-          Generate a one-time setup link to delegate the first org_admin for this organization.
-          This action is available when no active administrator account or valid pending invitation
+          Generate a one-time setup link to delegate the first org_admin for this organization. This
+          action is available when no active administrator account or valid pending invitation
           exists.
         </p>
       </div>
@@ -100,8 +98,9 @@ export default async function AssignAdminPage({
         <p className="text-amber-600 font-medium mt-1">Recovery delegation available</p>
         {!org.active && (
           <p className="text-stone-400 mt-0.5">
-            This organization is currently <span className="font-medium text-stone-500">inactive</span>.
-            Users will not be able to log in until it is reactivated.
+            This organization is currently{" "}
+            <span className="font-medium text-stone-500">inactive</span>. Users will not be able to
+            log in until it is reactivated.
           </p>
         )}
       </div>
@@ -111,9 +110,9 @@ export default async function AssignAdminPage({
         <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3">
           <p className="text-xs font-semibold text-stone-600">Organization is inactive</p>
           <p className="text-xs text-stone-400 mt-1 leading-relaxed">
-            You can still assign an administrator to an inactive organization. Once the admin
-            claims their account, they can reactivate the organization from the site-admin
-            Organizations page.
+            You can still assign an administrator to an inactive organization. Once the admin claims
+            their account, they can reactivate the organization from the site-admin Organizations
+            page.
           </p>
         </div>
       )}

@@ -9,12 +9,18 @@
  */
 
 import { useActionState } from "react";
-import { linkOrgAction, unlinkOrgAction } from "./actions";
-import type { IDPOrgSummaryForLink, AGOrgSummaryWithLink, OrgLinkWriteResult } from "@/lib/org-link-types";
+import { linkOrgAction, unlinkOrgAction, importOrgAction, importAllOrgsAction } from "./actions";
+import type { IDPOrgSummaryForLink, AGOrgSummaryWithLink, ImportAllBatchResult, OrgLinkWriteResult } from "@/lib/org-link-types";
 
 interface OrgLinkActionsProps {
   agOrgs: AGOrgSummaryWithLink[];
   idpOrgs: IDPOrgSummaryForLink[];
+  canAct: boolean;
+}
+
+interface IDPImportSectionProps {
+  idpOrgs: IDPOrgSummaryForLink[];
+  linkedIDPOrgIds: Set<string>;
   canAct: boolean;
 }
 
@@ -183,6 +189,145 @@ export function OrgLinkActions({ agOrgs, idpOrgs, canAct }: OrgLinkActionsProps)
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+function ImportForm({
+  idpOrg,
+  disabled,
+}: {
+  idpOrg: IDPOrgSummaryForLink;
+  disabled: boolean;
+}) {
+  const [state, action, pending] = useActionState(
+    async (_prev: OrgLinkWriteResult, formData: FormData) => {
+      const name = (formData.get("ag_name") as string) || idpOrg.name;
+      return importOrgAction(idpOrg.id, name);
+    },
+    initialState
+  );
+
+  return (
+    <form action={action} className="flex items-center gap-2 flex-wrap">
+      <input
+        type="text"
+        name="ag_name"
+        defaultValue={idpOrg.name}
+        disabled={disabled || pending}
+        placeholder="AG org name"
+        className="text-xs rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-stone-700 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50 w-48"
+      />
+      <button
+        type="submit"
+        disabled={disabled || pending}
+        className="text-xs rounded-lg bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        {pending ? "Importing…" : "Import into AG"}
+      </button>
+      {state.ok === false && state.error_code && (
+        <ActionError errorCode={state.error_code} message={state.message} />
+      )}
+      {state.ok && (
+        <span className="text-xs text-emerald-600">Imported and linked.</span>
+      )}
+    </form>
+  );
+}
+
+const initialBatchResult: ImportAllBatchResult = { ok: false, imported: 0, skipped: 0, failed: 0, message: "" };
+
+function ImportAllForm({
+  displayCount,
+  disabled,
+}: {
+  /** Display-only count for the button label. Server re-derives candidates independently. */
+  displayCount: number;
+  disabled: boolean;
+}) {
+  const [state, action, pending] = useActionState(
+    async (_prev: ImportAllBatchResult) => importAllOrgsAction(),
+    initialBatchResult
+  );
+
+  const hasResult = state.imported > 0 || state.skipped > 0 || state.failed > 0;
+
+  return (
+    <form action={action} className="flex items-center gap-3 flex-wrap">
+      <button
+        type="submit"
+        disabled={disabled || pending || displayCount === 0}
+        className="text-xs rounded-lg bg-sky-700 px-3 py-1.5 font-medium text-white hover:bg-sky-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        {pending
+          ? "Importing…"
+          : `Import all ${displayCount} organizations into AG`}
+      </button>
+      <span className="text-[10px] text-stone-400">
+        Organizations only — no users, admins, or roles.
+      </span>
+      {hasResult && (
+        <span className={`text-xs ${state.ok ? "text-emerald-600" : "text-red-600"}`}>
+          {state.message}
+        </span>
+      )}
+      {!hasResult && state.error_code && (
+        <ActionError errorCode={state.error_code} message={state.message} />
+      )}
+    </form>
+  );
+}
+
+export function IDPImportSection({ idpOrgs, linkedIDPOrgIds, canAct }: IDPImportSectionProps) {
+  const unlinkedIDPOrgs = idpOrgs.filter(
+    (o) => o.active && !o.deleted && !linkedIDPOrgIds.has(o.id)
+  );
+
+  if (unlinkedIDPOrgs.length === 0) {
+    return (
+      <p className="text-xs text-stone-400">
+        All active IDP organizations are already linked to AG organizations.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {canAct && unlinkedIDPOrgs.length > 1 && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
+          <p className="text-xs font-medium text-sky-800 mb-2">
+            Import all {unlinkedIDPOrgs.length} unlinked organizations at once
+          </p>
+          <ImportAllForm displayCount={unlinkedIDPOrgs.length} disabled={false} />
+        </div>
+      )}
+      <div className="space-y-3">
+      {unlinkedIDPOrgs.map((idpOrg) => (
+        <div
+          key={idpOrg.id}
+          className="rounded-xl border border-stone-200 bg-white p-4 space-y-2"
+        >
+          <div className="flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full flex-shrink-0 bg-stone-300" />
+            <p className="text-sm font-medium text-sky-950">{idpOrg.name}</p>
+            {idpOrg.domain && (
+              <span className="text-xs text-stone-400">{idpOrg.domain}</span>
+            )}
+            <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded ml-auto bg-stone-100 text-stone-500">
+              not in AG
+            </span>
+          </div>
+
+          {!canAct ? (
+            <p className="text-xs text-stone-400">
+              Import unavailable — requires IDP, AG, and an active AG operator session.
+            </p>
+          ) : (
+            <ImportForm idpOrg={idpOrg} disabled={false} />
+          )}
+        </div>
+      ))}
+      </div>
     </div>
   );
 }

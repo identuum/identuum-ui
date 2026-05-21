@@ -2,7 +2,7 @@
  * AG operator login endpoint.
  *
  * Accepts { email, password } JSON, forwards to AG's POST /login on the
- * identity surface, and sets an HttpOnly ag_access_token cookie on success.
+ * identity surface, and sets an HttpOnly ag_operator_session cookie on success.
  *
  * The raw access_token from AG is NEVER returned to the browser — it is
  * consumed server-side and stored only as an HttpOnly cookie.

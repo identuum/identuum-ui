@@ -11,7 +11,12 @@
  *   - No setup links, tokens, cookies, or credentials are logged.
  */
 
-import { inviteOrgUser, regenerateInvitation, resetUserMFA, setUserActive } from "@/lib/idp-admin-client";
+import {
+  inviteOrgUser,
+  regenerateInvitation,
+  resetUserMFA,
+  setUserActive,
+} from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
 import { revalidatePath } from "next/cache";

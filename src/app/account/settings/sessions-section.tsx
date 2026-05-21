@@ -39,8 +39,8 @@ export function SessionsSection({ sessions, forbidden, error }: SessionsSectionP
     return (
       <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3">
         <p className="text-xs text-stone-500 leading-relaxed">
-          Session management is not available for administrator accounts. Use the sign-out option
-          to end your current session.
+          Session management is not available for administrator accounts. Use the sign-out option to
+          end your current session.
         </p>
       </div>
     );
@@ -57,9 +57,7 @@ export function SessionsSection({ sessions, forbidden, error }: SessionsSectionP
   const activeSessions = sessions.filter((s) => s.is_active);
 
   if (activeSessions.length === 0) {
-    return (
-      <p className="text-sm text-stone-400">No active sessions found.</p>
-    );
+    return <p className="text-sm text-stone-400">No active sessions found.</p>;
   }
 
   return (
@@ -91,14 +89,10 @@ function SessionRow({ session }: { session: SessionItem }) {
               This session
             </span>
           )}
-          <span className="text-xs text-stone-500">
-            Started {formatDate(session.created_at)}
-          </span>
+          <span className="text-xs text-stone-500">Started {formatDate(session.created_at)}</span>
         </div>
         {session.last_used_at && (
-          <p className="text-xs text-stone-400">
-            Last used {formatDate(session.last_used_at)}
-          </p>
+          <p className="text-xs text-stone-400">Last used {formatDate(session.last_used_at)}</p>
         )}
         {session.ip_address && (
           <p className="text-xs text-stone-400 font-mono">{session.ip_address}</p>
@@ -108,9 +102,7 @@ function SessionRow({ session }: { session: SessionItem }) {
             {session.user_agent}
           </p>
         )}
-        {state.error && (
-          <p className="text-xs text-red-600 mt-1">{state.error}</p>
-        )}
+        {state.error && <p className="text-xs text-red-600 mt-1">{state.error}</p>}
       </div>
 
       {/* Only non-current sessions can be individually revoked */}

@@ -122,8 +122,7 @@ export function ResetMFAButton({ userId }: ResetMFAButtonProps) {
   if (state.phase === "success") {
     return (
       <p className="text-xs text-emerald-600 font-medium leading-tight max-w-[280px]">
-        MFA enrollment cleared. Active sessions revoked. The user must re-enroll on next
-        sign-in.
+        MFA enrollment cleared. Active sessions revoked. The user must re-enroll on next sign-in.
       </p>
     );
   }
@@ -134,8 +133,8 @@ export function ResetMFAButton({ userId }: ResetMFAButtonProps) {
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 max-w-[300px]">
           <p className="text-xs font-semibold text-amber-700">Confirm MFA reset</p>
           <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">
-            This will clear the user{"'"}s TOTP authenticator and revoke all active
-            sessions. The user will need to re-enroll MFA on next sign-in.
+            This will clear the user{"'"}s TOTP authenticator and revoke all active sessions. The
+            user will need to re-enroll MFA on next sign-in.
           </p>
         </div>
         {state.phase === "error" && state.error && (

@@ -22,8 +22,12 @@ export default async function OrgAdminSettingsPage() {
   return (
     <div className="space-y-8 max-w-2xl">
       <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-sky-950">Organization settings</h1>
-        <p className="text-sm text-stone-500 mt-0.5">Configuration and policies for your organization.</p>
+        <h1 className="text-2xl font-extrabold tracking-tight text-sky-950">
+          Organization settings
+        </h1>
+        <p className="text-sm text-stone-500 mt-0.5">
+          Configuration and policies for your organization.
+        </p>
       </div>
 
       {/* Organization profile — editable */}
@@ -42,7 +46,8 @@ export default async function OrgAdminSettingsPage() {
         <div className="px-6 py-4 border-b border-stone-100">
           <p className="text-sm font-semibold text-sky-950">Security policy</p>
           <p className="text-xs text-stone-400 mt-0.5">
-            Control whether multi-factor authentication is required for members of your organization.
+            Control whether multi-factor authentication is required for members of your
+            organization.
           </p>
         </div>
         <div className="px-6 py-5">

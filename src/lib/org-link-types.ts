@@ -81,6 +81,8 @@ export type OrgLinkWriteErrorCode =
   | "system_org_not_allowed"
   | "org_not_found"
   | "idp_org_already_linked"
+  /** AG reports the requested organization name is already in use. */
+  | "org_name_already_exists"
   /** AG write path is not configured (AG 503). */
   | "not_configured"
   /** AG backend is unreachable (network failure). */
@@ -96,4 +98,23 @@ export interface OrgLinkWriteResult {
   error_code?: OrgLinkWriteErrorCode;
   /** Safe human-readable message for UI display. */
   message?: string;
+}
+
+/**
+ * Safe batch result returned by the import-all action.
+ * Organization-only: no user/admin/credential/role data.
+ */
+export interface ImportAllBatchResult {
+  /** Number of organizations successfully imported. */
+  imported: number;
+  /** Number of organizations skipped (already linked, so no action needed). */
+  skipped: number;
+  /** Number of organizations that failed for reasons other than already-linked. */
+  failed: number;
+  /** Safe human-readable summary for UI display. */
+  message: string;
+  /** True when the batch completed without any unexpected failures. */
+  ok: boolean;
+  /** Safe error code when the entire operation was blocked before any work. */
+  error_code?: OrgLinkWriteErrorCode;
 }

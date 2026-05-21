@@ -37,11 +37,7 @@ export default async function OrgDetailPage({
     return <NotFoundPanel />;
   }
 
-  const statusLabel = org.deleted
-    ? "Deleted"
-    : org.active
-      ? "Active"
-      : "Inactive";
+  const statusLabel = org.deleted ? "Deleted" : org.active ? "Active" : "Inactive";
 
   const statusCls = org.deleted
     ? "text-red-600 bg-red-50 border-red-100"
@@ -106,9 +102,7 @@ export default async function OrgDetailPage({
             <span className="text-xs font-mono text-sky-950">{org.slug || "—"}</span>
           </DetailRow>
           <DetailRow label="Status">
-            <span
-              className={`text-xs font-medium ${statusCls.split(" ").slice(0, 2).join(" ")}`}
-            >
+            <span className={`text-xs font-medium ${statusCls.split(" ").slice(0, 2).join(" ")}`}>
               {statusLabel}
             </span>
           </DetailRow>
@@ -153,17 +147,15 @@ export default async function OrgDetailPage({
                     Administrator account present
                   </p>
                   <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">
-                    This organization has at least one organization administrator account.
-                    The administrator may be newly invited and completing initial setup.
+                    This organization has at least one organization administrator account. The
+                    administrator may be newly invited and completing initial setup.
                   </p>
                 </div>
               </div>
               {/* Recovery affordance when the only admin account has an expired invitation */}
               {org.can_assign_admin && !org.deleted && (
                 <div className="border-t border-stone-100 pt-3 space-y-2">
-                  <p className="text-xs text-amber-700 font-medium">
-                    Pending invitation expired
-                  </p>
+                  <p className="text-xs text-amber-700 font-medium">Pending invitation expired</p>
                   <p className="text-xs text-stone-500 leading-relaxed">
                     The administrator invitation has expired and was never claimed. As site
                     administrator you may delegate a recovery administrator.
@@ -190,9 +182,7 @@ export default async function OrgDetailPage({
                   !
                 </span>
                 <div>
-                  <p className="text-xs font-semibold text-amber-700">
-                    No active administrator
-                  </p>
+                  <p className="text-xs font-semibold text-amber-700">No active administrator</p>
                   <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">
                     This organization has no active organization administrator. Without an
                     administrator, tenant users cannot manage their organization settings.
@@ -366,9 +356,7 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
 function NotFoundPanel() {
   return (
     <div className="max-w-lg">
-      <h1 className="text-lg font-bold text-sky-950 mb-2 tracking-tight">
-        Organization not found
-      </h1>
+      <h1 className="text-lg font-bold text-sky-950 mb-2 tracking-tight">Organization not found</h1>
       <p className="text-sm text-stone-500 leading-relaxed">
         The organization does not exist or you do not have permission to view it.
       </p>
@@ -468,10 +456,7 @@ function OperationalStatusCard({ org, id }: { org: OrgDetail; id: string }) {
       <div className="px-6 py-4 space-y-3.5">
         {/* Lifecycle row */}
         <div className="flex items-start gap-3">
-          <span
-            className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${lc.dot}`}
-            aria-hidden="true"
-          />
+          <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${lc.dot}`} aria-hidden="true" />
           <div>
             <p className="text-xs font-semibold text-sky-950">{lc.label}</p>
             <p className="text-xs text-stone-500 leading-relaxed">{lc.body}</p>
@@ -480,10 +465,7 @@ function OperationalStatusCard({ org, id }: { org: OrgDetail; id: string }) {
 
         {/* Administrator row */}
         <div className="flex items-start gap-3">
-          <span
-            className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${ac.dot}`}
-            aria-hidden="true"
-          />
+          <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${ac.dot}`} aria-hidden="true" />
           <div>
             <p className="text-xs font-semibold text-sky-950">{ac.label}</p>
             <p className="text-xs text-stone-500 leading-relaxed">{ac.body}</p>
@@ -508,19 +490,13 @@ function OperationalStatusCard({ org, id }: { org: OrgDetail; id: string }) {
                 <a href={`/site-admin/organizations/${id}/reactivate`} className={actionLinkCls}>
                   Reactivate →
                 </a>
-                <a
-                  href={`/site-admin/organizations/${id}/assign-admin`}
-                  className={actionLinkCls}
-                >
+                <a href={`/site-admin/organizations/${id}/assign-admin`} className={actionLinkCls}>
                   Assign administrator →
                 </a>
               </>
             )}
             {nextAction === "assign-admin" && (
-              <a
-                href={`/site-admin/organizations/${id}/assign-admin`}
-                className={actionLinkCls}
-              >
+              <a href={`/site-admin/organizations/${id}/assign-admin`} className={actionLinkCls}>
                 Assign administrator →
               </a>
             )}

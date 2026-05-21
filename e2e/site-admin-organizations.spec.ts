@@ -31,7 +31,8 @@ import { expect, test } from "@playwright/test";
 import { ensureExpiredPendingOrgFixture } from "./helpers/fixture-expired-org";
 import { loginAsSiteAdmin, skipAuthTests } from "./helpers/login";
 
-const ORG_UUID_RE = /^\/site-admin\/organizations\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ORG_UUID_RE =
+  /^\/site-admin\/organizations\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
 // ── Shared site_admin context (login once per file run) ───────────────────────
@@ -56,19 +57,14 @@ test.afterAll(async () => {
 });
 
 test.describe("/site-admin/organizations list → detail navigation", () => {
-  test(
-    "Details link navigates to read-only organization detail page",
-    async () => {
-      if (skipAuthTests) {
-        test.skip(
-          true,
-          "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test"
-        );
-      }
+  test("Details link navigates to read-only organization detail page", async () => {
+    if (skipAuthTests) {
+      test.skip(true, "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test");
+    }
 
-      // ── Open organizations list using shared site_admin session ──────────────
-      const page = await siteAdminCtx!.newPage();
-      try {
+    // ── Open organizations list using shared site_admin session ──────────────
+    const page = await siteAdminCtx!.newPage();
+    try {
       await page.goto("/site-admin/organizations");
       await page.waitForLoadState("networkidle");
 
@@ -137,10 +133,9 @@ test.describe("/site-admin/organizations list → detail navigation", () => {
 
       // "Administrator account present" (has_admin=true) or "No active administrator"
       // (has_admin=false) depending on org state.
-      const hasAccountPresent = await page
-        .getByText("Administrator account present")
-        .isVisible();
-      const hasNoAdmin = (await page.getByText("No active administrator", { exact: true }).count()) > 0;
+      const hasAccountPresent = await page.getByText("Administrator account present").isVisible();
+      const hasNoAdmin =
+        (await page.getByText("No active administrator", { exact: true }).count()) > 0;
       expect(hasAccountPresent || hasNoAdmin).toBe(true);
 
       // ── Assert back link is present ──────────────────────────────────────────
@@ -155,11 +150,10 @@ test.describe("/site-admin/organizations list → detail navigation", () => {
       const hasEdit = await page.getByRole("link", { name: "Edit" }).isVisible();
       const hasRestore = await page.getByRole("link", { name: "Restore" }).isVisible();
       expect(hasEdit || hasRestore).toBe(true);
-      } finally {
-        await page.close();
-      }
+    } finally {
+      await page.close();
     }
-  );
+  });
 });
 
 test.describe("/site-admin/organizations action routes — unauthenticated redirect safety", () => {
@@ -211,7 +205,7 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
   function extractOrgId(href: string): string {
     const parts = href.replace(/\/$/, "").split("/");
     const idx = parts.indexOf("organizations");
-    return idx !== -1 ? parts[idx + 1] ?? "" : "";
+    return idx !== -1 ? (parts[idx + 1] ?? "") : "";
   }
 
   test("create organization page renders expected form fields", async () => {
@@ -247,42 +241,42 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
 
     const page = await siteAdminCtx!.newPage();
     try {
-    await page.goto("/site-admin/organizations");
-    await page.waitForLoadState("networkidle");
+      await page.goto("/site-admin/organizations");
+      await page.waitForLoadState("networkidle");
 
-    // Skip if there are no organizations at all
-    const detailsLinks = page.getByRole("link", { name: "Details" });
-    if ((await detailsLinks.count()) === 0) {
-      test.skip(true, "No organizations in DB — skipping edit page test");
-      return;
-    }
+      // Skip if there are no organizations at all
+      const detailsLinks = page.getByRole("link", { name: "Details" });
+      if ((await detailsLinks.count()) === 0) {
+        test.skip(true, "No organizations in DB — skipping edit page test");
+        return;
+      }
 
-    // Extract org ID from first Details link href (avoids a click-navigate roundtrip)
-    const firstDetailsHref = await detailsLinks.first().getAttribute("href");
-    const orgId = extractOrgId(firstDetailsHref ?? "");
-    expect(orgId).toMatch(/^[0-9a-f-]{36}$/i);
+      // Extract org ID from first Details link href (avoids a click-navigate roundtrip)
+      const firstDetailsHref = await detailsLinks.first().getAttribute("href");
+      const orgId = extractOrgId(firstDetailsHref ?? "");
+      expect(orgId).toMatch(/^[0-9a-f-]{36}$/i);
 
-    // Navigate to detail page to check active/deleted state before visiting edit
-    await page.goto(`/site-admin/organizations/${orgId}`);
-    await page.waitForLoadState("networkidle");
+      // Navigate to detail page to check active/deleted state before visiting edit
+      await page.goto(`/site-admin/organizations/${orgId}`);
+      await page.waitForLoadState("networkidle");
 
-    // Edit link is only visible for non-deleted orgs
-    const editLink = page.getByRole("link", { name: "Edit" });
-    if (!(await editLink.isVisible())) {
-      test.skip(true, "First org is deleted — Edit link not shown; skipping edit form test");
-      return;
-    }
+      // Edit link is only visible for non-deleted orgs
+      const editLink = page.getByRole("link", { name: "Edit" });
+      if (!(await editLink.isVisible())) {
+        test.skip(true, "First org is deleted — Edit link not shown; skipping edit form test");
+        return;
+      }
 
-    await page.goto(`/site-admin/organizations/${orgId}/edit`);
-    await page.waitForLoadState("networkidle");
+      await page.goto(`/site-admin/organizations/${orgId}/edit`);
+      await page.waitForLoadState("networkidle");
 
-    // Edit form must render with correct heading and Name field
-    await expect(page.getByRole("heading", { name: "Edit organization" })).toBeVisible();
-    await expect(page.getByLabel("Name")).toBeVisible();
-    // Cancel link must point back to the org detail page, not the list
-    const cancelLink = page.getByRole("link", { name: "Cancel" });
-    await expect(cancelLink).toBeVisible();
-    expect(await cancelLink.getAttribute("href")).toBe(`/site-admin/organizations/${orgId}`);
+      // Edit form must render with correct heading and Name field
+      await expect(page.getByRole("heading", { name: "Edit organization" })).toBeVisible();
+      await expect(page.getByLabel("Name")).toBeVisible();
+      // Cancel link must point back to the org detail page, not the list
+      const cancelLink = page.getByRole("link", { name: "Cancel" });
+      await expect(cancelLink).toBeVisible();
+      expect(await cancelLink.getAttribute("href")).toBe(`/site-admin/organizations/${orgId}`);
     } finally {
       await page.close();
     }
@@ -295,68 +289,58 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
 
     const page = await siteAdminCtx!.newPage();
     try {
-    await page.goto("/site-admin/organizations");
-    await page.waitForLoadState("networkidle");
+      await page.goto("/site-admin/organizations");
+      await page.waitForLoadState("networkidle");
 
-    const detailsLinks = page.getByRole("link", { name: "Details" });
-    if ((await detailsLinks.count()) === 0) {
-      test.skip(true, "No organizations in DB — skipping assign-admin copy test");
-      return;
-    }
+      const detailsLinks = page.getByRole("link", { name: "Details" });
+      if ((await detailsLinks.count()) === 0) {
+        test.skip(true, "No organizations in DB — skipping assign-admin copy test");
+        return;
+      }
 
-    // Extract org ID from first Details link
-    const firstDetailsHref = await detailsLinks.first().getAttribute("href");
-    const orgId = extractOrgId(firstDetailsHref ?? "");
-    expect(orgId).toMatch(/^[0-9a-f-]{36}$/i);
+      // Extract org ID from first Details link
+      const firstDetailsHref = await detailsLinks.first().getAttribute("href");
+      const orgId = extractOrgId(firstDetailsHref ?? "");
+      expect(orgId).toMatch(/^[0-9a-f-]{36}$/i);
 
-    await page.goto(`/site-admin/organizations/${orgId}/assign-admin`);
-    await page.waitForLoadState("networkidle");
+      await page.goto(`/site-admin/organizations/${orgId}/assign-admin`);
+      await page.waitForLoadState("networkidle");
 
-    // Stale copy must never appear
-    await expect(page.getByText("Already has an active administrator")).not.toBeVisible();
+      // Stale copy must never appear
+      await expect(page.getByText("Already has an active administrator")).not.toBeVisible();
 
-    // Page must render one of the three valid states:
-    //   (a) Recovery form — when can_assign_admin=true
-    //   (b) Policy-blocked panel — when can_assign_admin=false
-    //   (c) Deleted-org panel — when org.deleted=true
-    const showsForm = await page
-      .getByRole("button", { name: /generate admin setup link/i })
-      .isVisible();
-    const showsRecoveryBlocked = await page
-      .getByText("Recovery delegation not available")
-      .isVisible();
-    const showsDeletedGuard = await page
-      .getByText("Organization is deleted")
-      .isVisible();
+      // Page must render one of the three valid states:
+      //   (a) Recovery form — when can_assign_admin=true
+      //   (b) Policy-blocked panel — when can_assign_admin=false
+      //   (c) Deleted-org panel — when org.deleted=true
+      const showsForm = await page
+        .getByRole("button", { name: /generate admin setup link/i })
+        .isVisible();
+      const showsRecoveryBlocked = await page
+        .getByText("Recovery delegation not available")
+        .isVisible();
+      const showsDeletedGuard = await page.getByText("Organization is deleted").isVisible();
 
-    expect(showsForm || showsRecoveryBlocked || showsDeletedGuard).toBe(true);
+      expect(showsForm || showsRecoveryBlocked || showsDeletedGuard).toBe(true);
     } finally {
       await page.close();
     }
   });
 
-  test(
-    "list 'Assign admin' affordance opens recovery form (skips if no can_assign_admin=true org)",
-    async () => {
-      if (skipAuthTests) {
-        test.skip(
-          true,
-          "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test"
-        );
-      }
+  test("list 'Assign admin' affordance opens recovery form (skips if no can_assign_admin=true org)", async () => {
+    if (skipAuthTests) {
+      test.skip(true, "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test");
+    }
 
-      const page = await siteAdminCtx!.newPage();
-      try {
+    const page = await siteAdminCtx!.newPage();
+    try {
       await page.goto("/site-admin/organizations");
       await page.waitForLoadState("networkidle");
 
       // "Assign admin" only appears in list rows where can_assign_admin=true
       const assignLinks = page.getByRole("link", { name: "Assign admin" });
       if ((await assignLinks.count()) === 0) {
-        test.skip(
-          true,
-          "No organizations with can_assign_admin=true in current DB — skipping"
-        );
+        test.skip(true, "No organizations with can_assign_admin=true in current DB — skipping");
         return;
       }
 
@@ -368,39 +352,28 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
 
       // Recovery form must be visible
       await expect(page.getByRole("heading", { name: "Assign administrator" })).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: /generate admin setup link/i })
-      ).toBeVisible();
+      await expect(page.getByRole("button", { name: /generate admin setup link/i })).toBeVisible();
 
       // Stale copy must not appear
       await expect(page.getByText("Already has an active administrator")).not.toBeVisible();
-      } finally {
-        await page.close();
-      }
+    } finally {
+      await page.close();
     }
-  );
+  });
 
-  test(
-    "detail page 'Assign admin' affordance consistent with list when can_assign_admin=true",
-    async () => {
-      if (skipAuthTests) {
-        test.skip(
-          true,
-          "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test"
-        );
-      }
+  test("detail page 'Assign admin' affordance consistent with list when can_assign_admin=true", async () => {
+    if (skipAuthTests) {
+      test.skip(true, "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test");
+    }
 
-      const page = await siteAdminCtx!.newPage();
-      try {
+    const page = await siteAdminCtx!.newPage();
+    try {
       await page.goto("/site-admin/organizations");
       await page.waitForLoadState("networkidle");
 
       const assignLinks = page.getByRole("link", { name: "Assign admin" });
       if ((await assignLinks.count()) === 0) {
-        test.skip(
-          true,
-          "No organizations with can_assign_admin=true in current DB — skipping"
-        );
+        test.skip(true, "No organizations with can_assign_admin=true in current DB — skipping");
         return;
       }
 
@@ -425,36 +398,28 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
       // Detail page must expose at least one link to the assign-admin route for this org.
       // The detail handler now defaults can_assign_admin=true on DB error (consistent with
       // the list handler), so this count should be > 0 whenever the list shows "Assign admin".
-      const assignAdminLinkCount = await page
-        .locator(`a[href*="/assign-admin"]`)
-        .count();
+      const assignAdminLinkCount = await page.locator(`a[href*="/assign-admin"]`).count();
 
       expect(assignAdminLinkCount).toBeGreaterThan(0);
 
       // Administrator status card must show recovery affordance
       // (either "Pending invitation expired" sub-state or standard "No active administrator")
-      const hasExpiredInvitation =
-        (await page.getByText("Pending invitation expired").count()) > 0;
-      const hasNoAdmin = (await page.getByText("No active administrator", { exact: true }).count()) > 0;
+      const hasExpiredInvitation = (await page.getByText("Pending invitation expired").count()) > 0;
+      const hasNoAdmin =
+        (await page.getByText("No active administrator", { exact: true }).count()) > 0;
       expect(hasExpiredInvitation || hasNoAdmin).toBe(true);
-      } finally {
-        await page.close();
-      }
+    } finally {
+      await page.close();
     }
-  );
+  });
 
-  test(
-    "detail page shows accurate admin status copy — no stale text variants",
-    async () => {
-      if (skipAuthTests) {
-        test.skip(
-          true,
-          "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test"
-        );
-      }
+  test("detail page shows accurate admin status copy — no stale text variants", async () => {
+    if (skipAuthTests) {
+      test.skip(true, "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test");
+    }
 
-      const page = await siteAdminCtx!.newPage();
-      try {
+    const page = await siteAdminCtx!.newPage();
+    try {
       await page.goto("/site-admin/organizations");
       await page.waitForLoadState("networkidle");
 
@@ -478,15 +443,13 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
       await expect(page.getByText("Operational status")).toBeVisible();
 
       // Administrator status card must show one of the current valid strings
-      const accountPresent = await page
-        .getByText("Administrator account present")
-        .isVisible();
-      const noAdmin = await page.getByText("No active administrator").isVisible();
+      // Use count() to avoid strict-mode violations when text appears in multiple elements.
+      const accountPresent = (await page.getByText("Administrator account present").count()) > 0;
+      const noAdmin = (await page.getByText("No active administrator").count()) > 0;
       const pendingExpired = (await page.getByText("Pending invitation expired").count()) > 0;
       expect(accountPresent || noAdmin || pendingExpired).toBe(true);
-      } finally {
-        await page.close();
-      }
+    } finally {
+      await page.close();
     }
-  );
+  });
 });

@@ -101,12 +101,7 @@ export const AUDIT_EVENT_TYPE_GROUPS: readonly AuditEventTypeGroup[] = [
   },
   {
     label: "OAuth clients",
-    types: [
-      "client_created",
-      "client_updated",
-      "client_deleted",
-      "dynamic_client_registered",
-    ],
+    types: ["client_created", "client_updated", "client_deleted", "dynamic_client_registered"],
   },
   {
     label: "Identity providers",

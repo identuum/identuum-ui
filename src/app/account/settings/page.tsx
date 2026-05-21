@@ -42,7 +42,9 @@ export default async function AccountSettingsPage({
     <div className="space-y-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-extrabold tracking-tight text-sky-950">Account settings</h1>
-        <p className="text-sm text-stone-500 mt-0.5">Your personal sign-in credentials and security settings.</p>
+        <p className="text-sm text-stone-500 mt-0.5">
+          Your personal sign-in credentials and security settings.
+        </p>
       </div>
 
       {/* Tab navigation */}

@@ -50,9 +50,10 @@ test.afterAll(async () => {
 // ── org-admin area access ──────────────────────────────────────────────────────
 
 test.describe("/org-admin — authenticated route access", () => {
-
   test("/org-admin overview: renders heading, org-admin copy, and role display", async () => {
-    if (skipOrgAdminTests) { test.skip(true, SKIP_MSG); }
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
 
     const page = await sharedCtx!.newPage();
     try {
@@ -72,7 +73,9 @@ test.describe("/org-admin — authenticated route access", () => {
   });
 
   test("/org-admin/users: heading, filter tabs, table/empty state, and Details link", async () => {
-    if (skipOrgAdminTests) { test.skip(true, SKIP_MSG); }
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
 
     const page = await sharedCtx!.newPage();
     try {
@@ -100,7 +103,9 @@ test.describe("/org-admin — authenticated route access", () => {
   });
 
   test("/org-admin/users filter tabs navigable without 500", async () => {
-    if (skipOrgAdminTests) { test.skip(true, SKIP_MSG); }
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
 
     const page = await sharedCtx!.newPage();
     try {
@@ -119,7 +124,9 @@ test.describe("/org-admin — authenticated route access", () => {
   });
 
   test("/org-admin/users first Details link navigates to user detail (skips if no users)", async () => {
-    if (skipOrgAdminTests) { test.skip(true, SKIP_MSG); }
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
 
     const page = await sharedCtx!.newPage();
     try {
@@ -147,7 +154,9 @@ test.describe("/org-admin — authenticated route access", () => {
   });
 
   test("/org-admin/settings: all cards, form controls, and placeholder sections", async () => {
-    if (skipOrgAdminTests) { test.skip(true, SKIP_MSG); }
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
 
     const page = await sharedCtx!.newPage();
     try {
@@ -192,7 +201,9 @@ test.describe("/org-admin — authenticated route access", () => {
   });
 
   test("/org-admin/audit: renders without crash, org-scoped, no site-admin navigation", async () => {
-    if (skipOrgAdminTests) { test.skip(true, SKIP_MSG); }
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
 
     const page = await sharedCtx!.newPage();
     try {
@@ -202,12 +213,18 @@ test.describe("/org-admin — authenticated route access", () => {
       expect(await page.title()).not.toMatch(/500|internal error|application error/i);
 
       const hasAuditLog = (await page.getByRole("heading", { name: "Audit log" }).count()) > 0;
-      const hasUnavailable = (await page.getByText(/Professional tier|requires.*tier/i).count()) > 0;
+      const hasUnavailable =
+        (await page.getByText(/Professional tier|requires.*tier/i).count()) > 0;
+      // Heading is always rendered; unavailable panel shows when feature is license-gated.
       expect(hasAuditLog || hasUnavailable).toBe(true);
 
-      if (hasAuditLog) {
+      // Enter the content checks only when the feature IS available (no license gate).
+      // When hasUnavailable=true the page shows a license-tier notice; we already
+      // verified that above — no further content assertions are needed.
+      if (hasAuditLog && !hasUnavailable) {
         await expect(page.getByText("Audit events for your organization")).toBeVisible();
-        const hasTableHeader = (await page.getByRole("columnheader", { name: "Event" }).count()) > 0;
+        const hasTableHeader =
+          (await page.getByRole("columnheader", { name: "Event" }).count()) > 0;
         const hasEmptyState = (await page.getByText("No audit events found").count()) > 0;
         const hasErrorState = (await page.getByText("Could not load audit events").count()) > 0;
         expect(hasTableHeader || hasEmptyState || hasErrorState).toBe(true);
@@ -222,9 +239,10 @@ test.describe("/org-admin — authenticated route access", () => {
 // ── account/settings from org_admin session ────────────────────────────────────
 
 test.describe("/account/settings — authenticated from org_admin session", () => {
-
   test("/account/settings: heading, tabs, and no site-admin controls", async () => {
-    if (skipOrgAdminTests) { test.skip(true, SKIP_MSG); }
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
 
     const page = await sharedCtx!.newPage();
     try {
@@ -252,9 +270,10 @@ test.describe("/account/settings — authenticated from org_admin session", () =
 // ── site-admin access denied ───────────────────────────────────────────────────
 
 test.describe("/site-admin/* — access denied for org_admin", () => {
-
   test("org_admin cannot reach /site-admin/organizations — redirected away", async () => {
-    if (skipOrgAdminTests) { test.skip(true, SKIP_MSG); }
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
 
     const page = await sharedCtx!.newPage();
     try {
@@ -269,7 +288,9 @@ test.describe("/site-admin/* — access denied for org_admin", () => {
   });
 
   test("org_admin cannot reach /site-admin/settings — redirected away", async () => {
-    if (skipOrgAdminTests) { test.skip(true, SKIP_MSG); }
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
 
     const page = await sharedCtx!.newPage();
     try {
@@ -282,7 +303,9 @@ test.describe("/site-admin/* — access denied for org_admin", () => {
   });
 
   test("org_admin cannot reach /site-admin/audit — redirected away", async () => {
-    if (skipOrgAdminTests) { test.skip(true, SKIP_MSG); }
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
 
     const page = await sharedCtx!.newPage();
     try {

@@ -54,7 +54,10 @@ function mapAGErrorCode(status: number, agCode: string | null): OrgLinkWriteErro
     return agCode === "system_org_not_allowed" ? "system_org_not_allowed" : "ag_forbidden";
   }
   if (status === 404) return "org_not_found";
-  if (status === 409 || agCode === "idp_org_already_linked") return "idp_org_already_linked";
+  if (status === 409) {
+    if (agCode === "org_name_already_exists") return "org_name_already_exists";
+    return "idp_org_already_linked";
+  }
   if (status === 503) return "not_configured";
   return "write_failed";
 }
@@ -188,6 +191,66 @@ export async function unlinkAGOrganizationFromIDPOrg(agOrgId: string): Promise<O
   return { ok: false, error_code: errorCode, message: safeMessageForCode(errorCode) };
 }
 
+/**
+ * Imports (creates + links) a new AG organization from IDP org metadata.
+ * Calls POST /api/v1/org-link/import on the AG management surface.
+ * Organization-only: no users, admins, credentials, roles, or MFA are written.
+ */
+export async function importAGOrganization(
+  idpOrgId: string,
+  name: string,
+  displayName?: string
+): Promise<OrgLinkWriteResult> {
+  if (!isValidUUID(idpOrgId)) {
+    return { ok: false, error_code: "invalid_request", message: "Invalid IDP org ID format." };
+  }
+  if (!name.trim()) {
+    return { ok: false, error_code: "invalid_request", message: "Organization name must not be empty." };
+  }
+
+  const preflightError = await writePreflightCheck();
+  if (preflightError) {
+    return { ok: false, error_code: preflightError, message: safeMessageForCode(preflightError) };
+  }
+
+  let res: Response | null;
+  try {
+    const body: Record<string, string> = { idp_org_id: idpOrgId, name: name.trim() };
+    if (displayName?.trim()) body.display_name = displayName.trim();
+    res = await agRequest("/api/v1/org-link/import", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { ok: false, error_code: "ag_unavailable", message: safeMessageForCode("ag_unavailable") };
+  }
+
+  if (!res) {
+    return { ok: false, error_code: "not_configured", message: safeMessageForCode("not_configured") };
+  }
+
+  if (res.ok) {
+    try {
+      const body = (await res.json()) as Record<string, unknown>;
+      const org = sanitizeWriteOrg(body.organization);
+      return { ok: true, ...(org ? { organization: org } : {}) };
+    } catch {
+      return { ok: true };
+    }
+  }
+
+  let agCode: string | null = null;
+  try {
+    const errBody = (await res.json()) as Record<string, unknown>;
+    if (typeof errBody.code === "string") agCode = errBody.code;
+  } catch {
+    // ignore
+  }
+
+  const errorCode = mapAGErrorCode(res.status, agCode);
+  return { ok: false, error_code: errorCode, message: safeMessageForCode(errorCode) };
+}
+
 function safeMessageForCode(code: OrgLinkWriteErrorCode): string {
   switch (code) {
     case "invalid_request":
@@ -202,6 +265,8 @@ function safeMessageForCode(code: OrgLinkWriteErrorCode): string {
       return "Organization not found.";
     case "idp_org_already_linked":
       return "This IDP organization is already linked to another AG organization.";
+    case "org_name_already_exists":
+      return "An AG organization with this name already exists. Choose a different name.";
     case "not_configured":
       return "AG org-link write path is not configured.";
     case "ag_unavailable":

@@ -53,9 +53,12 @@ function parsePage(raw: string | string[] | undefined): number {
   return n;
 }
 
-function parseAuditFilters(
-  params: Record<string, string | string[] | undefined>
-): { filters: AuditFilterValues; startDateISO: string | null; endDateISO: string | null; subjectId: string | null } {
+function parseAuditFilters(params: Record<string, string | string[] | undefined>): {
+  filters: AuditFilterValues;
+  startDateISO: string | null;
+  endDateISO: string | null;
+  subjectId: string | null;
+} {
   const eventType = str(params, "event_type", 64);
   const subjectType = str(params, "subject_type", 32);
   const subjectId = str(params, "subject_id", 36); // UUID = 36 chars max
@@ -161,7 +164,9 @@ export default async function SiteAdminAuditPage({
             </span>
           )}
           {/* Org subject: replace raw truncated UUID with a clear message and optional link */}
-          {filters.subjectType === "organization" && UUID_RE.test(subjectId) && subjectId !== ZERO_UUID ? (
+          {filters.subjectType === "organization" &&
+          UUID_RE.test(subjectId) &&
+          subjectId !== ZERO_UUID ? (
             <>
               <span className="text-xs text-stone-500">Viewing events for one organization</span>
               <a
@@ -211,10 +216,14 @@ export default async function SiteAdminAuditPage({
             <AuditTable
               events={result.events}
               sortOrder={filters.sortOrder}
-              sortHref={pageHref(1, {
-                ...filters,
-                sortOrder: filters.sortOrder === "desc" ? "asc" : "desc",
-              }, subjectId)}
+              sortHref={pageHref(
+                1,
+                {
+                  ...filters,
+                  sortOrder: filters.sortOrder === "desc" ? "asc" : "desc",
+                },
+                subjectId
+              )}
             />
           ) : (
             <EmptyPanel />
@@ -292,14 +301,17 @@ function AuditTable({
                     <AuditIdentityCell value={e.subject_email} fallback={e.subject_type} />
                   )}
                   {/* Safe navigation link — excluded for zero UUID (system context) */}
-                  {e.subject_type === "organization" && e.subject_id && UUID_RE.test(e.subject_id) && e.subject_id !== ZERO_UUID && (
-                    <a
-                      href={`/site-admin/organizations/${e.subject_id}`}
-                      className="block text-[10px] text-sky-600 hover:text-sky-800 transition-colors"
-                    >
-                      View organization →
-                    </a>
-                  )}
+                  {e.subject_type === "organization" &&
+                    e.subject_id &&
+                    UUID_RE.test(e.subject_id) &&
+                    e.subject_id !== ZERO_UUID && (
+                      <a
+                        href={`/site-admin/organizations/${e.subject_id}`}
+                        className="block text-[10px] text-sky-600 hover:text-sky-800 transition-colors"
+                      >
+                        View organization →
+                      </a>
+                    )}
                 </div>
               </td>
               <td className="px-4 py-3 text-xs text-stone-400 font-mono whitespace-nowrap">
@@ -328,11 +340,7 @@ function Th({
   return (
     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-stone-400">
       {href ? (
-        <a
-          href={href}
-          title={title}
-          className="hover:text-sky-700 transition-colors"
-        >
+        <a href={href} title={title} className="hover:text-sky-700 transition-colors">
           {children}
         </a>
       ) : (
@@ -378,7 +386,11 @@ function formatDate(iso: string): string {
   }
 }
 
-function PaginationLink({ href, label, disabled }: { href?: string; label: string; disabled: boolean }) {
+function PaginationLink({
+  href,
+  label,
+  disabled,
+}: { href?: string; label: string; disabled: boolean }) {
   if (disabled || !href)
     return (
       <span className="text-xs text-stone-300 px-3 py-1.5 rounded-lg cursor-not-allowed select-none">
@@ -410,7 +422,9 @@ function ForbiddenPanel() {
   return (
     <div className="bg-white border border-red-100 rounded-[1.5rem] px-6 py-8 shadow-sm">
       <p className="text-sm font-semibold text-red-600">Access denied</p>
-      <p className="text-xs text-stone-400 mt-1">You do not have permission to view audit events.</p>
+      <p className="text-xs text-stone-400 mt-1">
+        You do not have permission to view audit events.
+      </p>
     </div>
   );
 }

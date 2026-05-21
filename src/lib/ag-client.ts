@@ -1,7 +1,7 @@
 /**
  * Server-side client for AG operator API calls.
  *
- * Reads the ag_access_token cookie and attaches it as a Bearer token on
+ * Reads the ag_operator_session cookie and attaches it as a Bearer token on
  * requests to the AG management surface. Must never expose internal_base_url,
  * the bearer token value, or any secrets to browser-side code or client props.
  *
@@ -9,7 +9,7 @@
  *
  * Auth contract:
  *   - AG uses "Authorization: Bearer <JWT>" header authentication.
- *   - The UI stores the token as an HttpOnly cookie (ag_access_token) and
+ *   - The UI stores the token as an HttpOnly cookie (ag_operator_session) and
  *     forwards it server-side; JavaScript never reads the cookie value.
  *   - getAgOperatorToken() returns the raw cookie value for server-side use
  *     only. It must not be passed to client components or serialized to JSON.
@@ -25,7 +25,9 @@ import "server-only";
 import { cookies } from "next/headers";
 import { agBaseUrl, loadRuntimeConfig } from "./runtime-config";
 
-export const AG_COOKIE_NAME = "ag_access_token";
+// ag_operator_session matches the cookie name set by the AG identity surface
+// on both the federated OIDC /callback path and the local /login path.
+export const AG_COOKIE_NAME = "ag_operator_session";
 
 /**
  * Returns the operator bearer token from the ag_access_token cookie, or null

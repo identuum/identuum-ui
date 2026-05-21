@@ -43,12 +43,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
           className="flex items-center gap-1 text-xs text-sky-600 hover:text-sky-700 transition-colors"
         >
           {/* chevron-left */}
-          <svg
-            className="h-3 w-3"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            aria-hidden="true"
-          >
+          <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
             <path
               fillRule="evenodd"
               d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z"
@@ -57,9 +52,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
           </svg>
           Back
         </a>
-        {userEmail && (
-          <span className="text-xs text-stone-400 truncate max-w-xs">{userEmail}</span>
-        )}
+        {userEmail && <span className="text-xs text-stone-400 truncate max-w-xs">{userEmail}</span>}
       </header>
 
       <main className="max-w-2xl mx-auto px-6 py-8">{children}</main>

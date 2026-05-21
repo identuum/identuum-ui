@@ -66,7 +66,7 @@ npx playwright test e2e/site-admin-organizations.spec.ts \
 **`--workers=1` is required.** TOTP replay protection rejects concurrent logins that use
 the same 30-second code. Running with multiple workers causes intermittent auth failures.
 
-Expected baseline: **32 passed, 0 skipped**.
+Expected baseline: **28 passed, 0 skipped**.
 
 ---
 
@@ -89,11 +89,25 @@ an invitation, which was then claimed to establish the account.
 
 ## `can_assign_admin=true` fixture
 
-Two conditional site-admin org tests require at least one organization in the
+Two site-admin org tests require at least one organization in the
 `has_admin=true / can_assign_admin=true` state (expired pending invitation).
 
 `e2e/helpers/fixture-expired-org.ts` maintains this state automatically before those
 tests run. It is called from the `beforeAll` in `site-admin-organizations.spec.ts`.
+
+### How it works
+
+1. `ensureExpiredPendingOrgFixture(siteAdminCtx)` is called in `beforeAll`.
+2. A `psql` query checks the state of `expired-admin@playwright-expired.local`.
+3. If the user doesn't exist, it creates the org+user via the IdP API and then
+   immediately expires the `activation_token_expires_at` via `psql`.
+4. If the user is already in the `expired-pending` state, nothing is done.
+5. If the user is in an `active` or `valid-pending` state, `psql` resets it.
+
+### After a backend rebuild
+
+A backend rebuild does not affect PostgreSQL data. The fixture org persists across
+rebuilds. After any rebuild, the test suite should run with **28 passed, 0 skipped**.
 
 **Important limitations:**
 
@@ -104,8 +118,27 @@ tests run. It is called from the `beforeAll` in `site-admin-organizations.spec.t
 - **Do not copy the psql mutation pattern** into broader tests or production code.
 - Idempotent: the fixture is safe to run repeatedly. It skips if state is already correct.
 
-If the fixture org needs resetting (e.g., after the test account claimed its invitation),
-delete the `expired-admin@playwright-expired.local` user row and re-run the test suite.
+### Fixture repair
+
+If the fixture tests skip after a rebuild, the likely cause is the backend returning
+`can_assign_admin=false` (e.g., after a backend regression). The DB state can be
+verified with:
+
+```sh
+PGPASSWORD=idp_local_password psql -h localhost -p 5432 -U idp_user -d identuum_idp \
+  -t -A -c "SELECT email_verified, activation_token_expires_at < NOW() FROM users \
+  WHERE email = 'expired-admin@playwright-expired.local';"
+```
+
+Expected output: `f|t` (email_verified=false, token expired).
+
+If the output is correct but tests still skip, the backend may not be returning
+`can_assign_admin` in the API response. Check `types/organization_types.go` for the
+`CanAssignAdmin` field and `HandleListOrganizations` for the
+`CountVerifiedOrgAdminsByOrganizations` call.
+
+If the user row is gone (e.g., after `DROP TABLE` or volume reset), simply re-run
+the combined test suite — `ensureExpiredPendingOrgFixture` will recreate it.
 
 ---
 

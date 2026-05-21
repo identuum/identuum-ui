@@ -19,7 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../lib/ag-client", () => ({
   agRequest: vi.fn(),
   getAgOperatorToken: vi.fn(),
-  AG_COOKIE_NAME: "ag_access_token",
+  AG_COOKIE_NAME: "ag_operator_session",
 }));
 
 vi.mock("../lib/runtime-config", () => ({
@@ -30,6 +30,7 @@ vi.mock("../lib/runtime-config", () => ({
 import {
   linkAGOrganizationToIDPOrg,
   unlinkAGOrganizationFromIDPOrg,
+  importAGOrganization,
 } from "../lib/ag-org-link-write-client";
 import { agRequest, getAgOperatorToken } from "../lib/ag-client";
 import { loadRuntimeConfig } from "../lib/runtime-config";
@@ -333,5 +334,134 @@ describe("write client — security invariants", () => {
     expect(json).not.toContain("pq:");
     expect(json).not.toContain("23505");
     expect(json).not.toContain("goroutine");
+  });
+});
+
+describe("importAGOrganization — pre-flight checks", () => {
+  it("returns ag_auth_required when AG is configured but no session token", async () => {
+    mockAGEnabled();
+    mockGetToken.mockResolvedValue(null);
+
+    const result = await importAGOrganization(VALID_IDP_ORG, "acme");
+    expect(result.ok).toBe(false);
+    expect(result.error_code).toBe("ag_auth_required");
+    expect(mockAgRequest).not.toHaveBeenCalled();
+  });
+
+  it("returns not_configured when AG is disabled", async () => {
+    mockLoadConfig.mockReturnValue({
+      ag: { enabled: false },
+    } as unknown as ReturnType<typeof loadRuntimeConfig>);
+
+    const result = await importAGOrganization(VALID_IDP_ORG, "acme");
+    expect(result.ok).toBe(false);
+    expect(result.error_code).toBe("not_configured");
+  });
+
+  it("returns invalid_request for non-UUID idp_org_id", async () => {
+    const result = await importAGOrganization("not-a-uuid", "acme");
+    expect(result.ok).toBe(false);
+    expect(result.error_code).toBe("invalid_request");
+    expect(mockAgRequest).not.toHaveBeenCalled();
+  });
+
+  it("returns invalid_request for empty name", async () => {
+    const result = await importAGOrganization(VALID_IDP_ORG, "   ");
+    expect(result.ok).toBe(false);
+    expect(result.error_code).toBe("invalid_request");
+    expect(mockAgRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("importAGOrganization — AG response mapping", () => {
+  beforeEach(() => {
+    mockAGEnabled();
+    mockGetToken.mockResolvedValue("valid-token");
+  });
+
+  it("returns ag_auth_required when AG responds 401", async () => {
+    mockAgRequest.mockResolvedValue(mockResponse(401, { code: "token_expired" }));
+    const result = await importAGOrganization(VALID_IDP_ORG, "acme");
+    expect(result.ok).toBe(false);
+    expect(result.error_code).toBe("ag_auth_required");
+  });
+
+  it("returns ag_forbidden when AG responds 403 generic", async () => {
+    mockAgRequest.mockResolvedValue(mockResponse(403, { code: "read_only_mode" }));
+    const result = await importAGOrganization(VALID_IDP_ORG, "acme");
+    expect(result.ok).toBe(false);
+    expect(result.error_code).toBe("ag_forbidden");
+  });
+
+  it("returns idp_org_already_linked when AG responds 409 idp_org_already_linked", async () => {
+    mockAgRequest.mockResolvedValue(mockResponse(409, { code: "idp_org_already_linked" }));
+    const result = await importAGOrganization(VALID_IDP_ORG, "acme");
+    expect(result.ok).toBe(false);
+    expect(result.error_code).toBe("idp_org_already_linked");
+  });
+
+  it("returns org_name_already_exists when AG responds 409 org_name_already_exists", async () => {
+    mockAgRequest.mockResolvedValue(mockResponse(409, { code: "org_name_already_exists" }));
+    const result = await importAGOrganization(VALID_IDP_ORG, "acme");
+    expect(result.ok).toBe(false);
+    expect(result.error_code).toBe("org_name_already_exists");
+  });
+
+  it("returns ag_unavailable on network failure", async () => {
+    mockAgRequest.mockRejectedValue(new Error("ECONNREFUSED"));
+    const result = await importAGOrganization(VALID_IDP_ORG, "acme");
+    expect(result.ok).toBe(false);
+    expect(result.error_code).toBe("ag_unavailable");
+  });
+
+  it("returns ok:true with sanitized org on 201 success", async () => {
+    mockAgRequest.mockResolvedValue(
+      mockResponse(201, {
+        success: true,
+        organization: {
+          id: VALID_AG_ORG,
+          name: "acme",
+          display_name: "Acme Corp",
+          status: "active",
+          created_at: "2026-01-01T00:00:00Z",
+          linked_idp_org_id: VALID_IDP_ORG,
+          link_status: "linked",
+          admin_token: "should-be-stripped",
+        },
+      }, true)
+    );
+    const result = await importAGOrganization(VALID_IDP_ORG, "acme");
+    expect(result.ok).toBe(true);
+    expect(result.organization?.linked_idp_org_id).toBe(VALID_IDP_ORG);
+    expect(JSON.stringify(result)).not.toContain("admin_token");
+  });
+
+  it("never includes internal AG URL in error result", async () => {
+    mockAgRequest.mockRejectedValue(new Error("ECONNREFUSED http://ag-internal:7215"));
+    const result = await importAGOrganization(VALID_IDP_ORG, "acme");
+    const json = JSON.stringify(result);
+    expect(json).not.toContain("ag-internal");
+    expect(json).not.toContain("7215");
+  });
+
+  it("does not expose secret-like fields in success response", async () => {
+    mockAgRequest.mockResolvedValue(
+      mockResponse(201, {
+        organization: {
+          id: VALID_AG_ORG,
+          name: "acme",
+          display_name: "Acme",
+          status: "active",
+          created_at: "2026-01-01T00:00:00Z",
+          linked_idp_org_id: VALID_IDP_ORG,
+          password: "secret",
+          mfa_secret: "secret",
+        },
+      }, true)
+    );
+    const result = await importAGOrganization(VALID_IDP_ORG, "acme");
+    const json = JSON.stringify(result);
+    expect(json).not.toContain("password");
+    expect(json).not.toContain("mfa_secret");
   });
 });

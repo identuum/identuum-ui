@@ -1,7 +1,7 @@
 /**
  * AG operator logout endpoint.
  *
- * Clears the ag_access_token cookie and redirects to /ag-admin/login.
+ * Clears the ag_operator_session cookie and redirects to /ag-admin/login.
  * No AG backend call is made — the cookie deletion is sufficient for
  * the UI session; the AG token will expire naturally.
  */

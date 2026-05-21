@@ -31,9 +31,7 @@ function isNoEmailSentinel(email: string): boolean {
   return email.startsWith("noemail+") && email.endsWith("@no-email.internal");
 }
 
-function computeStatus(
-  user: OrgUserItem
-): "active" | "pending" | "disabled" | "deleted" {
+function computeStatus(user: OrgUserItem): "active" | "pending" | "disabled" | "deleted" {
   if (user.deleted) return "deleted";
   // Use the explicit backend field first.
   if (user.invitation_pending) return "pending";
@@ -164,11 +162,7 @@ function UsersTable({
           </thead>
           <tbody className="divide-y divide-stone-100">
             {users.map((user) => (
-              <UserRow
-                key={user.id}
-                user={user}
-                activeAdminCount={activeAdminCount}
-              />
+              <UserRow key={user.id} user={user} activeAdminCount={activeAdminCount} />
             ))}
           </tbody>
         </table>
@@ -186,10 +180,7 @@ function UserRow({
 }) {
   const status = computeStatus(user);
 
-  const statusBadge: Record<
-    typeof status,
-    { label: string; cls: string }
-  > = {
+  const statusBadge: Record<typeof status, { label: string; cls: string }> = {
     active: { label: "Active", cls: "text-emerald-700 bg-emerald-50" },
     pending: { label: "Pending", cls: "text-amber-700 bg-amber-50" },
     disabled: { label: "Disabled", cls: "text-stone-500 bg-stone-100" },
@@ -227,8 +218,7 @@ function UserRow({
   // Show Disable/Enable only for fully active or admin-disabled users.
   // Pending users (unclaimed invitations) are not yet functional accounts;
   // skip lifecycle actions for them to avoid confusing the admin.
-  const showActions =
-    !user.deleted && user.role !== "site_admin" && status !== "pending";
+  const showActions = !user.deleted && user.role !== "site_admin" && status !== "pending";
 
   // Display label: use backend-authoritative invitation fields,
   // fall back to sentinel email detection for older API responses.
@@ -251,7 +241,9 @@ function UserRow({
               <p className="text-sm font-medium text-amber-700 group-hover:text-amber-800 truncate max-w-[220px] transition-colors">
                 {user.name ?? "Manual invite pending"}
               </p>
-              <p className="text-xs text-stone-400 italic mt-0.5">No email — link not yet claimed</p>
+              <p className="text-xs text-stone-400 italic mt-0.5">
+                No email — link not yet claimed
+              </p>
             </>
           ) : (
             <>

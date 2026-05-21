@@ -31,7 +31,12 @@ const MINIMAL_E2E_CONFIG = {
 };
 
 const RUN_END_FILE = "/tmp/identuum-run-end.json";
-const INTER_RUN_RECOVERY_MS = 30_000; // 30s server recovery between runs (matches TOTP cooldown gap)
+// 5s is a minimal breathing gap between test runs.
+// When the IdP container runs with E2E_DISABLE_ADAPTIVE_ENFORCEMENT=true
+// (see identuum-idp/deployment/docker-compose.local.yml), no velocity counter
+// accumulates and no step-up enforcement fires, so no large gap is needed.
+// The 5s gap lets in-flight server responses drain before the next run starts.
+const INTER_RUN_RECOVERY_MS = 5_000;
 
 export default async function globalSetup() {
   // Enforce a minimum gap between test runs to allow Docker containers to stabilize.
@@ -41,7 +46,9 @@ export default async function globalSetup() {
     const elapsed = Date.now() - data.endMs;
     if (elapsed < INTER_RUN_RECOVERY_MS) {
       const waitMs = INTER_RUN_RECOVERY_MS - elapsed;
-      process.stdout.write(`\n[e2e setup] Waiting ${Math.ceil(waitMs / 1000)}s for server recovery between runs...\n`);
+      process.stdout.write(
+        `\n[e2e setup] Waiting ${Math.ceil(waitMs / 1000)}s for server recovery between runs...\n`
+      );
       await new Promise((r) => setTimeout(r, waitMs));
     }
   } catch {
