@@ -1,20 +1,31 @@
 /**
  * Shared login helpers for authenticated E2E tests.
  *
- * Site-admin credentials (prefer specific vars, fall back to generic):
- *   IDENTUUM_TEST_SITE_ADMIN_EMAIL    — site_admin email (falls back to IDENTUUM_TEST_EMAIL)
- *   IDENTUUM_TEST_SITE_ADMIN_PASSWORD — site_admin password (falls back to IDENTUUM_TEST_PASSWORD)
- *   IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET — (falls back to IDENTUUM_TEST_TOTP_SECRET)
- *   Legacy generic vars still work: IDENTUUM_TEST_EMAIL / PASSWORD / TOTP_SECRET
+ * Credential resolution is centralized here so individual specs never read
+ * IDENTUUM_TEST_* env vars directly — that previously caused login.spec.ts
+ * and helper-based specs to disagree about which credential set was active
+ * when an operator had both legacy and canonical names defined locally.
  *
- * Org-admin credentials (org-admin-specific only, no fallback to generic):
+ * Canonical env vars (read these — and only these — directly):
+ *   IDENTUUM_TEST_SITE_ADMIN_EMAIL        — defaults to "site_admin@system.local"
+ *   IDENTUUM_TEST_SITE_ADMIN_PASSWORD
+ *   IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET
+ *
  *   IDENTUUM_TEST_ORG_ADMIN_EMAIL
  *   IDENTUUM_TEST_ORG_ADMIN_PASSWORD
- *   IDENTUUM_TEST_ORG_ADMIN_TOTP_SECRET  (optional — leave empty if MFA not enrolled)
+ *   IDENTUUM_TEST_ORG_ADMIN_TOTP_SECRET   — optional (omit when MFA not enrolled)
  *
- * Tests that require authentication should gate with:
- *   if (skipAuthTests) { test.skip(true, "Set IDENTUUM_TEST_SITE_ADMIN_PASSWORD…"); }
- *   if (skipOrgAdminTests) { test.skip(true, "Set IDENTUUM_TEST_ORG_ADMIN_PASSWORD…"); }
+ * Legacy names (IDENTUUM_TEST_EMAIL / _PASSWORD / _TOTP_SECRET) are NOT
+ * supported as aliases. If a local .env file still defines them they are
+ * ignored. See e2e/README.md for migration instructions.
+ *
+ * Tests that need authentication should gate with:
+ *   if (skipAuthTests) { test.skip(true, SKIP_AUTH_MSG); }
+ *   if (skipOrgAdminTests) { test.skip(true, SKIP_ORG_ADMIN_MSG); }
+ *
+ * Specs that drive the login UI themselves (e.g. login.spec.ts) can import
+ * the resolved constants below; the constants never appear in logs and are
+ * not re-exported anywhere else.
  *
  * Does NOT print credentials, cookies, session headers, or TOTP codes.
  */
@@ -23,22 +34,26 @@ import type { BrowserContext, Page } from "@playwright/test";
 import { generateTOTP } from "./totp";
 import { statSync } from "node:fs";
 
-// ── Site-admin credentials ────────────────────────────────────────────────────
-// Prefer role-specific vars; fall back to legacy generic vars for compatibility.
+// ── Site-admin credentials (canonical names only) ─────────────────────────────
 
-const SITE_ADMIN_EMAIL =
-  process.env.IDENTUUM_TEST_SITE_ADMIN_EMAIL ??
-  process.env.IDENTUUM_TEST_EMAIL ??
-  "site_admin@system.local";
-
-const SITE_ADMIN_PASSWORD =
-  process.env.IDENTUUM_TEST_SITE_ADMIN_PASSWORD ?? process.env.IDENTUUM_TEST_PASSWORD ?? "";
-
-const SITE_ADMIN_TOTP_SECRET =
-  process.env.IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET ?? process.env.IDENTUUM_TEST_TOTP_SECRET ?? "";
+/**
+ * Resolved site_admin credentials. Exported so the login UI spec can drive
+ * the email/password/TOTP steps without re-reading process.env directly —
+ * keeping a single source of truth.
+ *
+ * Never log these values.
+ */
+export const SITE_ADMIN_EMAIL =
+  process.env.IDENTUUM_TEST_SITE_ADMIN_EMAIL ?? "site_admin@system.local";
+export const SITE_ADMIN_PASSWORD = process.env.IDENTUUM_TEST_SITE_ADMIN_PASSWORD ?? "";
+export const SITE_ADMIN_TOTP_SECRET = process.env.IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET ?? "";
 
 /** True when site_admin auth env vars are absent. */
 export const skipAuthTests = !SITE_ADMIN_PASSWORD || !SITE_ADMIN_TOTP_SECRET;
+
+/** Standard skip message — reuse across specs for consistent operator guidance. */
+export const SKIP_AUTH_MSG =
+  "Set IDENTUUM_TEST_SITE_ADMIN_PASSWORD and IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET to run this test";
 
 // ── Org-admin credentials ─────────────────────────────────────────────────────
 

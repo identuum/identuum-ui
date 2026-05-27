@@ -47,9 +47,9 @@ try {
  *
  * Authenticated test credentials (.env.playwright.local — gitignored, never commit):
  *   Credentials are loaded automatically from .env.playwright.local if present.
- *   Site-admin vars (preferred):   IDENTUUM_TEST_SITE_ADMIN_EMAIL / _PASSWORD / _TOTP_SECRET
- *   Site-admin vars (legacy):      IDENTUUM_TEST_EMAIL / _PASSWORD / _TOTP_SECRET
+ *   Site-admin vars (canonical):   IDENTUUM_TEST_SITE_ADMIN_EMAIL / _PASSWORD / _TOTP_SECRET
  *   Org-admin vars:                IDENTUUM_TEST_ORG_ADMIN_EMAIL / _PASSWORD / _TOTP_SECRET
+ *   Legacy IDENTUUM_TEST_EMAIL / _PASSWORD / _TOTP_SECRET are no longer read.
  *   Authenticated tests self-skip when credentials are absent.
  *   Run authenticated tests with --workers=1 — TOTP replay protection rejects
  *   concurrent logins that generate the same 30-second code.

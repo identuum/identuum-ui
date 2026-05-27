@@ -1,31 +1,40 @@
 /**
  * Optional local browser verification for the identuum-ui login flow.
  *
- * This test is skipped unless all three required env vars are set:
- *   IDENTUUM_TEST_EMAIL        - login email (default: site_admin@system.local)
- *   IDENTUUM_TEST_PASSWORD     - login password
- *   IDENTUUM_TEST_TOTP_SECRET  - base32 TOTP seed from identuum-idp-setup output
+ * This spec drives the login UI step-by-step (not via the shared
+ * loginAsSiteAdmin helper) because the goal is to verify each visible
+ * step renders correctly. Credentials are imported from the helper so
+ * legacy/canonical env-var resolution lives in exactly one place.
+ *
+ * Required env vars (canonical names only):
+ *   IDENTUUM_TEST_SITE_ADMIN_EMAIL       — default: site_admin@system.local
+ *   IDENTUUM_TEST_SITE_ADMIN_PASSWORD
+ *   IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET — base32 seed from identuum-idp-setup
+ *
+ * Legacy IDENTUUM_TEST_EMAIL / _PASSWORD / _TOTP_SECRET are no longer
+ * read — operators with stale .env files must rename them.
  *
  * The full Compose stack must be running (IdP at localhost:7113, UI at localhost:7114).
  * The Playwright runner reuses the existing server automatically; see playwright.config.ts.
  *
  * Before first run: pnpm e2e:install
- * Run: IDENTUUM_TEST_PASSWORD=... IDENTUUM_TEST_TOTP_SECRET=... pnpm e2e
+ * Run: pnpm e2e (credentials auto-loaded from .env.playwright.local)
  */
 
 import { expect, test } from "@playwright/test";
+import {
+  SITE_ADMIN_EMAIL,
+  SITE_ADMIN_PASSWORD,
+  SITE_ADMIN_TOTP_SECRET,
+  SKIP_AUTH_MSG,
+  skipAuthTests,
+} from "./helpers/login";
 import { generateTOTP } from "./helpers/totp";
-
-const EMAIL = process.env.IDENTUUM_TEST_EMAIL ?? "site_admin@system.local";
-const PASSWORD = process.env.IDENTUUM_TEST_PASSWORD ?? "";
-const TOTP_SECRET = process.env.IDENTUUM_TEST_TOTP_SECRET ?? "";
-
-const skip = !PASSWORD || !TOTP_SECRET;
 
 test.describe("identuum-ui login flow", () => {
   test("email step → password step → MFA step → dashboard → logout", async ({ page }) => {
-    if (skip) {
-      test.skip(true, "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run");
+    if (skipAuthTests) {
+      test.skip(true, SKIP_AUTH_MSG);
     }
 
     // Root redirects to /login when configured.
@@ -34,19 +43,19 @@ test.describe("identuum-ui login flow", () => {
 
     // Email step.
     const emailInput = page.getByLabel("Email or domain");
-    await emailInput.fill(EMAIL);
+    await emailInput.fill(SITE_ADMIN_EMAIL);
     await page.getByRole("button", { name: "Continue" }).click();
 
     // Password step.
     const passwordInput = page.getByLabel("Password");
     await expect(passwordInput).toBeVisible();
-    await passwordInput.fill(PASSWORD);
+    await passwordInput.fill(SITE_ADMIN_PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
 
     // MFA step — generate code immediately before submission.
     const codeInput = page.getByLabel("Verification code");
     await expect(codeInput).toBeVisible();
-    const code = generateTOTP(TOTP_SECRET);
+    const code = generateTOTP(SITE_ADMIN_TOTP_SECRET);
     await codeInput.fill(code);
     await page.getByRole("button", { name: "Verify" }).click();
 

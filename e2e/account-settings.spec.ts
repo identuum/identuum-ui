@@ -12,7 +12,7 @@
  * Unknown values fall back to password.
  *
  * Happy-path tests (authenticated user interacts with tab content) require
- * live credentials; add when IDENTUUM_TEST_PASSWORD + IDENTUUM_TEST_TOTP_SECRET
+ * live credentials; add when IDENTUUM_TEST_SITE_ADMIN_PASSWORD + _TOTP_SECRET
  * are available.
  */
 

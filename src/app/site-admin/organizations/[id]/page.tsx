@@ -7,11 +7,16 @@
  * Data: GET /api/v1/organizations/:id via getOrganization().
  * Sanitized to OrgDetail — no secrets, internal URLs, or credential material.
  */
-import { getOrganization, listAuditEvents } from "@/lib/idp-admin-client";
-import type { AuditEventItem } from "@/lib/idp-admin-client";
+import {
+  getOrganization,
+  listAuditEvents,
+  listOrgAdminsForRecovery,
+} from "@/lib/idp-admin-client";
+import type { OrgAdminRecoveryCandidate } from "@/lib/idp-admin-client";
 import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
 import type { OrgDetail } from "@/lib/types";
 import type { Metadata } from "next";
+import { ResetAdminMFAButton } from "./reset-admin-mfa-button";
 
 export const metadata: Metadata = { title: "Organization — Identuum Admin" };
 
@@ -28,14 +33,22 @@ export default async function OrgDetailPage({
     return <NotFoundPanel />;
   }
 
-  const [org, recentAuditResult] = await Promise.all([
+  const [org, recentAuditResult, adminsResult] = await Promise.all([
     getOrganization(id),
     listAuditEvents({ subjectId: id, subjectType: "organization", pageSize: 8 }).catch(() => null),
+    listOrgAdminsForRecovery(id).catch(() => null),
   ]);
 
   if (!org) {
     return <NotFoundPanel />;
   }
+
+  // adminsResult is the narrow site_admin → org_admin recovery surface
+  // (see internal/service/user_read_service.go: ListOrgAdminsForRecovery).
+  // It returns only the org_admin row(s) for this organisation. Any
+  // failure here is non-fatal — the rest of the page still renders.
+  const admins: OrgAdminRecoveryCandidate[] = adminsResult?.ok ? adminsResult.admins : [];
+  const adminsLoadError = adminsResult && !adminsResult.ok ? adminsResult.message : null;
 
   const statusLabel = org.deleted ? "Deleted" : org.active ? "Active" : "Inactive";
 
@@ -207,6 +220,16 @@ export default async function OrgDetailPage({
         </div>
       </div>
 
+      {/* Administrator recovery card — narrow site_admin exception to the
+          Blind Sovereign Bunker policy. Lists only org_admin rows so the
+          operator can reset MFA without psql. Never lists org_users. */}
+      <OrgAdminRecoveryCard
+        orgId={id}
+        admins={admins}
+        loadError={adminsLoadError}
+        orgDeleted={org.deleted}
+      />
+
       {/* Actions card */}
       {!org.deleted && (
         <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
@@ -236,7 +259,7 @@ export default async function OrgDetailPage({
                 Reactivate
               </a>
             )}
-            {org.can_assign_admin && (
+            {(!org.has_admin || org.can_assign_admin) && (
               <a
                 href={`/site-admin/organizations/${id}/assign-admin`}
                 className="text-xs font-semibold text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-3 py-1.5 rounded-lg transition-colors"
@@ -387,13 +410,18 @@ function OperationalStatusCard({ org, id }: { org: OrgDetail; id: string }) {
         ? "expired-pending"
         : "no-admin";
 
+  // Assignment is allowed whenever no verified admin blocks delegation — i.e.
+  // either the org has no admin at all, or it has only unverified admins (the
+  // can_assign_admin recovery state).
+  const assignmentAllowed = !org.has_admin || org.can_assign_admin;
+
   const nextAction: NextAction = org.deleted
     ? "restore"
-    : !org.active && org.can_assign_admin
+    : !org.active && assignmentAllowed
       ? "reactivate-and-assign"
       : !org.active
         ? "reactivate"
-        : org.can_assign_admin
+        : assignmentAllowed
           ? "assign-admin"
           : "none";
 
@@ -504,5 +532,144 @@ function OperationalStatusCard({ org, id }: { org: OrgDetail; id: string }) {
         )}
       </div>
     </div>
+  );
+}
+
+// ── Organization administrators recovery card ────────────────────────────────
+//
+// Renders the org_admin row(s) of an organisation specifically for the
+// site_admin recovery surface. Backed by
+// GET /api/v1/organizations/:id/admin-recovery-candidates, which exposes
+// only the org_admin rows (no org_user data) and only the fields the
+// reset-MFA flow needs: id, email, name, role, mfa_enabled,
+// email_verified, active, deleted. Password hashes, MFA secret
+// ciphertext, claim tokens, and sessions never reach the wire.
+//
+// Why this card exists: the previous workflow required a site_admin to
+// shell into psql or curl the IDP directly to identify the right user_id
+// for the MFA-reset endpoint. That is both error-prone and an audit
+// blind-spot. This card lets the operator perform the recovery from the
+// organisation's detail page in one step.
+
+function OrgAdminRecoveryCard({
+  orgId,
+  admins,
+  loadError,
+  orgDeleted,
+}: {
+  orgId: string;
+  admins: OrgAdminRecoveryCandidate[];
+  loadError: string | null;
+  orgDeleted: boolean;
+}) {
+  return (
+    <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-stone-100">
+        <p className="text-sm font-semibold text-sky-950">Organization administrators</p>
+        <p className="text-xs text-stone-400 mt-0.5 leading-relaxed">
+          Reset MFA for an administrator who has lost their authenticator. Only org_admin accounts
+          are shown — tenant org_users remain hidden under the sovereign bunker policy.
+        </p>
+      </div>
+
+      <div className="px-6 py-5">
+        {loadError && (
+          <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs text-red-600">
+            Could not load administrators: {loadError}
+          </div>
+        )}
+
+        {!loadError && admins.length === 0 && (
+          <p className="text-xs text-stone-400 leading-relaxed">
+            No administrators on file. Use “Assign administrator” to delegate one.
+          </p>
+        )}
+
+        {!loadError && admins.length > 0 && (
+          <ul className="divide-y divide-stone-100 -my-3">
+            {admins.map((admin) => (
+              <AdminRow
+                key={admin.id}
+                orgId={orgId}
+                admin={admin}
+                orgDeleted={orgDeleted}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdminRow({
+  orgId,
+  admin,
+  orgDeleted,
+}: {
+  orgId: string;
+  admin: OrgAdminRecoveryCandidate;
+  orgDeleted: boolean;
+}) {
+  const isInactive = admin.deleted || !admin.active;
+  // The reset is allowed for an active org_admin row; we still surface
+  // the button for an MFA-already-disabled admin so the operator can
+  // clear stale MFA state if needed, but mark the row's MFA status
+  // explicitly. We DO suppress the button for deleted/banned rows and
+  // for archived organisations — both states would surface as backend
+  // errors anyway.
+  const disabled = isInactive || orgDeleted;
+  const disabledReason = orgDeleted
+    ? "Organization is archived. Restore it before resetting MFA."
+    : admin.deleted
+      ? "Administrator account is deleted."
+      : !admin.active
+        ? "Administrator account is suspended."
+        : undefined;
+
+  return (
+    <li className="py-3 flex items-start justify-between gap-4">
+      <div className="min-w-0 space-y-0.5">
+        <p className="text-xs font-mono font-semibold text-sky-950 truncate">{admin.email}</p>
+        {admin.name && <p className="text-xs text-stone-500 truncate">{admin.name}</p>}
+        <div className="flex items-center gap-1.5 flex-wrap pt-1">
+          <StatusPill
+            label={admin.mfa_enabled ? "MFA enabled" : "MFA disabled"}
+            tone={admin.mfa_enabled ? "emerald" : "amber"}
+          />
+          {!admin.email_verified && <StatusPill label="Email unverified" tone="stone" />}
+          {admin.deleted && <StatusPill label="Deleted" tone="red" />}
+          {!admin.deleted && !admin.active && <StatusPill label="Suspended" tone="red" />}
+        </div>
+      </div>
+
+      <div className="shrink-0 flex items-center gap-2">
+        <ResetAdminMFAButton
+          orgId={orgId}
+          userId={admin.id}
+          email={admin.email}
+          disabled={disabled}
+          disabledReason={disabledReason}
+        />
+      </div>
+    </li>
+  );
+}
+
+type StatusTone = "emerald" | "amber" | "red" | "stone";
+
+function StatusPill({ label, tone }: { label: string; tone: StatusTone }) {
+  const toneCls: Record<StatusTone, string> = {
+    emerald: "text-emerald-700 bg-emerald-50 border-emerald-200",
+    amber: "text-amber-700 bg-amber-50 border-amber-200",
+    red: "text-red-600 bg-red-50 border-red-100",
+    stone: "text-stone-500 bg-stone-100 border-stone-200",
+  };
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${toneCls[tone]}`}
+    >
+      {label}
+    </span>
   );
 }

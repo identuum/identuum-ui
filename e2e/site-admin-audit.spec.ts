@@ -18,13 +18,13 @@
  * Session strategy: login ONCE in beforeAll and share the browser context.
  * This avoids TOTP replay-protection failures from back-to-back logins.
  *
- * Skipped unless IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET are set.
+ * Skipped unless IDENTUUM_TEST_SITE_ADMIN_PASSWORD and _TOTP_SECRET are set.
  * Requires: full Compose stack (IdP at localhost:7113, UI at localhost:7114).
  */
 
 import type { BrowserContext } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { loginAsSiteAdmin, skipAuthTests } from "./helpers/login";
+import { SKIP_AUTH_MSG, loginAsSiteAdmin, skipAuthTests } from "./helpers/login";
 
 const skip = skipAuthTests;
 
@@ -54,7 +54,7 @@ test.afterAll(async () => {
 test.describe("/site-admin/audit subject-filter notice", () => {
   test("zero UUID org subject filter shows system-level message with no View organization link", async () => {
     if (skip) {
-      test.skip(true, "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test");
+      test.skip(true, SKIP_AUTH_MSG);
     }
 
     const page = await sharedCtx!.newPage();
@@ -78,7 +78,7 @@ test.describe("/site-admin/audit subject-filter notice", () => {
 
   test("non-zero org UUID subject filter shows org message and View organization link", async () => {
     if (skip) {
-      test.skip(true, "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test");
+      test.skip(true, SKIP_AUTH_MSG);
     }
 
     const page = await sharedCtx!.newPage();
@@ -110,7 +110,7 @@ test.describe("/site-admin/audit subject-filter notice", () => {
 test.describe("/site-admin/audit organization-subject row links", () => {
   test("any 'View organization →' links have valid org-detail hrefs and the page does not crash", async () => {
     if (skip) {
-      test.skip(true, "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test");
+      test.skip(true, SKIP_AUTH_MSG);
     }
 
     const page = await sharedCtx!.newPage();

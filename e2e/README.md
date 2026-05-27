@@ -22,21 +22,23 @@ Create `/Users/odemir/Development/2025-11/identuum/identuum-ui/.env.playwright.l
 Required env vars (fill in values from your local `identuum-idp-setup` output):
 
 ```
-# Site-admin credentials
+# Site-admin credentials (canonical names — these are the ONLY names read)
 IDENTUUM_TEST_SITE_ADMIN_EMAIL=site_admin@system.local
 IDENTUUM_TEST_SITE_ADMIN_PASSWORD=<from identuum-idp-setup output>
 IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET=<from identuum-idp-setup output>
-
-# Legacy aliases (kept for backward compatibility — same values as above)
-IDENTUUM_TEST_EMAIL=site_admin@system.local
-IDENTUUM_TEST_PASSWORD=<same as SITE_ADMIN_PASSWORD>
-IDENTUUM_TEST_TOTP_SECRET=<same as SITE_ADMIN_TOTP_SECRET>
 
 # Dedicated org_admin test account
 IDENTUUM_TEST_ORG_ADMIN_EMAIL=<org_admin email>
 IDENTUUM_TEST_ORG_ADMIN_PASSWORD=<org_admin password>
 IDENTUUM_TEST_ORG_ADMIN_TOTP_SECRET=<org_admin TOTP secret>
 ```
+
+> **Migration note:** Legacy `IDENTUUM_TEST_EMAIL` / `IDENTUUM_TEST_PASSWORD` /
+> `IDENTUUM_TEST_TOTP_SECRET` are no longer read. If you still have them in your
+> local env file, rename them to the canonical `IDENTUUM_TEST_SITE_ADMIN_*`
+> names. The mismatch between legacy and canonical sets is what caused
+> `e2e/login.spec.ts` to use stale credentials while helper-based specs used
+> the refreshed set.
 
 The site_admin credentials come from running the setup helper:
 
@@ -188,5 +190,6 @@ docker compose -f deployment/docker-compose.local.yml restart identuum-ui
 
 ## CI
 
-Authenticated tests self-skip when `IDENTUUM_TEST_PASSWORD` (or the `SITE_ADMIN_*`
-equivalent) is absent. Unauthenticated route-redirect tests always run.
+Authenticated tests self-skip when `IDENTUUM_TEST_SITE_ADMIN_PASSWORD` /
+`IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET` are absent. Unauthenticated
+route-redirect tests always run.

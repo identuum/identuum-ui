@@ -2,7 +2,7 @@
  * E2E coverage for /site-admin/organizations list → detail navigation flow,
  * lifecycle action route redirect safety, and authenticated action affordances.
  *
- * Authenticated tests (require IDENTUUM_TEST_PASSWORD + IDENTUUM_TEST_TOTP_SECRET):
+ * Authenticated tests (require IDENTUUM_TEST_SITE_ADMIN_PASSWORD + _TOTP_SECRET):
  *   - Organizations list renders with a heading and Details links.
  *   - Each list row shows one of three admin state labels (Admin active / Invitation expired / No admin).
  *   - The old broad "Has admin" badge label is not present (replaced by three-state badge).
@@ -29,7 +29,7 @@
 import type { BrowserContext } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { ensureExpiredPendingOrgFixture } from "./helpers/fixture-expired-org";
-import { loginAsSiteAdmin, skipAuthTests } from "./helpers/login";
+import { SKIP_AUTH_MSG, loginAsSiteAdmin, skipAuthTests } from "./helpers/login";
 
 const ORG_UUID_RE =
   /^\/site-admin\/organizations\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -59,7 +59,7 @@ test.afterAll(async () => {
 test.describe("/site-admin/organizations list → detail navigation", () => {
   test("Details link navigates to read-only organization detail page", async () => {
     if (skipAuthTests) {
-      test.skip(true, "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test");
+      test.skip(true, SKIP_AUTH_MSG);
     }
 
     // ── Open organizations list using shared site_admin session ──────────────
@@ -196,7 +196,7 @@ test.describe("/site-admin/organizations action routes — unauthenticated redir
 });
 
 test.describe("/site-admin/organizations — authenticated action page coverage", () => {
-  // All tests in this block require IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET.
+  // All tests in this block require IDENTUUM_TEST_SITE_ADMIN_PASSWORD and _TOTP_SECRET.
   // Tests that depend on specific DB state (e.g. can_assign_admin=true orgs) skip
   // gracefully when the prerequisite state is absent — they do not fail.
   // Shared siteAdminCtx is set up in beforeAll at the file level.
@@ -210,7 +210,7 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
 
   test("create organization page renders expected form fields", async () => {
     if (skipAuthTests) {
-      test.skip(true, "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test");
+      test.skip(true, SKIP_AUTH_MSG);
     }
 
     const page = await siteAdminCtx!.newPage();
@@ -236,7 +236,7 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
 
   test("edit action page renders form for first available organization", async () => {
     if (skipAuthTests) {
-      test.skip(true, "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test");
+      test.skip(true, SKIP_AUTH_MSG);
     }
 
     const page = await siteAdminCtx!.newPage();
@@ -284,7 +284,7 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
 
   test("assign-admin page never shows stale 'Already has an active administrator' copy", async () => {
     if (skipAuthTests) {
-      test.skip(true, "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test");
+      test.skip(true, SKIP_AUTH_MSG);
     }
 
     const page = await siteAdminCtx!.newPage();
@@ -329,7 +329,7 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
 
   test("list 'Assign admin' affordance opens recovery form (skips if no can_assign_admin=true org)", async () => {
     if (skipAuthTests) {
-      test.skip(true, "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test");
+      test.skip(true, SKIP_AUTH_MSG);
     }
 
     const page = await siteAdminCtx!.newPage();
@@ -363,7 +363,7 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
 
   test("detail page 'Assign admin' affordance consistent with list when can_assign_admin=true", async () => {
     if (skipAuthTests) {
-      test.skip(true, "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test");
+      test.skip(true, SKIP_AUTH_MSG);
     }
 
     const page = await siteAdminCtx!.newPage();
@@ -415,7 +415,7 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
 
   test("detail page shows accurate admin status copy — no stale text variants", async () => {
     if (skipAuthTests) {
-      test.skip(true, "Set IDENTUUM_TEST_PASSWORD and IDENTUUM_TEST_TOTP_SECRET to run this test");
+      test.skip(true, SKIP_AUTH_MSG);
     }
 
     const page = await siteAdminCtx!.newPage();

@@ -17,7 +17,7 @@
  * organization via the site-admin API, generate a claim token for that org, then
  * navigate to the claim page, complete the setup form, and assert the success state
  * — too much orchestration for the current test scope. Gate it on
- * IDENTUUM_TEST_PASSWORD + IDENTUUM_TEST_TOTP_SECRET when adding in future.
+ * IDENTUUM_TEST_SITE_ADMIN_PASSWORD + _TOTP_SECRET when adding in future.
  */
 
 import { expect, test } from "@playwright/test";

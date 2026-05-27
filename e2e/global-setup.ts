@@ -14,7 +14,7 @@ import path from "node:path";
  * Safe-state E2E tests (/claim, /verify-email) degrade gracefully when the IdP
  * is unreachable, so they pass under this config.
  * The login test requires the full Compose stack (real IdP at localhost:7113)
- * and credentials (IDENTUUM_TEST_PASSWORD + IDENTUUM_TEST_TOTP_SECRET).
+ * and credentials (IDENTUUM_TEST_SITE_ADMIN_PASSWORD + _TOTP_SECRET).
  */
 
 // Minimal runtime config written when none exists.
