@@ -15,7 +15,9 @@
 
 import type {
   BackendComponentState,
+  ComponentCapabilities,
   ComponentDiscoveryResponse,
+  ComponentLicenseInfo,
   DiscoveryErrorCode,
   PlatformMode,
   RuntimeState,
@@ -24,6 +26,36 @@ import type {
 const DISCOVERY_TIMEOUT_MS = 5000;
 export const EXPECTED_IDP_COMPONENT = "identuum-idp";
 export const EXPECTED_AG_COMPONENT = "identuum-ag";
+
+const KNOWN_CAPABILITY_KEYS: ReadonlyArray<keyof ComponentCapabilities> = [
+  "identity_provider",
+  "agent_governance",
+  "component_discovery",
+  "license_status",
+  "auth_provider_discovery",
+  "organization_export",
+  "organization_import",
+  "organization_linking",
+  "hitl",
+  "agent_sessions",
+];
+
+/**
+ * extractCapabilities safely projects the raw backend capabilities object onto
+ * ComponentCapabilities. Only the explicit known boolean keys are passed through;
+ * unknown keys, non-boolean values, and null/non-object input are discarded.
+ */
+export function extractCapabilities(input: unknown): ComponentCapabilities {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  const raw = input as Record<string, unknown>;
+  const caps: ComponentCapabilities = {};
+  for (const key of KNOWN_CAPABILITY_KEYS) {
+    if (typeof raw[key] === "boolean") {
+      caps[key] = raw[key] as boolean;
+    }
+  }
+  return caps;
+}
 
 function notConfiguredState(): BackendComponentState {
   return {
@@ -53,6 +85,45 @@ function unreachableState(error: DiscoveryErrorCode): BackendComponentState {
     license: { status: "unknown" },
     error,
   };
+}
+
+/**
+ * extractLicenseInfo safely projects the raw backend license object onto
+ * ComponentLicenseInfo. Only the explicit safe fields are passed through;
+ * unknown keys, entitlement lists, feature overrides, customer IDs, and key
+ * material are discarded even if accidentally present in the backend response.
+ */
+function extractLicenseInfo(raw: unknown): ComponentLicenseInfo {
+  const info: ComponentLicenseInfo = { status: "unknown" };
+
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return info;
+  const r = raw as Record<string, unknown>;
+
+  if (typeof r.status === "string") info.status = r.status;
+  if (typeof r.product === "string") info.product = r.product;
+  if (typeof r.tier === "string") info.tier = r.tier;
+  if (r.expires_at === null) {
+    info.expires_at = null;
+  } else if (typeof r.expires_at === "string") {
+    info.expires_at = r.expires_at;
+  }
+  if (r.days_remaining === null) {
+    info.days_remaining = null;
+  } else if (typeof r.days_remaining === "number") {
+    info.days_remaining = r.days_remaining;
+  }
+  if (r.deployment_mode === null) {
+    info.deployment_mode = null;
+  } else if (typeof r.deployment_mode === "string") {
+    info.deployment_mode = r.deployment_mode;
+  }
+  if (r.license_type === null) {
+    info.license_type = null;
+  } else if (typeof r.license_type === "string") {
+    info.license_type = r.license_type;
+  }
+
+  return info;
 }
 
 async function fetchComponent(
@@ -109,24 +180,14 @@ async function fetchComponent(
     };
   }
 
-  const caps =
-    typeof disc.capabilities === "object" &&
-    disc.capabilities !== null &&
-    !Array.isArray(disc.capabilities)
-      ? (disc.capabilities as Record<string, boolean>)
-      : {};
+  const caps = extractCapabilities(disc.capabilities);
 
   const auth =
     typeof disc.auth === "object" && disc.auth !== null && !Array.isArray(disc.auth)
       ? (disc.auth as Record<string, string>)
       : {};
 
-  const licStatus =
-    typeof disc.license === "object" &&
-    disc.license !== null &&
-    typeof disc.license.status === "string"
-      ? disc.license.status
-      : "unknown";
+  const license = extractLicenseInfo(disc.license);
 
   return {
     configured: true,
@@ -137,7 +198,7 @@ async function fetchComponent(
     status: typeof disc.status === "string" ? disc.status : null,
     capabilities: caps,
     auth,
-    license: { status: licStatus },
+    license,
     error: null,
   };
 }

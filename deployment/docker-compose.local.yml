@@ -1,0 +1,74 @@
+# identuum-ui local Docker Compose runner — aligned with identuum-idp's
+# `deployment/docker-compose.local.yml` and identuum-ag's
+# `deployment/docker-compose.dev.yml` operator-facing models.
+#
+# Purpose: a deterministic local/demo-style way to bring up the Next.js
+# UI in production shape (standalone server, port 7114) without typing
+# pnpm commands by hand.
+#
+# Operator flow (clean):
+#
+#   docker compose -f deployment/docker-compose.local.yml down
+#   docker compose -f deployment/docker-compose.local.yml up -d
+#   curl http://localhost:7114/api/health
+#
+# Pre-requisite for full demo: the identuum-idp and identuum-ag local
+# stacks must already be running (their `up -d` produces the networks
+# `identuum-idp-local` and `identuum-ag_identuum-ag-net`, which this
+# stack joins as external networks so the UI's server-side fetches
+# resolve `identuum-idp:7113`, `identuum-ag:7215`, and `identuum-ag:7214`
+# — the internal_base_url values in config/ui-runtime.json).
+#
+# Browser-facing public URLs (http://localhost:7113/7214/7215) work
+# regardless of Docker networking — the browser hits the host's loopback
+# port-published listeners directly.
+
+name: identuum-ui
+
+services:
+  identuum-ui:
+    build:
+      # Build context is the repo root; the existing Dockerfile lives
+      # there and copies the whole Next.js project structure (package.json,
+      # next.config.ts, src/, public/, etc.).
+      context: ..
+      dockerfile: Dockerfile
+    image: identuum-ui:local
+    container_name: identuum-ui-app
+    restart: unless-stopped
+    ports:
+      # Loopback-only bind keeps the dev UI off any non-localhost
+      # interface; the published port mirrors PORT=7114 in the Dockerfile.
+      - "127.0.0.1:7114:7114"
+    volumes:
+      # Bind-mount the host's runtime config so the operator can edit
+      # config/ui-runtime.json (issuer URLs, feature toggles) without
+      # rebuilding the image. Read-only so the container cannot mutate
+      # the source of truth on the host.
+      #
+      # Path inside the container matches runtime-config.ts's
+      # NODE_ENV=production default at /app/config/ui-runtime.json.
+      - ../config:/app/config:ro
+    networks:
+      # Join the IDP and AG networks so the UI's server-side fetches
+      # (idp-client.ts → http://identuum-idp:7113, idp-admin-client.ts,
+      # ag-admin-client.ts → http://identuum-ag:{7215,7214}) resolve.
+      # Without these the runtime config's internal_base_url values
+      # would dead-end and only browser-facing public URLs would work.
+      - identuum-idp-local
+      - identuum-ag-net
+
+networks:
+  # External networks are NOT created by this compose; they must already
+  # exist (`docker compose -f identuum-idp/deployment/docker-compose.local.yml up -d`
+  # and `docker compose -f identuum-ag/deployment/docker-compose.dev.yml up -d`).
+  # `external: true` makes attachment-only — no implicit creation.
+  identuum-idp-local:
+    external: true
+  identuum-ag-net:
+    # The AG network name is project-prefixed by AG's compose
+    # (`name: identuum-ag` + bare network key `identuum-ag-net` →
+    # `identuum-ag_identuum-ag-net`). Reference it by its real Docker
+    # name here so attachment resolves.
+    name: identuum-ag_identuum-ag-net
+    external: true

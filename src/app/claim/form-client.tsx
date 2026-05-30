@@ -7,12 +7,24 @@
  * It is NOT stored in localStorage/sessionStorage and NOT put into any URL.
  *
  * Backend behavior after successful consumption:
- *   - No session is created. User must visit /login to sign in.
- *   - The org is activated and the user account is ready.
+ *   - The user account exists and the organisation is active.
+ *   - The server action opens a pending MFA-enrollment session and
+ *     returns its session_id in state.sessionId. The component then
+ *     renders the existing MFAEnrollForm to guide the user through
+ *     TOTP setup before any session-bearing tokens are minted.
+ *   - On successful MFA enrollment the IdP completes the login and
+ *     sets the session cookie; the user is then routed into
+ *     /org-admin.
+ *   - If opening the pending MFA session failed (network blip), the
+ *     component falls back to the legacy "go to /login" success
+ *     state — the backend login gate still enforces MFA on the next
+ *     login attempt.
  */
 
+import { MFAEnrollForm } from "@/components/auth/mfa-enroll-form";
 import { Button } from "@/components/ui/button";
-import { useActionState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useState } from "react";
 import { type ConsumeClaimState, consumeClaimAction } from "./actions";
 
 interface ClaimFormClientProps {
@@ -51,8 +63,78 @@ export function ClaimFormClient({
   emailBound,
 }: ClaimFormClientProps) {
   const [state, action, isPending] = useActionState(consumeClaimAction, initialState);
+  const router = useRouter();
+  // mfaCompleted captures the post-enrollment terminal state. Once true,
+  // the IdP has issued session-bearing tokens (HttpOnly cookie) and the
+  // user can navigate into /org-admin; we render a clear "setup
+  // complete" success card and a Continue button.
+  const [mfaCompleted, setMfaCompleted] = useState(false);
 
-  // ── Success state ─────────────────────────────────────────────────────────
+  // ── MFA setup complete ────────────────────────────────────────────────────
+
+  if (mfaCompleted) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4">
+          <p className="text-sm font-semibold text-emerald-700">
+            Setup complete — two-factor authentication enrolled
+          </p>
+          <p className="text-xs text-stone-500 mt-1">
+            Your org_admin account{organizationName ? ` for ${organizationName}` : ""} is now fully
+            operational. You are signed in.
+          </p>
+        </div>
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={() => {
+              router.push("/org-admin");
+              router.refresh();
+            }}
+            className="inline-flex items-center justify-center w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 shadow-sm transition-colors"
+          >
+            Continue to org admin →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── MFA enrollment in-progress (mandatory next step after claim) ──────────
+
+  if (state.phase === "mfa_setup" && state.sessionId) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+          <p className="text-sm font-semibold text-sky-900">Account created</p>
+          <p className="text-xs text-stone-600 mt-1 leading-relaxed">
+            Two-factor authentication is required before administrator access. Set up an
+            authenticator app now to finish.
+          </p>
+        </div>
+        <MFAEnrollForm
+          sessionId={state.sessionId}
+          // The pending session is single-use and tied to this browser
+          // tab. Routing "back" mid-enrollment cannot rewind the claim
+          // (it is already consumed), so the back action sends the user
+          // to /login with a clear reason — they can resume by signing
+          // in with their new credentials, which will land them in the
+          // same enrollment step via the regular login flow.
+          onBack={() => {
+            window.location.href = "/login?reason=mfa_setup_required";
+          }}
+          onSuccess={() => {
+            setMfaCompleted(true);
+          }}
+        />
+      </div>
+    );
+  }
+
+  // ── Legacy success state (post-claim login probe could not be opened) ────
+  // Reached only when openPendingMFAEnrollmentSession failed after a
+  // successful claim — the backend login gate will still force MFA on
+  // the next sign-in attempt.
 
   if (state.phase === "success") {
     return (
@@ -60,12 +142,13 @@ export function ClaimFormClient({
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4">
           <p className="text-sm font-semibold text-emerald-700">Account set up successfully</p>
           <p className="text-xs text-stone-500 mt-1">
-            Your org_admin account{organizationName ? ` for ${organizationName}` : ""} is ready. The
-            setup link has been used and cannot be reused.
+            Your org_admin account{organizationName ? ` for ${organizationName}` : ""} is ready.
+            Sign in to finish — two-factor authentication setup will start automatically.
           </p>
         </div>
-        <p className="text-sm text-stone-500 leading-relaxed">
-          You can now sign in with your email and the password you just set.
+        <p className="text-xs text-stone-400 leading-relaxed">
+          Administrator access requires two-factor authentication. The next sign-in step will
+          guide you through TOTP setup.
         </p>
         <div className="pt-1">
           <a
@@ -267,7 +350,8 @@ export function ClaimFormClient({
       </div>
 
       <p className="text-xs text-stone-400 text-center leading-relaxed">
-        After setup you will be redirected to sign in. This link can only be used once.
+        After password setup you will be guided through two-factor authentication enrollment.
+        Administrator access requires TOTP. This link can only be used once.
       </p>
     </form>
   );

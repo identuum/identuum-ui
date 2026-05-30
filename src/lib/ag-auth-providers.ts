@@ -51,6 +51,8 @@ function notAvailableState(
     error_code,
     login_available: null,
     unavailable_reason: null,
+    local_login_available: null,
+    local_login_url: null,
   };
 }
 
@@ -192,11 +194,34 @@ export async function fetchAgAuthProviders(
       ? body.unavailable_reason
       : null;
 
+  // Parse the local-login signal added in identuum-ag 2026-05-25. Older AG
+  // builds omit both fields; treat absent as null (UI falls back to "show the
+  // form anyway" rather than hiding it, since hiding it would be a regression
+  // for deployments that haven't picked up the new AG release).
+  const localLoginAvailable =
+    typeof body.local_login_available === "boolean" ? body.local_login_available : null;
+
+  // local_login_url is only propagated when AG advertises local login AND the
+  // path passes the same relative-URL guard used for federated providers. An
+  // absolute URL here would risk an open-redirect-shaped bug; the UI's
+  // server-side proxy always posts to the configured agIdentityBaseUrl, so a
+  // bad path is discarded rather than honored.
+  let localLoginUrl: string | null = null;
+  if (
+    localLoginAvailable === true &&
+    typeof body.local_login_url === "string" &&
+    isRelativeLoginUrl(body.local_login_url)
+  ) {
+    localLoginUrl = body.local_login_url;
+  }
+
   return {
     available: true,
     auth_mode: authMode,
     login_available: loginAvailable,
     unavailable_reason: unavailableReason,
+    local_login_available: localLoginAvailable,
+    local_login_url: localLoginUrl,
     providers,
     provider_count: providers.length,
     error_code: null,

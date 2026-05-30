@@ -97,7 +97,7 @@ function VerifyEmailLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <p className="mt-6 text-center text-xs text-stone-400">
-          identuum — self-hosted identity platform
+          identuum — identitas tua, in potestate tua
         </p>
       </div>
     </div>

@@ -4,27 +4,66 @@
  * Auth is enforced by the parent layout (account/layout.tsx).
  * This page does NOT repeat the guard.
  *
- * Tab routing: ?tab=password (default) | sessions | passkeys
+ * Tab routing: ?tab=password (default) | sessions | passkeys | mfa
  * Unknown values fall back to password.
  * Sessions are only fetched when the sessions tab is active.
+ *
+ * Section 8 of UI-FEATURES.md documents one explicit exception to the
+ * password-default rule: when `?reason=mfa_required` is in the URL the page
+ * opens on the MFA tab instead of the password tab. This is the entry
+ * point used by the org-admin layout's MFA gate (UI-FEATURES.md Section 6)
+ * so the redirected operator is not confused by landing on a password
+ * form when the actual problem is missing MFA enrollment.
  *
  * Role-specific administrative settings live in their respective shells:
  *   - /site-admin/settings  → system / infrastructure settings
  *   - /org-admin/settings   → organization settings
  */
 import { ChangePasswordForm } from "./change-password-form";
+import { MfaSection } from "./mfa-section";
 import { SessionsSection } from "./sessions-section";
 import { PasskeySection } from "@/components/ui/passkey-section";
 import { listOwnSessions } from "@/lib/idp-admin-client";
+import { getServerSession } from "@/lib/server-session";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Account Settings — Identuum" };
 
-type Tab = "password" | "sessions" | "passkeys";
+type Tab = "password" | "sessions" | "passkeys" | "mfa";
 
-function parseTab(raw: string | string[] | undefined): Tab {
+function parseTab(raw: string | string[] | undefined): Tab | null {
   const s = Array.isArray(raw) ? raw[0] : raw;
-  if (s === "sessions" || s === "passkeys") return s;
+  if (s === "password" || s === "sessions" || s === "passkeys" || s === "mfa") return s;
+  return null;
+}
+
+function isMfaRequiredReason(raw: string | string[] | undefined): boolean {
+  const s = Array.isArray(raw) ? raw[0] : raw;
+  return s === "mfa_required";
+}
+
+/**
+ * Resolves the active tab.
+ *
+ * Precedence (UI-FEATURES.md Section 8 — explicit MFA exception):
+ *   1. Explicit `?tab=mfa` always wins, regardless of reason.
+ *   2. Otherwise, `?reason=mfa_required` defaults the tab to `mfa`.
+ *   3. Otherwise, a recognised explicit `?tab=…` value wins.
+ *   4. Otherwise, fall back to the documented default (`password`).
+ *
+ * Rules 2 and 3 are ordered intentionally: when both `reason=mfa_required`
+ * and an unrelated `tab=…` (e.g. `?tab=sessions&reason=mfa_required`) are
+ * present, the explicit tab is the operator's most-recent stated intent
+ * and takes precedence. Only the empty / absent / unrecognised tab values
+ * defer to the reason.
+ */
+function resolveTab(
+  rawTab: string | string[] | undefined,
+  rawReason: string | string[] | undefined
+): Tab {
+  const explicit = parseTab(rawTab);
+  if (explicit) return explicit;
+  if (isMfaRequiredReason(rawReason)) return "mfa";
   return "password";
 }
 
@@ -34,7 +73,15 @@ export default async function AccountSettingsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const tab = parseTab(params.tab);
+  const tab = resolveTab(params.tab, params.reason);
+  const reasonMfaRequired = isMfaRequiredReason(params.reason);
+
+  // getServerSession is React-cached per request; the parent layout has
+  // already invoked it, so this call is free. We only need the MFA-state
+  // projection from the IDP /api/v1/validate response (UI-FEATURES.md
+  // Section 7). Treat undefined as unknown — older IDP builds may omit it.
+  const session = tab === "mfa" ? await getServerSession() : null;
+  const mfaEnabled = session?.user?.mfa_enabled;
 
   const sessionsResult = tab === "sessions" ? await listOwnSessions() : null;
 
@@ -48,10 +95,11 @@ export default async function AccountSettingsPage({
       </div>
 
       {/* Tab navigation */}
-      <div className="flex gap-1">
+      <div className="flex gap-1 flex-wrap">
         {(
           [
             { label: "Password", value: "password" },
+            { label: "MFA", value: "mfa" },
             { label: "Sessions", value: "sessions" },
             { label: "Passkeys", value: "passkeys" },
           ] as { label: string; value: Tab }[]
@@ -85,6 +133,11 @@ export default async function AccountSettingsPage({
             <ChangePasswordForm />
           </div>
         </div>
+      )}
+
+      {/* MFA tab */}
+      {tab === "mfa" && (
+        <MfaSection mfaEnabled={mfaEnabled} reasonMfaRequired={reasonMfaRequired} />
       )}
 
       {/* Sessions tab */}

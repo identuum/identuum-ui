@@ -10,12 +10,25 @@
 import "server-only";
 
 import { cookies } from "next/headers";
+import { classifyDomainVerifyErrorKind } from "./domain-verification-errors";
 import { idpBaseUrl, loadRuntimeConfig } from "./runtime-config";
 import type {
+  OrganizationDomainChallenge,
+  OrganizationDomainChallengeResponse,
+  OrganizationDomainDeleteResponse,
+  OrganizationDomainInfo,
+  OrganizationDomainListResponse,
+  OrganizationDomainResponse,
+  OrganizationDomainSetPrimaryResponse,
   OrgDetail,
   OrgListItem,
   OrgListResult,
   OrgUserItem,
+  CreateOrgClientOptions,
+  CreatedOrgClient,
+  OrgClientItem,
+  OrgClientListResult,
+  UpdateOrgClientOptions,
   UserProfile,
   UserRole,
 } from "./types";
@@ -227,6 +240,8 @@ export async function getOrganization(id: string): Promise<OrgDetail | null> {
       mfa_policy: String(o.mfa_policy ?? "optional"),
       has_admin: Boolean(o.is_claimed),
       can_assign_admin: Boolean(o.can_assign_admin),
+      allow_public_registration: Boolean(o.allow_public_registration),
+      require_registration_approval: Boolean(o.require_registration_approval),
       created_at: String(o.created_at ?? ""),
       updated_at: String(o.updated_at ?? ""),
     };
@@ -272,6 +287,8 @@ export async function getOwnOrganization(): Promise<OrgDetail | null> {
       has_admin: Boolean(o.is_claimed),
       // org_admin views their own org; recovery affordance is not applicable here.
       can_assign_admin: false,
+      allow_public_registration: Boolean(o.allow_public_registration),
+      require_registration_approval: Boolean(o.require_registration_approval),
       created_at: String(o.created_at ?? ""),
       updated_at: String(o.updated_at ?? ""),
     };
@@ -287,6 +304,17 @@ export interface UpdateOrgOptions {
   active?: boolean;
   auth_policy?: string;
   mfa_policy?: string;
+  /**
+   * Organization-level invite policy fields. Together with
+   * `require_registration_approval` these control the three operator-
+   * visible modes (`invite-only`, `public-with-approval`, `public-immediate`)
+   * that the org-admin Invite policy form on /org-admin/settings exposes.
+   * Both fields are already accepted by the IDP wire shape
+   * (`types.UpdateOrganizationRequest`); omitting either leaves the
+   * corresponding column unchanged on the backend.
+   */
+  allow_public_registration?: boolean;
+  require_registration_approval?: boolean;
 }
 
 export type UpdateOrgResult =
@@ -313,6 +341,10 @@ export async function updateOrganization(
   if (opts.active !== undefined) body.active = opts.active;
   if (opts.auth_policy !== undefined) body.auth_policy = opts.auth_policy;
   if (opts.mfa_policy !== undefined) body.mfa_policy = opts.mfa_policy;
+  if (opts.allow_public_registration !== undefined)
+    body.allow_public_registration = opts.allow_public_registration;
+  if (opts.require_registration_approval !== undefined)
+    body.require_registration_approval = opts.require_registration_approval;
 
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}`, {
@@ -1211,8 +1243,8 @@ export async function listAuditEventTypes(): Promise<AuditEventTypeGroupFromAPI[
 // is the operator-recovery primitive for an org_admin who:
 //   - lost their TOTP device, or
 //   - was created before MFA enrollment was enforced and therefore cannot
-//     reach the new MFA-required login gate (the admin@audi.de class of
-//     legacy accounts).
+//     reach the new MFA-required login gate (the pre-enforcement class
+//     of legacy accounts).
 //
 // After a successful reset the target's row has MFAEnabled=false and
 // MFASecret=NULL. The next successful password login routes the user
@@ -1350,5 +1382,1163 @@ export async function listOrgAdminsForRecovery(
     return { ok: true, admins: body.admins as OrgAdminRecoveryCandidate[] };
   } catch {
     return { ok: false, status: 0, message: "Network error. Try again." };
+  }
+}
+
+// ── Org-admin Domains ────────────────────────────────────────────────────────
+//
+// Five endpoints back the org-admin Domains card on /org-admin/settings:
+//
+//   GET    /api/v1/organizations/:id/domains                       (list)
+//   POST   /api/v1/organizations/:id/domains                       (add → challenge)
+//   POST   /api/v1/organizations/:id/domains/:domain_id/verify     (verify)
+//   DELETE /api/v1/organizations/:id/domains/:domain_id            (remove)
+//   POST   /api/v1/organizations/:id/domains/:domain_id/primary    (set-primary)
+//
+// Conventions:
+//   - Org ID is in the URL path. Add-domain body must NEVER include
+//     organization_id — the backend rejects unknown fields strictly.
+//   - Domain strings are trimmed + lowercased before sending. The backend
+//     does the same; we send canonical form so the wire mirrors storage.
+//   - All responses are sanitized to a narrow ok-shape so a regression
+//     that leaked a verification_token_hash or any other internal field
+//     would be statically impossible (the TS type excludes it).
+
+function sanitizeDomainInfo(o: unknown): OrganizationDomainInfo {
+  // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+  const r = (o ?? {}) as any;
+  return {
+    id: String(r.id ?? ""),
+    organization_id: String(r.organization_id ?? ""),
+    domain: String(r.domain ?? ""),
+    is_primary: Boolean(r.is_primary),
+    verified: Boolean(r.verified),
+    verified_at: typeof r.verified_at === "string" ? r.verified_at : null,
+    verification_token_expires_at:
+      typeof r.verification_token_expires_at === "string"
+        ? r.verification_token_expires_at
+        : null,
+    verification_attempts: Number(r.verification_attempts ?? 0),
+    created_at: String(r.created_at ?? ""),
+    updated_at: String(r.updated_at ?? ""),
+  };
+}
+
+export type ListOrganizationDomainsResult =
+  | { ok: true; data: OrganizationDomainListResponse }
+  | { ok: false; status: number };
+
+/**
+ * Lists the calling org_admin's organization domains.
+ *
+ * Backend: GET /api/v1/organizations/:id/domains. Authorization is
+ * org-scoped; the IDP service rejects cross-org reads. The caller must
+ * supply the orgID derived server-side from getOwnOrganization (NEVER
+ * from the browser).
+ *
+ * The response is sanitized to the wire shape — no verification token
+ * hash, no internal fields. Returns { ok: false } on any non-2xx.
+ */
+export async function listOrganizationDomains(
+  orgID: string
+): Promise<ListOrganizationDomainsResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503 };
+
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/domains`,
+      {
+        method: "GET",
+        headers: { Cookie: await cookieHeader() },
+        cache: "no-store",
+      }
+    );
+    if (!res.ok) return { ok: false, status: res.status };
+
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const data: any = await res.json();
+    const raw = Array.isArray(data?.domains) ? data.domains : [];
+    return {
+      ok: true,
+      data: {
+        domains: raw.map(sanitizeDomainInfo),
+        count: Number(data?.count ?? raw.length),
+      },
+    };
+  } catch {
+    return { ok: false, status: 0 };
+  }
+}
+
+export type AddOrganizationDomainResult =
+  | { ok: true; data: OrganizationDomainChallengeResponse }
+  | { ok: false; status: number; conflict: boolean; invalid: boolean };
+
+/**
+ * Adds a new pending organization domain and mints the DNS-TXT
+ * challenge. The challenge `record_value` (and the bare `token`) are
+ * surfaced in the returned envelope — they appear ONLY on this immediate
+ * response and never on subsequent list/verify reads. Callers must show
+ * them once and discard.
+ *
+ * Backend: POST /api/v1/organizations/:id/domains.
+ * The body carries only `{ domain }`. Org ID lives in the path and is
+ * re-authorized by the service. Adding `organization_id` to the body
+ * would be rejected by StrictBindJSON; the helper enforces this contract
+ * by typing the body locally rather than accepting an open record.
+ */
+export async function addOrganizationDomain(
+  orgID: string,
+  domain: string
+): Promise<AddOrganizationDomainResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled)
+    return { ok: false, status: 503, conflict: false, invalid: false };
+
+  // Canonicalize: trim + lowercase. Matches backend NormalizeDomain.
+  const body: { domain: string } = { domain: domain.toLowerCase().trim() };
+
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/domains`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: await cookieHeader(),
+        },
+        body: JSON.stringify(body),
+        cache: "no-store",
+      }
+    );
+
+    if (res.status === 400)
+      return { ok: false, status: 400, conflict: false, invalid: true };
+    if (res.status === 409)
+      return { ok: false, status: 409, conflict: true, invalid: false };
+    if (!res.ok) return { ok: false, status: res.status, conflict: false, invalid: false };
+
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const data: any = await res.json();
+    const ch = (data?.challenge ?? {}) as Partial<OrganizationDomainChallenge>;
+    return {
+      ok: true,
+      data: {
+        domain: sanitizeDomainInfo(data?.domain),
+        challenge: {
+          record_name: String(ch.record_name ?? ""),
+          record_type: String(ch.record_type ?? "TXT"),
+          record_value: String(ch.record_value ?? ""),
+          token: String(ch.token ?? ""),
+          expires_at: String(ch.expires_at ?? ""),
+        },
+      },
+    };
+  } catch {
+    return { ok: false, status: 0, conflict: false, invalid: false };
+  }
+}
+
+export type VerifyOrganizationDomainResult =
+  | { ok: true; data: OrganizationDomainResponse }
+  | {
+      ok: false;
+      status: number;
+      /** True when the lookup itself failed (resolver / network / NX). */
+      lookupFailed: boolean;
+      /** True when the TXT record was not found at the expected name. */
+      recordNotFound: boolean;
+      /** True when a TXT record exists but does not match the expected value. */
+      mismatch: boolean;
+    };
+
+/**
+ * Verifies a pending organization domain by performing a real DNS TXT
+ * lookup at `_identuum-challenge.<domain>`. Reads the challenge token
+ * hash from the row (the raw token is not stored), hashes the TXT
+ * value, and compares.
+ *
+ * Backend: POST /api/v1/organizations/:id/domains/:domain_id/verify.
+ *
+ * The discriminated error surface lets the UI render specific copy for
+ * the three operator-correctable outcomes: lookup failure (transient or
+ * NX), record-not-found (operator must publish the TXT), and mismatch
+ * (operator pasted the wrong token). The raw token / hash never appears
+ * in the result.
+ */
+export async function verifyOrganizationDomain(
+  orgID: string,
+  domainID: string
+): Promise<VerifyOrganizationDomainResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled)
+    return {
+      ok: false,
+      status: 503,
+      lookupFailed: false,
+      recordNotFound: false,
+      mismatch: false,
+    };
+
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/domains/${encodeURIComponent(domainID)}/verify`,
+      {
+        method: "POST",
+        headers: { Cookie: await cookieHeader() },
+        cache: "no-store",
+      }
+    );
+
+    // Discriminate verifier failure kinds from the structured
+    // `error_kind` field on the IDP envelope. The pure classifier
+    // lives in ./domain-verification-errors so it is unit-testable
+    // without spinning up a fetch / cookies / runtime-config stack.
+    // Anything other than the four documented kinds collapses to
+    // the all-false / generic-copy branch the action layer renders.
+    //
+    // The brittle substring parsing of the backend `message` is
+    // intentionally gone — the helper does not even read the field.
+    if (!res.ok) {
+      let lookupFailed = false;
+      let recordNotFound = false;
+      let mismatch = false;
+      try {
+        // biome-ignore lint/suspicious/noExplicitAny: error envelope shape
+        const body: any = await res.json();
+        const classification = classifyDomainVerifyErrorKind(body?.error_kind);
+        switch (classification.kind) {
+          case "lookup_failed":
+            lookupFailed = true;
+            break;
+          case "record_not_found":
+            recordNotFound = true;
+            break;
+          case "mismatch":
+            mismatch = true;
+            break;
+          case "generic":
+            // All three discriminators stay false → the action layer
+            // renders ORG_ADMIN_DOMAINS_CARD_COPY.verifyErrorGeneric.
+            break;
+        }
+      } catch {
+        // Parse failure → generic copy (helper would have returned
+        // {kind: "generic"} too; the catch just short-circuits the
+        // attempt to read the body).
+      }
+      return { ok: false, status: res.status, lookupFailed, recordNotFound, mismatch };
+    }
+
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const data: any = await res.json();
+    return { ok: true, data: { domain: sanitizeDomainInfo(data?.domain) } };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      lookupFailed: true,
+      recordNotFound: false,
+      mismatch: false,
+    };
+  }
+}
+
+export type DeleteOrganizationDomainResult =
+  | { ok: true; data: OrganizationDomainDeleteResponse }
+  | { ok: false; status: number; notFound: boolean; primary: boolean };
+
+/**
+ * Removes a non-primary organization domain.
+ *
+ * Backend: DELETE /api/v1/organizations/:id/domains/:domain_id.
+ * The backend refuses to remove the primary row (409) — the UI also
+ * hides the affordance for primary rows, but the wire is the final gate.
+ */
+export async function deleteOrganizationDomain(
+  orgID: string,
+  domainID: string
+): Promise<DeleteOrganizationDomainResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled)
+    return { ok: false, status: 503, notFound: false, primary: false };
+
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/domains/${encodeURIComponent(domainID)}`,
+      {
+        method: "DELETE",
+        headers: { Cookie: await cookieHeader() },
+        cache: "no-store",
+      }
+    );
+
+    if (res.status === 404)
+      return { ok: false, status: 404, notFound: true, primary: false };
+    if (res.status === 409)
+      return { ok: false, status: 409, notFound: false, primary: true };
+    if (!res.ok)
+      return { ok: false, status: res.status, notFound: false, primary: false };
+
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const data: any = await res.json();
+    return { ok: true, data: { deleted: Boolean(data?.deleted) } };
+  } catch {
+    return { ok: false, status: 0, notFound: false, primary: false };
+  }
+}
+
+export type SetPrimaryOrganizationDomainResult =
+  | { ok: true; data: OrganizationDomainSetPrimaryResponse }
+  | { ok: false; status: number; notFound: boolean; notVerified: boolean };
+
+/**
+ * Promotes a verified, non-primary organization domain to primary.
+ *
+ * Backend: POST /api/v1/organizations/:id/domains/:domain_id/primary.
+ * The backend refuses to promote an unverified row (400 / 409 depending
+ * on state); the UI also hides the affordance for unverified rows.
+ */
+export async function setPrimaryOrganizationDomain(
+  orgID: string,
+  domainID: string
+): Promise<SetPrimaryOrganizationDomainResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled)
+    return { ok: false, status: 503, notFound: false, notVerified: false };
+
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/domains/${encodeURIComponent(domainID)}/primary`,
+      {
+        method: "POST",
+        headers: { Cookie: await cookieHeader() },
+        cache: "no-store",
+      }
+    );
+
+    if (res.status === 404)
+      return { ok: false, status: 404, notFound: true, notVerified: false };
+    if (res.status === 400 || res.status === 409)
+      return {
+        ok: false,
+        status: res.status,
+        notFound: false,
+        notVerified: true,
+      };
+    if (!res.ok)
+      return { ok: false, status: res.status, notFound: false, notVerified: false };
+
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const data: any = await res.json();
+    return { ok: true, data: { primary: Boolean(data?.primary) } };
+  } catch {
+    return { ok: false, status: 0, notFound: false, notVerified: false };
+  }
+}
+
+// ── Org-admin Applications (OAuth clients) ──────────────────────────────────
+//
+// Backed by GET /api/v1/clients. The IDP's ClientService.ListClients
+// filters by actor.OrganizationID when the actor is RoleOrgAdmin, so
+// org_admin sessions only see their own organization's clients. site_admin
+// sessions see clients across all organizations — but the org-admin UI
+// surfaces the result through getServerSession's org_admin role gate at
+// the layout level, so a site_admin would never reach this UI path.
+//
+// SECURITY:
+//   - The sanitiser EXPLICITLY drops the `client_secret` field from the
+//     wire shape even though the list-clients handler does not populate
+//     it today. The IDP's ClientResponse declares the field with
+//     `omitempty`; a future regression that started populating it on
+//     the list path would slip past the wire-level guard but would NOT
+//     reach this UI because the sanitiser does not even read the field.
+//   - The sanitiser similarly never reads inline JWKS material — only
+//     the `jwks_uri` reference is surfaced.
+//   - No client secret, signing material, refresh-token, or auth-code
+//     value is ever exposed in this code path.
+
+export type ListOwnOrganizationClientsResult =
+  | { ok: true; data: OrgClientListResult }
+  | { ok: false; status: number };
+
+/**
+ * Lists OAuth clients for the calling org_admin's organization.
+ *
+ * Backend: GET /api/v1/clients. Tenant scope is enforced server-side
+ * via ClientService.ListClients's `if actor.Role == RoleOrgAdmin
+ * { orgID = &actor.OrganizationID }` branch. The UI MUST not attempt
+ * to widen scope by passing a query param; the wire envelope from the
+ * IDP carries the operator's scoped result automatically.
+ *
+ * Returns { ok: false } on any non-2xx so the page can render a safe
+ * error state without forwarding backend prose.
+ */
+export async function listOwnOrganizationClients(opts?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<ListOwnOrganizationClientsResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503 };
+
+  const page = Math.max(1, Math.floor(opts?.page ?? 1));
+  const pageSize = Math.min(100, Math.max(1, Math.floor(opts?.pageSize ?? 50)));
+
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("page_size", String(pageSize));
+
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/clients?${params.toString()}`, {
+      method: "GET",
+      headers: { Cookie: await cookieHeader() },
+      cache: "no-store",
+    });
+    if (!res.ok) return { ok: false, status: res.status };
+
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+    const body: any = await res.json();
+    const rawList = Array.isArray(body?.data) ? body.data : [];
+
+    // Sanitise to the narrow OrgClientItem shape. Explicitly DROP
+    // any client_secret / signing-key material even if the wire
+    // payload includes it — defence in depth on top of the IDP's
+    // own `omitempty` + list-handler omission.
+    const clients: OrgClientItem[] = rawList.map(
+      // biome-ignore lint/suspicious/noExplicitAny: raw client entry
+      (c: any): OrgClientItem => ({
+        id: String(c.id ?? ""),
+        client_id: String(c.client_id ?? ""),
+        name: String(c.name ?? ""),
+        is_public: Boolean(c.is_public),
+        skip_consent: Boolean(c.skip_consent),
+        redirect_uris: Array.isArray(c.redirect_uris)
+          ? c.redirect_uris.map((s: unknown) => String(s))
+          : [],
+        post_logout_redirect_uris: Array.isArray(c.post_logout_redirect_uris)
+          ? c.post_logout_redirect_uris.map((s: unknown) => String(s))
+          : [],
+        allowed_audiences: Array.isArray(c.allowed_audiences)
+          ? c.allowed_audiences.map((s: unknown) => String(s))
+          : [],
+        scope: typeof c.scope === "string" ? c.scope : "",
+        token_endpoint_auth_method:
+          typeof c.token_endpoint_auth_method === "string"
+            ? c.token_endpoint_auth_method
+            : "",
+        jwks_uri: typeof c.jwks_uri === "string" ? c.jwks_uri : "",
+        token_endpoint_auth_signing_alg:
+          typeof c.token_endpoint_auth_signing_alg === "string"
+            ? c.token_endpoint_auth_signing_alg
+            : "",
+        organization_id: typeof c.organization_id === "string" ? c.organization_id : null,
+        created_at: typeof c.created_at === "string" ? c.created_at : "",
+      })
+    );
+
+    return {
+      ok: true,
+      data: {
+        clients,
+        total: typeof body?.total === "number" ? body.total : clients.length,
+        page: typeof body?.page === "number" ? body.page : page,
+        page_size: typeof body?.limit === "number" ? body.limit : pageSize,
+      },
+    };
+  } catch {
+    return { ok: false, status: 0 };
+  }
+}
+
+// ── Org-admin Get Application by ID (GET /api/v1/clients/:id) ──────────────
+//
+// The IDP's HandleGetClient + ClientService.GetClient enforce tenant
+// scope for org_admin actors: a client whose organization_id does not
+// match the actor's session-derived organization id returns 403
+// (ErrForbidden) — never a leak. Invalid UUIDs return 400
+// (ErrInvalidRequest). Not-found returns 404 (ErrClientNotFound). The
+// handler returns ClientResponse but does NOT populate the
+// `client_secret` field, and the `omitempty` JSON tag strips it from
+// the wire envelope. This wire helper additionally defends in depth
+// by explicit field-by-field projection — it never reads
+// client_secret / private_key / inline JWKS material even if the IDP
+// returned them.
+
+export type GetOrganizationClientByIdResult =
+  | { ok: true; data: OrgClientItem }
+  | { ok: false; status: number; notFound: boolean; forbidden: boolean; invalid: boolean };
+
+/**
+ * Fetches a single OAuth client by UUID for the org-admin detail page.
+ *
+ * Backend: GET /api/v1/clients/:id. Tenant scope enforced server-side
+ * via ClientService.GetClient's `*c.OrganizationID != actor.OrganizationID`
+ * branch for RoleOrgAdmin actors. The UI never widens scope.
+ *
+ * Returns a discriminated error on 400 (invalid UUID), 403 (forbidden
+ * — including the cross-org case), 404 (not found), and any other
+ * non-2xx so the detail page can render distinct copy without
+ * forwarding backend prose.
+ */
+export async function getOrganizationClientById(
+  id: string
+): Promise<GetOrganizationClientByIdResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return { ok: false, status: 503, notFound: false, forbidden: false, invalid: false };
+  }
+
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(id)}`, {
+      method: "GET",
+      headers: { Cookie: await cookieHeader() },
+      cache: "no-store",
+    });
+
+    if (res.status === 400)
+      return { ok: false, status: 400, notFound: false, forbidden: false, invalid: true };
+    if (res.status === 403)
+      return { ok: false, status: 403, notFound: false, forbidden: true, invalid: false };
+    if (res.status === 404)
+      return { ok: false, status: 404, notFound: true, forbidden: false, invalid: false };
+    if (!res.ok)
+      return {
+        ok: false,
+        status: res.status,
+        notFound: false,
+        forbidden: false,
+        invalid: false,
+      };
+
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+    const c: any = await res.json();
+
+    // Sanitise to the same OrgClientItem shape the list path uses.
+    // Explicitly DROPS client_secret / private_key / inline JWKS even
+    // if the IDP returned them. Defence in depth on top of the IDP-
+    // side `omitempty` + handler omission.
+    return {
+      ok: true,
+      data: {
+        id: String(c.id ?? ""),
+        client_id: String(c.client_id ?? ""),
+        name: String(c.name ?? ""),
+        is_public: Boolean(c.is_public),
+        skip_consent: Boolean(c.skip_consent),
+        redirect_uris: Array.isArray(c.redirect_uris)
+          ? c.redirect_uris.map((s: unknown) => String(s))
+          : [],
+        post_logout_redirect_uris: Array.isArray(c.post_logout_redirect_uris)
+          ? c.post_logout_redirect_uris.map((s: unknown) => String(s))
+          : [],
+        allowed_audiences: Array.isArray(c.allowed_audiences)
+          ? c.allowed_audiences.map((s: unknown) => String(s))
+          : [],
+        scope: typeof c.scope === "string" ? c.scope : "",
+        token_endpoint_auth_method:
+          typeof c.token_endpoint_auth_method === "string"
+            ? c.token_endpoint_auth_method
+            : "",
+        jwks_uri: typeof c.jwks_uri === "string" ? c.jwks_uri : "",
+        token_endpoint_auth_signing_alg:
+          typeof c.token_endpoint_auth_signing_alg === "string"
+            ? c.token_endpoint_auth_signing_alg
+            : "",
+        organization_id: typeof c.organization_id === "string" ? c.organization_id : null,
+        created_at: typeof c.created_at === "string" ? c.created_at : "",
+      },
+    };
+  } catch {
+    return { ok: false, status: 0, notFound: false, forbidden: false, invalid: false };
+  }
+}
+
+// ── Org-admin Create Application (POST /api/v1/clients) ────────────────────
+//
+// The IDP's HandleCreateClient handler injects
+// `OrganizationID: &actor.OrganizationID` automatically when the actor's
+// role is RoleOrgAdmin. The wire body MUST NOT include `organization_id`
+// — the IDP's StrictBindJSON rejects unknown fields, so a regression
+// that started sending it would surface as a 400, not a silent
+// scope-widen.
+//
+// The handler uses `RespondWithCreated(c, ClientResponse{..., ClientSecret:
+// secret, ...})` — the `client_secret` is populated EXACTLY on this
+// response and never on any subsequent read. This wire helper surfaces
+// the value through the returned envelope so the server action can
+// hand it to the operator in a single-shot UI panel. The value is
+// never persisted, never re-fetched, never logged.
+
+export type CreateOrgClientResult =
+  | { ok: true; data: CreatedOrgClient }
+  | { ok: false; status: number; conflict: boolean; invalid: boolean; message: string };
+
+export async function createOrganizationClient(
+  opts: CreateOrgClientOptions
+): Promise<CreateOrgClientResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return {
+      ok: false,
+      status: 503,
+      conflict: false,
+      invalid: false,
+      message: "IdP is not configured.",
+    };
+  }
+
+  // Construct a STRICT body — no organization_id, no service_account_id,
+  // no inline jwks, no token_ttl_secs. Org_admin self-service surface
+  // is intentionally narrow; the IDP enforces required name +
+  // redirect_uris.
+  const body: Record<string, unknown> = {
+    name: opts.name,
+    redirect_uris: opts.redirect_uris,
+  };
+  if (opts.post_logout_redirect_uris && opts.post_logout_redirect_uris.length > 0) {
+    body.post_logout_redirect_uris = opts.post_logout_redirect_uris;
+  }
+  if (typeof opts.scope === "string" && opts.scope.length > 0) {
+    body.scope = opts.scope;
+  }
+  if (typeof opts.is_public === "boolean") {
+    body.is_public = opts.is_public;
+  }
+  if (opts.allowed_audiences && opts.allowed_audiences.length > 0) {
+    body.allowed_audiences = opts.allowed_audiences;
+  }
+
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/clients`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: await cookieHeader(),
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+
+    if (res.status === 409) {
+      return {
+        ok: false,
+        status: 409,
+        conflict: true,
+        invalid: false,
+        message: "A client with this configuration already exists.",
+      };
+    }
+    if (res.status === 400) {
+      // Don't forward the backend prose. The form layer maps to safe copy.
+      return {
+        ok: false,
+        status: 400,
+        conflict: false,
+        invalid: true,
+        message: "The application could not be created with the supplied values.",
+      };
+    }
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: res.status,
+        conflict: false,
+        invalid: false,
+        message: "Could not create application. Please try again.",
+      };
+    }
+
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+    const d: any = await res.json();
+
+    return {
+      ok: true,
+      data: {
+        id: String(d.id ?? ""),
+        client_id: String(d.client_id ?? ""),
+        name: String(d.name ?? ""),
+        is_public: Boolean(d.is_public),
+        // The IDP returns client_secret ONLY on this response. Surface
+        // it through the envelope. Empty string for public clients.
+        client_secret: typeof d.client_secret === "string" ? d.client_secret : "",
+        redirect_uris: Array.isArray(d.redirect_uris)
+          ? d.redirect_uris.map((s: unknown) => String(s))
+          : [],
+        post_logout_redirect_uris: Array.isArray(d.post_logout_redirect_uris)
+          ? d.post_logout_redirect_uris.map((s: unknown) => String(s))
+          : [],
+        allowed_audiences: Array.isArray(d.allowed_audiences)
+          ? d.allowed_audiences.map((s: unknown) => String(s))
+          : [],
+        scope: typeof d.scope === "string" ? d.scope : "",
+        token_endpoint_auth_method:
+          typeof d.token_endpoint_auth_method === "string"
+            ? d.token_endpoint_auth_method
+            : "",
+        organization_id: typeof d.organization_id === "string" ? d.organization_id : null,
+      },
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      conflict: false,
+      invalid: false,
+      message: "Network error. Please try again.",
+    };
+  }
+}
+
+// ── Org-admin Update Application (PUT /api/v1/clients/:id) ─────────────────
+//
+// The IDP's HandleUpdateClient enforces tenant scope inside
+// service.ClientService.UpdateClient: when actor.Role == RoleOrgAdmin the
+// client's organization_id MUST equal actor.OrganizationID, otherwise the
+// service returns domain.ErrForbidden which the handler maps to HTTP 403.
+// The wire body MUST NOT include `organization_id` — the IDP's
+// StrictBindJSON rejects unknown fields, so a regression that started
+// sending it would surface as a 400, not a silent scope-widen.
+//
+// The handler's ClientResponse struct literal OMITS ClientSecret (no
+// assignment), and the field carries `json:"client_secret,omitempty"` so
+// JSON encoding drops the empty string. The update path NEVER returns
+// client_secret — secret rotation is an explicit non-feature of this
+// surface. This wire helper defence-in-depth sanitises the response and
+// drops any `client_secret` that a regression might re-introduce.
+
+export type UpdateOrgClientResult =
+  | { ok: true; data: OrgClientItem }
+  | {
+      ok: false;
+      status: number;
+      notFound: boolean;
+      forbidden: boolean;
+      invalid: boolean;
+      conflict: boolean;
+      message: string;
+    };
+
+export async function updateOrganizationClient(
+  id: string,
+  opts: UpdateOrgClientOptions
+): Promise<UpdateOrgClientResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return {
+      ok: false,
+      status: 503,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      conflict: false,
+      message: "IdP is not configured.",
+    };
+  }
+
+  // Construct a STRICT body — only the safe org_admin self-service
+  // subset. No organization_id, no client_secret, no service_account_id,
+  // no token_endpoint_auth_method, no jwks / jwks_uri / signing_alg, no
+  // skip_consent, no token_ttl_secs, no is_public flip. Each field is
+  // included only when the caller actually wants to change it; an
+  // omitted field is left unchanged on the IDP side (the Go opts.X is
+  // pointer-typed and `nil` means leave-unchanged).
+  const body: Record<string, unknown> = {};
+  if (typeof opts.name === "string") {
+    body.name = opts.name;
+  }
+  if (Array.isArray(opts.redirect_uris)) {
+    body.redirect_uris = opts.redirect_uris;
+  }
+  if (Array.isArray(opts.post_logout_redirect_uris)) {
+    body.post_logout_redirect_uris = opts.post_logout_redirect_uris;
+  }
+  if (typeof opts.scope === "string") {
+    body.scope = opts.scope;
+  }
+  if (Array.isArray(opts.allowed_audiences)) {
+    body.allowed_audiences = opts.allowed_audiences;
+  }
+
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: await cookieHeader(),
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+
+    if (res.status === 400) {
+      return {
+        ok: false,
+        status: 400,
+        notFound: false,
+        forbidden: false,
+        invalid: true,
+        conflict: false,
+        message: "The application could not be updated with the supplied values.",
+      };
+    }
+    if (res.status === 403) {
+      return {
+        ok: false,
+        status: 403,
+        notFound: false,
+        forbidden: true,
+        invalid: false,
+        conflict: false,
+        message: "You do not have permission to update this application.",
+      };
+    }
+    if (res.status === 404) {
+      return {
+        ok: false,
+        status: 404,
+        notFound: true,
+        forbidden: false,
+        invalid: false,
+        conflict: false,
+        message: "The application was not found.",
+      };
+    }
+    if (res.status === 409) {
+      return {
+        ok: false,
+        status: 409,
+        notFound: false,
+        forbidden: false,
+        invalid: false,
+        conflict: true,
+        message: "A client with this configuration already exists.",
+      };
+    }
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: res.status,
+        notFound: false,
+        forbidden: false,
+        invalid: false,
+        conflict: false,
+        message: "Could not update application. Please try again.",
+      };
+    }
+
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+    const c: any = await res.json();
+
+    // Sanitise to the same OrgClientItem shape the list + detail paths
+    // use. Explicitly DROPS client_secret / private_key / inline jwks /
+    // signing material even if the IDP returned them. The IDP-side
+    // omitempty + ClientResponse-literal omission is the first
+    // defence; this sanitiser is the second.
+    return {
+      ok: true,
+      data: {
+        id: String(c.id ?? ""),
+        client_id: String(c.client_id ?? ""),
+        name: String(c.name ?? ""),
+        is_public: Boolean(c.is_public),
+        skip_consent: Boolean(c.skip_consent),
+        redirect_uris: Array.isArray(c.redirect_uris)
+          ? c.redirect_uris.map((s: unknown) => String(s))
+          : [],
+        post_logout_redirect_uris: Array.isArray(c.post_logout_redirect_uris)
+          ? c.post_logout_redirect_uris.map((s: unknown) => String(s))
+          : [],
+        allowed_audiences: Array.isArray(c.allowed_audiences)
+          ? c.allowed_audiences.map((s: unknown) => String(s))
+          : [],
+        scope: typeof c.scope === "string" ? c.scope : "",
+        token_endpoint_auth_method:
+          typeof c.token_endpoint_auth_method === "string"
+            ? c.token_endpoint_auth_method
+            : "",
+        jwks_uri: typeof c.jwks_uri === "string" ? c.jwks_uri : "",
+        token_endpoint_auth_signing_alg:
+          typeof c.token_endpoint_auth_signing_alg === "string"
+            ? c.token_endpoint_auth_signing_alg
+            : "",
+        organization_id: typeof c.organization_id === "string" ? c.organization_id : null,
+        created_at: typeof c.created_at === "string" ? c.created_at : "",
+      },
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      conflict: false,
+      message: "Network error. Please try again.",
+    };
+  }
+}
+
+// ── Org-admin Delete Application (DELETE /api/v1/clients/:id) ──────────────
+//
+// HARD DELETE on the IDP side: `PgxClientRepository.Delete` runs
+// `DELETE FROM oauth_clients WHERE id = $1 AND organization_id = $2` —
+// the row is removed, not soft-deleted. The IDP's HandleDeleteClient
+// returns 204 No Content on success (no body, no client_secret, no
+// secret material of any kind crosses the wire on this path).
+//
+// Tenant scope is enforced server-side inside
+// `ClientService.DeleteClient`: when `actor.Role == RoleOrgAdmin` and
+// the client's `OrganizationID` does not equal `actor.OrganizationID`,
+// the service returns `domain.ErrForbidden` which the handler maps to
+// HTTP 403. `guardSiteAdminTenantClient` adds defence-in-depth.
+//
+// The service is IDEMPOTENT on already-deleted: when the client row is
+// already gone the service returns `nil` and the handler returns 204
+// — a double-submit / concurrent-tab race cannot 404. The UI maps 404
+// to a not-found result anyway so a stale link from outside the
+// active list is still handled cleanly.
+//
+// The audit event `AuditClientDeleted` is emitted with metadata
+// `{client_id, client_name}` (and `source: "mcp"` when the client's
+// scope contains an `mcp:` prefix).
+
+export type DeleteOrgClientResult =
+  | { ok: true }
+  | {
+      ok: false;
+      status: number;
+      notFound: boolean;
+      forbidden: boolean;
+      invalid: boolean;
+      message: string;
+    };
+
+export async function deleteOrganizationClient(
+  id: string
+): Promise<DeleteOrgClientResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return {
+      ok: false,
+      status: 503,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      message: "IdP is not configured.",
+    };
+  }
+
+  try {
+    // DELETE carries NO request body, NO `organization_id`,
+    // NO `client_secret`, NO `Authorization`-bearer header that
+    // didn't already exist on the session cookie. Tenant scope is
+    // enforced by the IDP from the actor's session.
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { Cookie: await cookieHeader() },
+      cache: "no-store",
+    });
+
+    // 204 No Content is the success path.
+    if (res.status === 204 || res.ok) return { ok: true };
+
+    if (res.status === 400) {
+      return {
+        ok: false,
+        status: 400,
+        notFound: false,
+        forbidden: false,
+        invalid: true,
+        message: "The application could not be deleted with the supplied id.",
+      };
+    }
+    if (res.status === 403) {
+      return {
+        ok: false,
+        status: 403,
+        notFound: false,
+        forbidden: true,
+        invalid: false,
+        message: "You do not have permission to delete this application.",
+      };
+    }
+    if (res.status === 404) {
+      return {
+        ok: false,
+        status: 404,
+        notFound: true,
+        forbidden: false,
+        invalid: false,
+        message: "The application was not found. It may have been removed already.",
+      };
+    }
+    return {
+      ok: false,
+      status: res.status,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      message: "Could not delete application. Please try again.",
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      message: "Network error. Please try again.",
+    };
+  }
+}
+
+// ── Org-admin Rotate Application Secret (POST /api/v1/clients/:id/secret/regenerate) ──
+//
+// The IDP exposes POST `/api/v1/clients/:id/secret/regenerate` (slice
+// identuum-20260530-client-secret-rotation-backend-route). Backend
+// semantics:
+//   - Tenant scope enforced by ClientService.RegenerateClientSecret:
+//     when actor.Role == RoleOrgAdmin the target client's
+//     OrganizationID MUST equal actor.OrganizationID, otherwise the
+//     service returns domain.ErrForbidden (HTTP 403).
+//   - Public clients are REJECTED with ErrInvalidRequest → HTTP 400.
+//     The wire helper surfaces this as `publicClient: true` so the
+//     server action can route a precise operator-facing message.
+//   - On success the handler returns the minimal envelope
+//     `{id, client_id, name, client_secret}` (RotateClientSecretResponse
+//     on the IDP side). client_secret is populated EXACTLY ONCE.
+//   - Secret rotation does NOT invalidate already-issued access
+//     tokens; new credential-bearing grants using the old secret fail
+//     because AuthenticateClient re-checks the stored hash. The UI
+//     surfaces this caveat verbatim in the success panel.
+//
+// The wire helper sends NO request body, NO `Content-Type` header,
+// NO `Authorization: Bearer ...` (session cookie is the only auth),
+// NO organization_id, NO client_secret. By construction the request
+// cannot widen tenant scope or carry secret material outward.
+
+export type RotateOrgClientSecretResult =
+  | {
+      ok: true;
+      data: { id: string; client_id: string; name: string; client_secret: string };
+    }
+  | {
+      ok: false;
+      status: number;
+      notFound: boolean;
+      forbidden: boolean;
+      invalid: boolean;
+      publicClient: boolean;
+      message: string;
+    };
+
+export async function rotateOrganizationClientSecret(
+  id: string
+): Promise<RotateOrgClientSecretResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return {
+      ok: false,
+      status: 503,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      publicClient: false,
+      message: "IdP is not configured.",
+    };
+  }
+
+  try {
+    // No `body:`, no `Content-Type` header — POST with an empty body.
+    // Tenant scope is server-enforced from the actor's session cookie.
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(id)}/secret/regenerate`,
+      {
+        method: "POST",
+        headers: { Cookie: await cookieHeader() },
+        cache: "no-store",
+      }
+    );
+
+    if (res.status === 400) {
+      // The IDP returns 400 for both invalid UUID AND public-client
+      // rejection — distinguishing the two on the wire requires
+      // parsing the error body, which we do NOT trust verbatim.
+      // Surface a `publicClient` discriminant the action layer uses
+      // to render a precise message; the catch-all `invalid` covers
+      // any other 400 cause.
+      return {
+        ok: false,
+        status: 400,
+        notFound: false,
+        forbidden: false,
+        invalid: true,
+        publicClient: true,
+        message: "This client cannot have its secret rotated.",
+      };
+    }
+    if (res.status === 403) {
+      return {
+        ok: false,
+        status: 403,
+        notFound: false,
+        forbidden: true,
+        invalid: false,
+        publicClient: false,
+        message: "You do not have permission to rotate this client's secret.",
+      };
+    }
+    if (res.status === 404) {
+      return {
+        ok: false,
+        status: 404,
+        notFound: true,
+        forbidden: false,
+        invalid: false,
+        publicClient: false,
+        message: "The application was not found.",
+      };
+    }
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: res.status,
+        notFound: false,
+        forbidden: false,
+        invalid: false,
+        publicClient: false,
+        message: "Could not rotate the client secret. Please try again.",
+      };
+    }
+
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+    const d: any = await res.json();
+
+    // Explicit projection — surface ONLY the four documented fields.
+    // Any other key the IDP might return is dropped on the floor.
+    // The IDP's RotateClientSecretResponse struct (slice
+    // identuum-20260530-client-secret-rotation-backend-route) carries
+    // ONLY these four fields by construction; the projection here is
+    // defence-in-depth against a future regression.
+    return {
+      ok: true,
+      data: {
+        id: String(d.id ?? ""),
+        client_id: String(d.client_id ?? ""),
+        name: String(d.name ?? ""),
+        client_secret: typeof d.client_secret === "string" ? d.client_secret : "",
+      },
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      publicClient: false,
+      message: "Network error. Please try again.",
+    };
   }
 }

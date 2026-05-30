@@ -21,6 +21,8 @@
 import { IDP_PATHS } from "@/lib/idp-paths";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "./button";
+import { arrayBufferToBase64url, base64urlToArrayBuffer } from "./passkey-base64url";
+import { classifyPasskeyEnrollmentError } from "./passkey-enrollment-errors";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -34,24 +36,6 @@ interface CredentialSummary {
 }
 
 type Phase = "idle" | "loading" | "registering" | "success" | "error";
-
-// ── Base64URL utilities ────────────────────────────────────────────────────────
-
-function base64urlToArrayBuffer(b64url: string): ArrayBuffer {
-  const base64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
-  const binary = atob(padded);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes.buffer;
-}
-
-function arrayBufferToBase64url(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf);
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -105,10 +89,9 @@ export function PasskeySection() {
       });
 
       if (!beginRes.ok) {
-        if (beginRes.status === 403) {
-          throw new Error("Passkey registration is not available for your account.");
-        }
-        throw new Error("Could not start passkey registration. Please try again.");
+        throw Object.assign(new Error("begin_failed"), {
+          __passkeyBeginStatus: beginRes.status,
+        });
       }
 
       // biome-ignore lint/suspicious/noExplicitAny: raw WebAuthn options from server
@@ -133,7 +116,11 @@ export function PasskeySection() {
         publicKey: creationOptions,
       })) as PublicKeyCredential | null;
 
-      if (!credential) throw new Error("Passkey creation was cancelled or failed.");
+      if (!credential) {
+        throw Object.assign(new Error("ceremony_cancelled"), {
+          __passkeyCeremonyCancelled: true,
+        });
+      }
 
       const attResp = credential.response as AuthenticatorAttestationResponse;
 
@@ -166,13 +153,15 @@ export function PasskeySection() {
       );
 
       if (!finishRes.ok) {
-        // biome-ignore lint/suspicious/noExplicitAny: raw error response
-        const errData: any = await finishRes.json().catch(() => ({}));
-        throw new Error(
-          typeof errData.message === "string" && errData.message.length > 0
-            ? errData.message
-            : "Passkey verification failed. Please try again."
-        );
+        // Do NOT forward the IDP's raw message field — it may be the
+        // generic "An error occurred. Please try again later." string
+        // which is the IDP's 500 fallback and gives the operator no
+        // actionable next step. Throw a sentinel tagged with the
+        // HTTP status so the catch block can map it through the
+        // helper to a vetted UI copy string.
+        throw Object.assign(new Error("finish_failed"), {
+          __passkeyFinishStatus: finishRes.status,
+        });
       }
 
       setNickname("");
@@ -181,13 +170,7 @@ export function PasskeySection() {
       await refresh();
       setTimeout(() => setPhase("idle"), 3000);
     } catch (err) {
-      if (err instanceof DOMException && err.name === "NotAllowedError") {
-        setError("Passkey creation was cancelled or timed out.");
-      } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("An unexpected error occurred. Please try again.");
-      }
+      setError(classifyPasskeyEnrollmentError(err));
       setPhase("error");
       setIsAdding(false);
     }

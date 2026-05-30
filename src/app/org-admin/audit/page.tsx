@@ -18,6 +18,7 @@
 import { listAuditEvents, listAuditEventTypes } from "@/lib/idp-admin-client";
 import type { AuditEventItem } from "@/lib/idp-admin-client";
 import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
+import { AuditIPAddressCell } from "@/components/shared/audit-ip-address-cell";
 import { AuditFilterPanel } from "@/components/shared/audit-filter-panel";
 import type { AuditFilterValues } from "@/components/shared/audit-filter-panel";
 import type { Metadata } from "next";
@@ -52,9 +53,17 @@ function parseAuditFilters(params: Record<string, string | string[] | undefined>
   filters: AuditFilterValues;
   startDateISO: string | null;
   endDateISO: string | null;
+  subjectId: string | null;
 } {
   const eventType = str(params, "event_type", 64);
   const subjectType = str(params, "subject_type", 32);
+  // subject_id arrives here from per-row "View in audit" links on the
+  // org-admin user detail page (and from the "View all →" link on the
+  // recent-activity card). The IDP backend filters by actor's org so
+  // a UUID for a user in another org would simply return no results —
+  // no cross-tenant leak. UUID = 36 chars max, so the slice trims any
+  // accidentally longer string.
+  const subjectId = str(params, "subject_id", 36);
   const window = str(params, "window", 8);
   const rawSort = str(params, "sort", 8);
   const sortOrder: "asc" | "desc" = rawSort === "asc" ? "asc" : "desc";
@@ -86,13 +95,16 @@ function parseAuditFilters(params: Record<string, string | string[] | undefined>
     filters: { eventType, subjectType, window, startDate, endDate, sortOrder },
     startDateISO,
     endDateISO,
+    subjectId,
   };
 }
 
-function pageHref(page: number, filters: AuditFilterValues): string {
+/** Build a pagination href that preserves active filters including subject_id. */
+function pageHref(page: number, filters: AuditFilterValues, subjectId?: string | null): string {
   const p = new URLSearchParams({ page: String(page) });
   if (filters.eventType) p.set("event_type", filters.eventType);
   if (filters.subjectType) p.set("subject_type", filters.subjectType);
+  if (subjectId) p.set("subject_id", subjectId);
   if (filters.window) {
     p.set("window", filters.window);
   } else {
@@ -112,7 +124,7 @@ export default async function OrgAdminAuditPage({
 }) {
   const params = await searchParams;
   const page = parsePage(params.page);
-  const { filters, startDateISO, endDateISO } = parseAuditFilters(params);
+  const { filters, startDateISO, endDateISO, subjectId } = parseAuditFilters(params);
 
   const [result, eventTypeGroups] = await Promise.all([
     listAuditEvents({
@@ -120,6 +132,7 @@ export default async function OrgAdminAuditPage({
       pageSize: PAGE_SIZE,
       eventType: filters.eventType,
       subjectType: filters.subjectType,
+      subjectId,
       startDate: startDateISO,
       endDate: endDateISO,
       sortOrder: filters.sortOrder,
@@ -142,7 +155,32 @@ export default async function OrgAdminAuditPage({
         </p>
       </div>
 
-      <AuditFilterPanel basePath={BASE_PATH} filters={filters} eventTypeGroups={eventTypeGroups} />
+      <AuditFilterPanel
+        basePath={BASE_PATH}
+        filters={filters}
+        eventTypeGroups={eventTypeGroups}
+        subjectId={subjectId}
+      />
+
+      {/* Active subject filter notice — shown when subject_id arrived
+          via a "View in audit" per-row link or a "View all →" link
+          from the org-admin user detail page's recent-activity card.
+          The truncated UUID is informational only; the operator can
+          clear the filter with the link to return to the unfiltered
+          tenant view. We do NOT render the full UUID or any sensitive
+          metadata. */}
+      {subjectId && (
+        <div className="flex items-center gap-2 flex-wrap rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5">
+          <span className="text-xs text-stone-500">Subject filter active:</span>
+          <span className="text-xs font-mono text-stone-500">{subjectId.slice(0, 8)}…</span>
+          <a
+            href={BASE_PATH}
+            className="ml-auto text-xs font-semibold text-sky-700 hover:text-sky-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 rounded"
+          >
+            Clear subject filter
+          </a>
+        </div>
+      )}
 
       {!result.ok && result.featureUnavailable && <FeatureUnavailablePanel />}
       {!result.ok && result.forbidden && <ForbiddenPanel />}
@@ -159,10 +197,14 @@ export default async function OrgAdminAuditPage({
             <AuditTable
               events={result.events}
               sortOrder={filters.sortOrder}
-              sortHref={pageHref(1, {
-                ...filters,
-                sortOrder: filters.sortOrder === "desc" ? "asc" : "desc",
-              })}
+              sortHref={pageHref(
+                1,
+                {
+                  ...filters,
+                  sortOrder: filters.sortOrder === "desc" ? "asc" : "desc",
+                },
+                subjectId
+              )}
             />
           ) : (
             <EmptyPanel />
@@ -170,13 +212,13 @@ export default async function OrgAdminAuditPage({
           {(hasPrev || hasNext) && (
             <div className="flex items-center justify-between pt-2">
               <PaginationLink
-                href={hasPrev ? pageHref(page - 1, filters) : undefined}
+                href={hasPrev ? pageHref(page - 1, filters, subjectId) : undefined}
                 label="← Previous"
                 disabled={!hasPrev}
               />
               <span className="text-xs text-stone-400">Page {page}</span>
               <PaginationLink
-                href={hasNext ? pageHref(page + 1, filters) : undefined}
+                href={hasNext ? pageHref(page + 1, filters, subjectId) : undefined}
                 label="Next →"
                 disabled={!hasNext}
               />
@@ -234,7 +276,7 @@ function AuditTable({
                 <AuditIdentityCell value={e.subject_email} fallback={e.subject_type} />
               </td>
               <td className="px-4 py-3 text-xs text-stone-400 font-mono whitespace-nowrap">
-                {e.ip_address ?? <span className="text-stone-300">—</span>}
+                <AuditIPAddressCell value={e.ip_address} />
               </td>
               <td className="px-4 py-3">
                 <PriorityBadge priority={e.priority} />

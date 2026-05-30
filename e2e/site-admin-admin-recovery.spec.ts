@@ -4,25 +4,26 @@
  *
  * Covers behaviors 7–18 of identuum-20260527-playwright-local-demo-regression-suite:
  *
- *   - site_admin login + navigation to the Audi organization detail page.
+ *   - site_admin login + navigation to the target organization detail page.
  *   - The "Organization administrators" recovery card renders.
- *   - admin@audi.de appears in that card with an MFA status pill.
+ *   - The configured org_admin email appears in that card with an MFA
+ *     status pill.
  *   - The "Reset MFA" button opens a confirmation dialog whose copy is
  *     interpolated with the actual admin email — must read
- *       "Reset MFA for admin@audi.de? This will revoke active sessions.
+ *       "Reset MFA for <email>? This will revoke active sessions.
  *        The administrator must sign in again and enroll a new authenticator."
  *     and NEVER "Reset MFA for ?".
  *   - (DESTRUCTIVE, opt-in) Confirming the reset shows a success badge,
  *     refreshes the row's MFA badge to "MFA disabled".
- *   - (DESTRUCTIVE, opt-in) admin@audi.de's next login routes into the
+ *   - (DESTRUCTIVE, opt-in) The org_admin's next login routes into the
  *     TOTP enrollment form ("Set up two-factor authentication"), not
  *     directly into /org-admin.
  *
  * Env-gating:
  *   - Read-only tests require:
  *       IDENTUUM_TEST_SITE_ADMIN_PASSWORD + _TOTP_SECRET
- *       IDENTUUM_TEST_ORG_ID                                (default: Audi local UUID)
- *       IDENTUUM_TEST_ORG_ADMIN_EMAIL                       (default: admin@audi.de)
+ *       IDENTUUM_TEST_ORG_ID                                (org UUID; default is a placeholder)
+ *       IDENTUUM_TEST_ORG_ADMIN_EMAIL                       (default: admin@example.org placeholder)
  *
  *   - Destructive tests additionally require:
  *       IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true
@@ -33,9 +34,9 @@
  *     must also be set so the password step can be exercised.
  *
  * Mutation footprint when the destructive flag is on:
- *   - users.mfa_enabled flips false for admin@audi.de.
+ *   - users.mfa_enabled flips false for the target org_admin row.
  *   - users.mfa_secret is cleared.
- *   - admin@audi.de's active sessions are revoked.
+ *   - The target org_admin's active sessions are revoked.
  *   The org_admin can immediately re-enroll on next login. No other state
  *   is touched, and tenant org_user rows are never read or modified.
  *
@@ -51,9 +52,12 @@ import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { SKIP_AUTH_MSG, loginAsSiteAdmin, skipAuthTests } from "./helpers/login";
 
-// Local-demo defaults from CLAUDE.md / Audi fixture row.
-const DEFAULT_ORG_ID = "019e67c6-e71d-76ce-a615-ada70411d953";
-const DEFAULT_ORG_ADMIN_EMAIL = "admin@audi.de";
+// Neutral placeholder defaults. Operators with a different local fixture
+// MUST set IDENTUUM_TEST_ORG_ID and IDENTUUM_TEST_ORG_ADMIN_EMAIL in their
+// local env file; the defaults exist only so the spec compiles and the
+// env-resolution path is exercised.
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000000";
+const DEFAULT_ORG_ADMIN_EMAIL = "admin@example.org";
 
 const ORG_ID = process.env.IDENTUUM_TEST_ORG_ID ?? DEFAULT_ORG_ID;
 const ORG_ADMIN_EMAIL =
@@ -67,7 +71,56 @@ const DESTRUCTIVE_ALLOWED =
   process.env.IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET === "true";
 
 const SKIP_DESTRUCTIVE_MSG =
-  "Set IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true to opt in. This test resets admin@audi.de's MFA in the local demo.";
+  "Set IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true to opt in. This test resets the configured org_admin's MFA in the local demo.";
+
+/**
+ * Safety guard against running destructive MFA-reset behavior against the
+ * placeholder defaults declared above. Called by every destructive test
+ * BEFORE any page interaction (and therefore BEFORE any reset endpoint
+ * could be reached) so a misconfigured operator environment fails fast
+ * with a clear non-secret error.
+ *
+ * Refuses when ANY of the following is true:
+ *   - IDENTUUM_TEST_ORG_ID is empty.
+ *   - IDENTUUM_TEST_ORG_ID equals the all-zero placeholder UUID.
+ *   - IDENTUUM_TEST_ORG_ADMIN_EMAIL is empty.
+ *   - IDENTUUM_TEST_ORG_ADMIN_EMAIL equals the "admin@example.org"
+ *     placeholder.
+ *
+ * The error message names only the offending VARIABLE NAME and the
+ * reason. It NEVER reports the offending value, NEVER reports the
+ * password / TOTP secret, and NEVER prints any other env content.
+ *
+ * Exported for source-invariant tests in
+ * src/__tests__/e2e-destructive-recovery-spec-safety.test.ts; the spec
+ * itself remains the single runtime consumer.
+ */
+export function requireConcreteDestructiveRecoveryTarget(): {
+  orgId: string;
+  orgAdminEmail: string;
+} {
+  if (!ORG_ID) {
+    throw new Error(
+      "DESTRUCTIVE recovery spec refused to run: IDENTUUM_TEST_ORG_ID is empty"
+    );
+  }
+  if (ORG_ID === DEFAULT_ORG_ID) {
+    throw new Error(
+      "DESTRUCTIVE recovery spec refused to run: IDENTUUM_TEST_ORG_ID is the all-zero placeholder; set it to the actual local-fixture org UUID"
+    );
+  }
+  if (!ORG_ADMIN_EMAIL) {
+    throw new Error(
+      "DESTRUCTIVE recovery spec refused to run: IDENTUUM_TEST_ORG_ADMIN_EMAIL is empty"
+    );
+  }
+  if (ORG_ADMIN_EMAIL === DEFAULT_ORG_ADMIN_EMAIL) {
+    throw new Error(
+      "DESTRUCTIVE recovery spec refused to run: IDENTUUM_TEST_ORG_ADMIN_EMAIL is the neutral 'admin@example.org' placeholder; set it to the actual local-fixture org_admin email"
+    );
+  }
+  return { orgId: ORG_ID, orgAdminEmail: ORG_ADMIN_EMAIL };
+}
 
 // ── Shared site_admin context ─────────────────────────────────────────────────
 
@@ -105,8 +158,8 @@ function recoveryCard(page: Page) {
 }
 
 /**
- * Locates the admin@audi.de row inside the recovery card. The row is a
- * <li> whose visible content includes the email text.
+ * Locates the configured org_admin row inside the recovery card. The row
+ * is a <li> whose visible content includes the email text.
  */
 function adminRowFor(page: Page, email: string) {
   return recoveryCard(page).locator("li").filter({ hasText: email });
@@ -115,7 +168,7 @@ function adminRowFor(page: Page, email: string) {
 // ── Read-only behavior (items 7–15) ───────────────────────────────────────────
 
 test.describe("/site-admin/organizations/[id] — admin recovery card (read-only)", () => {
-  test("admin recovery card lists admin@audi.de with an MFA status pill", async () => {
+  test("admin recovery card lists the configured org_admin with an MFA status pill", async () => {
     if (skipAuthTests) {
       test.skip(true, SKIP_AUTH_MSG);
     }
@@ -211,6 +264,9 @@ test.describe("/site-admin/organizations/[id] — admin recovery flow (DESTRUCTI
     if (!DESTRUCTIVE_ALLOWED) {
       test.skip(true, SKIP_DESTRUCTIVE_MSG);
     }
+    // SAFETY: refuse placeholder targets BEFORE any page interaction so
+    // no MFA-reset endpoint can be reached against an unintended fixture.
+    requireConcreteDestructiveRecoveryTarget();
 
     const page = await siteAdminCtx!.newPage();
     try {
@@ -254,7 +310,7 @@ test.describe("/site-admin/organizations/[id] — admin recovery flow (DESTRUCTI
     }
   });
 
-  test("admin@audi.de's next login routes into TOTP enrollment, not /org-admin", async ({
+  test("the configured org_admin's next login routes into TOTP enrollment, not /org-admin", async ({
     browser,
   }) => {
     if (!DESTRUCTIVE_ALLOWED) {
@@ -266,6 +322,9 @@ test.describe("/site-admin/organizations/[id] — admin recovery flow (DESTRUCTI
         "Set IDENTUUM_TEST_ORG_ADMIN_PASSWORD to verify post-reset MFA enrollment routing"
       );
     }
+    // SAFETY: refuse placeholder targets BEFORE any page interaction so
+    // no login flow can run against an unintended fixture.
+    requireConcreteDestructiveRecoveryTarget();
 
     // Use a clean context — we want a fresh login flow, not a
     // restored cached session (loginAsOrgAdmin would short-circuit

@@ -240,8 +240,9 @@ function OrgActions({ org }: { org: OrgListItem }) {
           Reactivate
         </a>
       )}
-      {/* Show "Assign admin" when recovery delegation is allowed (no blocking admin) */}
-      {org.can_assign_admin && (
+      {/* Show "Assign admin" when no blocking admin exists: either no admin at all
+          (!has_admin) or admins exist but none are verified (can_assign_admin recovery). */}
+      {(!org.has_admin || org.can_assign_admin) && (
         <a
           href={`/site-admin/organizations/${org.id}/assign-admin`}
           className="text-xs font-semibold text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-3 py-1.5 rounded-lg transition-colors"

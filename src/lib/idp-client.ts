@@ -207,3 +207,70 @@ export async function mfaEnrollComplete(
   const body = await res.json();
   return { role: body.role ?? "org_user" };
 }
+
+// ── Authenticated MFA setup (account-settings surface) ────────────────────────
+//
+// Calls the authenticated /mfa/setup/{initiate,complete} endpoints — a
+// separate surface from the login-flow's pending-session enrollment.
+// The caller MUST be on an authenticated browser origin (cookie present);
+// the IdP rejects an already-enrolled user with HTTP 409 (the wire-shape
+// for the `ErrMFAAlreadyEnrolled` sentinel, see identuum-idp's
+// internal/handlers/handler_mfa.go).
+//
+// Security: the secret + provisioning URI returned by `initiate` are held
+// only in the calling component's state. They MUST NOT be persisted to
+// localStorage, sessionStorage, or the URL. The `complete` call returns
+// recovery codes; treat them with the same handling discipline.
+
+export class AccountMFAAlreadyEnrolledError extends Error {
+  constructor() {
+    super("MFA is already enrolled. Disable MFA before enrolling a new authenticator.");
+    this.name = "AccountMFAAlreadyEnrolledError";
+  }
+}
+
+/**
+ * Initiates authenticated TOTP enrollment for the calling user. Throws
+ * AccountMFAAlreadyEnrolledError when the IdP returns HTTP 409.
+ */
+export async function accountMfaSetupInitiate(): Promise<{ secret: string; otpauthUrl: string }> {
+  const res = await fetch(IDP.mfaSetupInitiate, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: "{}",
+  });
+  if (res.status === 409) {
+    throw new AccountMFAAlreadyEnrolledError();
+  }
+  if (!res.ok) {
+    throw new ApiError(res.status, "Failed to initiate MFA enrollment");
+  }
+  const body = await res.json();
+  return { secret: body.secret, otpauthUrl: body.qr_code_url };
+}
+
+/**
+ * Completes authenticated TOTP enrollment by verifying the user-supplied
+ * code. Returns the recovery codes generated server-side. Throws
+ * AccountMFAAlreadyEnrolledError when the IdP returns HTTP 409 — the
+ * defence-in-depth path for the race where another enrollment finished
+ * between initiate and complete on this same session.
+ */
+export async function accountMfaSetupComplete(code: string): Promise<{ recoveryCodes: string[] }> {
+  const res = await fetch(IDP.mfaSetupComplete, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ code }),
+  });
+  if (res.status === 409) {
+    throw new AccountMFAAlreadyEnrolledError();
+  }
+  if (!res.ok) {
+    throw new ApiError(res.status, "Invalid verification code");
+  }
+  const body = await res.json();
+  const codes = Array.isArray(body.recovery_codes) ? (body.recovery_codes as string[]) : [];
+  return { recoveryCodes: codes };
+}

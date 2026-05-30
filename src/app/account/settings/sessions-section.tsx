@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { useActionState } from "react";
 import type { SessionItem } from "@/lib/idp-admin-client";
 import { type RevokeSessionState, revokeSessionAction } from "./session-actions";
+import { canRevokeSession, formatDate, selectActiveSessions } from "./sessions-helpers";
 
 interface SessionsSectionProps {
   sessions: SessionItem[];
@@ -23,15 +24,6 @@ interface SessionsSectionProps {
   forbidden: boolean;
   /** True when the list fetch failed for a reason other than 403. */
   error: boolean;
-}
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
-  } catch {
-    return "—";
-  }
 }
 
 export function SessionsSection({ sessions, forbidden, error }: SessionsSectionProps) {
@@ -54,7 +46,7 @@ export function SessionsSection({ sessions, forbidden, error }: SessionsSectionP
     );
   }
 
-  const activeSessions = sessions.filter((s) => s.is_active);
+  const activeSessions = selectActiveSessions(sessions);
 
   if (activeSessions.length === 0) {
     return <p className="text-sm text-stone-400">No active sessions found.</p>;
@@ -105,8 +97,9 @@ function SessionRow({ session }: { session: SessionItem }) {
         {state.error && <p className="text-xs text-red-600 mt-1">{state.error}</p>}
       </div>
 
-      {/* Only non-current sessions can be individually revoked */}
-      {!session.is_current && (
+      {/* Only non-current active sessions can be individually revoked.
+          Centralised in canRevokeSession() so the test pins the invariant. */}
+      {canRevokeSession(session) && (
         <form action={action} className="shrink-0">
           {/* session_id is an opaque revocation handle — not displayed */}
           <input type="hidden" name="session_id" value={session.id} />

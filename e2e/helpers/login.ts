@@ -32,6 +32,7 @@
 
 import type { BrowserContext, Page } from "@playwright/test";
 import { generateTOTP } from "./totp";
+import { loadOrgAdminFixture } from "./fixture";
 import { statSync } from "node:fs";
 
 // ── Site-admin credentials (canonical names only) ─────────────────────────────
@@ -56,12 +57,29 @@ export const SKIP_AUTH_MSG =
   "Set IDENTUUM_TEST_SITE_ADMIN_PASSWORD and IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET to run this test";
 
 // ── Org-admin credentials ─────────────────────────────────────────────────────
+//
+// Resolution precedence:
+//   1. Dynamic fixture file written by `identuum --e2e-create-org-admin-fixture`.
+//      Loaded at module init via loadOrgAdminFixture(). The loader returns
+//      null when the file is absent (durable-env mode); throws when the
+//      file exists but is malformed.
+//   2. IDENTUUM_TEST_ORG_ADMIN_EMAIL / _PASSWORD / _TOTP_SECRET env vars
+//      (durable mode — see identuum-ui/docs/LOCAL_ORG_ADMIN_PLAYWRIGHT_FIXTURE.md).
+//
+// Whichever source wins is exposed to the rest of this module via the same
+// three constants below; nothing else in the file knows the difference.
+// Never log the resolved values — neither source is safe to print.
 
-const ORG_ADMIN_EMAIL = process.env.IDENTUUM_TEST_ORG_ADMIN_EMAIL ?? "";
-const ORG_ADMIN_PASSWORD = process.env.IDENTUUM_TEST_ORG_ADMIN_PASSWORD ?? "";
-const ORG_ADMIN_TOTP_SECRET = process.env.IDENTUUM_TEST_ORG_ADMIN_TOTP_SECRET ?? "";
+const dynamicOrgAdminFixture = loadOrgAdminFixture();
 
-/** True when org_admin auth env vars are absent. */
+const ORG_ADMIN_EMAIL =
+  dynamicOrgAdminFixture?.email ?? process.env.IDENTUUM_TEST_ORG_ADMIN_EMAIL ?? "";
+const ORG_ADMIN_PASSWORD =
+  dynamicOrgAdminFixture?.password ?? process.env.IDENTUUM_TEST_ORG_ADMIN_PASSWORD ?? "";
+const ORG_ADMIN_TOTP_SECRET =
+  dynamicOrgAdminFixture?.totpSecret ?? process.env.IDENTUUM_TEST_ORG_ADMIN_TOTP_SECRET ?? "";
+
+/** True when org_admin auth credentials are absent from BOTH sources. */
 export const skipOrgAdminTests = !ORG_ADMIN_EMAIL || !ORG_ADMIN_PASSWORD;
 
 // ── Per-account TOTP cooldown ─────────────────────────────────────────────────

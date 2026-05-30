@@ -31,32 +31,87 @@ export default async function OrgAdminPage() {
         {orgId && <InfoRow label="Organization ID" value={orgId} mono />}
       </Section>
 
-      {/* Placeholder section cards */}
+      {/* Section cards. Each entry with a `href` renders as an active
+          (keyboard-focusable, accessible-named) link card; entries
+          without `href` render as the "coming soon" placeholder. The
+          active/placeholder distinction is carried in card chrome
+          (a final-line "open →" vs "coming soon" badge with a sky vs
+          stone palette) AND in the wrapping element type (anchor vs
+          static div) so neither sighted users relying on color alone
+          nor screen-reader users have an ambiguous experience. */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-stone-400 mb-3">
           Sections
         </p>
         <div className="grid grid-cols-2 gap-4">
-          <a href="/org-admin/users" className="block group">
-            <ActiveCard title="Users" description="View members of your organization." />
-          </a>
-          <PlaceholderCard
-            title="Applications"
-            description="Configure OAuth clients and API resources for this organization."
-          />
-          <PlaceholderCard
-            title="Settings"
-            description="Authentication policies, MFA requirements, and domain configuration."
-          />
-          <PlaceholderCard
-            title="Audit"
-            description="Review authentication events and administrative actions."
-          />
+          {ORG_ADMIN_OVERVIEW_CARDS.map((card) =>
+            card.href ? (
+              <a
+                key={card.title}
+                href={card.href}
+                aria-label={`Open ${card.title}`}
+                className="block group rounded-[1.5rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40"
+              >
+                <ActiveCard title={card.title} description={card.description} />
+              </a>
+            ) : (
+              <PlaceholderCard
+                key={card.title}
+                title={card.title}
+                description={card.description}
+              />
+            )
+          )}
         </div>
       </div>
     </div>
   );
 }
+
+/**
+ * Section cards rendered on the Overview page.
+ *
+ * Single source of truth for the operator-visible Sections grid:
+ *   - `href` set → ActiveCard (route exists and is reachable from the
+ *     sidebar). Listed in sidebar-order so the Overview grid and the
+ *     sidebar agree on what is implemented.
+ *   - `href` omitted → PlaceholderCard with a "coming soon" badge.
+ *     All four cards are currently active; the placeholder branch is
+ *     retained for future sections.
+ *
+ * The structure is exported so unit tests can pin the active/
+ * placeholder matrix without scraping the JSX.
+ */
+export interface OrgAdminOverviewCard {
+  title: string;
+  description: string;
+  /** Internal route. Omit to render the "coming soon" placeholder card. */
+  href?: string;
+}
+
+export const ORG_ADMIN_OVERVIEW_CARDS: ReadonlyArray<OrgAdminOverviewCard> = [
+  {
+    title: "Users",
+    description: "View members of your organization.",
+    href: "/org-admin/users",
+  },
+  {
+    title: "Settings",
+    description:
+      "Authentication policies, MFA requirements, invite policy, and verified organization domains.",
+    href: "/org-admin/settings",
+  },
+  {
+    title: "Audit",
+    description: "Review authentication events and administrative actions for your organization.",
+    href: "/org-admin/audit",
+  },
+  {
+    title: "Applications",
+    description: "OAuth clients registered in your organization. Read-only.",
+    href: "/org-admin/applications",
+  },
+];
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

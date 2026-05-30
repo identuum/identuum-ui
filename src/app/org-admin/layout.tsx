@@ -57,6 +57,23 @@ export default async function OrgAdminLayout({ children }: { children: React.Rea
     redirect(roleToPath(role));
   }
 
+  // MFA setup gate. Admin roles MUST have MFA enrolled before they can
+  // access privileged surfaces. The IdP enforces this at login time
+  // (resolveMFARequirement returns true for any admin without MFA, so
+  // no JWT is issued until enrollment completes), but a pre-deploy
+  // session that pre-dates the gate may still carry a valid token.
+  // We re-check the IdP-authoritative mfa_enabled value here and route
+  // such users into /account/settings (the existing MFA enrollment
+  // surface) before any org-admin pages render.
+  //
+  // Older IdP builds may omit the mfa_enabled field; we only block when
+  // the field is explicitly `false` so an unknown value does not lock
+  // working operators out during a rolling upgrade. The IdP login-side
+  // gate is the load-bearing defence; this is belt-and-suspenders.
+  if (session.user?.mfa_enabled === false) {
+    redirect("/account/settings?reason=mfa_required");
+  }
+
   const userEmail = session.user?.email ?? null;
 
   // Auth and role confirmed. Render the shell.

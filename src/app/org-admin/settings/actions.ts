@@ -124,3 +124,80 @@ export async function updateOrgProfileAction(
 
   return { phase: "error", error: "Failed to update organization profile. Please try again." };
 }
+
+// ── Invite policy ────────────────────────────────────────────────────────────
+
+const VALID_INVITE_POLICY_MODES = [
+  "invite-only",
+  "public-with-approval",
+  "public-immediate",
+] as const;
+export type InvitePolicyMode = (typeof VALID_INVITE_POLICY_MODES)[number];
+
+export type UpdateInvitePolicyState =
+  | { phase: "idle" }
+  | { phase: "error"; error: string }
+  | { phase: "success"; mode: InvitePolicyMode };
+
+/**
+ * Persists the org-admin Invite policy mode by converting the mode to its
+ * canonical `(allow_public_registration, require_registration_approval)`
+ * pair and forwarding to the IDP via `updateOrganization`.
+ *
+ * Security:
+ *   - Session re-validated.
+ *   - Role gated to org_admin.
+ *   - Org ID derived from the session-scoped getOwnOrganization endpoint;
+ *     never from form data.
+ *   - The mode enum is the only operator-visible input. The flag pair is
+ *     derived locally so the invalid `(false, true)` combination cannot
+ *     reach the wire even if a malicious client tampered with the form.
+ */
+export async function updateInvitePolicyAction(
+  _prev: UpdateInvitePolicyState,
+  formData: FormData
+): Promise<UpdateInvitePolicyState> {
+  const session = await getServerSession();
+  if (!session) redirect("/login?reason=session_expired");
+
+  const role = session.user?.role ?? session.role;
+  if (role !== "org_admin") redirect(roleToPath(role));
+
+  const org = await getOwnOrganization();
+  if (!org?.id) {
+    return {
+      phase: "error",
+      error: "Could not resolve your organization. Please sign out and sign in again.",
+    };
+  }
+
+  const rawMode = ((formData.get("invite_policy_mode") as string | null) ?? "").trim();
+  if (!VALID_INVITE_POLICY_MODES.includes(rawMode as InvitePolicyMode)) {
+    return {
+      phase: "error",
+      error: "Invalid invite policy mode.",
+    };
+  }
+  const mode = rawMode as InvitePolicyMode;
+
+  // Derive the persisted flag pair from the mode. This is the only place the
+  // booleans cross the wire — the form NEVER submits the booleans directly.
+  const allow_public_registration = mode !== "invite-only";
+  const require_registration_approval = mode === "public-with-approval";
+
+  const result = await updateOrganization(org.id, {
+    allow_public_registration,
+    require_registration_approval,
+  });
+
+  if (result.ok) {
+    revalidatePath("/org-admin/settings");
+    return { phase: "success", mode };
+  }
+
+  if (result.notFound) {
+    return { phase: "error", error: "Organization not found." };
+  }
+
+  return { phase: "error", error: "Failed to update invite policy. Please try again." };
+}

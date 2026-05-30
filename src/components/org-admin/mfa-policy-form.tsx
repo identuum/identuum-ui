@@ -13,6 +13,10 @@ import {
   type UpdateMFAPolicyState,
   updateMFAPolicyAction,
 } from "@/app/org-admin/settings/actions";
+import {
+  ORG_ADMIN_MFA_FORM_COPY,
+  ORG_ADMIN_MFA_POLICY_OPTIONS,
+} from "@/app/org-admin/settings/settings-helpers";
 import { Button } from "@/components/ui/button";
 import { useActionState } from "react";
 
@@ -21,21 +25,6 @@ interface MFAPolicyFormProps {
 }
 
 const initialState: UpdateMFAPolicyState = { phase: "idle" };
-
-const POLICIES: { value: MFAPolicy; label: string; description: string }[] = [
-  {
-    value: "optional",
-    label: "Optional",
-    description:
-      "Users may enroll MFA at any time, but are not required to do so before signing in.",
-  },
-  {
-    value: "required",
-    label: "Required",
-    description:
-      "Users must enroll and complete MFA before login can finish. Existing sessions without MFA are revoked at next sign-in.",
-  },
-];
 
 export function MFAPolicyForm({ currentPolicy }: MFAPolicyFormProps) {
   const [state, action, isPending] = useActionState(updateMFAPolicyAction, initialState);
@@ -49,7 +38,7 @@ export function MFAPolicyForm({ currentPolicy }: MFAPolicyFormProps) {
       {/* Success banner */}
       {state.phase === "success" && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          MFA policy updated successfully.
+          {ORG_ADMIN_MFA_FORM_COPY.successBanner}
         </div>
       )}
 
@@ -62,8 +51,8 @@ export function MFAPolicyForm({ currentPolicy }: MFAPolicyFormProps) {
 
       {/* Policy radio options */}
       <fieldset className="space-y-3">
-        <legend className="sr-only">MFA policy</legend>
-        {POLICIES.map(({ value, label, description }) => (
+        <legend className="sr-only">{ORG_ADMIN_MFA_FORM_COPY.legend}</legend>
+        {ORG_ADMIN_MFA_POLICY_OPTIONS.map(({ value, label, description }) => (
           <label
             key={value}
             className={[
@@ -91,7 +80,7 @@ export function MFAPolicyForm({ currentPolicy }: MFAPolicyFormProps) {
       </fieldset>
 
       <Button type="submit" loading={isPending} size="md">
-        {isPending ? "Saving…" : "Save policy"}
+        {isPending ? ORG_ADMIN_MFA_FORM_COPY.savingLabel : ORG_ADMIN_MFA_FORM_COPY.saveLabel}
       </Button>
     </form>
   );

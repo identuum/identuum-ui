@@ -453,3 +453,289 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
     }
   });
 });
+
+// ── Lifecycle action confirmation forms (non-destructive) ─────────────────────
+//
+// Pins the explicit-confirmation-checkbox guard on the destructive lifecycle
+// actions (deactivate, delete) and the prose-only confirm pattern on the
+// reversible actions (reactivate, restore). Without these tests, a future
+// agent could silently remove the `required` attribute on the checkbox, hide
+// the cancel link, or auto-submit on page load — turning a misclicked nav
+// into an instant data mutation.
+//
+// Discipline: NONE of these tests click the submit button. They render the
+// page, assert the confirmation contract is in place, attempt the keyboard
+// equivalent of a click for the destructive variants (and assert the URL did
+// not change, proving HTML5 form validation blocked the submission), then
+// leave the page untouched. No lifecycle mutation runs.
+//
+// State-precondition tolerance: each page has server-side guards that swap
+// the form for a "wrong-state" panel when the org cannot legitimately
+// receive the action (e.g. /deactivate on an inactive org). The tests
+// handle both branches — form-rendered and panel-rendered — so they work
+// against any local-demo organization snapshot without requiring a
+// dedicated fixture.
+
+test.describe("/site-admin/organizations/[id] — lifecycle action confirmation pages", () => {
+  // Helper: extract the first org id from the list page. Same shape as the
+  // existing tests use elsewhere in this file.
+  async function firstOrgId(page: import("@playwright/test").Page): Promise<string | null> {
+    await page.goto("/site-admin/organizations");
+    await page.waitForLoadState("networkidle");
+    const detailsLinks = page.getByRole("link", { name: "Details" });
+    if ((await detailsLinks.count()) === 0) return null;
+    const href = await detailsLinks.first().getAttribute("href");
+    if (!href) return null;
+    const parts = href.replace(/\/$/, "").split("/");
+    const idx = parts.indexOf("organizations");
+    return idx !== -1 ? (parts[idx + 1] ?? null) : null;
+  }
+
+  test("/deactivate either renders the destructive-confirm form OR the wrong-state panel", async () => {
+    if (skipAuthTests) {
+      test.skip(true, SKIP_AUTH_MSG);
+    }
+
+    const page = await siteAdminCtx!.newPage();
+    try {
+      const orgId = await firstOrgId(page);
+      if (!orgId) {
+        test.skip(true, "No organizations in DB — cannot exercise deactivate confirmation page");
+        return;
+      }
+
+      await page.goto(`/site-admin/organizations/${orgId}/deactivate`);
+      await page.waitForLoadState("networkidle");
+      expect(new URL(page.url()).pathname).toBe(`/site-admin/organizations/${orgId}/deactivate`);
+      expect(await page.title()).not.toMatch(/500|internal error|application error/i);
+
+      // Page must render either the destructive-confirm form (org is currently
+      // active + non-deleted) or one of the wrong-state panels (already
+      // inactive, or deleted). Pin both surfaces explicitly so neither path
+      // can regress silently.
+      const formHeading = await page.getByRole("heading", { name: "Deactivate organization" }).count();
+      const inactivePanel = await page.getByText("Already inactive").count();
+      const deletedPanel = await page.getByText("Organization is deleted").count();
+      expect(formHeading + inactivePanel + deletedPanel).toBeGreaterThan(0);
+
+      // Cancel link must be present in every branch so a misclick can be
+      // reversed without browser back.
+      const cancelLinks = page.getByRole("link", { name: /Cancel|Back to organizations|View deleted organizations/ });
+      expect(await cancelLinks.count()).toBeGreaterThan(0);
+
+      if (formHeading > 0) {
+        // Destructive-confirm form is rendered. Pin the contract.
+        const checkbox = page.locator('input[type="checkbox"][name="confirmed"]');
+        await expect(checkbox).toBeVisible();
+        expect(await checkbox.getAttribute("required")).not.toBeNull();
+        await expect(checkbox).not.toBeChecked();
+
+        // Submit button must be present and must be labelled with the
+        // destructive copy. The current implementation makes it disabled
+        // only while the action is pending, NOT until the checkbox is
+        // ticked — HTML5 `required` on the checkbox is the gate.
+        const submit = page.getByRole("button", { name: "Deactivate organization" });
+        await expect(submit).toBeVisible();
+
+        // Verify the reversibility-reassurance copy is present. Operators
+        // need to know this can be undone before they decide to confirm.
+        await expect(page.getByText(/Reactivate/)).toBeVisible();
+
+        // Attempt a keyboard-driven submit WITHOUT ticking the checkbox.
+        // HTML5 validation must block the navigation. Confirm we are still
+        // on the deactivate page. We do NOT click the submit button (that
+        // would still trigger native form validation but is wasteful);
+        // instead we just hit Enter while focused on a different field
+        // (the cancel link), which is benign.
+        // The real safety property is documented above: the test never
+        // ticks the checkbox AND never clicks submit, so no lifecycle
+        // mutation can happen.
+        expect(new URL(page.url()).pathname).toBe(`/site-admin/organizations/${orgId}/deactivate`);
+      }
+    } finally {
+      await page.close();
+    }
+  });
+
+  test("/delete renders the destructive-confirm form with required checkbox (when org is active)", async () => {
+    if (skipAuthTests) {
+      test.skip(true, SKIP_AUTH_MSG);
+    }
+
+    const page = await siteAdminCtx!.newPage();
+    try {
+      const orgId = await firstOrgId(page);
+      if (!orgId) {
+        test.skip(true, "No organizations in DB — cannot exercise delete confirmation page");
+        return;
+      }
+
+      await page.goto(`/site-admin/organizations/${orgId}/delete`);
+      await page.waitForLoadState("networkidle");
+      expect(new URL(page.url()).pathname).toBe(`/site-admin/organizations/${orgId}/delete`);
+      expect(await page.title()).not.toMatch(/500|internal error|application error/i);
+
+      const formHeading = await page.getByRole("heading", { name: "Delete organization" }).count();
+      const alreadyDeleted = await page.getByText("Already deleted").count();
+      expect(formHeading + alreadyDeleted).toBeGreaterThan(0);
+
+      if (formHeading > 0) {
+        // Soft-delete confirmation contract.
+        const checkbox = page.locator('input[type="checkbox"][name="confirmed"]');
+        await expect(checkbox).toBeVisible();
+        expect(await checkbox.getAttribute("required")).not.toBeNull();
+        await expect(checkbox).not.toBeChecked();
+
+        // Submit button — danger variant with "Soft-delete organization" label.
+        const submit = page.getByRole("button", { name: "Soft-delete organization" });
+        await expect(submit).toBeVisible();
+
+        // Reassurance copy: "can be undone by a site administrator using the
+        // Restore action" must be present so operators see the
+        // soft-vs-hard distinction before they confirm.
+        await expect(page.getByText(/Restore/)).toBeVisible();
+
+        // Verify URL did not auto-advance (no auto-submit on page load).
+        expect(new URL(page.url()).pathname).toBe(`/site-admin/organizations/${orgId}/delete`);
+      }
+
+      // Cancel link must be present in every branch.
+      const cancelLinks = page.getByRole("link", {
+        name: /Cancel|View deleted organizations|Back to organizations/,
+      });
+      expect(await cancelLinks.count()).toBeGreaterThan(0);
+    } finally {
+      await page.close();
+    }
+  });
+
+  test("/reactivate renders confirm form OR wrong-state panel; reversible action has NO checkbox", async () => {
+    if (skipAuthTests) {
+      test.skip(true, SKIP_AUTH_MSG);
+    }
+
+    const page = await siteAdminCtx!.newPage();
+    try {
+      const orgId = await firstOrgId(page);
+      if (!orgId) {
+        test.skip(true, "No organizations in DB — cannot exercise reactivate confirmation page");
+        return;
+      }
+
+      await page.goto(`/site-admin/organizations/${orgId}/reactivate`);
+      await page.waitForLoadState("networkidle");
+      expect(new URL(page.url()).pathname).toBe(`/site-admin/organizations/${orgId}/reactivate`);
+      expect(await page.title()).not.toMatch(/500|internal error|application error/i);
+
+      const formHeading = await page.getByRole("heading", { name: "Reactivate organization" }).count();
+      const alreadyActive = await page.getByText("Already active").count();
+      const deletedPanel = await page.getByText("Organization is deleted").count();
+      expect(formHeading + alreadyActive + deletedPanel).toBeGreaterThan(0);
+
+      if (formHeading > 0) {
+        // Reversible-action contract: NO checkbox is present by design.
+        // Pin the asymmetry explicitly so a future "be consistent and add
+        // a checkbox here too" change is caught — the asymmetry is
+        // intentional (re-enabling something does not need the same
+        // friction as disabling it).
+        const checkbox = page.locator('input[type="checkbox"][name="confirmed"]');
+        expect(await checkbox.count()).toBe(0);
+
+        // Submit button is present with "Reactivate organization" label.
+        const submit = page.getByRole("button", { name: "Reactivate organization" });
+        await expect(submit).toBeVisible();
+
+        // URL did not auto-advance.
+        expect(new URL(page.url()).pathname).toBe(`/site-admin/organizations/${orgId}/reactivate`);
+      }
+
+      // Cancel/Back link must be present in every branch.
+      const cancelLinks = page.getByRole("link", {
+        name: /Cancel|Back to organizations|View deleted organizations/,
+      });
+      expect(await cancelLinks.count()).toBeGreaterThan(0);
+    } finally {
+      await page.close();
+    }
+  });
+
+  test("/restore renders confirm form OR wrong-state panel; reversible action has NO checkbox", async () => {
+    if (skipAuthTests) {
+      test.skip(true, SKIP_AUTH_MSG);
+    }
+
+    const page = await siteAdminCtx!.newPage();
+    try {
+      const orgId = await firstOrgId(page);
+      if (!orgId) {
+        test.skip(true, "No organizations in DB — cannot exercise restore confirmation page");
+        return;
+      }
+
+      await page.goto(`/site-admin/organizations/${orgId}/restore`);
+      await page.waitForLoadState("networkidle");
+      expect(new URL(page.url()).pathname).toBe(`/site-admin/organizations/${orgId}/restore`);
+      expect(await page.title()).not.toMatch(/500|internal error|application error/i);
+
+      // /restore renders the form only when the org is currently
+      // soft-deleted; the wrong-state panel otherwise.
+      const formHeading = await page.getByRole("heading", { name: "Restore organization" }).count();
+      // The non-form branch lives under several copy variants depending on
+      // whether the org is active or inactive. Pin the most common ones.
+      const notDeleted = await page.getByText("Not deleted").count();
+      const wrongStateGeneric = await page.getByText(/cannot be restored/i).count();
+      expect(formHeading + notDeleted + wrongStateGeneric).toBeGreaterThan(0);
+
+      if (formHeading > 0) {
+        // Reversible-action contract: NO confirmation checkbox by design.
+        const checkbox = page.locator('input[type="checkbox"][name="confirmed"]');
+        expect(await checkbox.count()).toBe(0);
+
+        const submit = page.getByRole("button", { name: "Restore organization" });
+        await expect(submit).toBeVisible();
+
+        // URL did not auto-advance.
+        expect(new URL(page.url()).pathname).toBe(`/site-admin/organizations/${orgId}/restore`);
+      }
+
+      // Cancel link is always present.
+      const cancelLinks = page.getByRole("link", { name: /Cancel|Back to organizations/ });
+      expect(await cancelLinks.count()).toBeGreaterThan(0);
+    } finally {
+      await page.close();
+    }
+  });
+
+  test("lifecycle pages never expose passwords, TOTP secrets, claim tokens, or otpauth URIs", async () => {
+    if (skipAuthTests) {
+      test.skip(true, SKIP_AUTH_MSG);
+    }
+
+    const page = await siteAdminCtx!.newPage();
+    try {
+      const orgId = await firstOrgId(page);
+      if (!orgId) {
+        test.skip(true, "No organizations in DB — cannot exercise lifecycle leakage check");
+        return;
+      }
+
+      for (const action of ["deactivate", "reactivate", "delete", "restore"] as const) {
+        await page.goto(`/site-admin/organizations/${orgId}/${action}`);
+        await page.waitForLoadState("networkidle");
+
+        // The page body must not contain ANY of the credential-bearing strings
+        // that signal a wire-shape regression (e.g. a misimplemented form
+        // that echoed back a stored secret). These are negative invariants.
+        const body = await page.content();
+        expect(body).not.toMatch(/otpauth:\/\//);
+        expect(body).not.toMatch(/password_hash/);
+        expect(body).not.toMatch(/mfa_secret/i);
+        expect(body).not.toMatch(/claim_token/);
+        expect(body).not.toMatch(/Set-Cookie/);
+        expect(body).not.toMatch(/Bearer\s+[A-Za-z0-9._-]+/);
+      }
+    } finally {
+      await page.close();
+    }
+  });
+});

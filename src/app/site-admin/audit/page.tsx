@@ -19,6 +19,7 @@
 import { listAuditEvents, listAuditEventTypes } from "@/lib/idp-admin-client";
 import type { AuditEventItem } from "@/lib/idp-admin-client";
 import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
+import { AuditIPAddressCell } from "@/components/shared/audit-ip-address-cell";
 import { AuditFilterPanel } from "@/components/shared/audit-filter-panel";
 import type { AuditFilterValues } from "@/components/shared/audit-filter-panel";
 import type { Metadata } from "next";
@@ -199,7 +200,12 @@ export default async function SiteAdminAuditPage({
         </div>
       )}
 
-      <AuditFilterPanel basePath={BASE_PATH} filters={filters} eventTypeGroups={eventTypeGroups} />
+      <AuditFilterPanel
+        basePath={BASE_PATH}
+        filters={filters}
+        eventTypeGroups={eventTypeGroups}
+        subjectId={subjectId}
+      />
 
       {!result.ok && result.featureUnavailable && <FeatureUnavailablePanel />}
       {!result.ok && result.forbidden && <ForbiddenPanel />}
@@ -315,7 +321,7 @@ function AuditTable({
                 </div>
               </td>
               <td className="px-4 py-3 text-xs text-stone-400 font-mono whitespace-nowrap">
-                {e.ip_address ?? <span className="text-stone-300">—</span>}
+                <AuditIPAddressCell value={e.ip_address} />
               </td>
               <td className="px-4 py-3">
                 <PriorityBadge priority={e.priority} />

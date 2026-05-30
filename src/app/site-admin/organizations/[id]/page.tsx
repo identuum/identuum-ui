@@ -16,6 +16,17 @@ import type { OrgAdminRecoveryCandidate } from "@/lib/idp-admin-client";
 import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
 import type { OrgDetail } from "@/lib/types";
 import type { Metadata } from "next";
+import {
+  ADMIN_STATE_COPY,
+  BOUNDARY_COPY,
+  LIFECYCLE_COPY,
+  type AdminState,
+  type LifecycleState,
+  deriveOperationalStatus,
+  deriveOrganizationActions,
+  getOrganizationActionHref,
+  getOrganizationActionLabel,
+} from "./operational-status";
 import { ResetAdminMFAButton } from "./reset-admin-mfa-button";
 
 export const metadata: Metadata = { title: "Organization — Identuum Admin" };
@@ -49,6 +60,17 @@ export default async function OrgDetailPage({
   // failure here is non-fatal — the rest of the page still renders.
   const admins: OrgAdminRecoveryCandidate[] = adminsResult?.ok ? adminsResult.admins : [];
   const adminsLoadError = adminsResult && !adminsResult.ok ? adminsResult.message : null;
+
+  // Actions card visibility — derived from the same four boolean flags as
+  // the Operational status card. The helper enforces the deleted-org
+  // restore-only invariant and the assign-admin assignment-allowed
+  // boundary documented in UI-FEATURES.md Section 2.
+  const actions = deriveOrganizationActions({
+    active: org.active,
+    deleted: org.deleted,
+    has_admin: org.has_admin,
+    can_assign_admin: org.can_assign_admin,
+  });
 
   const statusLabel = org.deleted ? "Deleted" : org.active ? "Active" : "Inactive";
 
@@ -183,8 +205,7 @@ export default async function OrgDetailPage({
               )}
               {!org.can_assign_admin && (
                 <p className="text-xs text-stone-400 leading-relaxed border-t border-stone-100 pt-3">
-                  Site administrators cannot view or list tenant organization members. This is
-                  enforced by the sovereign bunker policy to preserve tenant privacy boundaries.
+                  {BOUNDARY_COPY.administratorStatusCard}
                 </p>
               )}
             </>
@@ -230,7 +251,9 @@ export default async function OrgDetailPage({
         orgDeleted={org.deleted}
       />
 
-      {/* Actions card */}
+      {/* Actions card — visibility derived by deriveOrganizationActions(org)
+          in ./operational-status.ts. The deleted-org branch keeps a slimmer
+          card (no subtitle) to match its restore-only semantic. */}
       {!org.deleted && (
         <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-stone-100">
@@ -238,56 +261,61 @@ export default async function OrgDetailPage({
             <p className="text-xs text-stone-400 mt-0.5">Manage this organization.</p>
           </div>
           <div className="px-6 py-5 flex flex-wrap gap-2">
-            <a
-              href={`/site-admin/organizations/${id}/edit`}
-              className="text-xs font-semibold text-stone-500 hover:text-sky-700 bg-stone-100 hover:bg-sky-50 border border-stone-200 hover:border-sky-200 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              Edit
-            </a>
-            {org.active ? (
+            {actions.includes("edit") && (
               <a
-                href={`/site-admin/organizations/${id}/deactivate`}
+                href={getOrganizationActionHref(id, "edit")}
+                className="text-xs font-semibold text-stone-500 hover:text-sky-700 bg-stone-100 hover:bg-sky-50 border border-stone-200 hover:border-sky-200 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                {getOrganizationActionLabel("edit")}
+              </a>
+            )}
+            {actions.includes("deactivate") && (
+              <a
+                href={getOrganizationActionHref(id, "deactivate")}
                 className="text-xs font-semibold text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-3 py-1.5 rounded-lg transition-colors"
               >
-                Deactivate
+                {getOrganizationActionLabel("deactivate")}
               </a>
-            ) : (
+            )}
+            {actions.includes("reactivate") && (
               <a
-                href={`/site-admin/organizations/${id}/reactivate`}
+                href={getOrganizationActionHref(id, "reactivate")}
                 className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg transition-colors"
               >
-                Reactivate
+                {getOrganizationActionLabel("reactivate")}
               </a>
             )}
-            {(!org.has_admin || org.can_assign_admin) && (
+            {actions.includes("assign-admin") && (
               <a
-                href={`/site-admin/organizations/${id}/assign-admin`}
+                href={getOrganizationActionHref(id, "assign-admin")}
                 className="text-xs font-semibold text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-3 py-1.5 rounded-lg transition-colors"
               >
-                Assign admin
+                {getOrganizationActionLabel("assign-admin")}
               </a>
             )}
-            <a
-              href={`/site-admin/organizations/${id}/delete`}
-              className="text-xs font-semibold text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 border border-red-100 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              Archive
-            </a>
+            {actions.includes("archive") && (
+              <a
+                href={getOrganizationActionHref(id, "archive")}
+                className="text-xs font-semibold text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 border border-red-100 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                {getOrganizationActionLabel("archive")}
+              </a>
+            )}
           </div>
         </div>
       )}
 
-      {org.deleted && (
+      {org.deleted && actions.includes("restore") && (
         <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-stone-100">
             <p className="text-sm font-semibold text-sky-950">Actions</p>
           </div>
           <div className="px-6 py-5">
             <a
-              href={`/site-admin/organizations/${id}/restore`}
+              href={getOrganizationActionHref(id, "restore")}
               className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg transition-colors"
             >
-              Restore
+              {getOrganizationActionLabel("restore")}
             </a>
           </div>
         </div>
@@ -394,80 +422,37 @@ function NotFoundPanel() {
 }
 
 // ── Operational status card ──────────────────────────────────────────────────
+//
+// The lifecycle / admin-state / next-action derivation is in
+// ./operational-status.ts (pure, vitest-covered). This component composes
+// those values with the Tailwind presentation layer below — colour dots,
+// border classes, and the next-action link styling. Edits to the
+// derivation rules belong in operational-status.ts so they are caught by
+// the matrix vitest.
 
-type LifecycleState = "active" | "inactive" | "deleted";
-type AdminState = "operational" | "expired-pending" | "no-admin" | "suspended";
-type NextAction = "restore" | "reactivate" | "assign-admin" | "reactivate-and-assign" | "none";
+const LIFECYCLE_DOT: Record<LifecycleState, string> = {
+  active: "bg-emerald-500",
+  inactive: "bg-stone-400",
+  deleted: "bg-red-500",
+};
+
+const ADMIN_STATE_DOT: Record<AdminState, string> = {
+  operational: "bg-emerald-500",
+  "expired-pending": "bg-amber-400",
+  "no-admin": "bg-amber-400",
+  suspended: "bg-stone-300",
+};
 
 function OperationalStatusCard({ org, id }: { org: OrgDetail; id: string }) {
-  const lifecycle: LifecycleState = org.deleted ? "deleted" : org.active ? "active" : "inactive";
+  const { lifecycle, adminState, nextAction } = deriveOperationalStatus({
+    active: org.active,
+    deleted: org.deleted,
+    has_admin: org.has_admin,
+    can_assign_admin: org.can_assign_admin,
+  });
 
-  const adminState: AdminState = org.deleted
-    ? "suspended"
-    : org.has_admin && !org.can_assign_admin
-      ? "operational"
-      : org.has_admin && org.can_assign_admin
-        ? "expired-pending"
-        : "no-admin";
-
-  // Assignment is allowed whenever no verified admin blocks delegation — i.e.
-  // either the org has no admin at all, or it has only unverified admins (the
-  // can_assign_admin recovery state).
-  const assignmentAllowed = !org.has_admin || org.can_assign_admin;
-
-  const nextAction: NextAction = org.deleted
-    ? "restore"
-    : !org.active && assignmentAllowed
-      ? "reactivate-and-assign"
-      : !org.active
-        ? "reactivate"
-        : assignmentAllowed
-          ? "assign-admin"
-          : "none";
-
-  const lifecycleCfg: Record<LifecycleState, { dot: string; label: string; body: string }> = {
-    active: {
-      dot: "bg-emerald-500",
-      label: "Active",
-      body: "User logins are permitted.",
-    },
-    inactive: {
-      dot: "bg-stone-400",
-      label: "Inactive",
-      body: "User logins are blocked. Reactivate to allow users to sign in.",
-    },
-    deleted: {
-      dot: "bg-red-500",
-      label: "Archived",
-      body: "Organization is soft-deleted. All user logins are blocked. Restore to resume operations.",
-    },
-  };
-
-  const adminCfg: Record<AdminState, { dot: string; label: string; body: string }> = {
-    operational: {
-      dot: "bg-emerald-500",
-      label: "Administrator account active",
-      body: "An active administrator account or a valid pending setup invitation is present. No recovery action is needed.",
-    },
-    "expired-pending": {
-      dot: "bg-amber-400",
-      label: "Pending invitation expired",
-      body: "An administrator account exists but the setup invitation was never claimed. Recovery delegation is available.",
-    },
-    "no-admin": {
-      dot: "bg-amber-400",
-      label: "No administrator",
-      body: "No active administrator account is present. Tenant users cannot manage organization settings without one. Recovery delegation is available.",
-    },
-    suspended: {
-      dot: "bg-stone-300",
-      label: "Admin management suspended",
-      body: "Restore the organization to resume administrator management.",
-    },
-  };
-
-  const lc = lifecycleCfg[lifecycle];
-  const ac = adminCfg[adminState];
+  const lc = { dot: LIFECYCLE_DOT[lifecycle], ...LIFECYCLE_COPY[lifecycle] };
+  const ac = { dot: ADMIN_STATE_DOT[adminState], ...ADMIN_STATE_COPY[adminState] };
 
   const actionLinkCls =
     "inline-flex items-center gap-1 text-xs font-semibold text-sky-700 hover:text-sky-900 " +
@@ -567,8 +552,7 @@ function OrgAdminRecoveryCard({
       <div className="px-6 py-4 border-b border-stone-100">
         <p className="text-sm font-semibold text-sky-950">Organization administrators</p>
         <p className="text-xs text-stone-400 mt-0.5 leading-relaxed">
-          Reset MFA for an administrator who has lost their authenticator. Only org_admin accounts
-          are shown — tenant org_users remain hidden under the sovereign bunker policy.
+          {BOUNDARY_COPY.recoveryCardDescription}
         </p>
       </div>
 

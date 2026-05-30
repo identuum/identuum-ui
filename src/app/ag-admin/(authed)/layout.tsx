@@ -15,6 +15,7 @@
  * The sidebar exposes only public route paths.
  */
 import { AgAdminNav } from "@/components/ag-admin/ag-admin-nav";
+import { PlatformLicenseWarnings } from "@/components/shared/platform-license-warnings";
 import { hasAgSession } from "@/lib/ag-client";
 import { redirect } from "next/navigation";
 
@@ -51,6 +52,7 @@ export default async function AgAdminAuthedLayout({
 
       {/* Main content */}
       <main className="flex-1 overflow-auto">
+        <PlatformLicenseWarnings />
         <div className="max-w-5xl mx-auto px-6 py-8">{children}</div>
       </main>
     </div>

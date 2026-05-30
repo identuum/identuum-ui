@@ -14,9 +14,13 @@ const NAV_LINKS: NavLink[] = [
   { label: "Users", href: "/org-admin/users", match: "prefix" },
   { label: "Audit", href: "/org-admin/audit", match: "prefix" },
   { label: "Settings", href: "/org-admin/settings", match: "prefix" },
+  { label: "Applications", href: "/org-admin/applications", match: "prefix" },
 ];
 
-const DISABLED_LABELS = ["Applications"];
+// Promoted Applications from disabled-"soon" → active nav in
+// identuum-20260530-org-admin-applications-surface-discovery-and-foundation.
+// Future "Coming soon" sidebar items would re-populate this array.
+const DISABLED_LABELS: string[] = [];
 
 export function OrgAdminNav() {
   const pathname = usePathname();

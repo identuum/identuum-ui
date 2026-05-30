@@ -761,3 +761,197 @@ describe("fetchAgAuthProviders — license availability", () => {
     expect(json).not.toContain("issuer_url");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Local-login signal (local_login_available + local_login_url)
+// ---------------------------------------------------------------------------
+//
+// AG started emitting these two fields on 2026-05-25 to advertise local
+// site-admin password login (POST /login on the identity surface). The UI
+// uses local_login_available to decide whether to show the password form or
+// a "setup required" hint, and treats absent (older AG builds) as null so
+// the form continues to render defensively.
+
+describe("fetchAgAuthProviders — local login signal", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("propagates local_login_available=true and local_login_url='/login'", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          component: "identuum-ag",
+          auth_mode: "local",
+          local_login_available: true,
+          local_login_url: "/login",
+          providers: [],
+        }),
+      })
+    );
+
+    const state = await fetchAgAuthProviders("http://ag:7215");
+    expect(state.available).toBe(true);
+    expect(state.auth_mode).toBe("local");
+    expect(state.local_login_available).toBe(true);
+    expect(state.local_login_url).toBe("/login");
+  });
+
+  it("propagates local_login_available=false and drops local_login_url", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          component: "identuum-ag",
+          auth_mode: "unknown",
+          local_login_available: false,
+          providers: [],
+        }),
+      })
+    );
+
+    const state = await fetchAgAuthProviders("http://ag:7215");
+    expect(state.local_login_available).toBe(false);
+    expect(state.local_login_url).toBeNull();
+  });
+
+  it("returns local_login_*=null when AG omits the fields (older build compat)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          component: "identuum-ag",
+          auth_mode: "external_oidc",
+          providers: [
+            {
+              id: "entra",
+              type: "microsoft_entra",
+              display_name: "Entra",
+              login_url: "/login?idp=entra",
+              enabled: true,
+              advanced: false,
+            },
+          ],
+        }),
+      })
+    );
+
+    const state = await fetchAgAuthProviders("http://ag:7215");
+    expect(state.local_login_available).toBeNull();
+    expect(state.local_login_url).toBeNull();
+  });
+
+  it("rejects absolute local_login_url (open-redirect guard)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          component: "identuum-ag",
+          auth_mode: "local",
+          local_login_available: true,
+          // Absolute URL — must be rejected, not propagated to the UI.
+          local_login_url: "https://attacker.example.com/login",
+          providers: [],
+        }),
+      })
+    );
+
+    const state = await fetchAgAuthProviders("http://ag:7215");
+    // The signal stays truthy because AG advertised availability, but the URL
+    // is discarded so the UI does not pass an attacker-controlled value to the
+    // client.
+    expect(state.local_login_available).toBe(true);
+    expect(state.local_login_url).toBeNull();
+  });
+
+  it("does not propagate local_login_url when local_login_available=false", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          component: "identuum-ag",
+          auth_mode: "unknown",
+          local_login_available: false,
+          // AG should not send a URL with available=false, but defensively
+          // the UI ignores it anyway.
+          local_login_url: "/login",
+          providers: [],
+        }),
+      })
+    );
+
+    const state = await fetchAgAuthProviders("http://ag:7215");
+    expect(state.local_login_available).toBe(false);
+    expect(state.local_login_url).toBeNull();
+  });
+
+  it("503 path leaves local_login_*=null (AG did not successfully list providers)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        json: async () => ({
+          component: "identuum-ag",
+          auth_mode: "unknown",
+          providers: [],
+          error: { code: "provider_discovery_failed" },
+        }),
+      })
+    );
+
+    const state = await fetchAgAuthProviders("http://ag:7215");
+    expect(state.available).toBe(false);
+    expect(state.local_login_available).toBeNull();
+    expect(state.local_login_url).toBeNull();
+  });
+
+  it("local + federated together — both signals coexist", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          component: "identuum-ag",
+          auth_mode: "mixed",
+          login_available: true,
+          local_login_available: true,
+          local_login_url: "/login",
+          providers: [
+            {
+              id: "entra",
+              type: "microsoft_entra",
+              display_name: "Entra",
+              login_url: "/login?idp=entra",
+              enabled: true,
+              advanced: false,
+            },
+          ],
+        }),
+      })
+    );
+
+    const state = await fetchAgAuthProviders("http://ag:7215");
+    expect(state.auth_mode).toBe("mixed");
+    expect(state.login_available).toBe(true);
+    expect(state.local_login_available).toBe(true);
+    expect(state.local_login_url).toBe("/login");
+    expect(state.providers).toHaveLength(1);
+  });
+});

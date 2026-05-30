@@ -1,9 +1,13 @@
 /**
  * Assign first org_admin page — site_admin only.
  *
- * Only valid for organizations that:
+ * Valid for organizations that:
  *   - exist and are not soft-deleted
- *   - have no active org_admin (has_admin === false)
+ *   - have no org_admin row (initial bootstrap), or have only unverified admins
+ *     (recovery delegation — surfaced via `can_assign_admin`)
+ *
+ * Inactive organizations are allowed; the page shows an inactive-org notice but
+ * still permits assignment per the bootstrap/recovery product rule.
  *
  * Auth is enforced by the parent /site-admin layout guard.
  * The server action in actions.ts independently revalidates site_admin.
@@ -54,16 +58,24 @@ export default async function AssignAdminPage({
     );
   }
 
-  if (!org.can_assign_admin) {
+  // Assignment is allowed when no org_admin row exists at all (`!has_admin`)
+  // or when admins exist but none are verified (`can_assign_admin` recovery state).
+  // Both states match the backend GenerateClaimToken guard (`adminCount == 0` or
+  // its recovery extension), so don't block on `can_assign_admin` alone.
+  const canAssign = !org.has_admin || org.can_assign_admin;
+
+  if (!canAssign) {
     return (
       <div className="max-w-lg space-y-4">
         <Breadcrumb orgName={org.name} />
         <div className="bg-white border border-stone-200 rounded-[1.5rem] px-5 py-4 shadow-sm">
-          <p className="text-sm font-semibold text-stone-700">Recovery delegation not available</p>
+          <p className="text-sm font-semibold text-stone-700">
+            Administrator already assigned
+          </p>
           <p className="text-xs text-stone-400 mt-1">
-            <span className="font-medium text-sky-950">{org.name}</span> has an active administrator
-            account or a pending setup link that has not yet expired. Recovery delegation is only
-            available when neither condition applies.
+            <span className="font-medium text-sky-950">{org.name}</span> already has an active
+            administrator. Site administrators can only delegate the first administrator, or
+            recover the role when no administrator exists.
           </p>
         </div>
         <a
@@ -95,7 +107,9 @@ export default async function AssignAdminPage({
       <div className="bg-white border border-amber-200 rounded-[1.5rem] px-5 py-3.5 shadow-sm text-xs space-y-0.5">
         <p className="text-sm font-semibold text-sky-950">{org.name}</p>
         <p className="text-stone-400 font-mono">{org.domain || "no domain"}</p>
-        <p className="text-amber-600 font-medium mt-1">Recovery delegation available</p>
+        <p className="text-amber-600 font-medium mt-1">
+          {org.has_admin ? "Recovery delegation available" : "No administrator assigned"}
+        </p>
         {!org.active && (
           <p className="text-stone-400 mt-0.5">
             This organization is currently{" "}

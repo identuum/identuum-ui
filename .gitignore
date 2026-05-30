@@ -16,6 +16,9 @@ config/ui-runtime.json
 
 # env files
 .env*.local
+# operator-supplied smoke harness env files (never committed)
+.smoke-org-import.env
+*.smoke.env
 
 # vercel
 .vercel
@@ -30,6 +33,9 @@ next-env.d.ts
 # test artifacts
 playwright-report/
 test-results/
+# Local E2E fixture material written by `identuum --e2e-create-org-admin-fixture`.
+# Contains generated password + TOTP secret. Never committed.
+e2e/.auth/
 
 # local agent instructions
 CLAUDE.md

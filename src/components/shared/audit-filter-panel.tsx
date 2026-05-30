@@ -35,6 +35,16 @@ interface AuditFilterPanelProps {
    * compile-time list when null (endpoint unavailable or feature not licensed).
    */
   eventTypeGroups?: AuditEventTypeGroupFromAPI[] | null;
+  /**
+   * Subject UUID filter that arrived via a per-row "View in audit" or
+   * "View all →" link. The panel preserves it across filter-form
+   * submissions via a hidden input so the operator's filter changes
+   * do not silently broaden the visible event set. Omit (or pass
+   * null) on surfaces that do not use subject_id (the field is
+   * out-of-band from the other filter form controls — the operator
+   * cannot type a UUID into the panel UI).
+   */
+  subjectId?: string | null;
 }
 
 const SUBJECT_TYPE_OPTIONS = [
@@ -63,7 +73,12 @@ function windowSelectValue(f: AuditFilterValues): string {
   return "";
 }
 
-export function AuditFilterPanel({ basePath, filters, eventTypeGroups }: AuditFilterPanelProps) {
+export function AuditFilterPanel({
+  basePath,
+  filters,
+  eventTypeGroups,
+  subjectId,
+}: AuditFilterPanelProps) {
   const activeFilters = hasActiveFilters(filters);
   const windowVal = windowSelectValue(filters);
   const isCustom = windowVal === "custom";
@@ -114,6 +129,11 @@ export function AuditFilterPanel({ basePath, filters, eventTypeGroups }: AuditFi
       >
         {/* Reset page to 1 on filter change. Sort order preserved via separate URL mechanism. */}
         <input type="hidden" name="page" value="1" />
+        {/* Preserve subject_id across filter-form submissions so a
+            "View in audit" link doesn't silently broaden when the
+            operator changes another filter. Out-of-band from the
+            visible controls — operator cannot type a UUID here. */}
+        {subjectId ? <input type="hidden" name="subject_id" value={subjectId} /> : null}
 
         {/* Event type — grouped select from known backend constants */}
         <div className="space-y-1 sm:col-span-2 lg:col-span-1">

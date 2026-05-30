@@ -191,10 +191,12 @@ test.describe("/org-admin — authenticated route access", () => {
       expect(optChecked && reqChecked).toBe(false);
       await expect(page.getByRole("button", { name: /save policy/i })).toBeVisible();
 
-      // Placeholder cards
+      // Settings cards below the two forms:
+      // - Invite policy: real read-only card (since 2026-05-30 invite-policy task)
+      // - Domains: still a "Coming soon" placeholder (backend gap documented in UI-FEATURES.md Section 6c)
       expect(await page.getByText("Domains", { exact: true }).count()).toBeGreaterThan(0);
       expect(await page.getByText("Invite policy", { exact: true }).count()).toBeGreaterThan(0);
-      expect(await page.getByText("Coming soon").count()).toBeGreaterThanOrEqual(2);
+      expect(await page.getByText("Coming soon").count()).toBeGreaterThanOrEqual(1);
     } finally {
       await page.close();
     }

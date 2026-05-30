@@ -1,0 +1,11 @@
+# pnpm 11 reads install-script approval from "allowBuilds" (map of
+# package -> bool). pnpm 10's equivalent was "pnpm.onlyBuiltDependencies"
+# in package.json; pnpm 11 ignores that field. These packages ship native
+# binaries / generated assets and need their postinstall scripts to run:
+#   - esbuild         — vite/vitest dev/build pipeline (native bundler)
+#   - sharp           — next/image native bindings
+#   - @biomejs/biome  — biome native CLI
+allowBuilds:
+  '@biomejs/biome': true
+  esbuild: true
+  sharp: true

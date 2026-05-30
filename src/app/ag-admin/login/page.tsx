@@ -8,13 +8,21 @@
  *   1. OIDC provider section — fetched server-side from AG's provider
  *      discovery endpoint. Rendered based on login_available and provider
  *      enabled status from AG's license-aware response.
- *   2. Local password form — always shown as an alternative.
+ *   2. Local password form — rendered when AG reports
+ *      local_login_available=true (post-`--setup`), or as a defensive fallback
+ *      when AG is briefly unreachable / running an older build that does not
+ *      yet emit the signal. When AG explicitly reports
+ *      local_login_available=false (site-admin not yet provisioned), the form
+ *      is replaced with operator-facing setup guidance so an operator who
+ *      lands here pre-setup is not stuck staring at a form that would 401.
  *
  * Security:
  *   - Provider metadata is fetched server-side; internal AG URLs never rendered.
  *   - login_url values from AG are NOT rendered directly; the UI constructs
  *     /api/ag-auth/login?idp=<id> from the provider id.
- *   - Credentials (for local login) are proxied server-to-server.
+ *   - Credentials (for local login) are proxied server-to-server through
+ *     /api/ag/login; the browser never POSTs directly to the AG identity
+ *     surface and never sees the AG access_token (HttpOnly cookie only).
  *   - No sidebar shown; unauthenticated layout.
  */
 import { fetchAgAuthProviders } from "@/lib/ag-auth-providers";
@@ -32,10 +40,23 @@ export default async function AgAdminLoginPage() {
   const providerState = await fetchAgAuthProviders(agUrl);
 
   const enabledProviders = providerState.providers.filter((p) => p.enabled);
+
+  // The local password form is shown when:
+  //   - AG explicitly advertises local login (local_login_available=true), OR
+  //   - The signal is absent (null) — older AG build, AG unreachable, or
+  //     provider listing failed. Suppressing the form on null would prevent
+  //     operator login on deployments that work today, so the page defaults to
+  //     showing it and lets the POST surface the auth failure if AG says no.
+  // The form is hidden only when AG explicitly says local_login_available=false.
+  const showLocalForm = providerState.local_login_available !== false;
+
+  // The "or" divider sits between federated provider buttons and the local
+  // form. Only render it when BOTH sides are actually present.
   const showDivider =
     providerState.available &&
     providerState.login_available === true &&
-    enabledProviders.length > 0;
+    enabledProviders.length > 0 &&
+    showLocalForm;
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
@@ -135,16 +156,21 @@ export default async function AgAdminLoginPage() {
                 </div>
               )}
 
-              {/* Local credential form */}
-              <div>
-                <h3 className="text-sm font-semibold text-sky-950 mb-1 tracking-tight">
-                  Operator credentials
-                </h3>
-                <p className="text-xs text-stone-500 mb-4 leading-relaxed">
-                  Sign in with your AG operator account.
-                </p>
-                <AgAdminLoginForm />
-              </div>
+              {/* Local credential form (or setup-required hint when AG
+                  reports the site-admin row is not yet configured) */}
+              {showLocalForm ? (
+                <div>
+                  <h3 className="text-sm font-semibold text-sky-950 mb-1 tracking-tight">
+                    Operator credentials
+                  </h3>
+                  <p className="text-xs text-stone-500 mb-4 leading-relaxed">
+                    Sign in with your AG operator account.
+                  </p>
+                  <AgAdminLoginForm />
+                </div>
+              ) : (
+                <AgLocalSetupRequired />
+              )}
             </div>
           </div>
 
@@ -231,6 +257,51 @@ function AgProviderLockedBadge({ provider }: { provider: AgAuthProvider }) {
     <div className="flex items-center justify-between rounded-lg px-3 py-2 text-xs text-stone-400 bg-stone-100 border border-stone-200 select-none">
       <span>{provider.display_name}</span>
       <span className="font-mono text-stone-400 text-[10px] ml-2">unavailable</span>
+    </div>
+  );
+}
+
+/**
+ * Rendered when AG reports local_login_available=false — the deployment has
+ * been wired up but `identuum-ag --setup` (or --reset-site-admin-password)
+ * has not yet been run, so there is no usable password to log in with.
+ *
+ * The hint is intentionally generic: it does not reveal whether the row is
+ * missing, the password_hash is null, or the bootstrap migration is stale.
+ * It points at the operator-side recovery command, which is the canonical
+ * fix path and does not leak deployment state.
+ */
+function AgLocalSetupRequired() {
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-sky-950 mb-1 tracking-tight">
+        Operator credentials
+      </h3>
+      <p className="text-xs text-stone-500 mb-4 leading-relaxed">
+        AG reports that the site-admin account has not been provisioned for this
+        deployment yet. Run the AG setup or recovery command on the host, then
+        reload this page.
+      </p>
+      <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600 leading-relaxed">
+        On the AG host, run one of:
+        <ul className="mt-2 space-y-1 list-disc pl-4 text-stone-500">
+          <li>
+            <code className="font-mono text-[11px] text-sky-900">
+              docker compose run --rm identuum-ag-setup
+            </code>
+            <span className="ml-1">(initial setup)</span>
+          </li>
+          <li>
+            <code className="font-mono text-[11px] text-sky-900">
+              docker exec identuum-ag /app/identuum-ag --reset-site-admin-password
+            </code>
+            <span className="ml-1">(rotate / recover)</span>
+          </li>
+        </ul>
+        <p className="mt-2 text-[11px] text-stone-400">
+          The setup output prints the generated site-admin password once.
+        </p>
+      </div>
     </div>
   );
 }

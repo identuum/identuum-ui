@@ -20,22 +20,18 @@ import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
 import type { OrgUserItem } from "@/lib/types";
 import type { Metadata } from "next";
 import { RegenerateInviteLink, ResetMFAButton, UserRowActions } from "../user-row-actions";
+import {
+  RECENT_ACTIVITY_COPY,
+  SOLE_ACTIVE_ADMIN_COPY,
+  buildOrgAdminUserAuditHref,
+  computeOrgUserStatus,
+  deriveOrgAdminUserActions,
+  isNoEmailSentinel,
+} from "./user-detail-actions";
 
 export const metadata: Metadata = { title: "User — Identuum Org Admin" };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isNoEmailSentinel(email: string): boolean {
-  return email.startsWith("noemail+") && email.endsWith("@no-email.internal");
-}
-
-function computeStatus(u: OrgUserItem): "active" | "pending" | "disabled" | "deleted" {
-  if (u.deleted) return "deleted";
-  if (u.invitation_pending) return "pending";
-  if (isNoEmailSentinel(u.email) && !u.email_verified) return "pending";
-  if (!u.active) return "disabled";
-  return "active";
-}
 
 function formatAuditDate(iso: string): string {
   if (!iso) return "—";
@@ -85,14 +81,18 @@ export default async function OrgAdminUserDetailPage({
     return <NotFoundPanel />;
   }
 
-  const status = computeStatus(user);
-
   // Count active, non-deleted org_admins to determine last-admin protection.
-  // If listOrgUsers fails (null), default isSoleActiveAdmin=false — the backend
-  // will enforce the guard if the action is attempted.
+  // If listOrgUsers fails (null), default activeAdminCount=0 — the helper's
+  // soleActiveAdmin guard then fires only when user.role === "org_admin"
+  // && user.active, which still surfaces the explanatory copy and lets the
+  // backend enforce the final guard on submission.
   const activeAdminCount =
     allUsers?.filter((u) => u.role === "org_admin" && u.active && !u.deleted).length ?? 0;
-  const isSoleActiveAdmin = user.role === "org_admin" && user.active && activeAdminCount <= 1;
+  const status = computeOrgUserStatus(user);
+  const { actions, soleActiveAdmin: isSoleActiveAdmin } = deriveOrgAdminUserActions(
+    user,
+    activeAdminCount
+  );
   const isManualInvite =
     (user.invitation_pending && !user.invitation_email_bound) ||
     (!user.invitation_email_bound && isNoEmailSentinel(user.email));
@@ -119,11 +119,12 @@ export default async function OrgAdminUserDetailPage({
     cls: "text-stone-500 bg-stone-100 border-stone-200",
   };
 
-  const showLifecycleActions = !user.deleted && user.role !== "site_admin" && status !== "pending";
-  const showRegenerate = status === "pending" && !user.deleted && user.role !== "site_admin";
-  // MFA reset: only for active org_user targets with MFA enabled.
-  const showMFAReset =
-    user.role === "org_user" && user.mfa_enabled && !user.deleted && status !== "pending";
+  // Action visibility is derived by deriveOrgAdminUserActions(). The
+  // three local booleans below are kept as thin aliases so the JSX
+  // below remains byte-identical; tests pin the underlying matrix.
+  const showLifecycleActions = actions.includes("disable") || actions.includes("enable");
+  const showRegenerate = actions.includes("regenerate-invite");
+  const showMFAReset = actions.includes("reset-mfa");
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -238,16 +239,18 @@ export default async function OrgAdminUserDetailPage({
             {showLifecycleActions && isSoleActiveAdmin ? (
               /* Last active org_admin — disabling would leave the org without an admin.
                  Backend enforces ErrForbidden for org_admin actors in this state.
-                 Show an explanatory message instead of a silently blocked button. */
+                 Render the explanatory panel from SOLE_ACTIVE_ADMIN_COPY instead
+                 of a silently-blocked button. */
               <div className="space-y-1.5">
-                <p className="text-xs font-semibold text-stone-600">Suspend access</p>
+                <p className="text-xs font-semibold text-stone-600">
+                  {SOLE_ACTIVE_ADMIN_COPY.sectionHeading}
+                </p>
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 max-w-[340px] space-y-1">
                   <p className="text-xs font-semibold text-amber-700">
-                    Cannot disable the last active organization admin
+                    {SOLE_ACTIVE_ADMIN_COPY.title}
                   </p>
                   <p className="text-xs text-stone-500 leading-relaxed">
-                    Assign another administrator before suspending this account. This organization
-                    must always have at least one active admin.
+                    {SOLE_ACTIVE_ADMIN_COPY.body}
                   </p>
                 </div>
               </div>
@@ -299,40 +302,59 @@ export default async function OrgAdminUserDetailPage({
         <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-sky-950">Recent activity</p>
-              <p className="text-xs text-stone-400 mt-0.5">
-                Latest audit events where this user is the subject.
-              </p>
+              <p className="text-sm font-semibold text-sky-950">{RECENT_ACTIVITY_COPY.title}</p>
+              <p className="text-xs text-stone-400 mt-0.5">{RECENT_ACTIVITY_COPY.subtitle}</p>
             </div>
             <a
-              href={`/org-admin/audit?subject_id=${encodeURIComponent(id)}`}
+              href={buildOrgAdminUserAuditHref(id)}
               className="shrink-0 text-xs font-semibold text-sky-700 hover:text-sky-900 transition-colors"
             >
-              View all →
+              {RECENT_ACTIVITY_COPY.viewAllLabel}
             </a>
           </div>
-          <div className="divide-y divide-stone-100">
-            {recentAuditResult.events.map((e, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: audit rows have no stable client key
-              <div key={i} className="px-6 py-3 flex items-start justify-between gap-4">
-                <div className="min-w-0 space-y-0.5">
-                  <span className="text-xs font-mono text-sky-950">{e.event_type}</span>
-                  {e.summary && (
-                    <p className="text-[10px] text-stone-400 leading-tight">{e.summary}</p>
-                  )}
-                  {e.actor_email || e.actor_type ? (
-                    <div className="flex items-center gap-1 text-[10px] text-stone-400">
-                      <span>by</span>
-                      <AuditIdentityCell value={e.actor_email} fallback={e.actor_type} />
+          {/* Per-row "View in audit" links: each row is wrapped in an
+              <a> that navigates to the subject-filtered audit page
+              with the row's event_type appended. The accessible name
+              ("View audit event <event_type> for this user") tells a
+              screen-reader user where the click goes. Visible focus
+              ring is provided so keyboard users can see focus. The
+              compact row intentionally renders ONLY event_type / safe
+              summary / actor display name / formatted timestamp — no
+              raw metadata, no IP, no user agent, no session id, no
+              cookies, no token, no clientDataJSON, no attestation. */}
+          <ul className="divide-y divide-stone-100">
+            {recentAuditResult.events.map((e, i) => {
+              const rowHref = buildOrgAdminUserAuditHref(id, e.event_type);
+              const actorLabel = e.actor_email ?? e.actor_type ?? null;
+              const ariaLabel = `View audit event ${e.event_type} for this user`;
+              return (
+                // biome-ignore lint/suspicious/noArrayIndexKey: audit rows have no stable client key
+                <li key={i}>
+                  <a
+                    href={rowHref}
+                    aria-label={ariaLabel}
+                    className="px-6 py-3 flex items-start justify-between gap-4 hover:bg-stone-50 focus-visible:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-500/40 transition-colors"
+                  >
+                    <div className="min-w-0 space-y-0.5">
+                      <span className="text-xs font-mono text-sky-950">{e.event_type}</span>
+                      {e.summary && (
+                        <p className="text-[10px] text-stone-400 leading-tight">{e.summary}</p>
+                      )}
+                      {actorLabel && (
+                        <div className="flex items-center gap-1 text-[10px] text-stone-400">
+                          <span>Actor:</span>
+                          <AuditIdentityCell value={e.actor_email} fallback={e.actor_type} />
+                        </div>
+                      )}
                     </div>
-                  ) : null}
-                </div>
-                <span className="shrink-0 text-[10px] text-stone-400 whitespace-nowrap">
-                  {formatAuditDate(e.created_at)}
-                </span>
-              </div>
-            ))}
-          </div>
+                    <span className="shrink-0 text-[10px] text-stone-400 whitespace-nowrap">
+                      {formatAuditDate(e.created_at)}
+                    </span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 

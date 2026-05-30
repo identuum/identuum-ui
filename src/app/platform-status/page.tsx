@@ -17,6 +17,8 @@ import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 import type {
   AgAuthProviderDiscoveryState,
   BackendComponentState,
+  ComponentCapabilities,
+  ComponentLicenseInfo,
   PlatformMode,
 } from "@/lib/types";
 import type { Metadata } from "next";
@@ -65,9 +67,15 @@ export default async function PlatformStatusPage() {
           )}
         </div>
 
-        <div className="border-t border-stone-200 pt-4">
+        <div className="border-t border-stone-200 pt-4 flex flex-wrap gap-6">
           <a href="/" className="text-sm text-sky-600 hover:text-sky-700 underline">
             Return to home
+          </a>
+          <a
+            href="/site-admin/org-link/readiness"
+            className="text-sm text-stone-500 hover:text-stone-700 underline"
+          >
+            Organization linking readiness
           </a>
         </div>
       </div>
@@ -128,6 +136,67 @@ function ModeBadge({ mode }: { mode: PlatformMode }) {
   );
 }
 
+function licenseStatusDisplay(status: string): string {
+  if (status === "unknown") return "—";
+  if (status === "valid") return "Valid";
+  if (status === "invalid") return "Invalid";
+  if (status === "expired") return "Expired";
+  if (status === "missing") return "Missing";
+  return status;
+}
+
+function licenseStatusClass(status: string): string {
+  if (status === "valid") return "text-emerald-600 font-medium";
+  if (status === "invalid" || status === "expired") return "text-red-600 font-medium";
+  return "text-stone-500";
+}
+
+function formatExpiresAt(s: string): string {
+  try {
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s;
+    return d.toISOString().slice(0, 10);
+  } catch {
+    return s;
+  }
+}
+
+function daysRemainingClass(days: number): string {
+  if (days <= 0) return "text-red-600 font-medium";
+  if (days <= 30) return "text-amber-600 font-medium";
+  return "text-stone-600";
+}
+
+function LicenseRows({ lic }: { lic: ComponentLicenseInfo }) {
+  return (
+    <>
+      <StatusRow
+        label="License"
+        value={licenseStatusDisplay(lic.status)}
+        valueClass={licenseStatusClass(lic.status)}
+      />
+      {lic.product && <StatusRow label="Product" value={lic.product} />}
+      {lic.tier && <StatusRow label="Tier" value={lic.tier} />}
+      {lic.expires_at != null && (
+        <StatusRow label="Expires" value={formatExpiresAt(lic.expires_at)} />
+      )}
+      {lic.days_remaining != null && (
+        <StatusRow
+          label="Days left"
+          value={String(lic.days_remaining)}
+          valueClass={daysRemainingClass(lic.days_remaining)}
+        />
+      )}
+      {lic.deployment_mode != null && lic.deployment_mode !== "" && (
+        <StatusRow label="Deploy mode" value={lic.deployment_mode} />
+      )}
+      {lic.license_type != null && lic.license_type !== "" && (
+        <StatusRow label="License type" value={lic.license_type} />
+      )}
+    </>
+  );
+}
+
 function BackendCard({
   label,
   abbreviation,
@@ -174,10 +243,7 @@ function BackendCard({
         <StatusRow label="Configured" value={backend.configured ? "Yes" : "No"} />
         <StatusRow label="Reachable" value={backend.reachable ? "Yes" : "No"} />
         <StatusRow label="Usable" value={backend.usable ? "Yes" : "No"} />
-        <StatusRow
-          label="License"
-          value={backend.license.status === "unknown" ? "—" : backend.license.status}
-        />
+        <LicenseRows lic={backend.license} />
         {backend.version && <StatusRow label="Version" value={backend.version} />}
         {backend.error && (
           <StatusRow label="Error" value={backend.error} valueClass="text-amber-700 font-mono" />
@@ -208,23 +274,36 @@ function StatusRow({
   );
 }
 
-function CapabilitiesList({ capabilities }: { capabilities: Record<string, boolean> }) {
-  const enabled = Object.entries(capabilities)
-    .filter(([, v]) => v)
-    .map(([k]) => k.replace(/_/g, " "));
+const CAPABILITY_LABELS: Record<keyof ComponentCapabilities, string> = {
+  component_discovery: "Component discovery",
+  license_status: "License status",
+  auth_provider_discovery: "Auth provider discovery",
+  organization_export: "Organization export",
+  organization_import: "Organization import",
+  organization_linking: "Organization linking",
+  identity_provider: "Identity provider",
+  agent_governance: "Agent governance",
+  hitl: "HITL",
+  agent_sessions: "Agent sessions",
+};
 
-  if (enabled.length === 0) return null;
+function CapabilitiesList({ capabilities }: { capabilities: ComponentCapabilities }) {
+  const entries = (Object.keys(CAPABILITY_LABELS) as Array<keyof ComponentCapabilities>)
+    .filter((k) => capabilities[k] === true)
+    .map((k) => ({ key: k, label: CAPABILITY_LABELS[k] }));
+
+  if (entries.length === 0) return null;
 
   return (
     <div>
       <p className="text-[10px] uppercase tracking-wide text-stone-400 mb-1.5">Capabilities</p>
       <div className="flex flex-wrap gap-1.5">
-        {enabled.map((cap) => (
+        {entries.map(({ key, label }) => (
           <span
-            key={cap}
+            key={key}
             className="rounded-md bg-stone-100 border border-stone-200 px-2 py-0.5 text-[10px] font-medium text-stone-600"
           >
-            {cap}
+            {label}
           </span>
         ))}
       </div>

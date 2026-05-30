@@ -17,6 +17,7 @@
  *   - Authenticated site_admin     → render shell + children
  */
 import { AccountMenu } from "@/components/shared/account-menu";
+import { PlatformLicenseWarnings } from "@/components/shared/platform-license-warnings";
 import { SiteAdminNav } from "@/components/site-admin/site-admin-nav";
 import { roleToPath } from "@/lib/role-routing";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
@@ -114,6 +115,7 @@ export default async function SiteAdminLayout({ children }: { children: React.Re
           <span className="text-xs text-stone-400 font-mono">site_admin</span>
           {userEmail && <AccountMenu email={userEmail} />}
         </header>
+        <PlatformLicenseWarnings />
         <main className="flex-1 overflow-auto bg-stone-50 px-8 py-8">{children}</main>
       </div>
     </div>

@@ -146,7 +146,7 @@ describe("RuntimeState shape — no secret fields", () => {
       component: "identuum-idp",
       version: "1.0.0",
       status: "ok",
-      capabilities: { identity: true },
+      capabilities: { identity_provider: true },
       auth: { authority: "identuum-idp", provider_mode: "local" },
       license: { status: "valid" },
       error: null,

@@ -8,9 +8,85 @@ Unauthenticated tests run without any credentials:
 npx playwright test
 ```
 
-## Authenticated tests
+## Recommended: dynamic org-admin fixture mode
 
-Authenticated tests require credentials in a local env file.
+**For non-destructive org-admin Playwright tests, prefer dynamic fixture
+mode.** It provisions a disposable org + org_admin pair before the run
+and hard-purges it after. No `.env.playwright.local` edits are required
+for the org_admin slot; the IDP CLI generates a fresh password + TOTP
+secret per run and writes them to a gitignored local file the login
+helper consumes automatically.
+
+### Before the first dynamic run after pulling changes
+
+Rebuild + restart the local IDP so the new CLI binary, migration,
+compose bind mount, and env gate are all live:
+
+```sh
+cd /Users/odemir/Development/2025-11/identuum/identuum-idp
+make local-restart
+curl -s http://localhost:7113/health
+```
+
+### Run
+
+```sh
+cd /Users/odemir/Development/2025-11/identuum/identuum-ui
+
+IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true \
+  npx playwright test e2e/org-admin-smoke.spec.ts --workers=1
+
+IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true \
+  npx playwright test e2e/org-admin.spec.ts --workers=1
+
+IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true \
+  npx playwright test e2e/org-admin-settings.spec.ts --workers=1
+```
+
+`--workers=1` is required (TOTP replay protection rejects concurrent
+logins with the same 30-second code).
+
+### What happens automatically
+
+1. `e2e/global-setup.ts` runs preflight diagnostics inside the IDP
+   container (`/app/identuum`, `/e2e-auth`, env gates, bind-mount
+   probe). On any failure the error message names the exact fix.
+2. `globalSetup` shells out to the IDP CLI to create the disposable
+   fixture; the JSON envelope appears briefly under
+   `identuum-ui/e2e/.auth/` with mode `0600`.
+3. `e2e/helpers/login.ts` reads the file via `loadOrgAdminFixture()` and
+   uses the generated credentials for every authenticated org_admin spec.
+4. `e2e/global-teardown.ts` shells out to the IDP CLI to hard-purge the
+   fixture organization (cascading every FK child row including
+   `audit_events`) and unlinks the host file.
+
+### Security
+
+- `e2e/.auth/` is gitignored (entry in `identuum-ui/.gitignore`). The
+  fixture JSON written there must never be committed.
+- The fixture JSON contains a generated org_admin password + TOTP
+  secret while tests run. **Never `cat`, paste, screenshot, or
+  otherwise print its contents.** `globalTeardown` removes it after a
+  successful run.
+- Setting `IDENTUUM_E2E_USE_DYNAMIC_FIXTURE` to any value other than
+  the literal string `"true"` is a no-op; durable env mode is
+  preserved unchanged.
+
+### Detailed runbook
+
+Full prerequisites, preflight troubleshooting matrix, cleanup
+commands, audit-cascade contract, and recovery procedures live at
+[`docs/LOCAL_ORG_ADMIN_PLAYWRIGHT_FIXTURE.md`](../docs/LOCAL_ORG_ADMIN_PLAYWRIGHT_FIXTURE.md)
+(Section 9). Use that document whenever a preflight check fails or the
+fixture file appears to be orphaned.
+
+---
+
+## Authenticated tests (durable env mode — fallback)
+
+Durable env mode is the fallback path for org_admin authentication and
+the only supported path for `site_admin` authentication. It uses
+long-lived credentials kept in `.env.playwright.local`.
 
 ### 1. Create `.env.playwright.local`
 
@@ -188,8 +264,41 @@ docker compose -f deployment/docker-compose.local.yml restart identuum-ui
 
 ---
 
+## Destructive recovery spec — separate from dynamic mode
+
+`e2e/site-admin-admin-recovery.spec.ts` covers the site_admin →
+org_admin MFA-reset recovery flow. It is **destructive**: it clears
+`mfa_enabled` + `mfa_secret` on a real org_admin row and revokes that
+row's active sessions. **It is intentionally NOT wired to the dynamic
+disposable fixture.**
+
+To run it you must set ALL of:
+
+```
+IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true
+IDENTUUM_TEST_SITE_ADMIN_PASSWORD=<set in .env.playwright.local>
+IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET=<set in .env.playwright.local>
+IDENTUUM_TEST_ORG_ID=<concrete fixture org UUID, NOT the all-zero placeholder>
+IDENTUUM_TEST_ORG_ADMIN_EMAIL=<concrete fixture org_admin email, NOT admin@example.org>
+```
+
+(Variable NAMES only — no values in this README.)
+
+The spec's `requireConcreteDestructiveRecoveryTarget()` helper refuses
+to run if `IDENTUUM_TEST_ORG_ID` is the all-zero placeholder or if
+`IDENTUUM_TEST_ORG_ADMIN_EMAIL` is the neutral `admin@example.org`
+placeholder. The refusal happens BEFORE any page interaction or HTTP
+call to the IDP.
+
+**Do not run this spec casually.** It is regression coverage for the
+recovery flow, not a substitute for dynamic mode or durable env mode.
+
+---
+
 ## CI
 
 Authenticated tests self-skip when `IDENTUUM_TEST_SITE_ADMIN_PASSWORD` /
 `IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET` are absent. Unauthenticated
-route-redirect tests always run.
+route-redirect tests always run. Dynamic-mode org_admin tests also
+self-skip when `IDENTUUM_E2E_USE_DYNAMIC_FIXTURE` is unset — the
+default-skip path is preserved for CI.

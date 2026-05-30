@@ -39,12 +39,40 @@ export interface ValidateClaimResult {
 }
 
 export interface ConsumeClaimState {
-  phase: "form" | "success" | "exhausted" | "invalid";
+  /**
+   * Phase semantics:
+   *   - "form"      → initial render or recoverable validation error.
+   *   - "mfa_setup" → claim consumed AND a pending MFA-enrollment session
+   *                   was opened via /auth/login (server-side). The
+   *                   sessionId field carries the pending session the UI
+   *                   uses to call mfaEnrollInitiate/Complete from the
+   *                   browser. The IdP refuses to mint session-bearing
+   *                   tokens for an admin without MFA, so this phase is
+   *                   where the user MUST verify a TOTP code before
+   *                   becoming operational.
+   *   - "success"   → terminal state. Used when the claim succeeded but
+   *                   the post-claim login probe could not be opened
+   *                   (network blip, IdP transient error). The UI falls
+   *                   back to "go to /login" so the user can retry —
+   *                   the backend login gate still enforces MFA on the
+   *                   next login attempt.
+   *   - "exhausted" → claim token burned (max wrong-password attempts).
+   *   - "invalid"   → token unknown/expired/already-consumed.
+   */
+  phase: "form" | "mfa_setup" | "success" | "exhausted" | "invalid";
   error?: string;
   fieldErrors?: Partial<Record<"email" | "password" | "confirmPassword" | "name", string>>;
   attemptsRemaining?: number;
   /** Success: true after token is fully consumed */
   success?: boolean;
+  /**
+   * Pending MFA-enrollment session id. Populated only when phase ===
+   * "mfa_setup". The UI passes this into the existing MFAEnrollForm
+   * component to drive TOTP enrollment + verification. Never the value
+   * itself appears in URLs, localStorage, or logs; it lives in React
+   * state for the duration of the enrollment step only.
+   */
+  sessionId?: string;
 }
 
 // ── Validate token (called server-side on page load) ──────────────────────────
@@ -202,6 +230,63 @@ export async function consumeClaimAction(
     };
   }
 
-  // Success — org activated, account created. User must sign in.
+  // Claim consumed successfully. The user account now exists and the
+  // organisation is active, but per the platform's MFA invariant an
+  // org_admin without MFA cannot receive session-bearing tokens. To
+  // guide the user through TOTP enrollment without a second navigation,
+  // we open a pending login session server-side using the same
+  // credentials the user just set and surface its session_id to the
+  // UI. The client then renders MFAEnrollForm against this pending
+  // session — same machinery the regular login flow uses.
+  //
+  // SECURITY: the password is consumed and discarded here. It is never
+  // returned to the browser, never logged, and never persisted. The
+  // session_id is a non-secret pending-session identifier; it is
+  // surfaced to the React tree for the duration of the enrollment step
+  // and never written to URLs or storage.
+  const pendingSessionID = await openPendingMFAEnrollmentSession(idpBaseUrl(cfg), email, password);
+  if (pendingSessionID) {
+    return { phase: "mfa_setup", success: true, sessionId: pendingSessionID };
+  }
+
+  // Defensive fallback: if the post-claim login probe could not be
+  // opened (transient IdP error, network blip), surface the legacy
+  // "go to /login" success state. The backend login gate will still
+  // force MFA enrollment on the next manual login attempt, so this
+  // path does not weaken the invariant — it just degrades the UX.
   return { phase: "success", success: true };
+}
+
+// openPendingMFAEnrollmentSession issues a server-side login request
+// with the credentials the user just supplied and returns the pending
+// session_id when the IdP responds with mfa_required=true. Returns the
+// empty string on any non-pending outcome (network error, missing
+// fields, unexpected response shape) so the caller can fall back to
+// the legacy /login redirect. Never throws.
+//
+// This indirection exists so the claim flow can chain directly into
+// MFA enrollment without holding the password in client state. The
+// password is given to the IdP exactly once and discarded.
+async function openPendingMFAEnrollmentSession(
+  idpURL: string,
+  email: string,
+  password: string
+): Promise<string> {
+  try {
+    const res = await fetch(`${idpURL}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+      cache: "no-store",
+    });
+    if (!res.ok) return "";
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response
+    const body: any = await res.json();
+    if (body?.mfa_required === true && typeof body.session_id === "string" && body.session_id) {
+      return body.session_id;
+    }
+    return "";
+  } catch {
+    return "";
+  }
 }

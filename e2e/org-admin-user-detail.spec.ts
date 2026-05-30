@@ -1,0 +1,185 @@
+/**
+ * Rendered-DOM Playwright coverage for /org-admin/users/[id] — focuses
+ * on the Recent activity card's per-row click → /org-admin/audit
+ * subject-filtered navigation contract.
+ *
+ * Scope:
+ *   - Dynamic-fixture mode only. The fixture provisions a disposable
+ *     org_admin whose recent successful login produces at least one
+ *     auth_success audit row where they are the subject; the test
+ *     opens the user detail page for that admin, finds the Recent
+ *     activity card, clicks the first row link, and asserts the
+ *     audit page renders a subject-filtered view.
+ *   - The test never mutates any data. It only navigates and clicks
+ *     links. No destructive action, no reset endpoint, no fixture
+ *     password / TOTP / cookie / storage state is printed.
+ *   - Self-skips when dynamic-fixture mode is not requested.
+ *
+ * Session strategy:
+ *   - Login ONCE in beforeAll and share the browser context, matching
+ *     the existing e2e/org-admin-smoke.spec.ts + e2e/org-admin-settings.spec.ts
+ *     pattern. Avoids TOTP replay failures.
+ *
+ * Requires:
+ *   - Full Compose stack (IdP at localhost:7113, UI at localhost:7114).
+ *   - Run with --workers=1 to avoid TOTP replay-protection failures.
+ *
+ * SECURITY:
+ *   - Reads the fixture admin's user_id via the narrow accessor
+ *     `loadOrgAdminFixtureUserId()` which returns ONLY the non-secret
+ *     UUID. The accessor never returns credentials or envelope
+ *     metadata.
+ *   - The clicked link target is constrained to /org-admin/audit with
+ *     subject_id + event_type query params. The test asserts the
+ *     "Subject filter active:" notice is visible — the IDP backend
+ *     enforces tenant scoping so a misconstructed UUID could not
+ *     leak cross-tenant data.
+ *   - Never asserts on raw audit metadata, IP addresses, user agents,
+ *     session IDs, or any sensitive payload. The test inspects only
+ *     URL shape, card presence, link role, and the safe filter-notice
+ *     copy.
+ */
+
+import type { BrowserContext } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { loadOrgAdminFixtureUserId } from "./helpers/fixture";
+import { loginAsOrgAdmin, skipOrgAdminTests } from "./helpers/login";
+
+const SKIP_MSG =
+  "Set IDENTUUM_TEST_ORG_ADMIN_EMAIL + _PASSWORD (durable) or " +
+  "IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true (dynamic) to run this test";
+
+const DYNAMIC_ONLY_SKIP_MSG =
+  "Set IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true to opt in. This test reads the disposable fixture's org_admin user_id.";
+
+// ── Shared auth context ──────────────────────────────────────────────────────
+
+let sharedCtx: BrowserContext | null = null;
+
+test.beforeAll(async ({ browser }) => {
+  test.setTimeout(180_000); // 31s TOTP cooldown + ~70s TOTP retry headroom
+  if (skipOrgAdminTests) return;
+  sharedCtx = await browser.newContext();
+  const setupPage = await sharedCtx.newPage();
+  await loginAsOrgAdmin(setupPage);
+  await setupPage.close();
+});
+
+test.afterAll(async () => {
+  await sharedCtx?.close();
+  sharedCtx = null;
+});
+
+// ── Recent activity row → audit filter navigation ────────────────────────────
+
+test.describe("/org-admin/users/[id] — Recent activity card", () => {
+  test("[dynamic mode only] clicking a recent activity row navigates to /org-admin/audit with subject_id and event_type filters", async () => {
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
+    if (process.env.IDENTUUM_E2E_USE_DYNAMIC_FIXTURE !== "true") {
+      test.skip(true, DYNAMIC_ONLY_SKIP_MSG);
+    }
+
+    const fixtureUserId = loadOrgAdminFixtureUserId();
+    expect(
+      fixtureUserId,
+      "dynamic-fixture mode must produce a fixture file the accessor can read"
+    ).not.toBeNull();
+    // Narrow UUID-shape sanity (the accessor already enforced this;
+    // re-pinning so the test fails loudly if a future regression
+    // weakens the accessor).
+    expect(fixtureUserId).toMatch(/^[0-9a-fA-F-]{32,36}$/);
+
+    const page = await sharedCtx!.newPage();
+    try {
+      // Navigate directly to the fixture admin's own user-detail page.
+      // The /org-admin layout guard already validated the role; this
+      // page is reachable to the same org_admin viewing themselves.
+      await page.goto(`/org-admin/users/${fixtureUserId!}`);
+      await page.waitForLoadState("networkidle");
+
+      expect(await page.title()).not.toMatch(/500|internal error|application error/i);
+
+      // The Recent activity card renders only when the API returned
+      // at least one event. The fixture admin's recent login (which
+      // routed through CompleteMFALogin) should have produced at least
+      // one auth_success audit row where the admin is the subject —
+      // so the card is expected to appear. If the test environment's
+      // licence tier ever degrades to one without audit, this test
+      // would self-skip rather than fail; for now we assert the card.
+      const cardHeading = page.getByText("Recent activity", { exact: true });
+      const cardVisible = await cardHeading
+        .waitFor({ state: "visible", timeout: 10_000 })
+        .then(() => true)
+        .catch(() => false);
+      if (!cardVisible) {
+        test.skip(
+          true,
+          "Recent activity card not rendered — license tier may not include audit; nothing to click"
+        );
+      }
+
+      // Each row is now wrapped in an <a> with aria-label
+      // "View audit event <event_type> for this user". Find the first
+      // such link. We accept any event_type (the fixture admin's
+      // first row will typically be `auth_success` but we don't
+      // depend on it).
+      const rowLinks = page.getByRole("link", {
+        name: /^View audit event \S+ for this user$/,
+      });
+      const rowCount = await rowLinks.count();
+      expect(rowCount, "at least one Recent activity row must be a link").toBeGreaterThan(0);
+
+      // Prefer the first auth_success row (the slice's canonical
+      // example), but fall back to the first row when no
+      // auth_success row is visible. This keeps the test robust to
+      // audit-event ordering changes.
+      const authSuccessLink = page
+        .getByRole("link", { name: /^View audit event auth_success for this user$/ })
+        .first();
+      const targetLink = (await authSuccessLink.count()) > 0 ? authSuccessLink : rowLinks.first();
+
+      // Capture the link's href BEFORE clicking so we can pin the
+      // shape the helper produced. We do NOT print the href to test
+      // output — we only assert structural properties.
+      const href = (await targetLink.getAttribute("href")) ?? "";
+      expect(href).toMatch(/^\/org-admin\/audit\?/);
+      expect(href).toContain(`subject_id=${encodeURIComponent(fixtureUserId!)}`);
+      // The per-row link MUST carry event_type. The helper appends
+      // it whenever the row's event_type is non-empty (always true
+      // for real audit events).
+      expect(href).toMatch(/&event_type=[^&]+/);
+
+      // Extract the event_type from the link href so we can assert
+      // it threaded through to the audit page after navigation.
+      const eventTypeMatch = href.match(/[?&]event_type=([^&]+)/);
+      expect(eventTypeMatch).not.toBeNull();
+      const clickedEventType = decodeURIComponent(eventTypeMatch?.[1] ?? "");
+
+      // Click the row link.
+      await Promise.all([page.waitForLoadState("networkidle"), targetLink.click()]);
+
+      // The audit page is rendered, not a 500 / 404.
+      expect(await page.title()).not.toMatch(/500|internal error|application error/i);
+      await expect(page.getByRole("heading", { name: "Audit log" })).toBeVisible();
+
+      // URL contract: subject_id and event_type both present.
+      const finalURL = page.url();
+      expect(finalURL).toContain("/org-admin/audit");
+      expect(finalURL).toContain(`subject_id=${encodeURIComponent(fixtureUserId!)}`);
+      expect(finalURL).toContain(`event_type=${encodeURIComponent(clickedEventType)}`);
+
+      // "Subject filter active:" notice is visible — confirms the
+      // audit page actually applied the filter (not just received the
+      // query param and ignored it).
+      await expect(page.getByText("Subject filter active:", { exact: false })).toBeVisible();
+
+      // The "Clear subject filter" affordance is visible so the
+      // operator can break out of the filter.
+      await expect(page.getByRole("link", { name: /^Clear subject filter$/ })).toBeVisible();
+    } finally {
+      await page.close();
+    }
+  });
+});
