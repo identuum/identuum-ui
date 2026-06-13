@@ -19,6 +19,7 @@ import type {
   ComponentDiscoveryResponse,
   ComponentLicenseInfo,
   DiscoveryErrorCode,
+  IdpSetupStateView,
   PlatformMode,
   RuntimeState,
 } from "./types";
@@ -204,6 +205,48 @@ async function fetchComponent(
 }
 
 /**
+ * fetchIdpSetupState probes the IDP appliance setup-status surface
+ * (`GET /api/setup/status`) and projects the safe-to-render subset onto
+ * IdpSetupStateView. Failure modes (timeout / 404 from an older backend
+ * / non-OK / non-JSON / unexpected shape) all resolve to `null` so the
+ * runtime composition never collapses to "setup_required" from a probe
+ * that cannot speak the contract.
+ *
+ * No setup token, hash, or admin-credential material is read or
+ * surfaced — the endpoint deliberately returns a no-secrets view per
+ * D-IDP-INSTALL-20.
+ */
+export async function fetchIdpSetupState(baseUrl: string): Promise<IdpSetupStateView | null> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/setup/status`;
+
+  let raw: unknown;
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    raw = await res.json();
+  } catch {
+    return null;
+  }
+
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  const state = r.state;
+  if (state !== "setup_required" && state !== "setup_complete") return null;
+
+  return {
+    state,
+    setupTokenRequired: r.setup_token_required === true,
+    firstSigningKeyExists: r.first_signing_key_exists === true,
+    siteAdminExists: r.site_admin_exists === true,
+    firstOrganizationExists: r.first_organization_exists === true,
+    nextAction: typeof r.next_action === "string" ? r.next_action : "",
+  };
+}
+
+/**
  * computePlatformMode derives the platform mode from the two backend states.
  *
  * Rules (in priority order):
@@ -245,6 +288,15 @@ export async function discoverRuntime(
       ? fetchComponent(agBaseUrl, EXPECTED_AG_COMPONENT)
       : Promise.resolve(notConfiguredState()),
   ]);
+
+  // Probe the appliance setup-status surface only when the IDP is
+  // both configured and usable. A non-usable IDP cannot serve the
+  // setup-status endpoint reliably; older OSS backends without
+  // /api/setup/status return null and the UI keeps default behaviour
+  // (no redirect to /setup).
+  if (idpBaseUrl && idp.usable) {
+    idp.setupState = await fetchIdpSetupState(idpBaseUrl);
+  }
 
   return {
     mode: computePlatformMode(idp, ag),

@@ -1,4 +1,5 @@
 import { loadRuntimeConfig, toPublicConfig } from "@/lib/runtime-config";
+import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LoginPageClient } from "./client";
@@ -6,11 +7,24 @@ import { LoginPageClient } from "./client";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Sign in — Identuum" };
 
-export default function LoginPage() {
+export default async function LoginPage() {
   const cfg = loadRuntimeConfig();
 
   if (!cfg) {
     redirect("/setup-required");
+  }
+
+  // Defense in depth: if the IDP reports first-run setup is required,
+  // direct visitors to /login land in the wizard instead of seeing a
+  // sign-in form that can't yet authenticate anyone. The root page
+  // performs the same check; this guards the case where the operator
+  // bookmarks or types /login directly.
+  const runtimeState = await getServerRuntimeState();
+  if (
+    runtimeState?.components.idp.usable &&
+    runtimeState.components.idp.setupState?.state === "setup_required"
+  ) {
+    redirect("/setup");
   }
 
   const publicCfg = toPublicConfig(cfg);

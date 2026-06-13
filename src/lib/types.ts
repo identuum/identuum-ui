@@ -578,6 +578,42 @@ export interface BackendComponentState {
   auth: Record<string, string>;
   license: ComponentLicenseInfo;
   error: DiscoveryErrorCode | null;
+  /**
+   * Appliance first-run setup state probed from `GET /api/setup/status`
+   * when the IDP component is usable. Defined only on the IDP slot.
+   *
+   *   { state: "setup_required" }   — the IDP wants the operator to run
+   *                                    the first-run wizard at /setup.
+   *   { state: "setup_complete" }   — setup is finished; the wizard is
+   *                                    not shown.
+   *   null                          — older OSS backend without the
+   *                                    setup endpoint, OR the probe
+   *                                    failed (treated as unknown; the
+   *                                    UI does NOT redirect to /setup).
+   *   undefined                     — IDP unreachable / never probed.
+   *
+   * The field is intentionally separate from `status` (which carries
+   * the backend's free-form status string for /system/info) and from
+   * the capability map (which surfaces feature booleans).
+   */
+  setupState?: IdpSetupStateView | null;
+}
+
+/**
+ * IdpSetupStateView mirrors the safe subset of the IDP's
+ * GET /api/setup/status response surfaced to the UI. It carries no
+ * setup token, no token hash, no organization id, no admin email, and
+ * no signing-key material — only the booleans the wizard needs to
+ * decide what to render. New fields landing on the backend status
+ * shape can be added here as the wizard grows.
+ */
+export interface IdpSetupStateView {
+  state: "setup_required" | "setup_complete";
+  setupTokenRequired: boolean;
+  firstSigningKeyExists: boolean;
+  siteAdminExists: boolean;
+  firstOrganizationExists: boolean;
+  nextAction: string;
 }
 
 /**
