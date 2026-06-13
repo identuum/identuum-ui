@@ -75,6 +75,12 @@ jobs:
             echo "EOF"
           } >> "${GITHUB_OUTPUT}"
 
+      - name: Set up QEMU
+        # Required so the linux/arm64 stage can cross-compile on the
+        # linux/amd64 GitHub-hosted runner. `node:22-bookworm-slim` is
+        # multi-arch upstream so no Dockerfile changes are required.
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -95,9 +101,8 @@ jobs:
           file: Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          # Multi-arch is optional. Default to linux/amd64 so the first
-          # publish is predictable; a maintainer can extend to
-          # linux/arm64 in a future slice once a tested arm64 base image
-          # is verified.
-          platforms: linux/amd64
+          # Multi-arch manifest. Apple Silicon hosts pull the linux/arm64
+          # variant natively; linux/amd64 covers the GitHub-hosted runner
+          # and most server deployments.
+          platforms: linux/amd64,linux/arm64
           provenance: false
