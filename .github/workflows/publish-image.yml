@@ -1,0 +1,103 @@
+# identuum-ui — manual image publish workflow.
+#
+# ★ MANUAL ONLY. workflow_dispatch — never runs on push or PR. ★
+#
+# Builds the UI container image from the repo-root `Dockerfile` (Node 22
+# + Next.js standalone, port 7114, healthcheck) and pushes it to
+# ghcr.io/identuum/identuum-ui with a user-specified version tag and a
+# short-SHA tag. An opt-in `latest_tag` input also pushes :latest; that
+# input defaults to `false` so an accidental run NEVER moves the rolling
+# `latest` pointer.
+#
+# Identuum IDP OSS customer install (see
+# wiki/platform/idp-appliance-install-ux.md D-IDP-INSTALL-06) downloads
+# `identuum-idp-oss/deployment/docker-compose.yml`, which pulls the UI
+# image as `ghcr.io/identuum/identuum-ui:v0.1.0`. This workflow
+# publishes the image that the customer command flow expects.
+#
+# Permissions:
+#   contents: read   — checkout
+#   packages: write  — push to ghcr.io with the workflow's
+#                      ${{ secrets.GITHUB_TOKEN }} (no PAT, no static
+#                      secret, no third-party credential).
+#
+# No secrets are added by this workflow. No registry credentials are
+# stored in the repository.
+
+name: Publish UI image
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Version tag to publish (e.g. v0.1.0). Pushed alongside the short-SHA tag.'
+        required: true
+        type: string
+      latest_tag:
+        description: 'Also push :latest. Defaults to false; never set true on an accidental run.'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Build and push to GHCR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compute image metadata
+        id: meta
+        run: |
+          # Short SHA tag is always pushed alongside the version tag so
+          # operators can pin to an immutable revision.
+          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-12)"
+          REGISTRY_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/identuum-ui"
+          VERSION_TAG="${{ inputs.version_tag }}"
+
+          TAGS="${REGISTRY_IMAGE}:${VERSION_TAG}"
+          TAGS="${TAGS},${REGISTRY_IMAGE}:sha-${SHORT_SHA}"
+          if [ "${{ inputs.latest_tag }}" = "true" ]; then
+            TAGS="${TAGS},${REGISTRY_IMAGE}:latest"
+          fi
+
+          {
+            echo "registry_image=${REGISTRY_IMAGE}"
+            echo "version_tag=${VERSION_TAG}"
+            echo "short_sha=${SHORT_SHA}"
+            echo "tags<<EOF"
+            echo "${TAGS}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          # Build context is the repo root; the production Dockerfile is
+          # the one the local compose stack and the customer-facing
+          # deployment already reference.
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          # Multi-arch is optional. Default to linux/amd64 so the first
+          # publish is predictable; a maintainer can extend to
+          # linux/arm64 in a future slice once a tested arm64 base image
+          # is verified.
+          platforms: linux/amd64
+          provenance: false
