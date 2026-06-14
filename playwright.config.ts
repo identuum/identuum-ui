@@ -59,6 +59,17 @@ try {
  *   starts a fresh pnpm dev server. global-setup.ts auto-creates
  *   config/ui-runtime.json if absent — no manual CI setup step needed.
  */
+// Port + base URL overrides for environments where the canonical
+// :7114 is held by an outdated Compose UI container (so a freshly
+// rebuilt dev server cannot bind it without stopping unrelated
+// containers). The defaults reproduce the existing contract; when
+// IDENTUUM_E2E_PORT is set, the dev server starts on that port and
+// baseURL is composed automatically — useful for one-spec smoke runs
+// that need source-fresh code without touching the standing dev
+// container.
+const e2ePort = process.env.IDENTUUM_E2E_PORT ?? "7114";
+const e2eBaseURL = process.env.IDENTUUM_E2E_BASE_URL ?? `http://localhost:${e2ePort}`;
+
 export default defineConfig({
   testDir: "./e2e",
   globalSetup: "./e2e/global-setup.ts",
@@ -70,7 +81,7 @@ export default defineConfig({
   retries: 0,
   reporter: "line",
   use: {
-    baseURL: "http://localhost:7114",
+    baseURL: e2eBaseURL,
     headless: true,
     locale: "en-US",
     timezoneId: "UTC",
@@ -82,11 +93,11 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm dev",
-    url: "http://localhost:7114",
+    command: `pnpm exec next dev --port ${e2ePort}`,
+    url: e2eBaseURL,
     // Local: reuse an already-running server (Compose stack or manual pnpm dev).
     // CI: always start fresh to avoid stale state between test runs.
     reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
+    timeout: 60_000,
   },
 });
