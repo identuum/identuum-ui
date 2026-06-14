@@ -148,6 +148,62 @@ export interface OrgDetail {
   updated_at: string;
 }
 
+/**
+ * Per-organization protocol settings returned by
+ * GET /api/v1/organizations/:id/protocol-settings (site_admin only).
+ *
+ * `source` distinguishes an explicit operator decision from the
+ * system-default fallback:
+ *   "explicit" — the org has a row in organization_protocol_settings;
+ *                created_at and updated_at are populated.
+ *   "default"  — no row exists; both booleans reflect system defaults
+ *                (currently false/false); timestamps are null.
+ *
+ * Neither DCR nor SCIM credentials, tokens, IATs, or raw client secrets
+ * appear in this type — only the two enable/disable booleans and
+ * metadata needed to render the settings panel.
+ */
+export interface OrgProtocolSettings {
+  organization_id: string;
+  dynamic_client_registration_enabled: boolean;
+  scim_enabled: boolean;
+  source: "explicit" | "default";
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+/**
+ * Discriminated result from getOrgProtocolSettings().
+ *
+ * ok=true  — settings fetched successfully.
+ * ok=false — reason distinguishes the failure mode so the UI can render
+ *            appropriate per-reason copy instead of a single generic notice:
+ *   "not_authenticated" — session expired / 401.
+ *   "forbidden"         — caller lacks permission / 403 (auth/role gate).
+ *   "not_licensed"      — commercial license gate / 403 with structured license signal.
+ *   "not_found"         — org absent or endpoint not present in this runtime / 404 or 501.
+ *   "unavailable"       — backend unreachable, IDP not configured, 503, or network error.
+ *   "unknown"           — any other non-200 from the backend.
+ *
+ * DCR Foundation remains OSS/Starter. SCIM 2.0 provisioning is
+ * Enterprise/CE-only. "not_licensed" is reserved for structured commercial
+ * license signals. When no structured signal is present, 403 maps to
+ * "forbidden".
+ */
+export type GetOrgProtocolSettingsResult =
+  | { ok: true; settings: OrgProtocolSettings }
+  | {
+      ok: false;
+      reason:
+        | "not_authenticated"
+        | "forbidden"
+        | "not_licensed"
+        | "not_found"
+        | "unavailable"
+        | "unknown";
+      status: number;
+    };
+
 export interface OrgListResult {
   organizations: OrgListItem[];
   total_count: number;
@@ -178,6 +234,77 @@ export interface OrgUserItem {
   invitation_pending: boolean;
   /** true = email-bound invite; false = no-email (manual) invite. Only meaningful when invitation_pending. */
   invitation_email_bound: boolean;
+  /**
+   * IDP-authoritative pending-approval flag. The IDP creates self-registered
+   * users with banned=true; (*UserService).ApproveRegistration flips banned to
+   * false (and email_verified to true) only for role=org_user. The "Approve
+   * registration" UI affordance MUST be gated on `banned && role === "org_user"`
+   * — never inferred from other fields.
+   */
+  banned: boolean;
+}
+
+/**
+ * UI-safe subset of the IdP APIResourceResponse type for the org-admin
+ * API Resources page. Sanitised in idp-admin-client.ts. The backend's
+ * APIResourceResponse already omits `resource_secret_hash` (it lives only
+ * on the domain object, not the wire); the UI projection drops nothing
+ * sensitive but keeps the explicit safe-field allowlist as defence in
+ * depth against any future backend struct drift.
+ */
+export interface OrgAPIResourceItem {
+  id: string;
+  organization_id: string;
+  name: string;
+  /** Logical OAuth audience identifier, immutable after create. */
+  audience: string;
+  active: boolean;
+  /** Access-token lifetime for tokens minted for this audience. */
+  token_ttl_secs: number;
+  /** Per-resource OAuth scope catalog. Each scope is independently assignable. */
+  scopes: OrgAPIResourceScope[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrgAPIResourceScope {
+  id: string;
+  name: string;
+  description: string;
+}
+
+/**
+ * UI-safe subset of the IdP types.ServiceAccount wire shape. The IDP
+ * intentionally projects ONLY the seven fields below to the wire (the
+ * mapper at internal/handlers/mappers.go:25 drops Active / ExpiresAt /
+ * OwnerUserID / OriginPeerID / OriginSPIFFEID from the DB row before
+ * responding), so the UI's safe-projection allowlist mirrors the
+ * backend exactly. The IDP NEVER returns a credential / secret / hash
+ * / private-key field on any service-account route — the create
+ * endpoint returns the same DTO as list/get, with no credential
+ * material. Linking a service account to an OAuth client to obtain a
+ * usable client_credentials grant is a separate (unimplemented)
+ * backend operation; the UI does NOT promise a credential here.
+ */
+export interface OrgServiceAccountItem {
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string;
+  /** "org_user" | "org_admin" (per domain.AllowedServiceAccountRoles). */
+  role: string;
+  /**
+   * Service account lifecycle state — true when the SA can mint
+   * client_credentials tokens via its linked OAuth client; false when
+   * the org_admin has disabled it (slice
+   * identuum-20260530-service-account-disable-enable-backend). The
+   * IDP's GenerateTokensForClient guard refuses new tokens when this
+   * is false. Existing already-issued access tokens run to their
+   * natural expiry.
+   */
+  active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 /**
@@ -350,6 +477,12 @@ export interface UserProfile {
 export interface BackendHealthStatus {
   enabled: boolean;
   healthy: boolean | null;
+  /**
+   * Backend product name derived from the /health response body.
+   * Examples: "identuum-idp-oss", "identuum-idp-ce", "identuum-ag-oss",
+   * "identuum-idp" (monolith/unknown), "identuum-ag" (legacy fallback).
+   */
+  product: string;
 }
 
 export interface StatusResponse {
@@ -538,6 +671,25 @@ export interface ComponentCapabilities {
   organization_linking?: boolean;
   hitl?: boolean;
   agent_sessions?: boolean;
+  account_self_service?: boolean;
+  user_sessions?: boolean;
+  mfa?: boolean;
+  webauthn?: boolean;
+  authorization_server?: boolean;
+  oauth_clients?: boolean;
+  api_resources?: boolean;
+  service_accounts?: boolean;
+  scope_templates?: boolean;
+  org_roles?: boolean;
+  protocol_settings?: boolean;
+  client_credentials?: boolean;
+  dynamic_client_registration?: boolean;
+  scim?: boolean;
+  audit_log?: boolean;
+  audit_chain?: boolean;
+  reporting?: boolean;
+  anomaly_detection?: boolean;
+  observability?: boolean;
 }
 
 /**
@@ -558,8 +710,10 @@ export interface ComponentLicenseInfo {
 /** Raw shape returned by a backend's GET /api/v1/component endpoint. */
 export interface ComponentDiscoveryResponse {
   component: string;
+  product?: string;
   version: string;
   status: string;
+  capability_map_schema_version?: string;
   /** Raw backend capabilities object — pass through extractCapabilities() before use. */
   capabilities?: Record<string, unknown>;
   auth: Record<string, string>;
@@ -572,6 +726,28 @@ export interface BackendComponentState {
   reachable: boolean;
   usable: boolean;
   component: string | null;
+  /**
+   * Backend product / distribution identifier, when the backend reports
+   * the optional `product` field (e.g. AG OSS returns `"identuum-ag-oss"`,
+   * IDP OSS returns `"identuum-idp-oss"`). null when the backend does not
+   * report it or is unreachable. Distinct from `license.product`, which is
+   * the product field on the license snapshot.
+   *
+   * Optional on the type so older test fixtures that pre-date this field
+   * continue to compile; readers must guard for `undefined` in addition to
+   * `null`. New production code paths set it explicitly to `null` when
+   * absent, never `undefined`.
+   */
+  product?: string | null;
+  /**
+   * Capability map schema version (e.g. `"ag-capabilities.v1"`,
+   * `"idp-capabilities.v1"`). null when the backend does not report it
+   * or is unreachable. Surfacing this lets the UI display the schema
+   * generation it negotiated without inventing one.
+   *
+   * Optional on the type for the same reason as `product` above.
+   */
+  capability_map_schema_version?: string | null;
   version: string | null;
   status: string | null;
   capabilities: ComponentCapabilities;
@@ -597,6 +773,26 @@ export interface BackendComponentState {
    * the capability map (which surfaces feature booleans).
    */
   setupState?: IdpSetupStateView | null;
+  /**
+   * Appliance OSS-to-CE upgrade state probed from
+   * `GET /api/upgrade/status` when the IDP component is reachable.
+   * Defined only on the IDP slot.
+   *
+   *   { state: "oss_database_detected" | "upgrade_required" | … } —
+   *     CE binary observes a database that needs the upgrade wizard
+   *     (or is already current — the field still carries the state
+   *     so post-upgrade screens can render correctly).
+   *   null — older OSS backend without the upgrade endpoint, OR the
+   *          probe failed (treated as unknown; the UI does NOT
+   *          redirect to /upgrade).
+   *   undefined — IDP unreachable / never probed.
+   *
+   * The probe is intentionally tolerant: any non-200 response, any
+   * malformed body, or an unknown state value collapses to null so
+   * the runtime composition layer never makes a false "upgrade
+   * needed" verdict from a probe that cannot speak the contract.
+   */
+  upgradeState?: IdpUpgradeStateView | null;
 }
 
 /**
@@ -617,6 +813,36 @@ export interface IdpSetupStateView {
 }
 
 /**
+ * IdpUpgradeStateView mirrors the safe subset of the CE binary's
+ * `GET /api/upgrade/status` response surfaced to the UI. It carries
+ * no DB URL, no SQL error, no schema fragment, and no upgrade-token
+ * plaintext — only the explicit named state and the wire booleans
+ * the runtime composition layer needs to decide whether to route
+ * the operator to /upgrade before /setup.
+ *
+ * `null` on a BackendComponentState means either the backend does
+ * not expose `/api/upgrade/status` (older OSS) OR the probe failed;
+ * the UI does NOT redirect to `/upgrade` in either case.
+ */
+export interface IdpUpgradeStateView {
+  state:
+    | "fresh_ce"
+    | "oss_database_detected"
+    | "upgrade_required"
+    | "ce_migrations_current"
+    | "upgrade_complete"
+    | "incompatible_database"
+    | "database_unreachable"
+    | "backup_required";
+  distribution: string;
+  upgradeAvailable: boolean;
+  ceMigrationsCurrent: boolean;
+  ossDatabaseDetected: boolean;
+  backupRequired: boolean;
+  nextAction: string;
+}
+
+/**
  * Full runtime state returned by GET /api/runtime.
  * The UI derives navigation, login choices, and platform mode from this.
  */
@@ -626,6 +852,25 @@ export interface RuntimeState {
     idp: BackendComponentState;
     ag: BackendComponentState;
   };
+}
+
+// ── AG PolicyPacks org-level settings ───────────────────────────────────────
+
+/**
+ * AG PolicyPacks org-level settings returned by
+ * GET /api/v1/policy-packs/settings (AG management surface).
+ *
+ * policy_packs_enabled=true  → enforcement is active for this organization.
+ * policy_packs_enabled=false → enforcement is off (operator-disabled).
+ *
+ * A 503 from the AG backend when reading settings means the lookup failed
+ * and enforcement falls back to fail-closed (active). That is distinct from
+ * the operator having set policy_packs_enabled=false.
+ *
+ * No credential material, tokens, or internal config appears in this type.
+ */
+export interface AgPolicyPackSettings {
+  policy_packs_enabled: boolean;
 }
 
 // ── Cross-system organization export candidates ─────────────────────────────
@@ -691,10 +936,7 @@ export type OrgImportDryRunAction =
  * never expects "created" or "linked" because those only appear under
  * dry_run=false.
  */
-export type OrgImportDryRunStatus =
-  | "planned"
-  | "already_linked"
-  | "rejected";
+export type OrgImportDryRunStatus = "planned" | "already_linked" | "rejected";
 
 /**
  * UI-safe shape of the AG POST /api/v1/organizations/import-from-idp
@@ -749,11 +991,7 @@ export type OrgImportDryRunResult =
  * "planned" is intentionally excluded — it should never appear in an execute
  * response. The parser rejects it.
  */
-export type OrgImportExecuteStatus =
-  | "created"
-  | "linked"
-  | "already_linked"
-  | "rejected";
+export type OrgImportExecuteStatus = "created" | "linked" | "already_linked" | "rejected";
 
 /**
  * UI-safe shape of an AG POST /api/v1/organizations/import-from-idp execute

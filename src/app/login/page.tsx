@@ -1,3 +1,4 @@
+import { upgradeStateNeedsWizard } from "@/lib/runtime-composition";
 import { loadRuntimeConfig, toPublicConfig } from "@/lib/runtime-config";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { Metadata } from "next";
@@ -20,6 +21,10 @@ export default async function LoginPage() {
   // performs the same check; this guards the case where the operator
   // bookmarks or types /login directly.
   const runtimeState = await getServerRuntimeState();
+  const upgradeState = runtimeState?.components.idp.upgradeState;
+  if (upgradeState && upgradeStateNeedsWizard(upgradeState.state)) {
+    redirect("/upgrade");
+  }
   if (
     runtimeState?.components.idp.usable &&
     runtimeState.components.idp.setupState?.state === "setup_required"

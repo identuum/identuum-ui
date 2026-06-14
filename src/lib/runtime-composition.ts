@@ -20,6 +20,7 @@ import type {
   ComponentLicenseInfo,
   DiscoveryErrorCode,
   IdpSetupStateView,
+  IdpUpgradeStateView,
   PlatformMode,
   RuntimeState,
 } from "./types";
@@ -39,7 +40,28 @@ const KNOWN_CAPABILITY_KEYS: ReadonlyArray<keyof ComponentCapabilities> = [
   "organization_linking",
   "hitl",
   "agent_sessions",
+  "account_self_service",
+  "user_sessions",
+  "mfa",
+  "webauthn",
+  "authorization_server",
+  "oauth_clients",
+  "api_resources",
+  "service_accounts",
+  "scope_templates",
+  "org_roles",
+  "protocol_settings",
+  "client_credentials",
+  "dynamic_client_registration",
+  "scim",
+  "audit_log",
+  "audit_chain",
+  "reporting",
+  "anomaly_detection",
+  "observability",
 ];
+
+export type CapabilityAvailability = "available" | "unavailable" | "unknown";
 
 /**
  * extractCapabilities safely projects the raw backend capabilities object onto
@@ -58,12 +80,24 @@ export function extractCapabilities(input: unknown): ComponentCapabilities {
   return caps;
 }
 
+export function getCapabilityAvailability(
+  capabilities: ComponentCapabilities,
+  key: keyof ComponentCapabilities
+): CapabilityAvailability {
+  const value = capabilities[key];
+  if (value === true) return "available";
+  if (value === false) return "unavailable";
+  return "unknown";
+}
+
 function notConfiguredState(): BackendComponentState {
   return {
     configured: false,
     reachable: false,
     usable: false,
     component: null,
+    product: null,
+    capability_map_schema_version: null,
     version: null,
     status: null,
     capabilities: {},
@@ -79,6 +113,8 @@ function unreachableState(error: DiscoveryErrorCode): BackendComponentState {
     reachable: false,
     usable: false,
     component: null,
+    product: null,
+    capability_map_schema_version: null,
     version: null,
     status: null,
     capabilities: {},
@@ -155,6 +191,8 @@ async function fetchComponent(
       reachable: true,
       usable: false,
       component: null,
+      product: null,
+      capability_map_schema_version: null,
       version: null,
       status: null,
       capabilities: {},
@@ -166,12 +204,24 @@ async function fetchComponent(
 
   const disc = raw as Partial<ComponentDiscoveryResponse>;
 
+  // Pass-through helpers for the two optional backend-identity fields.
+  // These are safe to surface on every non-unreachable response — they
+  // carry no secret material and do not affect the usable/wrong-component
+  // verdict.
+  const product = typeof disc.product === "string" ? disc.product : null;
+  const schemaVersion =
+    typeof disc.capability_map_schema_version === "string"
+      ? disc.capability_map_schema_version
+      : null;
+
   if (disc.component !== expectedComponent) {
     return {
       configured: true,
       reachable: true,
       usable: false,
       component: typeof disc.component === "string" ? disc.component : null,
+      product,
+      capability_map_schema_version: schemaVersion,
       version: typeof disc.version === "string" ? disc.version : null,
       status: typeof disc.status === "string" ? disc.status : null,
       capabilities: {},
@@ -195,6 +245,8 @@ async function fetchComponent(
     reachable: true,
     usable: true,
     component: disc.component,
+    product,
+    capability_map_schema_version: schemaVersion,
     version: typeof disc.version === "string" ? disc.version : null,
     status: typeof disc.status === "string" ? disc.status : null,
     capabilities: caps,
@@ -247,6 +299,92 @@ export async function fetchIdpSetupState(baseUrl: string): Promise<IdpSetupState
 }
 
 /**
+ * Wire-stable upgrade state vocabulary surfaced by the CE binary.
+ * Local copy of the union from idp-upgrade-client.ts so the runtime
+ * probe stays decoupled from the client helper that the wizard
+ * itself imports — keeps this server-only module narrow.
+ */
+const UPGRADE_STATES: ReadonlySet<IdpUpgradeStateView["state"]> = new Set<
+  IdpUpgradeStateView["state"]
+>([
+  "fresh_ce",
+  "oss_database_detected",
+  "upgrade_required",
+  "ce_migrations_current",
+  "upgrade_complete",
+  "incompatible_database",
+  "database_unreachable",
+  "backup_required",
+]);
+
+function isUpgradeState(value: unknown): value is IdpUpgradeStateView["state"] {
+  return typeof value === "string" && UPGRADE_STATES.has(value as IdpUpgradeStateView["state"]);
+}
+
+/**
+ * fetchIdpUpgradeState probes the CE upgrade-status surface
+ * (`GET /api/upgrade/status`) and projects the safe-to-render subset
+ * onto IdpUpgradeStateView. Failure modes (timeout / 404 from an
+ * older OSS backend / non-OK / non-JSON / unexpected shape) all
+ * resolve to `null` so the runtime composition never routes to
+ * `/upgrade` from a probe that cannot speak the contract.
+ *
+ * The probe is intentionally tolerant on the OSS side: OSS backends
+ * do NOT expose `/api/upgrade/status` and a 404 there is the
+ * expected state, not an error.
+ *
+ * No DB URL, no SQL error, no schema fragment, and no upgrade-token
+ * plaintext is read or surfaced — the endpoint deliberately returns
+ * a no-secrets view (see internal/upgrade/domain.go StatusView).
+ */
+export async function fetchIdpUpgradeState(baseUrl: string): Promise<IdpUpgradeStateView | null> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/upgrade/status`;
+
+  let raw: unknown;
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    raw = await res.json();
+  } catch {
+    return null;
+  }
+
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  if (!isUpgradeState(r.state)) return null;
+
+  return {
+    state: r.state,
+    distribution: typeof r.distribution === "string" ? r.distribution : "",
+    upgradeAvailable: r.upgrade_available === true,
+    ceMigrationsCurrent: r.ce_migrations_current === true,
+    ossDatabaseDetected: r.oss_database_detected === true,
+    backupRequired: r.backup_required === true,
+    nextAction: typeof r.next_action === "string" ? r.next_action : "",
+  };
+}
+
+/**
+ * upgradeStateNeedsWizard returns true when the IDP-reported upgrade
+ * state requires operator action in the /upgrade wizard. The runtime
+ * composition layer uses this to decide whether to send the operator
+ * to /upgrade ahead of /setup or /login.
+ */
+export function upgradeStateNeedsWizard(state: IdpUpgradeStateView["state"]): boolean {
+  return (
+    state === "fresh_ce" ||
+    state === "oss_database_detected" ||
+    state === "upgrade_required" ||
+    state === "incompatible_database" ||
+    state === "database_unreachable" ||
+    state === "backup_required"
+  );
+}
+
+/**
  * computePlatformMode derives the platform mode from the two backend states.
  *
  * Rules (in priority order):
@@ -296,6 +434,17 @@ export async function discoverRuntime(
   // (no redirect to /setup).
   if (idpBaseUrl && idp.usable) {
     idp.setupState = await fetchIdpSetupState(idpBaseUrl);
+  }
+
+  // Probe the OSS-to-CE upgrade-status surface whenever the IDP base
+  // URL is configured. In CE upgrade mode the binary mounts ONLY
+  // `/healthz` + `/api/upgrade/*` — the `/api/v1/component` endpoint
+  // is absent, so `idp.usable` is false. We still need to detect
+  // upgrade mode so the UI can route to `/upgrade`. OSS backends do
+  // not expose `/api/upgrade/status`; the probe returns null and the
+  // UI keeps default behaviour (no redirect to /upgrade).
+  if (idpBaseUrl) {
+    idp.upgradeState = await fetchIdpUpgradeState(idpBaseUrl);
   }
 
   return {

@@ -1,3 +1,4 @@
+import { upgradeStateNeedsWizard } from "@/lib/runtime-composition";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { redirect } from "next/navigation";
 
@@ -12,6 +13,17 @@ export default async function RootPage() {
 
   if (state.mode === "unconfigured") {
     redirect("/setup-required");
+  }
+
+  // OSS-to-CE upgrade wizard: if the IDP reports an upgrade-required
+  // state, route operators to /upgrade BEFORE any other dispatch.
+  // The CE binary in upgrade mode mounts only /healthz + /api/upgrade/*,
+  // so it shows up as not usable here — but the upgradeState probe still
+  // runs and surfaces the state. Older OSS backends without
+  // /api/upgrade/status leave upgradeState as null and fall through.
+  const upgradeState = state.components.idp.upgradeState;
+  if (upgradeState && upgradeStateNeedsWizard(upgradeState.state)) {
+    redirect("/upgrade");
   }
 
   if (state.mode === "misconfigured") {
