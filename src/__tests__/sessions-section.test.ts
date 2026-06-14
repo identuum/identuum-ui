@@ -36,14 +36,12 @@ import {
   formatDate,
   selectActiveSessions,
 } from "../app/account/settings/sessions-helpers";
-import type { SessionItem } from "../lib/idp-admin-client";
+import type { SessionItem } from "../lib/idp-account-client";
 
-// Synthetic session-fixture builder. The `id` field is an obviously-fake
-// UUID-shaped string with the literal `0000` prefix so it cannot be
-// confused with a real session identifier in failure output.
+// Synthetic session-fixture builder. The OSS /me sessions endpoint returns
+// safe metadata only; there is no opaque session identifier on the wire.
 function syntheticSession(overrides: Partial<SessionItem> = {}): SessionItem {
   return {
-    id: "00000000-0000-0000-0000-000000000001",
     created_at: "2026-05-28T10:00:00Z",
     expires_at: "2026-06-04T10:00:00Z",
     last_used_at: "2026-05-28T11:30:00Z",
@@ -120,14 +118,11 @@ describe("selectActiveSessions — projection invariants", () => {
   });
 
   it("returns only sessions with is_active=true", () => {
-    const a = syntheticSession({ id: "00000000-0000-0000-0000-000000000001", is_active: true });
-    const b = syntheticSession({ id: "00000000-0000-0000-0000-000000000002", is_active: false });
-    const c = syntheticSession({ id: "00000000-0000-0000-0000-000000000003", is_active: true });
+    const a = syntheticSession({ created_at: "2026-05-28T10:00:00Z", is_active: true });
+    const b = syntheticSession({ created_at: "2026-05-28T11:00:00Z", is_active: false });
+    const c = syntheticSession({ created_at: "2026-05-28T12:00:00Z", is_active: true });
     const out = selectActiveSessions([a, b, c]);
-    expect(out.map((s) => s.id)).toEqual([
-      "00000000-0000-0000-0000-000000000001",
-      "00000000-0000-0000-0000-000000000003",
-    ]);
+    expect(out.map((s) => s.created_at)).toEqual(["2026-05-28T10:00:00Z", "2026-05-28T12:00:00Z"]);
   });
 
   it("preserves input order (no sort surprise)", () => {
@@ -135,15 +130,15 @@ describe("selectActiveSessions — projection invariants", () => {
     // here would silently rearrange the operator's mental model of
     // their device history.
     const list = [
-      syntheticSession({ id: "00000000-0000-0000-0000-00000000000A", created_at: "2026-05-28T12:00:00Z" }),
-      syntheticSession({ id: "00000000-0000-0000-0000-00000000000B", created_at: "2026-05-27T12:00:00Z" }),
-      syntheticSession({ id: "00000000-0000-0000-0000-00000000000C", created_at: "2026-05-26T12:00:00Z" }),
+      syntheticSession({ created_at: "2026-05-28T12:00:00Z" }),
+      syntheticSession({ created_at: "2026-05-27T12:00:00Z" }),
+      syntheticSession({ created_at: "2026-05-26T12:00:00Z" }),
     ];
     const out = selectActiveSessions(list);
-    expect(out.map((s) => s.id)).toEqual([
-      "00000000-0000-0000-0000-00000000000A",
-      "00000000-0000-0000-0000-00000000000B",
-      "00000000-0000-0000-0000-00000000000C",
+    expect(out.map((s) => s.created_at)).toEqual([
+      "2026-05-28T12:00:00Z",
+      "2026-05-27T12:00:00Z",
+      "2026-05-26T12:00:00Z",
     ]);
   });
 
@@ -166,14 +161,13 @@ describe("selectActiveSessions — projection invariants", () => {
 // ── canRevokeSession ─────────────────────────────────────────────────────────
 
 describe("canRevokeSession — current-session invariant", () => {
-  it("returns true for an active non-current session", () => {
-    expect(canRevokeSession(syntheticSession({ is_active: true, is_current: false }))).toBe(true);
+  it("returns false for an active non-current session because OSS /me list has no session IDs", () => {
+    expect(canRevokeSession(syntheticSession({ is_active: true, is_current: false }))).toBe(false);
   });
 
   it("returns false for the current session (active+current)", () => {
-    // The load-bearing rule: revoking the current session must NOT be
-    // exposed as a per-row affordance. The operator signs out the
-    // current session via the dedicated sign-out button instead.
+    // The load-bearing rule: row-level revoke is not exposed. The operator
+    // uses principal-derived current / others / all actions instead.
     expect(canRevokeSession(syntheticSession({ is_active: true, is_current: true }))).toBe(false);
   });
 
@@ -224,25 +218,9 @@ describe("Negative invariants — sessions module source contains no credential 
     }
   });
 
-  it("sessions-section.tsx renders session.id only inside a hidden input (never as visible text)", () => {
-    // The component uses session.id solely as a hidden-form-field revocation
-    // handle. A future agent who accidentally surfaced `{session.id}` as
-    // a visible <p>/<span> would leak the opaque identifier into the
-    // page body. The test pins the wire shape by asserting that the
-    // file contains exactly one reference to session.id inside an
-    // `<input type="hidden"`.
-    const hiddenInputMatch = COMPONENT_SRC.match(
-      /<input[^>]*type="hidden"[^>]*name="session_id"[^>]*value=\{session\.id\}/
-    );
-    expect(hiddenInputMatch).not.toBeNull();
-    // And the component must NOT have any other rendering of session.id
-    // outside that hidden-input context. The grep is permissive: any
-    // `{session.id}` outside the hidden-input pattern would also match
-    // (the matcher above) but appearances of `session.id` elsewhere
-    // (e.g. as a React key on a map iteration) are acceptable when not
-    // wrapped in JSX text braces. Keep the assertion narrow:
-    const visibleTextLeak = COMPONENT_SRC.match(/>\s*\{session\.id\}\s*</);
-    expect(visibleTextLeak).toBeNull();
+  it("sessions-section.tsx never renders or submits a session_id field", () => {
+    expect(COMPONENT_SRC).not.toMatch(/session_id/);
+    expect(COMPONENT_SRC).not.toMatch(/session\.id/);
   });
 
   it("sessions-helpers.ts does not import any browser/DOM/cookie APIs", () => {

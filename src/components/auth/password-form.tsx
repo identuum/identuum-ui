@@ -55,7 +55,16 @@ export function PasswordForm({
       });
 
       if (outcome.kind === "mfa_enrollment_required") {
-        onMfaEnrollmentRequired(outcome.sessionId);
+        if (outcome.sessionId) {
+          onMfaEnrollmentRequired(outcome.sessionId);
+        } else {
+          // OSS path: MFA enrollment is required, but the backend did not open
+          // a pending enrollment session. Show a distinct, accurate message —
+          // not "Invalid credentials."
+          setServerError(
+            "Two-factor authentication enrollment is required before you can sign in. Please contact your administrator to set up an authenticator app."
+          );
+        }
         return;
       }
 

@@ -38,10 +38,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  arrayBufferToBase64url,
-  base64urlToArrayBuffer,
-} from "../components/ui/passkey-base64url";
+import { arrayBufferToBase64url, base64urlToArrayBuffer } from "../components/ui/passkey-base64url";
 import { IDP_PATHS } from "../lib/idp-paths";
 
 // Helper: build an ArrayBuffer from a synthetic byte array. Used to
@@ -146,9 +143,9 @@ describe("base64url helpers — output alphabet and padding", () => {
     expect(arrayBufferToBase64url(bytesToBuffer([0xaa, 0xbb, 0xcc])).length).toBe(4);
     expect(arrayBufferToBase64url(bytesToBuffer([0xaa, 0xbb, 0xcc, 0xdd])).length).toBe(6);
     expect(arrayBufferToBase64url(bytesToBuffer([0xaa, 0xbb, 0xcc, 0xdd, 0xee])).length).toBe(7);
-    expect(
-      arrayBufferToBase64url(bytesToBuffer([0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff])).length
-    ).toBe(8);
+    expect(arrayBufferToBase64url(bytesToBuffer([0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff])).length).toBe(
+      8
+    );
   });
 });
 
@@ -185,12 +182,16 @@ describe("base64url helpers — URL-safe alphabet input handling", () => {
     //   3 bytes → 4 chars (no padding needed at all)
     //   2 bytes → 3 chars (one padding char needed)
     //   1 byte  → 2 chars (two padding chars needed)
-    expect(bufferToBytes(base64urlToArrayBuffer(arrayBufferToBase64url(bytesToBuffer([0x66])))))
-      .toEqual([0x66]);
-    expect(bufferToBytes(base64urlToArrayBuffer(arrayBufferToBase64url(bytesToBuffer([0x66, 0x77])))))
-      .toEqual([0x66, 0x77]);
     expect(
-      bufferToBytes(base64urlToArrayBuffer(arrayBufferToBase64url(bytesToBuffer([0x66, 0x77, 0x88]))))
+      bufferToBytes(base64urlToArrayBuffer(arrayBufferToBase64url(bytesToBuffer([0x66]))))
+    ).toEqual([0x66]);
+    expect(
+      bufferToBytes(base64urlToArrayBuffer(arrayBufferToBase64url(bytesToBuffer([0x66, 0x77]))))
+    ).toEqual([0x66, 0x77]);
+    expect(
+      bufferToBytes(
+        base64urlToArrayBuffer(arrayBufferToBase64url(bytesToBuffer([0x66, 0x77, 0x88])))
+      )
     ).toEqual([0x66, 0x77, 0x88]);
   });
 

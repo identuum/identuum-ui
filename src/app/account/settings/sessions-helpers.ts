@@ -10,11 +10,10 @@
  * SECURITY: these helpers manipulate display strings only. They do NOT
  * accept session IDs, session validators, cookies, or any opaque
  * authentication state — the only inputs are ISO timestamp strings and
- * `SessionItem` objects whose `id` field is the revocation handle (kept
- * out of rendered text by the caller).
+ * safe `SessionItem` metadata from the OSS /me session list.
  */
 
-import type { SessionItem } from "@/lib/idp-admin-client";
+import type { SessionItem } from "@/lib/idp-account-client";
 
 /**
  * Renders an ISO-8601 timestamp string into a localised "medium" date +
@@ -47,14 +46,10 @@ export function selectActiveSessions(sessions: ReadonlyArray<SessionItem>): Sess
 }
 
 /**
- * Returns true when the session row should show an individual "Sign out"
- * revoke button. The current session is intentionally NOT revocable
- * from this surface — revoking the active session is a sign-out, which
- * has its own UI affordance elsewhere. Centralising this rule prevents
- * a future "be consistent" edit from accidentally allowing the operator
- * to sign-out-the-current-session via the per-row button (which would
- * surface as a confusing "Signed out." marker on the same page).
+ * Returns true when a session row should expose a per-row revoke action.
+ * The OSS /me session list deliberately does not return session IDs, so
+ * account settings uses the dedicated current / others / all actions instead.
  */
-export function canRevokeSession(session: SessionItem): boolean {
-  return session.is_active && !session.is_current;
+export function canRevokeSession(_session: SessionItem): boolean {
+  return false;
 }

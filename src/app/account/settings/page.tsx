@@ -1,3 +1,11 @@
+import { PasskeySection } from "@/components/ui/passkey-section";
+import { getOwnMfaStatus, listOwnSessions } from "@/lib/idp-account-client";
+import { getServerSession } from "@/lib/server-session";
+import type { Metadata } from "next";
+import { ChangePasswordForm } from "./change-password-form";
+import { MfaSection } from "./mfa-section";
+import { SessionsSection } from "./sessions-section";
+
 /**
  * Account settings page — shared across all authenticated roles.
  *
@@ -19,13 +27,6 @@
  *   - /site-admin/settings  → system / infrastructure settings
  *   - /org-admin/settings   → organization settings
  */
-import { ChangePasswordForm } from "./change-password-form";
-import { MfaSection } from "./mfa-section";
-import { SessionsSection } from "./sessions-section";
-import { PasskeySection } from "@/components/ui/passkey-section";
-import { listOwnSessions } from "@/lib/idp-admin-client";
-import { getServerSession } from "@/lib/server-session";
-import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Account Settings — Identuum" };
 
@@ -77,11 +78,16 @@ export default async function AccountSettingsPage({
   const reasonMfaRequired = isMfaRequiredReason(params.reason);
 
   // getServerSession is React-cached per request; the parent layout has
-  // already invoked it, so this call is free. We only need the MFA-state
-  // projection from the IDP /api/v1/validate response (UI-FEATURES.md
-  // Section 7). Treat undefined as unknown — older IDP builds may omit it.
-  const session = tab === "mfa" ? await getServerSession() : null;
-  const mfaEnabled = session?.user?.mfa_enabled;
+  // already invoked it, so this call is free. /me/mfa/status is preferred
+  // when present; validate.mfa_enabled remains the rolling-upgrade fallback.
+  let session: Awaited<ReturnType<typeof getServerSession>> | null = null;
+  let mfaStatusResult: Awaited<ReturnType<typeof getOwnMfaStatus>> | null = null;
+  if (tab === "mfa") {
+    [session, mfaStatusResult] = await Promise.all([getServerSession(), getOwnMfaStatus()]);
+  }
+  const mfaEnabled = mfaStatusResult?.ok
+    ? mfaStatusResult.status.mfa_enabled
+    : session?.user?.mfa_enabled;
 
   const sessionsResult = tab === "sessions" ? await listOwnSessions() : null;
 
@@ -137,7 +143,14 @@ export default async function AccountSettingsPage({
 
       {/* MFA tab */}
       {tab === "mfa" && (
-        <MfaSection mfaEnabled={mfaEnabled} reasonMfaRequired={reasonMfaRequired} />
+        <MfaSection
+          mfaEnabled={mfaEnabled}
+          mfaStatus={mfaStatusResult?.ok ? mfaStatusResult.status : null}
+          statusUnavailable={Boolean(
+            mfaStatusResult && !mfaStatusResult.ok && mfaStatusResult.unavailable
+          )}
+          reasonMfaRequired={reasonMfaRequired}
+        />
       )}
 
       {/* Sessions tab */}
@@ -152,8 +165,8 @@ export default async function AccountSettingsPage({
           <div className="px-6 py-5">
             <SessionsSection
               sessions={sessionsResult.ok ? sessionsResult.sessions : []}
-              forbidden={!sessionsResult.ok && sessionsResult.forbidden}
-              error={!sessionsResult.ok && !sessionsResult.forbidden}
+              unavailable={!sessionsResult.ok && sessionsResult.unavailable}
+              error={!sessionsResult.ok && !sessionsResult.unavailable}
             />
           </div>
         </div>

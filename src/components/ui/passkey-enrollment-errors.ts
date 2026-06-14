@@ -77,25 +77,16 @@ type PasskeyCeremonyCancelledError = Error & {
 };
 
 function isPasskeyBeginError(v: unknown): v is PasskeyBeginError {
-  return (
-    v instanceof Error &&
-    typeof (v as PasskeyBeginError).__passkeyBeginStatus === "number"
-  );
+  return v instanceof Error && typeof (v as PasskeyBeginError).__passkeyBeginStatus === "number";
 }
 
 function isPasskeyFinishError(v: unknown): v is PasskeyFinishError {
-  return (
-    v instanceof Error &&
-    typeof (v as PasskeyFinishError).__passkeyFinishStatus === "number"
-  );
+  return v instanceof Error && typeof (v as PasskeyFinishError).__passkeyFinishStatus === "number";
 }
 
-function isPasskeyCeremonyCancelledError(
-  v: unknown
-): v is PasskeyCeremonyCancelledError {
+function isPasskeyCeremonyCancelledError(v: unknown): v is PasskeyCeremonyCancelledError {
   return (
-    v instanceof Error &&
-    (v as PasskeyCeremonyCancelledError).__passkeyCeremonyCancelled === true
+    v instanceof Error && (v as PasskeyCeremonyCancelledError).__passkeyCeremonyCancelled === true
   );
 }
 

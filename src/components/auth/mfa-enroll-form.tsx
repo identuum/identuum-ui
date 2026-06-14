@@ -8,7 +8,7 @@ import { ApiError } from "@/lib/ui-api";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -21,7 +21,7 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-type Phase = "loading" | "display" | "error";
+type Phase = "loading" | "display" | "recovery" | "error";
 
 interface MFAEnrollFormProps {
   sessionId: string;
@@ -44,6 +44,11 @@ export function MFAEnrollForm({ sessionId, onBack, onSuccess }: MFAEnrollFormPro
   // SECURITY: kept exclusively in component state — never persisted.
   const [secret, setSecret] = useState("");
   const [otpauthUrl, setOtpauthUrl] = useState("");
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  // Ref keeps onSubmit from reading a stale closure value — needed because
+  // react-hook-form's handleSubmit can hold an old reference across renders.
+  const recoveryCodesRef = useRef<string[]>([]);
+  const [pendingRole, setPendingRole] = useState<UserRole | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
@@ -61,6 +66,8 @@ export function MFAEnrollForm({ sessionId, onBack, onSuccess }: MFAEnrollFormPro
         if (cancelled) return;
         setSecret(data.secret);
         setOtpauthUrl(data.otpauthUrl);
+        setRecoveryCodes(data.recoveryCodes);
+        recoveryCodesRef.current = data.recoveryCodes;
         setPhase("display");
       })
       .catch(() => {
@@ -76,7 +83,13 @@ export function MFAEnrollForm({ sessionId, onBack, onSuccess }: MFAEnrollFormPro
     setServerError(null);
     try {
       const result = await mfaEnrollComplete(sessionId, data.code);
-      onSuccess(result.role);
+      if (recoveryCodesRef.current.length > 0) {
+        // Show recovery codes before completing — they will not be shown again.
+        setPendingRole(result.role);
+        setPhase("recovery");
+      } else {
+        onSuccess(result.role);
+      }
     } catch (err) {
       if (err instanceof ApiError && err.message === "SESSION_EXPIRED") {
         window.location.href = "/login?reason=session_expired";
@@ -104,6 +117,48 @@ export function MFAEnrollForm({ sessionId, onBack, onSuccess }: MFAEnrollFormPro
           </a>
           .
         </div>
+      </div>
+    );
+  }
+
+  if (phase === "recovery") {
+    return (
+      <div className="space-y-5">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700">Save your recovery codes</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Store these codes somewhere safe. Each code can be used once to sign in if you lose
+            access to your authenticator app.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="grid grid-cols-2 gap-1">
+            {recoveryCodes.map((code) => (
+              <code
+                key={code}
+                className="block font-mono text-sm text-slate-800 text-center py-0.5"
+              >
+                {code}
+              </code>
+            ))}
+          </div>
+        </div>
+
+        <p className="text-xs text-amber-700 text-center font-medium">
+          These codes will not be shown again.
+        </p>
+
+        <Button
+          type="button"
+          className="w-full"
+          size="lg"
+          onClick={() => {
+            if (pendingRole) onSuccess(pendingRole);
+          }}
+        >
+          I&apos;ve saved my recovery codes
+        </Button>
       </div>
     );
   }

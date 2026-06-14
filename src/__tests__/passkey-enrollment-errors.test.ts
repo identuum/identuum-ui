@@ -22,8 +22,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  classifyPasskeyEnrollmentError,
   PASSKEY_ENROLLMENT_ERROR_COPY,
+  classifyPasskeyEnrollmentError,
 } from "../components/ui/passkey-enrollment-errors";
 
 // ── Begin-registration HTTP failure ────────────────────────────────────────
@@ -33,9 +33,7 @@ describe("classifyPasskeyEnrollmentError — begin-registration failures", () =>
     const err = Object.assign(new Error("begin_failed"), {
       __passkeyBeginStatus: 403,
     });
-    expect(classifyPasskeyEnrollmentError(err)).toBe(
-      PASSKEY_ENROLLMENT_ERROR_COPY.beginForbidden
-    );
+    expect(classifyPasskeyEnrollmentError(err)).toBe(PASSKEY_ENROLLMENT_ERROR_COPY.beginForbidden);
   });
 
   it("maps any other non-2xx begin status to the unavailable copy", () => {
@@ -75,36 +73,36 @@ describe("classifyPasskeyEnrollmentError — DOMException mapping", () => {
   }
 
   it("maps NotAllowedError to the cancelled copy", () => {
-    expect(
-      classifyPasskeyEnrollmentError(makeDomException("NotAllowedError"))
-    ).toBe(PASSKEY_ENROLLMENT_ERROR_COPY.ceremonyCancelled);
+    expect(classifyPasskeyEnrollmentError(makeDomException("NotAllowedError"))).toBe(
+      PASSKEY_ENROLLMENT_ERROR_COPY.ceremonyCancelled
+    );
   });
 
   it("maps NotSupportedError to the unsupported copy", () => {
-    expect(
-      classifyPasskeyEnrollmentError(makeDomException("NotSupportedError"))
-    ).toBe(PASSKEY_ENROLLMENT_ERROR_COPY.ceremonyUnsupported);
+    expect(classifyPasskeyEnrollmentError(makeDomException("NotSupportedError"))).toBe(
+      PASSKEY_ENROLLMENT_ERROR_COPY.ceremonyUnsupported
+    );
   });
 
   it("maps InvalidStateError to the already-registered copy", () => {
-    expect(
-      classifyPasskeyEnrollmentError(makeDomException("InvalidStateError"))
-    ).toBe(PASSKEY_ENROLLMENT_ERROR_COPY.ceremonyInvalidState);
+    expect(classifyPasskeyEnrollmentError(makeDomException("InvalidStateError"))).toBe(
+      PASSKEY_ENROLLMENT_ERROR_COPY.ceremonyInvalidState
+    );
   });
 
   it("maps SecurityError to the secure-context copy", () => {
-    expect(
-      classifyPasskeyEnrollmentError(makeDomException("SecurityError"))
-    ).toBe(PASSKEY_ENROLLMENT_ERROR_COPY.ceremonySecurity);
+    expect(classifyPasskeyEnrollmentError(makeDomException("SecurityError"))).toBe(
+      PASSKEY_ENROLLMENT_ERROR_COPY.ceremonySecurity
+    );
   });
 
   it("maps any other DOMException name to the generic copy", () => {
-    expect(
-      classifyPasskeyEnrollmentError(makeDomException("AbortError"))
-    ).toBe(PASSKEY_ENROLLMENT_ERROR_COPY.generic);
-    expect(
-      classifyPasskeyEnrollmentError(makeDomException("UnknownError"))
-    ).toBe(PASSKEY_ENROLLMENT_ERROR_COPY.generic);
+    expect(classifyPasskeyEnrollmentError(makeDomException("AbortError"))).toBe(
+      PASSKEY_ENROLLMENT_ERROR_COPY.generic
+    );
+    expect(classifyPasskeyEnrollmentError(makeDomException("UnknownError"))).toBe(
+      PASSKEY_ENROLLMENT_ERROR_COPY.generic
+    );
   });
 });
 
@@ -151,10 +149,9 @@ describe("classifyPasskeyEnrollmentError — finish-registration failures", () =
     // the generic 500 fallback ("An error occurred. Please try
     // again later."). The helper must classify the failure as
     // finishUnavailable WITHOUT inspecting .message.
-    const err = Object.assign(
-      new Error("An error occurred. Please try again later."),
-      { __passkeyFinishStatus: 500 }
-    );
+    const err = Object.assign(new Error("An error occurred. Please try again later."), {
+      __passkeyFinishStatus: 500,
+    });
     const copy = classifyPasskeyEnrollmentError(err);
     expect(copy).toBe(PASSKEY_ENROLLMENT_ERROR_COPY.finishUnavailable);
     expect(copy).not.toContain("An error occurred");
@@ -179,9 +176,7 @@ describe("classifyPasskeyEnrollmentError — generic fallback", () => {
     ["object", { message: "raw" }],
     ["array", [1, 2]],
   ])("treats %s as generic", (_label, value) => {
-    expect(classifyPasskeyEnrollmentError(value)).toBe(
-      PASSKEY_ENROLLMENT_ERROR_COPY.generic
-    );
+    expect(classifyPasskeyEnrollmentError(value)).toBe(PASSKEY_ENROLLMENT_ERROR_COPY.generic);
   });
 
   it("does NOT forward an Error.message into the banner copy", () => {
@@ -270,10 +265,7 @@ describe("passkey-enrollment-errors.ts — source contract", () => {
     // the field name as a documented exclusion don't trip the
     // assertion. Real code that READS the field via `.message`
     // would survive the strip.
-    const noComments = HELPER_SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(
-      /^\s*\/\/.*$/gm,
-      ""
-    );
+    const noComments = HELPER_SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     expect(noComments).not.toMatch(/\.message\b/);
   });
 

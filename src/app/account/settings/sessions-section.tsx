@@ -4,35 +4,31 @@
  * Sessions section for /account/settings.
  *
  * Receives server-fetched session data as props — no direct API calls from
- * the browser. Session IDs are placed only in hidden form fields for the
- * revoke action; they are not rendered as visible text.
- *
- * site_admin accounts receive a 403 from the backend for session listing;
- * the parent page passes forbidden=true and this component renders an
- * informational note instead of a list.
+ * the browser. The OSS /me session endpoint intentionally returns no
+ * session IDs; revoke actions derive identity from the current principal.
  */
 
 import { Button } from "@/components/ui/button";
-import { useActionState } from "react";
-import type { SessionItem } from "@/lib/idp-admin-client";
-import { type RevokeSessionState, revokeSessionAction } from "./session-actions";
-import { canRevokeSession, formatDate, selectActiveSessions } from "./sessions-helpers";
+import type { SessionItem } from "@/lib/idp-account-client";
+import { useActionState, useEffect, useState } from "react";
+import { revokeSessionAction } from "./session-actions";
+import { formatDate, selectActiveSessions } from "./sessions-helpers";
 
 interface SessionsSectionProps {
   sessions: SessionItem[];
-  /** True when the backend returned 403 (site_admin — not supported by design). */
-  forbidden: boolean;
-  /** True when the list fetch failed for a reason other than 403. */
+  /** True when the IDP runtime does not expose the /me sessions endpoint. */
+  unavailable: boolean;
+  /** True when the list fetch failed for a reason other than unavailable runtime. */
   error: boolean;
 }
 
-export function SessionsSection({ sessions, forbidden, error }: SessionsSectionProps) {
-  if (forbidden) {
+export function SessionsSection({ sessions, unavailable, error }: SessionsSectionProps) {
+  if (unavailable) {
     return (
       <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3">
         <p className="text-xs text-stone-500 leading-relaxed">
-          Session management is not available for administrator accounts. Use the sign-out option to
-          end your current session.
+          Session management is not available from this IDP runtime. Use the account menu to sign
+          out of the current browser session.
         </p>
       </div>
     );
@@ -53,27 +49,45 @@ export function SessionsSection({ sessions, forbidden, error }: SessionsSectionP
   }
 
   return (
-    <div className="divide-y divide-stone-100">
-      {activeSessions.map((s) => (
-        <SessionRow key={s.id} session={s} />
-      ))}
+    <div className="space-y-4">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <SessionActionForm
+          actionKind="revoke_current"
+          confirmLiteral="CURRENT"
+          title="Sign out here"
+          description="End only this browser session."
+          buttonLabel="Sign out current"
+          signedOutOnSuccess
+        />
+        <SessionActionForm
+          actionKind="revoke_others"
+          confirmLiteral="OTHERS"
+          title="Sign out others"
+          description="Keep this browser signed in."
+          buttonLabel="Sign out others"
+        />
+        <SessionActionForm
+          actionKind="revoke_all"
+          confirmLiteral="ALL"
+          title="Sign out everywhere"
+          description="End every browser session."
+          buttonLabel="Sign out all"
+          signedOutOnSuccess
+        />
+      </div>
+
+      <div className="divide-y divide-stone-100">
+        {activeSessions.map((s, index) => (
+          <SessionRow key={`${s.created_at}-${s.expires_at}-${index}`} session={s} />
+        ))}
+      </div>
     </div>
   );
 }
 
 function SessionRow({ session }: { session: SessionItem }) {
-  const [state, action, isPending] = useActionState(revokeSessionAction, {});
-
-  if (state.success) {
-    return (
-      <div className="py-3 flex items-center justify-between gap-4">
-        <span className="text-xs text-emerald-600 font-medium">Signed out.</span>
-      </div>
-    );
-  }
-
   return (
-    <div className="py-3.5 flex items-start justify-between gap-4">
+    <div className="py-3.5">
       <div className="min-w-0 space-y-0.5">
         <div className="flex items-center gap-2">
           {session.is_current && (
@@ -94,27 +108,68 @@ function SessionRow({ session }: { session: SessionItem }) {
             {session.user_agent}
           </p>
         )}
-        {state.error && <p className="text-xs text-red-600 mt-1">{state.error}</p>}
       </div>
-
-      {/* Only non-current active sessions can be individually revoked.
-          Centralised in canRevokeSession() so the test pins the invariant. */}
-      {canRevokeSession(session) && (
-        <form action={action} className="shrink-0">
-          {/* session_id is an opaque revocation handle — not displayed */}
-          <input type="hidden" name="session_id" value={session.id} />
-          <Button
-            type="submit"
-            variant="ghost"
-            size="sm"
-            loading={isPending}
-            disabled={isPending}
-            className="text-red-600 hover:text-red-800 hover:bg-red-50"
-          >
-            {isPending ? "Signing out…" : "Sign out"}
-          </Button>
-        </form>
-      )}
     </div>
+  );
+}
+
+function SessionActionForm({
+  actionKind,
+  confirmLiteral,
+  title,
+  description,
+  buttonLabel,
+  signedOutOnSuccess = false,
+}: {
+  actionKind: "revoke_current" | "revoke_others" | "revoke_all";
+  confirmLiteral: string;
+  title: string;
+  description: string;
+  buttonLabel: string;
+  signedOutOnSuccess?: boolean;
+}) {
+  const [state, action, isPending] = useActionState(revokeSessionAction, {});
+  const [confirm, setConfirm] = useState("");
+  const trimmed = confirm.trim();
+  const disabled = isPending || trimmed !== confirmLiteral;
+
+  useEffect(() => {
+    if (state.success && state.signedOut && signedOutOnSuccess) {
+      window.location.assign("/login?reason=session_expired");
+    }
+  }, [signedOutOnSuccess, state]);
+
+  return (
+    <form action={action} className="rounded-xl border border-stone-200 bg-stone-50 p-3 space-y-2">
+      <input type="hidden" name="action" value={actionKind} />
+      <div>
+        <p className="text-xs font-semibold text-sky-950">{title}</p>
+        <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">{description}</p>
+      </div>
+      <label className="block text-[11px] font-medium text-stone-500">
+        Type {confirmLiteral} to confirm
+        <input
+          name="confirm"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          disabled={isPending || state.success}
+          className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-xs font-mono text-stone-800 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:opacity-50"
+        />
+      </label>
+      {state.error && <p className="text-xs text-red-600">{state.error}</p>}
+      {state.success && !state.signedOut && (
+        <p className="text-xs font-medium text-emerald-600">Sessions revoked.</p>
+      )}
+      <Button
+        type="submit"
+        variant={actionKind === "revoke_all" ? "danger" : "secondary"}
+        size="sm"
+        loading={isPending}
+        disabled={disabled || state.success}
+        className="w-full"
+      >
+        {isPending ? "Revoking…" : buttonLabel}
+      </Button>
+    </form>
   );
 }

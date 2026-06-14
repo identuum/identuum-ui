@@ -115,16 +115,16 @@ export function AccountMFAEnrollForm({ onSuccess }: { onSuccess?: () => void }) 
   };
 
   if (phase === "loading") {
-    return (
-      <p className="text-xs text-stone-500">Setting up two-factor authentication…</p>
-    );
+    return <p className="text-xs text-stone-500">Setting up two-factor authentication…</p>;
   }
 
   if (phase === "error") {
     return (
       <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
         <p className="font-semibold">Could not start MFA enrollment.</p>
-        <p className="mt-1">Reload the page to try again. If the problem persists, contact your administrator.</p>
+        <p className="mt-1">
+          Reload the page to try again. If the problem persists, contact your administrator.
+        </p>
       </div>
     );
   }
@@ -139,8 +139,8 @@ export function AccountMFAEnrollForm({ onSuccess }: { onSuccess?: () => void }) 
         <p className="font-semibold">MFA is already enrolled on this account.</p>
         <p className="mt-1 text-amber-700">
           To replace your current authenticator, disable MFA from a privileged surface first.
-          Administrator accounts cannot disable MFA themselves — contact your site administrator
-          for an MFA reset.
+          Administrator accounts cannot disable MFA themselves — contact your site administrator for
+          an MFA reset.
         </p>
       </div>
     );
@@ -182,8 +182,8 @@ export function AccountMFAEnrollForm({ onSuccess }: { onSuccess?: () => void }) 
       <div>
         <p className="text-xs font-semibold text-sky-950">Step 1 — Scan the QR code</p>
         <p className="text-xs text-stone-500 mt-1 leading-relaxed">
-          Open your authenticator app (e.g. 1Password, Authy, Google Authenticator) and scan
-          the QR code below to add this account.
+          Open your authenticator app (e.g. 1Password, Authy, Google Authenticator) and scan the QR
+          code below to add this account.
         </p>
       </div>
 

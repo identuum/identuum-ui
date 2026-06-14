@@ -33,7 +33,17 @@ export async function orgLookup(domain: string): Promise<OrgConfig | null> {
 }
 
 export type LoginOutcome =
-  | { kind: "mfa_enrollment_required"; sessionId: string }
+  | {
+      kind: "mfa_enrollment_required";
+      /**
+       * Pending session token for the enrollment flow.
+       * null when the backend did not open a pending enrollment session
+       * (OSS backend: HTTP 401 + {"error":"mfa_enrollment_required"} — no session_id).
+       * Callers must show an enrollment-required message without starting the
+       * enrollment form when this is null.
+       */
+      sessionId: string | null;
+    }
   | { kind: "mfa_required"; sessionId: string }
   | { kind: "success"; role: UserRole };
 
@@ -89,6 +99,18 @@ export async function login(payload: LoginPayload): Promise<LoginOutcome> {
     }
     // mfa_required but no usable session_id — unexpected backend state.
     throw new ApiError(0, "MFA required but server did not return a session token");
+  }
+
+  // OSS backend: HTTP 401 + {"error":"mfa_enrollment_required"} — no session_id.
+  // Fires when MFA is required but the user has not yet enrolled a TOTP secret.
+  // Must be checked BEFORE the generic !res.ok path so the caller receives a
+  // distinct outcome instead of "Invalid credentials."
+  if (
+    res.status === 401 &&
+    typeof body.error === "string" &&
+    body.error === "mfa_enrollment_required"
+  ) {
+    return { kind: "mfa_enrollment_required", sessionId: null };
   }
 
   // Non-2xx status means authentication failure (e.g. 401 = wrong password).
@@ -155,12 +177,17 @@ export async function logout(): Promise<void> {
 
 /**
  * Initiates TOTP enrollment for an admin user who has no OTP configured.
- * Returns the TOTP secret and the otpauth:// provisioning URL.
- * The secret MUST be kept only in component state — never in localStorage/sessionStorage.
+ * Returns the TOTP secret, the otpauth:// provisioning URL, and recovery codes.
+ * All three MUST be kept only in component state — never in localStorage/sessionStorage.
+ *
+ * Field compatibility:
+ *   - identuum-idp-oss returns `otpauth_url` (new standard field).
+ *   - identuum-idp monolith returns `qr_code_url` (legacy field name).
+ *   Both are handled; `otpauth_url` takes precedence.
  */
 export async function mfaEnrollInitiate(
   sessionId: string
-): Promise<{ secret: string; otpauthUrl: string }> {
+): Promise<{ secret: string; otpauthUrl: string; recoveryCodes: string[] }> {
   const res = await fetch(IDP.mfaEnrollInitiate, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -171,7 +198,11 @@ export async function mfaEnrollInitiate(
     throw new ApiError(res.status, "Failed to initiate MFA enrollment");
   }
   const body = await res.json();
-  return { secret: body.secret, otpauthUrl: body.qr_code_url };
+  return {
+    secret: body.secret,
+    otpauthUrl: body.otpauth_url ?? body.qr_code_url,
+    recoveryCodes: Array.isArray(body.recovery_codes) ? (body.recovery_codes as string[]) : [],
+  };
 }
 
 /**

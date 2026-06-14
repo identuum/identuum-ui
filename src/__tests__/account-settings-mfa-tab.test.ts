@@ -44,8 +44,15 @@ vi.mock("../components/ui/passkey-section", () => ({
 vi.mock("../app/account/settings/account-mfa-enroll-form", () => ({
   AccountMFAEnrollForm: () => "[[ACCOUNT_MFA_ENROLL_FORM]]",
 }));
-vi.mock("../lib/idp-admin-client", () => ({
+vi.mock("../app/account/settings/mfa-self-service-forms", () => ({
+  RecoveryCodesRegenerateForm: () => "[[RECOVERY_CODES_REGENERATE_FORM]]",
+  DisableMfaForm: () => "[[DISABLE_MFA_FORM]]",
+}));
+const mockGetOwnMfaStatus = vi.hoisted(() => vi.fn());
+
+vi.mock("../lib/idp-account-client", () => ({
   listOwnSessions: vi.fn().mockResolvedValue({ ok: true, sessions: [] }),
+  getOwnMfaStatus: () => mockGetOwnMfaStatus(),
 }));
 
 // getServerSession is the only dependency that actually feeds MFA state
@@ -71,7 +78,29 @@ async function renderText(
   } else {
     mockGetServerSession.mockResolvedValue({
       role: "org_admin",
-      user: { id: "00000000-0000-0000-0000-000000000001", email: "a@example.com", role: "org_admin", ...sessionUser },
+      user: {
+        id: "00000000-0000-0000-0000-000000000001",
+        email: "a@example.com",
+        role: "org_admin",
+        ...sessionUser,
+      },
+    });
+  }
+  if (sessionUser && "mfa_enabled" in sessionUser) {
+    mockGetOwnMfaStatus.mockResolvedValue({
+      ok: true,
+      status: {
+        mfa_enabled: Boolean(sessionUser.mfa_enabled),
+        totp_enrolled: Boolean(sessionUser.mfa_enabled),
+        recovery_codes_remaining_count: sessionUser.mfa_enabled ? 4 : 0,
+      },
+    });
+  } else {
+    mockGetOwnMfaStatus.mockResolvedValue({
+      ok: false,
+      statusCode: 404,
+      unavailable: true,
+      unauthorized: false,
     });
   }
   const element = await AccountSettingsPage({
@@ -132,7 +161,10 @@ describe("/account/settings — MFA tab routing", () => {
   });
 
   it("unrecognised ?tab=… falls back to mfa when reason=mfa_required is also set", async () => {
-    const text = await renderText({ tab: "garbage", reason: "mfa_required" }, { mfa_enabled: false });
+    const text = await renderText(
+      { tab: "garbage", reason: "mfa_required" },
+      { mfa_enabled: false }
+    );
     expect(text).toMatch(/Authenticator app not enrolled/);
   });
 
@@ -147,6 +179,7 @@ describe("/account/settings — MFA section per-state copy", () => {
     const text = await renderText({ tab: "mfa" }, { mfa_enabled: true });
     expect(text).toMatch(/Authenticator app enrolled/);
     expect(text).toMatch(/Sign-in requires a code/);
+    expect(text).toMatch(/Recovery codes remaining:\s+4/);
     expect(text).not.toMatch(/not enrolled/i);
   });
 
