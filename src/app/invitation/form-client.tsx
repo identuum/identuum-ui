@@ -32,7 +32,6 @@ const inputErrorClass =
 export function InvitationFormClient({
   rawToken,
   targetEmail,
-  targetName,
   emailBound,
 }: InvitationFormClientProps) {
   const [state, action, isPending] = useActionState(consumeInvitationAction, initialState);

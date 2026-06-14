@@ -18,8 +18,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  classifyDomainVerifyErrorKind,
   type DomainVerifyFailureClassification,
+  classifyDomainVerifyErrorKind,
 } from "../lib/domain-verification-errors";
 
 // ── Happy-path mapping ──────────────────────────────────────────────────────
@@ -29,19 +29,25 @@ describe("classifyDomainVerifyErrorKind — known wire kinds", () => {
     // Pinning the slice-3 collapse: the operator copy for "your DNS
     // resolver is not wired up" is the same as "the DNS lookup
     // failed transiently". Both surface as the lookup_failed banner.
-    expect(classifyDomainVerifyErrorKind("verifier_unavailable")).toEqual<DomainVerifyFailureClassification>({
+    expect(
+      classifyDomainVerifyErrorKind("verifier_unavailable")
+    ).toEqual<DomainVerifyFailureClassification>({
       kind: "lookup_failed",
     });
   });
 
   it("maps lookup_failed to lookup_failed", () => {
-    expect(classifyDomainVerifyErrorKind("lookup_failed")).toEqual<DomainVerifyFailureClassification>({
+    expect(
+      classifyDomainVerifyErrorKind("lookup_failed")
+    ).toEqual<DomainVerifyFailureClassification>({
       kind: "lookup_failed",
     });
   });
 
   it("maps record_not_found to record_not_found", () => {
-    expect(classifyDomainVerifyErrorKind("record_not_found")).toEqual<DomainVerifyFailureClassification>({
+    expect(
+      classifyDomainVerifyErrorKind("record_not_found")
+    ).toEqual<DomainVerifyFailureClassification>({
       kind: "record_not_found",
     });
   });
@@ -66,7 +72,9 @@ describe("classifyDomainVerifyErrorKind — generic fallback", () => {
     // A future IDP version that introduces e.g. "rate_limited" must
     // not crash the UI. The safe-fallback behaviour is to render the
     // generic copy until the UI is updated.
-    expect(classifyDomainVerifyErrorKind("rate_limited")).toEqual<DomainVerifyFailureClassification>({
+    expect(
+      classifyDomainVerifyErrorKind("rate_limited")
+    ).toEqual<DomainVerifyFailureClassification>({
       kind: "generic",
     });
   });
@@ -96,27 +104,33 @@ describe("classifyDomainVerifyErrorKind — substring parsing is gone", () => {
     // gap-report flagged. A regression that re-introduced substring
     // matching against the message text would classify these as the
     // matching kind — the helper must not.
-    expect(classifyDomainVerifyErrorKind("DNS TXT record was not found")).toEqual<DomainVerifyFailureClassification>(
-      { kind: "generic" }
-    );
     expect(
-      classifyDomainVerifyErrorKind("Domain verification TXT record does not match the expected value")
+      classifyDomainVerifyErrorKind("DNS TXT record was not found")
     ).toEqual<DomainVerifyFailureClassification>({ kind: "generic" });
-    expect(classifyDomainVerifyErrorKind("Could not look up the domain verification record")).toEqual<DomainVerifyFailureClassification>(
-      { kind: "generic" }
-    );
+    expect(
+      classifyDomainVerifyErrorKind(
+        "Domain verification TXT record does not match the expected value"
+      )
+    ).toEqual<DomainVerifyFailureClassification>({ kind: "generic" });
+    expect(
+      classifyDomainVerifyErrorKind("Could not look up the domain verification record")
+    ).toEqual<DomainVerifyFailureClassification>({ kind: "generic" });
   });
 
   it("does not partially match (e.g. 'lookup_failed_v2' is NOT lookup_failed)", () => {
     // The allow-list uses exact-string match. A protocol revision
     // that ships a versioned suffix must coordinate the UI update;
     // the safe behaviour until then is generic copy.
-    expect(classifyDomainVerifyErrorKind("lookup_failed_v2")).toEqual<DomainVerifyFailureClassification>({
+    expect(
+      classifyDomainVerifyErrorKind("lookup_failed_v2")
+    ).toEqual<DomainVerifyFailureClassification>({
       kind: "generic",
     });
-    expect(classifyDomainVerifyErrorKind("v2_mismatch")).toEqual<DomainVerifyFailureClassification>({
-      kind: "generic",
-    });
+    expect(classifyDomainVerifyErrorKind("v2_mismatch")).toEqual<DomainVerifyFailureClassification>(
+      {
+        kind: "generic",
+      }
+    );
   });
 
   it("is case-sensitive: 'Mismatch' is not 'mismatch'", () => {

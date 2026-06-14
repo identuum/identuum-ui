@@ -111,7 +111,10 @@ describe("requestPasswordResetAction — generic success on every non-network re
   });
 
   it("rejects malformed email at the field level (no IDP call)", async () => {
-    const state = await requestPasswordResetAction({ phase: "form" }, fd({ email: "not-an-email" }));
+    const state = await requestPasswordResetAction(
+      { phase: "form" },
+      fd({ email: "not-an-email" })
+    );
     expect(state.phase).toBe("form");
     expect(state.fieldErrors?.email).toBeTruthy();
   });
@@ -125,10 +128,7 @@ describe("requestPasswordResetAction — generic success on every non-network re
         return { ok: true, status: 200, json: async () => ({ success: true }) };
       })
     );
-    await requestPasswordResetAction(
-      { phase: "form" },
-      fd({ email: "  Owner@Example.COM  " })
-    );
+    await requestPasswordResetAction({ phase: "form" }, fd({ email: "  Owner@Example.COM  " }));
     expect(seenBodies).toHaveLength(1);
     const body = JSON.parse(seenBodies[0]) as { email: string };
     expect(body.email).toBe("owner@example.com");

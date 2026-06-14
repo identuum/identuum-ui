@@ -128,10 +128,7 @@ export async function consumeResetTokenAction(
     // Non-JSON body — fall through to the default invalid-token branch.
   }
 
-  if (
-    code.includes("RESET_TOKEN") ||
-    /reset token|expired|invalid/i.test(message)
-  ) {
+  if (code.includes("RESET_TOKEN") || /reset token|expired|invalid/i.test(message)) {
     return { phase: "invalid" };
   }
   if (code === "WEAK_PASSWORD" || /weak password|too weak|too short/i.test(message)) {

@@ -59,11 +59,7 @@ export default async function ResetPasswordPage({
             </p>
           </div>
           <div className="px-6 py-5">
-            {token === "" ? (
-              <MissingTokenPanel />
-            ) : (
-              <ResetPasswordFormClient rawToken={token} />
-            )}
+            {token === "" ? <MissingTokenPanel /> : <ResetPasswordFormClient rawToken={token} />}
           </div>
         </div>
       </div>

@@ -40,7 +40,10 @@ export function ForgotPasswordFormClient() {
           This deployment is not configured with an identity provider that supports email-based
           password reset. Contact your administrator.
         </p>
-        <a href="/login" className="mt-3 inline-block text-xs text-sky-600 hover:text-sky-700 underline">
+        <a
+          href="/login"
+          className="mt-3 inline-block text-xs text-sky-600 hover:text-sky-700 underline"
+        >
           Back to sign in
         </a>
       </div>
@@ -53,8 +56,8 @@ export function ForgotPasswordFormClient() {
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4">
           <p className="text-sm font-semibold text-emerald-700">Check your inbox</p>
           <p className="text-xs text-stone-600 mt-1 leading-relaxed">
-            If an account exists for that email address, password reset instructions have been
-            sent. The link expires in one hour.
+            If an account exists for that email address, password reset instructions have been sent.
+            The link expires in one hour.
           </p>
           <p className="text-xs text-stone-500 mt-2 leading-relaxed">
             Don&apos;t see it? Check your spam folder, or wait a minute and resubmit the form.
@@ -96,8 +99,8 @@ export function ForgotPasswordFormClient() {
           <p className="text-xs text-red-600">{state.fieldErrors.email}</p>
         )}
         <p className="text-xs text-stone-400 leading-relaxed">
-          We&apos;ll send password reset instructions to this email if it matches an account on
-          this deployment.
+          We&apos;ll send password reset instructions to this email if it matches an account on this
+          deployment.
         </p>
       </div>
 
@@ -109,10 +112,7 @@ export function ForgotPasswordFormClient() {
         >
           {isPending ? "Sending…" : "Send reset link"}
         </button>
-        <a
-          href="/login"
-          className="text-sm text-stone-500 hover:text-sky-950 transition-colors"
-        >
+        <a href="/login" className="text-sm text-stone-500 hover:text-sky-950 transition-colors">
           Back to sign in
         </a>
       </div>

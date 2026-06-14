@@ -50,7 +50,10 @@ export function ResetPasswordFormClient({ rawToken }: ResetPasswordFormClientPro
           This deployment is not configured with an identity provider that supports email-based
           password reset. Contact your administrator.
         </p>
-        <a href="/login" className="mt-3 inline-block text-xs text-sky-600 hover:text-sky-700 underline">
+        <a
+          href="/login"
+          className="mt-3 inline-block text-xs text-sky-600 hover:text-sky-700 underline"
+        >
           Back to sign in
         </a>
       </div>
@@ -158,10 +161,7 @@ export function ResetPasswordFormClient({ rawToken }: ResetPasswordFormClientPro
         >
           {isPending ? "Updating…" : "Update password"}
         </button>
-        <a
-          href="/login"
-          className="text-sm text-stone-500 hover:text-sky-950 transition-colors"
-        >
+        <a href="/login" className="text-sm text-stone-500 hover:text-sky-950 transition-colors">
           Back to sign in
         </a>
       </div>

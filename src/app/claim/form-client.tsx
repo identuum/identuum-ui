@@ -147,8 +147,8 @@ export function ClaimFormClient({
           </p>
         </div>
         <p className="text-xs text-stone-400 leading-relaxed">
-          Administrator access requires two-factor authentication. The next sign-in step will
-          guide you through TOTP setup.
+          Administrator access requires two-factor authentication. The next sign-in step will guide
+          you through TOTP setup.
         </p>
         <div className="pt-1">
           <a
