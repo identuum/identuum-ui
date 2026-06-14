@@ -302,3 +302,86 @@ Authenticated tests self-skip when `IDENTUUM_TEST_SITE_ADMIN_PASSWORD` /
 route-redirect tests always run. Dynamic-mode org_admin tests also
 self-skip when `IDENTUUM_E2E_USE_DYNAMIC_FIXTURE` is unset — the
 default-skip path is preserved for CI.
+
+---
+
+## Opt-in live-backend regression — `/upgrade` wizard backup flow
+
+`e2e/upgrade-backup-live.spec.ts` drives the OSS-to-CE `/upgrade`
+wizard backup affordance against a real source-build CE backend, an
+OSS-shaped throwaway Postgres database, real `pg_dump`-driven
+backups, real prune, real apply, real restart, and the post-apply
+transition to first-run setup. The spec is gated on
+`IDENTUUM_E2E_LIVE_UPGRADE_BACKUP=1` and self-skips otherwise, so
+the standard `pnpm e2e` run stays fast and deterministic.
+
+### Single-command runner
+
+The recommended invocation:
+
+```sh
+make verify-live-upgrade-backup
+# equivalent:
+pnpm e2e:upgrade-backup-live
+```
+
+Both forms wrap `e2e/scripts/run-upgrade-backup-live.sh`. The runner:
+
+1. Brings up a throwaway Compose project named
+   `idp-ce-upgrade-backup-playwright-20260617` on host ports
+   `7129` (IDP) and `7130` (UI). Postgres is internal-only. The
+   project is independent of the standing `identuum-ui-app` dev
+   container on `:7114` and never touches it.
+2. Seeds the OSS-shape schema into the throwaway Postgres BEFORE
+   the IDP first-boot probe runs.
+3. Captures the one-time upgrade token to a mode-0600 file under
+   `${SMOKE_DIR}` (default `/tmp/idp-ce-upgrade-backup-playwright-20260617`).
+   The token VALUE never appears in stdout.
+4. Runs the Playwright spec in headless Chromium.
+5. ALWAYS tears the throwaway project down via the wrapper's
+   `trap EXIT INT TERM HUP` — even on failure, on Ctrl-C, or on a
+   hung step. Teardown zero-fills the upgrade-token file with
+   `dd if=/dev/zero` before unlinking it.
+
+The runner exits with the Playwright exit code on success; on
+failure, the trap still runs teardown and the script exits with
+the propagated Playwright exit code so `make verify-live-upgrade-backup`
+fails the same way a normal `playwright test` invocation would.
+
+### Prerequisites
+
+- The sibling `identuum-idp-ce/` source tree (or set
+  `IDENTUUM_CE_REPO=<path>` to point elsewhere).
+- Docker Compose with BuildKit support.
+- `curl` and `psql` (`psql` is consumed inside the throwaway
+  Postgres container; no local install required).
+
+### What is opt-in vs default
+
+| Surface | Default behaviour | Opt-in behaviour |
+|---------|------------------|------------------|
+| `make verify` | runs biome + tsc + vitest only | unchanged |
+| `pnpm e2e` (standard Playwright run) | runs every spec; `e2e/upgrade-backup-live.spec.ts` SKIPS cleanly | unchanged |
+| `make verify-live-upgrade-backup` | not invoked | brings up the throwaway stack, runs the live spec, always tears down |
+| `pnpm e2e:upgrade-backup-live` | not invoked | same as above |
+
+The live runner deliberately does NOT integrate with default
+`verify` or `e2e` so that the standing dev workflow stays fast.
+
+### Security posture
+
+- The upgrade-token plaintext, the DB password, and backup body
+  bytes are NEVER printed by the harness, the wrapper, or the
+  spec. The captured token lives only inside the mode-0600
+  scratch file and is zero-filled before unlink.
+- The throwaway stack is fully isolated by a unique Compose
+  project name + scratch directory + named volumes.
+- No `git add`, `git commit`, `git push`, `workflow_dispatch`,
+  image publish, or repo/GHCR visibility change is performed by
+  any wrapper script.
+
+For the source-of-truth wire contract this spec exercises, see
+[[wiki/repos/identuum-idp-ce]] §"OSS-to-CE upgrade wizard backup
+retention & pruning (complete — 2026-06-17)" and the prior live
+smoke entry. For the platform-level ledger see
+[[wiki/platform/idp-appliance-install-ux]] §4.

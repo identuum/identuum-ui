@@ -40,6 +40,7 @@ const runPath = join(root, "e2e/scripts/run-upgrade-backup-live.sh");
 const sqlPath = join(root, "e2e/scripts/upgrade-backup-live-oss-shape.sql");
 const makefilePath = join(root, "Makefile");
 const packageJsonPath = join(root, "package.json");
+const e2eReadmePath = join(root, "e2e/README.md");
 
 const SPEC = readFileSync(specPath, "utf8");
 const UP = readFileSync(upPath, "utf8");
@@ -48,6 +49,7 @@ const RUN = readFileSync(runPath, "utf8");
 const SQL = readFileSync(sqlPath, "utf8");
 const MAKEFILE = readFileSync(makefilePath, "utf8");
 const PACKAGE_JSON = readFileSync(packageJsonPath, "utf8");
+const E2E_README = readFileSync(e2eReadmePath, "utf8");
 
 function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -298,5 +300,48 @@ describe("upgrade-backup-live target: Makefile + package.json wiring", () => {
   it("package.json keeps the default e2e script unchanged (no auto opt-in)", () => {
     const parsed = JSON.parse(PACKAGE_JSON) as { scripts?: Record<string, string> };
     expect(parsed.scripts?.e2e).toBe("playwright test");
+  });
+});
+
+describe("upgrade-backup-live target: e2e/README.md documentation", () => {
+  it("documents the make verify-live-upgrade-backup invocation", () => {
+    expect(E2E_README).toMatch(/make\s+verify-live-upgrade-backup/);
+  });
+
+  it("documents the pnpm e2e:upgrade-backup-live invocation", () => {
+    expect(E2E_README).toMatch(/pnpm\s+e2e:upgrade-backup-live/);
+  });
+
+  it("names the wrapper script the two surfaces converge on", () => {
+    expect(E2E_README).toMatch(/run-upgrade-backup-live\.sh/);
+  });
+
+  it("documents the opt-in gate variable name", () => {
+    expect(E2E_README).toMatch(/IDENTUUM_E2E_LIVE_UPGRADE_BACKUP/);
+  });
+
+  it("documents the always-on teardown discipline (trap)", () => {
+    expect(E2E_README).toMatch(/\btrap\b/);
+  });
+
+  it("documents the throwaway Compose project naming + scratch dir discipline", () => {
+    expect(E2E_README).toMatch(/idp-ce-upgrade-backup-playwright-20260617/);
+  });
+
+  it("documents the host-port choices (7129 IDP, 7130 UI)", () => {
+    expect(E2E_README).toMatch(/\b7129\b/);
+    expect(E2E_README).toMatch(/\b7130\b/);
+  });
+
+  it("documents that the standing :7114 dev container is NOT touched", () => {
+    expect(E2E_README).toMatch(/7114/);
+  });
+
+  it("does NOT inline a token plaintext literal in the documentation", () => {
+    expect(E2E_README).not.toMatch(/[A-Z2-7]{50,}/);
+  });
+
+  it("does NOT inline a postgres DSN with credentials in the documentation", () => {
+    expect(E2E_README).not.toMatch(/postgres(?:ql)?:\/\/[^@\s"]+:[^@\s"]+@/);
   });
 });

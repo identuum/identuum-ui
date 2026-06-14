@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "playwright test",
-    "e2e:install": "playwright install chromium"
+    "e2e:install": "playwright install chromium",
+    "e2e:upgrade-backup-live": "./e2e/scripts/run-upgrade-backup-live.sh"
   },
   "engines": {
     "node": ">=22.15.0"
