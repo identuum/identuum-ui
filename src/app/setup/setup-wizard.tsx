@@ -1,9 +1,11 @@
 "use client";
 
+import type { LicenseStatusBody } from "@/lib/idp-license-client";
 import { type CompleteSetupInput, completeSetup, verifySetupToken } from "@/lib/idp-setup-client";
 import { AlertCircle, CheckCircle2, KeyRound, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
+import { LicenseStep } from "./license-step";
 
 interface InitialStatus {
   state: "setup_required" | "setup_complete";
@@ -11,10 +13,20 @@ interface InitialStatus {
   siteAdminExists: boolean;
   firstOrganizationExists: boolean;
   firstSigningKeyExists: boolean;
+  distribution: string;
 }
 
 interface Props {
   initialStatus: InitialStatus | null;
+  /**
+   * License status fetched server-side at page load. Null when the
+   * backend is not the CE distribution OR the license endpoint
+   * could not be reached (older backend, network failure). The
+   * wizard only renders the CE license step when this is non-null
+   * AND the embedded state is missing/invalid/expired AND the
+   * setup-status distribution reports `ce`.
+   */
+  initialLicenseStatus: LicenseStatusBody | null;
 }
 
 type CodeState =
@@ -45,7 +57,7 @@ const MIN_PASSWORD_LENGTH = 12;
  * verified. Submitting calls `completeSetup`; on success we navigate
  * to `/login`.
  */
-export function SetupWizard({ initialStatus }: Props) {
+export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
   const router = useRouter();
 
   const [setupCode, setSetupCode] = useState("");
@@ -59,8 +71,26 @@ export function SetupWizard({ initialStatus }: Props) {
 
   const [submitState, setSubmitState] = useState<SubmitState>({ kind: "idle" });
 
+  const [licenseStatus, setLicenseStatus] = useState<LicenseStatusBody | null>(
+    initialLicenseStatus
+  );
+
   const codeVerified = codeState.kind === "ok";
   const passwordsMatch = adminPassword === confirmPassword;
+
+  // Render the CE license step only when the IDP backend is the CE
+  // distribution AND the current license state needs operator
+  // attention. OSS backends never carry license state, so the step
+  // stays hidden. When the backend reports `license_valid` the step
+  // collapses into a non-blocking confirmation banner instead of a
+  // full upload form (the operator can still upload a replacement
+  // later from the admin path — deferred follow-on slice).
+  const distributionIsCE = initialStatus?.distribution === "ce";
+  const showLicenseStep =
+    distributionIsCE && licenseStatus !== null && licenseStatus.state !== "license_valid";
+
+  const licenseAccepted =
+    !distributionIsCE || licenseStatus === null || licenseStatus.state === "license_valid";
 
   async function handleVerifyCode(event: FormEvent) {
     event.preventDefault();
@@ -263,6 +293,21 @@ export function SetupWizard({ initialStatus }: Props) {
         </form>
       </section>
 
+      {/* Section 2.5 — CE license (conditional). Shown only when
+          the IDP backend is the CE distribution AND the runtime
+          reports a license state that requires operator action
+          (missing / invalid / expired). OSS deployments and
+          already-licensed CE deployments skip straight to the
+          org+admin section below. */}
+      {showLicenseStep && licenseStatus !== null ? (
+        <LicenseStep
+          setupToken={setupCode.trim()}
+          setupTokenVerified={codeVerified}
+          status={licenseStatus}
+          onLicenseAccepted={setLicenseStatus}
+        />
+      ) : null}
+
       {/* Section 3 — organization + site administrator */}
       <section aria-labelledby="setup-org" className="flex flex-col gap-3">
         <h2 id="setup-org" className="text-sm font-semibold uppercase tracking-wide text-stone-500">
@@ -271,7 +316,7 @@ export function SetupWizard({ initialStatus }: Props) {
         <form
           onSubmit={handleComplete}
           className="flex flex-col gap-4"
-          aria-disabled={!codeVerified}
+          aria-disabled={!codeVerified || !licenseAccepted}
           noValidate
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -285,7 +330,7 @@ export function SetupWizard({ initialStatus }: Props) {
                 type="text"
                 value={orgName}
                 onChange={(e) => setOrgName(e.target.value)}
-                disabled={!codeVerified || submitState.kind === "submitting"}
+                disabled={!codeVerified || !licenseAccepted || submitState.kind === "submitting"}
                 required
                 className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-sky-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-70 disabled:cursor-not-allowed"
                 placeholder="Acme Corp"
@@ -302,7 +347,7 @@ export function SetupWizard({ initialStatus }: Props) {
                 type="text"
                 value={orgDomain}
                 onChange={(e) => setOrgDomain(e.target.value)}
-                disabled={!codeVerified || submitState.kind === "submitting"}
+                disabled={!codeVerified || !licenseAccepted || submitState.kind === "submitting"}
                 required
                 className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-sky-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-70 disabled:cursor-not-allowed"
                 placeholder="acme.example"
@@ -322,7 +367,7 @@ export function SetupWizard({ initialStatus }: Props) {
               autoComplete="email"
               value={adminEmail}
               onChange={(e) => setAdminEmail(e.target.value)}
-              disabled={!codeVerified || submitState.kind === "submitting"}
+              disabled={!codeVerified || !licenseAccepted || submitState.kind === "submitting"}
               required
               className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-sky-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-70 disabled:cursor-not-allowed"
               placeholder="owner@acme.example"
@@ -342,7 +387,7 @@ export function SetupWizard({ initialStatus }: Props) {
                 autoComplete="new-password"
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
-                disabled={!codeVerified || submitState.kind === "submitting"}
+                disabled={!codeVerified || !licenseAccepted || submitState.kind === "submitting"}
                 required
                 minLength={MIN_PASSWORD_LENGTH}
                 className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-sky-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-70 disabled:cursor-not-allowed"
@@ -361,7 +406,7 @@ export function SetupWizard({ initialStatus }: Props) {
                 autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                disabled={!codeVerified || submitState.kind === "submitting"}
+                disabled={!codeVerified || !licenseAccepted || submitState.kind === "submitting"}
                 required
                 minLength={MIN_PASSWORD_LENGTH}
                 className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-sky-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-70 disabled:cursor-not-allowed"
@@ -375,6 +420,7 @@ export function SetupWizard({ initialStatus }: Props) {
             type="submit"
             disabled={
               !codeVerified ||
+              !licenseAccepted ||
               submitState.kind === "submitting" ||
               submitState.kind === "ok" ||
               !orgName.trim() ||

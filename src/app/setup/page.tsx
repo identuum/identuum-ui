@@ -1,3 +1,4 @@
+import { getLicenseStatus } from "@/lib/idp-license-client";
 import { getSetupStatus } from "@/lib/idp-setup-client";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
 import type { Metadata } from "next";
@@ -29,7 +30,11 @@ export default async function SetupPage() {
     redirect("/setup-required");
   }
 
-  const status = await getSetupStatus();
+  // Probe setup + license state in parallel so a slow IDP boot does
+  // not double the page TTFB. The license probe is best-effort —
+  // older OSS backends do not expose the endpoint, and the wizard
+  // gracefully falls back to "no CE license step" in that case.
+  const [status, licenseProbe] = await Promise.all([getSetupStatus(), getLicenseStatus()]);
 
   if (status.kind === "ok" && status.status.state === "setup_complete") {
     // Defense in depth: a stale tab landing here after completion goes
@@ -49,7 +54,16 @@ export default async function SetupPage() {
           siteAdminExists: status.status.siteAdminExists,
           firstOrganizationExists: status.status.firstOrganizationExists,
           firstSigningKeyExists: status.status.firstSigningKeyExists,
+          distribution: status.status.distribution,
         }
+      : null;
+
+  // License probe result: only forward the body when the kind is
+  // "ok" AND the backend reports CE distribution. OSS deployments
+  // never need the CE license step.
+  const initialLicenseStatus =
+    licenseProbe.kind === "ok" && status.kind === "ok" && status.status.distribution === "ce"
+      ? licenseProbe.status
       : null;
 
   return (
@@ -81,7 +95,7 @@ export default async function SetupPage() {
               first-run setup. It runs once.
             </p>
 
-            <SetupWizard initialStatus={initial} />
+            <SetupWizard initialStatus={initial} initialLicenseStatus={initialLicenseStatus} />
           </div>
         </div>
 
