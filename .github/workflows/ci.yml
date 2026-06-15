@@ -1,0 +1,72 @@
+# identuum-ui CI pipeline.
+# Runs on every push and pull request to main / master.
+#
+# This workflow mirrors the repo-local `make verify` target verbatim:
+#
+#   pnpm exec biome check . --reporter=json --max-diagnostics=none
+#   pnpm exec tsc --noEmit
+#   pnpm exec vitest run
+#
+# Scope intent. The first identuum-ui CI workflow is deliberately
+# narrow: no Playwright, no `next build`, no live IDP/AG runtime, no
+# Docker, no secrets. Authenticated specs (login, MFA, sessions,
+# admin UI, setup/upgrade wizards) require `.env.playwright.local`
+# credentials which are NOT present in CI. The OSS scaffold spec
+# (`e2e/oss-contract.spec.ts`) is safe without credentials but it
+# requires a live identuum-idp-oss container — out of scope for a
+# Node-only validation workflow. A future slice can add a separate
+# job that brings up the OSS scaffold and runs the contract spec.
+#
+# Permissions are least-privilege; the workflow reads the repo and
+# reports check status. No GITHUB_TOKEN-elevated steps, no PAT, no
+# deploy key. No GHCR login, no image publish, no workflow_dispatch.
+# The publish-image.yml workflow (workflow_dispatch only) is NOT
+# affected by this file.
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Activate pnpm via corepack BEFORE setup-node so the
+      # `cache: pnpm` option in setup-node finds the binary.
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          # Node version sourced from package.json#engines.node
+          # ("node": ">=22.15.0"). Pin to 22.x so the runner reliably
+          # selects the documented major.
+          node-version: '22'
+          # Use pnpm's content-addressed store for cross-run reuse.
+          # Cache key is auto-derived from pnpm-lock.yaml.
+          cache: pnpm
+
+      - name: Install dependencies (frozen lockfile)
+        # --frozen-lockfile fails the run if pnpm-lock.yaml is out of
+        # date with package.json; this catches accidental hand edits.
+        run: pnpm install --frozen-lockfile
+
+      - name: Biome check (lint + format)
+        run: pnpm exec biome check . --reporter=json --max-diagnostics=none
+
+      - name: TypeScript typecheck (tsc --noEmit)
+        run: pnpm exec tsc --noEmit
+
+      - name: Unit tests (vitest run)
+        run: pnpm exec vitest run
