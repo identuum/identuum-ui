@@ -60,15 +60,13 @@ const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000000";
 const DEFAULT_ORG_ADMIN_EMAIL = "admin@example.org";
 
 const ORG_ID = process.env.IDENTUUM_TEST_ORG_ID ?? DEFAULT_ORG_ID;
-const ORG_ADMIN_EMAIL =
-  process.env.IDENTUUM_TEST_ORG_ADMIN_EMAIL ?? DEFAULT_ORG_ADMIN_EMAIL;
+const ORG_ADMIN_EMAIL = process.env.IDENTUUM_TEST_ORG_ADMIN_EMAIL ?? DEFAULT_ORG_ADMIN_EMAIL;
 
 const ORG_ADMIN_PASSWORD = process.env.IDENTUUM_TEST_ORG_ADMIN_PASSWORD ?? "";
 
 // Opt-in safety latch. Keep the literal string "true" — any other value
 // (including unset, empty, "1", "yes") leaves destructive tests skipped.
-const DESTRUCTIVE_ALLOWED =
-  process.env.IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET === "true";
+const DESTRUCTIVE_ALLOWED = process.env.IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET === "true";
 
 const SKIP_DESTRUCTIVE_MSG =
   "Set IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true to opt in. This test resets the configured org_admin's MFA in the local demo.";
@@ -91,18 +89,16 @@ const SKIP_DESTRUCTIVE_MSG =
  * reason. It NEVER reports the offending value, NEVER reports the
  * password / TOTP secret, and NEVER prints any other env content.
  *
- * Exported for source-invariant tests in
- * src/__tests__/e2e-destructive-recovery-spec-safety.test.ts; the spec
- * itself remains the single runtime consumer.
+ * Source-invariant tests in
+ * src/__tests__/e2e-destructive-recovery-spec-safety.test.ts pin this helper
+ * by reading this spec file as text; the spec itself is the runtime consumer.
  */
-export function requireConcreteDestructiveRecoveryTarget(): {
+function requireConcreteDestructiveRecoveryTarget(): {
   orgId: string;
   orgAdminEmail: string;
 } {
   if (!ORG_ID) {
-    throw new Error(
-      "DESTRUCTIVE recovery spec refused to run: IDENTUUM_TEST_ORG_ID is empty"
-    );
+    throw new Error("DESTRUCTIVE recovery spec refused to run: IDENTUUM_TEST_ORG_ID is empty");
   }
   if (ORG_ID === DEFAULT_ORG_ID) {
     throw new Error(
@@ -125,6 +121,13 @@ export function requireConcreteDestructiveRecoveryTarget(): {
 // ── Shared site_admin context ─────────────────────────────────────────────────
 
 let siteAdminCtx: BrowserContext | null = null;
+
+function getSiteAdminContext(): BrowserContext {
+  if (!siteAdminCtx) {
+    throw new Error("site admin context not initialized");
+  }
+  return siteAdminCtx;
+}
 
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(180_000); // see other auth specs — TOTP cooldown headroom
@@ -173,7 +176,7 @@ test.describe("/site-admin/organizations/[id] — admin recovery card (read-only
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    const page = await siteAdminCtx!.newPage();
+    const page = await getSiteAdminContext().newPage();
     try {
       await page.goto(`/site-admin/organizations/${ORG_ID}`);
       await page.waitForLoadState("networkidle");
@@ -200,9 +203,7 @@ test.describe("/site-admin/organizations/[id] — admin recovery card (read-only
       // "Administrator status" card, whose own paragraph also mentions
       // the sovereign bunker policy.
       await expect(
-        recoveryCard(page).getByText(
-          /Only org_admin accounts are shown|sovereign bunker policy/i
-        )
+        recoveryCard(page).getByText(/Only org_admin accounts are shown|sovereign bunker policy/i)
       ).toBeVisible();
     } finally {
       await page.close();
@@ -214,7 +215,7 @@ test.describe("/site-admin/organizations/[id] — admin recovery card (read-only
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    const page = await siteAdminCtx!.newPage();
+    const page = await getSiteAdminContext().newPage();
     try {
       await page.goto(`/site-admin/organizations/${ORG_ID}`);
       await page.waitForLoadState("networkidle");
@@ -238,9 +239,7 @@ test.describe("/site-admin/organizations/[id] — admin recovery card (read-only
 
       // PIN: the destructive-side-effect copy must be present.
       await expect(dialog).toContainText(/revoke active sessions/i);
-      await expect(dialog).toContainText(
-        /sign in again and enroll a new authenticator/i
-      );
+      await expect(dialog).toContainText(/sign in again and enroll a new authenticator/i);
 
       // Negative pin: empty interpolation must never render.
       await expect(dialog).not.toContainText("Reset MFA for ?");
@@ -268,7 +267,7 @@ test.describe("/site-admin/organizations/[id] — admin recovery flow (DESTRUCTI
     // no MFA-reset endpoint can be reached against an unintended fixture.
     requireConcreteDestructiveRecoveryTarget();
 
-    const page = await siteAdminCtx!.newPage();
+    const page = await getSiteAdminContext().newPage();
     try {
       await page.goto(`/site-admin/organizations/${ORG_ID}`);
       await page.waitForLoadState("networkidle");

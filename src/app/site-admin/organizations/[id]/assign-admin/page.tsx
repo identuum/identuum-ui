@@ -69,13 +69,11 @@ export default async function AssignAdminPage({
       <div className="max-w-lg space-y-4">
         <Breadcrumb orgName={org.name} />
         <div className="bg-white border border-stone-200 rounded-[1.5rem] px-5 py-4 shadow-sm">
-          <p className="text-sm font-semibold text-stone-700">
-            Administrator already assigned
-          </p>
+          <p className="text-sm font-semibold text-stone-700">Administrator already assigned</p>
           <p className="text-xs text-stone-400 mt-1">
             <span className="font-medium text-sky-950">{org.name}</span> already has an active
-            administrator. Site administrators can only delegate the first administrator, or
-            recover the role when no administrator exists.
+            administrator. Site administrators can only delegate the first administrator, or recover
+            the role when no administrator exists.
           </p>
         </div>
         <a

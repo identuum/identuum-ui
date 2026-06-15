@@ -135,14 +135,38 @@ describe("deriveOrganizationActions — deleted dominates everything", () => {
   // collapses to exactly ["restore"] regardless of any other flag.
 
   const deletedCombos: { name: string; overrides: Partial<OperationalStatusInput> }[] = [
-    { name: "deleted + active=true + has_admin=true + can_assign_admin=false", overrides: { deleted: true, active: true, has_admin: true, can_assign_admin: false } },
-    { name: "deleted + active=true + has_admin=true + can_assign_admin=true",  overrides: { deleted: true, active: true, has_admin: true, can_assign_admin: true } },
-    { name: "deleted + active=true + has_admin=false + can_assign_admin=false", overrides: { deleted: true, active: true, has_admin: false, can_assign_admin: false } },
-    { name: "deleted + active=true + has_admin=false + can_assign_admin=true",  overrides: { deleted: true, active: true, has_admin: false, can_assign_admin: true } },
-    { name: "deleted + active=false + has_admin=true + can_assign_admin=false", overrides: { deleted: true, active: false, has_admin: true, can_assign_admin: false } },
-    { name: "deleted + active=false + has_admin=true + can_assign_admin=true",  overrides: { deleted: true, active: false, has_admin: true, can_assign_admin: true } },
-    { name: "deleted + active=false + has_admin=false + can_assign_admin=false", overrides: { deleted: true, active: false, has_admin: false, can_assign_admin: false } },
-    { name: "deleted + active=false + has_admin=false + can_assign_admin=true",  overrides: { deleted: true, active: false, has_admin: false, can_assign_admin: true } },
+    {
+      name: "deleted + active=true + has_admin=true + can_assign_admin=false",
+      overrides: { deleted: true, active: true, has_admin: true, can_assign_admin: false },
+    },
+    {
+      name: "deleted + active=true + has_admin=true + can_assign_admin=true",
+      overrides: { deleted: true, active: true, has_admin: true, can_assign_admin: true },
+    },
+    {
+      name: "deleted + active=true + has_admin=false + can_assign_admin=false",
+      overrides: { deleted: true, active: true, has_admin: false, can_assign_admin: false },
+    },
+    {
+      name: "deleted + active=true + has_admin=false + can_assign_admin=true",
+      overrides: { deleted: true, active: true, has_admin: false, can_assign_admin: true },
+    },
+    {
+      name: "deleted + active=false + has_admin=true + can_assign_admin=false",
+      overrides: { deleted: true, active: false, has_admin: true, can_assign_admin: false },
+    },
+    {
+      name: "deleted + active=false + has_admin=true + can_assign_admin=true",
+      overrides: { deleted: true, active: false, has_admin: true, can_assign_admin: true },
+    },
+    {
+      name: "deleted + active=false + has_admin=false + can_assign_admin=false",
+      overrides: { deleted: true, active: false, has_admin: false, can_assign_admin: false },
+    },
+    {
+      name: "deleted + active=false + has_admin=false + can_assign_admin=true",
+      overrides: { deleted: true, active: false, has_admin: false, can_assign_admin: true },
+    },
   ];
 
   for (const c of deletedCombos) {
@@ -341,12 +365,7 @@ const TENANT_INTERNAL_ROUTES: string[] = [
 // because operators read it as irreversible — the archive route's
 // visible label must say "Archive" instead. "Hard delete" is forbidden
 // outright (no hard-delete affordance exists on this page).
-const MISLEADING_LABELS: string[] = [
-  "Delete",
-  "Hard delete",
-  "Hard Delete",
-  "Permanently delete",
-];
+const MISLEADING_LABELS: string[] = ["Delete", "Hard delete", "Hard Delete", "Permanently delete"];
 
 // Credential-material terms that must never appear in a label or href.
 const CREDENTIAL_TERMS: string[] = [

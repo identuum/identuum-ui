@@ -12,7 +12,7 @@
  */
 import "server-only";
 
-import { deriveLicenseWarnings, type LicenseWarning } from "@/lib/license-warnings";
+import { type LicenseWarning, deriveLicenseWarnings } from "@/lib/license-warnings";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 
 export async function PlatformLicenseWarnings() {
@@ -42,9 +42,7 @@ function WarningStrip({ warning }: { warning: LicenseWarning }) {
     ? "h-1.5 w-1.5 rounded-full bg-red-500 shrink-0"
     : "h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0";
 
-  const textClass = isCritical
-    ? "text-xs text-red-700 font-medium"
-    : "text-xs text-amber-700";
+  const textClass = isCritical ? "text-xs text-red-700 font-medium" : "text-xs text-amber-700";
 
   return (
     <div className={containerClass} data-testid={`license-warning-${warning.backendId}`}>

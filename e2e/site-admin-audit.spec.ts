@@ -35,6 +35,13 @@ const NON_ZERO_TEST_UUID = "11111111-1111-1111-1111-111111111111";
 
 let sharedCtx: BrowserContext | null = null;
 
+function getSharedContext(): BrowserContext {
+  if (!sharedCtx) {
+    throw new Error("shared context not initialized");
+  }
+  return sharedCtx;
+}
+
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(180_000); // allow up to ~101s (31s cooldown + 70s TOTP retry)
   if (skip) return;
@@ -57,7 +64,7 @@ test.describe("/site-admin/audit subject-filter notice", () => {
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto(`/site-admin/audit?subject_id=${ZERO_UUID}&subject_type=organization`);
       await page.waitForLoadState("networkidle");
@@ -81,7 +88,7 @@ test.describe("/site-admin/audit subject-filter notice", () => {
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto(
         `/site-admin/audit?subject_id=${NON_ZERO_TEST_UUID}&subject_type=organization`
@@ -113,7 +120,7 @@ test.describe("/site-admin/audit organization-subject row links", () => {
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/site-admin/audit");
       await page.waitForLoadState("networkidle");

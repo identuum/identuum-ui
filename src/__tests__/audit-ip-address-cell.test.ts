@@ -70,7 +70,8 @@ describe("AuditIPAddressCell — render shape", () => {
     const el = AuditIPAddressCell({ value: null });
     expect(isValidElement(el)).toBe(true);
     // The fallback branch returns a <span> with the copy constant.
-    const props = (el as { props: { children?: unknown; className?: string; title?: string } }).props;
+    const props = (el as { props: { children?: unknown; className?: string; title?: string } })
+      .props;
     expect(props.children).toBe(AUDIT_IP_NOT_CAPTURED_COPY);
     // Muted-italic styling — not text-stone-300 (which would
     // visually be indistinguishable from the previous "—").
@@ -123,15 +124,11 @@ describe("/org-admin/audit + /site-admin/audit — IP cell wiring", () => {
   });
 
   it("org-admin audit page renders <AuditIPAddressCell value={e.ip_address} />", () => {
-    expect(ORG_ADMIN_SRC).toMatch(
-      /<AuditIPAddressCell\s+value=\{\s*e\.ip_address\s*\}\s*\/>/
-    );
+    expect(ORG_ADMIN_SRC).toMatch(/<AuditIPAddressCell\s+value=\{\s*e\.ip_address\s*\}\s*\/>/);
   });
 
   it("site-admin audit page renders <AuditIPAddressCell value={e.ip_address} />", () => {
-    expect(SITE_ADMIN_SRC).toMatch(
-      /<AuditIPAddressCell\s+value=\{\s*e\.ip_address\s*\}\s*\/>/
-    );
+    expect(SITE_ADMIN_SRC).toMatch(/<AuditIPAddressCell\s+value=\{\s*e\.ip_address\s*\}\s*\/>/);
   });
 
   it("the previous '?? <span className=text-stone-300>—</span>' inline placeholder is GONE on both pages", () => {
@@ -203,10 +200,7 @@ describe("audit-ip-address-cell.tsx — module purity", () => {
     // names the forbidden fields (as a documented exclusion list)
     // does not trip the assertions. Real code that READS one of
     // those fields would survive the strip.
-    const noComments = HELPER_SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(
-      /^\s*\/\/.*$/gm,
-      ""
-    );
+    const noComments = HELPER_SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     const BANNED: RegExp[] = [
       /metadata/i,
       /user_agent/i,

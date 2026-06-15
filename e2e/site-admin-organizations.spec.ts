@@ -39,6 +39,13 @@ const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 // Authenticated tests reuse one session to avoid TOTP replay failures.
 let siteAdminCtx: BrowserContext | null = null;
 
+function getSiteAdminContext(): BrowserContext {
+  if (!siteAdminCtx) {
+    throw new Error("site admin context not initialized");
+  }
+  return siteAdminCtx;
+}
+
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(180_000); // allow up to ~101s (31s cooldown + 70s TOTP retry + fixture ~5s)
   if (skipAuthTests) return;
@@ -63,7 +70,7 @@ test.describe("/site-admin/organizations list → detail navigation", () => {
     }
 
     // ── Open organizations list using shared site_admin session ──────────────
-    const page = await siteAdminCtx!.newPage();
+    const page = await getSiteAdminContext().newPage();
     try {
       await page.goto("/site-admin/organizations");
       await page.waitForLoadState("networkidle");
@@ -213,7 +220,7 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    const page = await siteAdminCtx!.newPage();
+    const page = await getSiteAdminContext().newPage();
     try {
       await page.goto("/site-admin/organizations/new");
       await page.waitForLoadState("networkidle");
@@ -239,7 +246,7 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    const page = await siteAdminCtx!.newPage();
+    const page = await getSiteAdminContext().newPage();
     try {
       await page.goto("/site-admin/organizations");
       await page.waitForLoadState("networkidle");
@@ -287,7 +294,7 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    const page = await siteAdminCtx!.newPage();
+    const page = await getSiteAdminContext().newPage();
     try {
       await page.goto("/site-admin/organizations");
       await page.waitForLoadState("networkidle");
@@ -332,7 +339,7 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    const page = await siteAdminCtx!.newPage();
+    const page = await getSiteAdminContext().newPage();
     try {
       await page.goto("/site-admin/organizations");
       await page.waitForLoadState("networkidle");
@@ -366,7 +373,7 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    const page = await siteAdminCtx!.newPage();
+    const page = await getSiteAdminContext().newPage();
     try {
       await page.goto("/site-admin/organizations");
       await page.waitForLoadState("networkidle");
@@ -418,7 +425,7 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    const page = await siteAdminCtx!.newPage();
+    const page = await getSiteAdminContext().newPage();
     try {
       await page.goto("/site-admin/organizations");
       await page.waitForLoadState("networkidle");
@@ -496,7 +503,7 @@ test.describe("/site-admin/organizations/[id] — lifecycle action confirmation 
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    const page = await siteAdminCtx!.newPage();
+    const page = await getSiteAdminContext().newPage();
     try {
       const orgId = await firstOrgId(page);
       if (!orgId) {
@@ -513,14 +520,18 @@ test.describe("/site-admin/organizations/[id] — lifecycle action confirmation 
       // active + non-deleted) or one of the wrong-state panels (already
       // inactive, or deleted). Pin both surfaces explicitly so neither path
       // can regress silently.
-      const formHeading = await page.getByRole("heading", { name: "Deactivate organization" }).count();
+      const formHeading = await page
+        .getByRole("heading", { name: "Deactivate organization" })
+        .count();
       const inactivePanel = await page.getByText("Already inactive").count();
       const deletedPanel = await page.getByText("Organization is deleted").count();
       expect(formHeading + inactivePanel + deletedPanel).toBeGreaterThan(0);
 
       // Cancel link must be present in every branch so a misclick can be
       // reversed without browser back.
-      const cancelLinks = page.getByRole("link", { name: /Cancel|Back to organizations|View deleted organizations/ });
+      const cancelLinks = page.getByRole("link", {
+        name: /Cancel|Back to organizations|View deleted organizations/,
+      });
       expect(await cancelLinks.count()).toBeGreaterThan(0);
 
       if (formHeading > 0) {
@@ -562,7 +573,7 @@ test.describe("/site-admin/organizations/[id] — lifecycle action confirmation 
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    const page = await siteAdminCtx!.newPage();
+    const page = await getSiteAdminContext().newPage();
     try {
       const orgId = await firstOrgId(page);
       if (!orgId) {
@@ -614,7 +625,7 @@ test.describe("/site-admin/organizations/[id] — lifecycle action confirmation 
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    const page = await siteAdminCtx!.newPage();
+    const page = await getSiteAdminContext().newPage();
     try {
       const orgId = await firstOrgId(page);
       if (!orgId) {
@@ -627,7 +638,9 @@ test.describe("/site-admin/organizations/[id] — lifecycle action confirmation 
       expect(new URL(page.url()).pathname).toBe(`/site-admin/organizations/${orgId}/reactivate`);
       expect(await page.title()).not.toMatch(/500|internal error|application error/i);
 
-      const formHeading = await page.getByRole("heading", { name: "Reactivate organization" }).count();
+      const formHeading = await page
+        .getByRole("heading", { name: "Reactivate organization" })
+        .count();
       const alreadyActive = await page.getByText("Already active").count();
       const deletedPanel = await page.getByText("Organization is deleted").count();
       expect(formHeading + alreadyActive + deletedPanel).toBeGreaterThan(0);
@@ -664,7 +677,7 @@ test.describe("/site-admin/organizations/[id] — lifecycle action confirmation 
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    const page = await siteAdminCtx!.newPage();
+    const page = await getSiteAdminContext().newPage();
     try {
       const orgId = await firstOrgId(page);
       if (!orgId) {
@@ -711,7 +724,7 @@ test.describe("/site-admin/organizations/[id] — lifecycle action confirmation 
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    const page = await siteAdminCtx!.newPage();
+    const page = await getSiteAdminContext().newPage();
     try {
       const orgId = await firstOrgId(page);
       if (!orgId) {

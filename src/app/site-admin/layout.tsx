@@ -21,6 +21,7 @@ import { PlatformLicenseWarnings } from "@/components/shared/platform-license-wa
 import { SiteAdminNav } from "@/components/site-admin/site-admin-nav";
 import { roleToPath } from "@/lib/role-routing";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
+import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { getServerSession } from "@/lib/server-session";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
@@ -59,6 +60,8 @@ export default async function SiteAdminLayout({ children }: { children: React.Re
   }
 
   const userEmail = session.user?.email ?? null;
+  const runtimeState = await getServerRuntimeState();
+  const idpCapabilities = runtimeState?.components.idp.capabilities ?? null;
 
   // Auth and role confirmed. Render the shell.
   return (
@@ -80,7 +83,7 @@ export default async function SiteAdminLayout({ children }: { children: React.Re
 
         {/* Navigation — SiteAdminNav is a client component that uses
             usePathname() to determine which item is active. */}
-        <SiteAdminNav />
+        <SiteAdminNav capabilities={idpCapabilities} />
 
         {/* Platform status link */}
         <div className="px-3 py-1">

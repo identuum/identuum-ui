@@ -57,8 +57,14 @@ export function SiteAdminOverviewClient({
           <LoadingRow />
         ) : config ? (
           <>
-            <CapabilityRow label="identuum-idp" enabled={config.idp.enabled} />
-            <CapabilityRow label="identuum-ag" enabled={config.ag.enabled} />
+            <CapabilityRow
+              label={status?.idp.product ?? "identuum-idp"}
+              enabled={config.idp.enabled}
+            />
+            <CapabilityRow
+              label={status?.ag.product ?? "identuum-ag"}
+              enabled={config.ag.enabled}
+            />
           </>
         ) : (
           <ErrorRow message="Could not load runtime configuration." />
@@ -71,8 +77,12 @@ export function SiteAdminOverviewClient({
           <LoadingRow />
         ) : status ? (
           <>
-            {status.idp.enabled && <HealthRow label="identuum-idp" healthy={status.idp.healthy} />}
-            {status.ag.enabled && <HealthRow label="identuum-ag" healthy={status.ag.healthy} />}
+            {status.idp.enabled && (
+              <HealthRow label={status.idp.product} healthy={status.idp.healthy} />
+            )}
+            {status.ag.enabled && (
+              <HealthRow label={status.ag.product} healthy={status.ag.healthy} />
+            )}
             {!status.idp.enabled && !status.ag.enabled && (
               <ErrorRow message="No backends are enabled." />
             )}

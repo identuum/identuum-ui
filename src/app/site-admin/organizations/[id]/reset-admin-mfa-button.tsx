@@ -1,10 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import {
-  type ResetAdminMFAActionState,
-  resetAdminMFAAction,
-} from "./reset-admin-mfa-actions";
+import { type ResetAdminMFAActionState, resetAdminMFAAction } from "./reset-admin-mfa-actions";
 
 interface ResetAdminMFAButtonProps {
   orgId: string;
@@ -45,16 +42,33 @@ export function ResetAdminMFAButton({
 }: ResetAdminMFAButtonProps) {
   const [open, setOpen] = useState(false);
   const [state, action, isPending] = useActionState(resetAdminMFAAction, initialState);
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  // Focus the confirm button when the dialog opens — keyboard users
-  // should not have to tab past the modal scrim to reach the action.
+  // Open the native dialog after mount so server/client hydration stays
+  // deterministic, then put keyboard users directly on the destructive action.
   useEffect(() => {
-    if (open) {
-      confirmRef.current?.focus();
+    if (!open) return;
+
+    const dialog = dialogRef.current;
+    if (dialog && !dialog.open) {
+      if (typeof dialog.showModal === "function") {
+        dialog.showModal();
+      } else if (typeof dialog.show === "function") {
+        dialog.show();
+      } else {
+        dialog.setAttribute("open", "");
+      }
     }
+
+    confirmRef.current?.focus();
+
+    return () => {
+      if (dialog?.open) {
+        dialog.close();
+      }
+    };
   }, [open]);
 
   // When the action succeeds, surface a short-lived success banner and
@@ -95,102 +109,113 @@ export function ResetAdminMFAButton({
       </button>
 
       {showSuccess && (
-        <p
-          role="status"
-          className="ml-2 inline-flex items-center text-[10px] font-semibold text-emerald-700"
-        >
+        <output className="ml-2 inline-flex items-center text-[10px] font-semibold text-emerald-700">
           MFA reset
-        </p>
+        </output>
       )}
 
       {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4"
+        <dialog
+          ref={dialogRef}
+          aria-labelledby="reset-mfa-dialog-title"
+          aria-modal="true"
+          className="bg-white rounded-[1.5rem] shadow-xl border border-stone-200 max-w-md w-[calc(100%-2rem)] p-6 space-y-4 backdrop:bg-black/30"
           // Click-outside-to-close, but not while a reset is in-flight.
           onClick={(e) => {
-            if (e.target === e.currentTarget && !isPending) {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const clickedOutside =
+              e.clientX < rect.left ||
+              e.clientX > rect.right ||
+              e.clientY < rect.top ||
+              e.clientY > rect.bottom;
+            if (clickedOutside && !isPending) {
               setOpen(false);
             }
           }}
-          // biome-ignore lint/a11y/useKeyWithClickEvents: keyboard handler lives on window via useEffect
+          onCancel={(e) => {
+            if (isPending) {
+              e.preventDefault();
+              return;
+            }
+            setOpen(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape" && !isPending) {
+              setOpen(false);
+            }
+          }}
+          onClose={() => {
+            setOpen(false);
+          }}
         >
-          <div
-            ref={dialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="reset-mfa-dialog-title"
-            className="bg-white rounded-[1.5rem] shadow-xl border border-stone-200 max-w-md w-full p-6 space-y-4"
+          <h2
+            id="reset-mfa-dialog-title"
+            className="text-base font-bold text-sky-950 tracking-tight"
           >
-            <h2
-              id="reset-mfa-dialog-title"
-              className="text-base font-bold text-sky-950 tracking-tight"
+            Reset MFA
+          </h2>
+
+          <p className="text-sm text-stone-600 leading-relaxed">
+            Reset MFA for <span className="font-mono font-semibold text-sky-950">{email}</span>?
+            This will revoke active sessions. The administrator must sign in again and enroll a new
+            authenticator.
+          </p>
+
+          <p className="text-xs text-stone-400 leading-relaxed">
+            This action is logged in the audit trail. It cannot be undone — but the administrator
+            can immediately re-enroll a new authenticator from the login flow.
+          </p>
+
+          {state.error && (
+            <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
+              {state.error}
+            </div>
+          )}
+
+          <form action={action} className="flex items-center justify-end gap-2 pt-1">
+            <input type="hidden" name="user_id" value={userId} />
+            <input type="hidden" name="org_id" value={orgId} />
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              disabled={isPending}
+              className="text-sm font-medium text-stone-500 hover:text-sky-950 transition-colors px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Reset MFA
-            </h2>
-
-            <p className="text-sm text-stone-600 leading-relaxed">
-              Reset MFA for{" "}
-              <span className="font-mono font-semibold text-sky-950">{email}</span>? This will
-              revoke active sessions. The administrator must sign in again and enroll a new
-              authenticator.
-            </p>
-
-            <p className="text-xs text-stone-400 leading-relaxed">
-              This action is logged in the audit trail. It cannot be undone — but the administrator
-              can immediately re-enroll a new authenticator from the login flow.
-            </p>
-
-            {state.error && (
-              <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
-                {state.error}
-              </div>
-            )}
-
-            <form action={action} className="flex items-center justify-end gap-2 pt-1">
-              <input type="hidden" name="user_id" value={userId} />
-              <input type="hidden" name="org_id" value={orgId} />
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                disabled={isPending}
-                className="text-sm font-medium text-stone-500 hover:text-sky-950 transition-colors px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Cancel
-              </button>
-              <button
-                ref={confirmRef}
-                type="submit"
-                disabled={isPending}
-                className="inline-flex items-center justify-center gap-2 rounded-xl h-8 px-3 text-xs font-semibold bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {isPending && (
-                  <svg
-                    className="h-3.5 w-3.5 animate-spin"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
-                  </svg>
-                )}
-                {isPending ? "Resetting…" : "Reset MFA"}
-              </button>
-            </form>
-          </div>
-        </div>
+              Cancel
+            </button>
+            <button
+              ref={confirmRef}
+              type="submit"
+              disabled={isPending}
+              className="inline-flex items-center justify-center gap-2 rounded-xl h-8 px-3 text-xs font-semibold bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isPending && (
+                <svg
+                  className="h-3.5 w-3.5 animate-spin"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
+                </svg>
+              )}
+              {isPending ? "Resetting…" : "Reset MFA"}
+            </button>
+          </form>
+        </dialog>
       )}
     </>
   );

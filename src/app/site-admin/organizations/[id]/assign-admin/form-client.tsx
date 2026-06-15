@@ -1,7 +1,7 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { SetupLinkPanel } from "@/components/shared/setup-link-panel";
+import { Button } from "@/components/ui/button";
 import { useActionState } from "react";
 import { type AssignAdminActionState, assignAdminAction } from "./actions";
 

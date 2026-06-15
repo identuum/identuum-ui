@@ -86,7 +86,9 @@ describe("deriveOperationalStatus — inactive (deactivated, not deleted)", () =
   });
 
   it("inactive org + expired-pending admin → expired-pending, reactivate-and-assign", () => {
-    const s = deriveOperationalStatus(org({ active: false, has_admin: true, can_assign_admin: true }));
+    const s = deriveOperationalStatus(
+      org({ active: false, has_admin: true, can_assign_admin: true })
+    );
     expect(s.lifecycle).toBe("inactive");
     expect(s.adminState).toBe("expired-pending");
     expect(s.assignmentAllowed).toBe(true);
@@ -109,14 +111,38 @@ describe("deriveOperationalStatus — deleted dominates everything", () => {
   // is never allowed on a deleted org (deleted orgs cannot be edited).
 
   const deletedCombos: { name: string; overrides: Partial<OperationalStatusInput> }[] = [
-    { name: "deleted, active=true, has_admin=true, can_assign_admin=false", overrides: { deleted: true, active: true, has_admin: true, can_assign_admin: false } },
-    { name: "deleted, active=true, has_admin=true, can_assign_admin=true", overrides: { deleted: true, active: true, has_admin: true, can_assign_admin: true } },
-    { name: "deleted, active=true, has_admin=false, can_assign_admin=false", overrides: { deleted: true, active: true, has_admin: false, can_assign_admin: false } },
-    { name: "deleted, active=true, has_admin=false, can_assign_admin=true", overrides: { deleted: true, active: true, has_admin: false, can_assign_admin: true } },
-    { name: "deleted, active=false, has_admin=true, can_assign_admin=false", overrides: { deleted: true, active: false, has_admin: true, can_assign_admin: false } },
-    { name: "deleted, active=false, has_admin=false, can_assign_admin=false", overrides: { deleted: true, active: false, has_admin: false, can_assign_admin: false } },
-    { name: "deleted, active=false, has_admin=false, can_assign_admin=true", overrides: { deleted: true, active: false, has_admin: false, can_assign_admin: true } },
-    { name: "deleted, active=false, has_admin=true, can_assign_admin=true", overrides: { deleted: true, active: false, has_admin: true, can_assign_admin: true } },
+    {
+      name: "deleted, active=true, has_admin=true, can_assign_admin=false",
+      overrides: { deleted: true, active: true, has_admin: true, can_assign_admin: false },
+    },
+    {
+      name: "deleted, active=true, has_admin=true, can_assign_admin=true",
+      overrides: { deleted: true, active: true, has_admin: true, can_assign_admin: true },
+    },
+    {
+      name: "deleted, active=true, has_admin=false, can_assign_admin=false",
+      overrides: { deleted: true, active: true, has_admin: false, can_assign_admin: false },
+    },
+    {
+      name: "deleted, active=true, has_admin=false, can_assign_admin=true",
+      overrides: { deleted: true, active: true, has_admin: false, can_assign_admin: true },
+    },
+    {
+      name: "deleted, active=false, has_admin=true, can_assign_admin=false",
+      overrides: { deleted: true, active: false, has_admin: true, can_assign_admin: false },
+    },
+    {
+      name: "deleted, active=false, has_admin=false, can_assign_admin=false",
+      overrides: { deleted: true, active: false, has_admin: false, can_assign_admin: false },
+    },
+    {
+      name: "deleted, active=false, has_admin=false, can_assign_admin=true",
+      overrides: { deleted: true, active: false, has_admin: false, can_assign_admin: true },
+    },
+    {
+      name: "deleted, active=false, has_admin=true, can_assign_admin=true",
+      overrides: { deleted: true, active: false, has_admin: true, can_assign_admin: true },
+    },
   ];
 
   for (const c of deletedCombos) {
@@ -212,10 +238,10 @@ describe("operator-facing copy is pinned (regression sentry for label/body edits
     // The card never echoes any credential strings. This is an
     // operator-facing-only surface; tokens belong elsewhere.
     for (const c of Object.values(LIFECYCLE_COPY)) {
-      expect(c.label + " " + c.body).not.toMatch(/password|token|secret|otpauth|cookie/i);
+      expect(`${c.label} ${c.body}`).not.toMatch(/password|token|secret|otpauth|cookie/i);
     }
     for (const c of Object.values(ADMIN_STATE_COPY)) {
-      expect(c.label + " " + c.body).not.toMatch(/password|token|secret|otpauth|cookie/i);
+      expect(`${c.label} ${c.body}`).not.toMatch(/password|token|secret|otpauth|cookie/i);
     }
   });
 });

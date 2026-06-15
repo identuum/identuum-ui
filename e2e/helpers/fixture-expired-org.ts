@@ -92,12 +92,7 @@ export async function ensureExpiredPendingOrgFixture(
 function queryAdminState(): AdminState {
   try {
     const row = execSync(
-      `${PSQL} -t -A -c ` +
-        `"SELECT CASE WHEN email_verified THEN 'active' ` +
-        `WHEN activation_token_expires_at > NOW() THEN 'valid-pending' ` +
-        `ELSE 'expired-pending' END ` +
-        `FROM users WHERE email = '${FIXTURE_ADMIN_EMAIL}' ` +
-        `AND deleted_at IS NULL AND banned = false AND role = 'org_admin' LIMIT 1;"`,
+      `${PSQL} -t -A -c "SELECT CASE WHEN email_verified THEN 'active' WHEN activation_token_expires_at > NOW() THEN 'valid-pending' ELSE 'expired-pending' END FROM users WHERE email = '${FIXTURE_ADMIN_EMAIL}' AND deleted_at IS NULL AND banned = false AND role = 'org_admin' LIMIT 1;"`,
       { stdio: "pipe" }
     )
       .toString()
@@ -111,10 +106,7 @@ function queryAdminState(): AdminState {
 
 function expireActivationToken(): void {
   execSync(
-    `${PSQL} -c ` +
-      `"UPDATE users SET activation_token_expires_at = NOW() - INTERVAL '2 hours' ` +
-      `WHERE email = '${FIXTURE_ADMIN_EMAIL}' ` +
-      `AND deleted_at IS NULL;"`,
+    `${PSQL} -c "UPDATE users SET activation_token_expires_at = NOW() - INTERVAL '2 hours' WHERE email = '${FIXTURE_ADMIN_EMAIL}' AND deleted_at IS NULL;"`,
     { stdio: "pipe" }
   );
 }
@@ -124,12 +116,7 @@ function resetActiveUserToExpiredPending(): void {
   // Resetting to false + expiring the token produces the desired fixture state.
   // Safe for a test account that is never used for real logins.
   execSync(
-    `${PSQL} -c ` +
-      `"UPDATE users SET ` +
-      `email_verified = false, ` +
-      `activation_token_expires_at = NOW() - INTERVAL '2 hours' ` +
-      `WHERE email = '${FIXTURE_ADMIN_EMAIL}' ` +
-      `AND deleted_at IS NULL;"`,
+    `${PSQL} -c "UPDATE users SET email_verified = false, activation_token_expires_at = NOW() - INTERVAL '2 hours' WHERE email = '${FIXTURE_ADMIN_EMAIL}' AND deleted_at IS NULL;"`,
     { stdio: "pipe" }
   );
 }
@@ -205,7 +192,7 @@ async function createUserViaClaimConsume(ctx: BrowserContext, orgId: string): Pr
   if (!token) throw new Error("Fixture claim generation returned no token");
 
   // Consume the claim — sets email_verified=true
-  const consumeRes = await ctx.request.post(`http://localhost:7113/api/v1/auth/claim`, {
+  const consumeRes = await ctx.request.post("http://localhost:7113/api/v1/auth/claim", {
     data: {
       token,
       email: FIXTURE_ADMIN_EMAIL,

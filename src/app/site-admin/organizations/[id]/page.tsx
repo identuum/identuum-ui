@@ -1,3 +1,4 @@
+import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
 /**
  * Organization detail page — site_admin only, read-only.
  *
@@ -8,25 +9,26 @@
  * Sanitized to OrgDetail — no secrets, internal URLs, or credential material.
  */
 import {
+  getOrgProtocolSettings,
   getOrganization,
   listAuditEvents,
   listOrgAdminsForRecovery,
 } from "@/lib/idp-admin-client";
 import type { OrgAdminRecoveryCandidate } from "@/lib/idp-admin-client";
-import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
 import type { OrgDetail } from "@/lib/types";
 import type { Metadata } from "next";
 import {
   ADMIN_STATE_COPY,
+  type AdminState,
   BOUNDARY_COPY,
   LIFECYCLE_COPY,
-  type AdminState,
   type LifecycleState,
   deriveOperationalStatus,
   deriveOrganizationActions,
   getOrganizationActionHref,
   getOrganizationActionLabel,
 } from "./operational-status";
+import { ProtocolSettingsPanel } from "./protocol-settings-panel";
 import { ResetAdminMFAButton } from "./reset-admin-mfa-button";
 
 export const metadata: Metadata = { title: "Organization — Identuum Admin" };
@@ -44,10 +46,11 @@ export default async function OrgDetailPage({
     return <NotFoundPanel />;
   }
 
-  const [org, recentAuditResult, adminsResult] = await Promise.all([
+  const [org, recentAuditResult, adminsResult, protocolSettings] = await Promise.all([
     getOrganization(id),
     listAuditEvents({ subjectId: id, subjectType: "organization", pageSize: 8 }).catch(() => null),
     listOrgAdminsForRecovery(id).catch(() => null),
+    getOrgProtocolSettings(id).catch(() => null),
   ]);
 
   if (!org) {
@@ -251,6 +254,13 @@ export default async function OrgDetailPage({
         orgDeleted={org.deleted}
       />
 
+      {/* Protocol settings card — site_admin only. Fetched in parallel with
+          the rest of the page data. Returns a discriminated result; the panel
+          renders per-reason copy for 401/403/404/network failures instead of
+          a single generic notice. Not shown for deleted orgs since protocol
+          settings are irrelevant when the org is archived. */}
+      {!org.deleted && <ProtocolSettingsPanel orgId={id} initialSettings={protocolSettings} />}
+
       {/* Actions card — visibility derived by deriveOrganizationActions(org)
           in ./operational-status.ts. The deleted-org branch keeps a slimmer
           card (no subtitle) to match its restore-only semantic. */}
@@ -322,7 +332,7 @@ export default async function OrgDetailPage({
       )}
 
       {/* Recent audit activity — only shown when feature is available and has results */}
-      {recentAuditResult && recentAuditResult.ok && recentAuditResult.events.length > 0 && (
+      {recentAuditResult?.ok && recentAuditResult.events.length > 0 && (
         <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between gap-4">
             <div>
@@ -572,12 +582,7 @@ function OrgAdminRecoveryCard({
         {!loadError && admins.length > 0 && (
           <ul className="divide-y divide-stone-100 -my-3">
             {admins.map((admin) => (
-              <AdminRow
-                key={admin.id}
-                orgId={orgId}
-                admin={admin}
-                orgDeleted={orgDeleted}
-              />
+              <AdminRow key={admin.id} orgId={orgId} admin={admin} orgDeleted={orgDeleted} />
             ))}
           </ul>
         )}
