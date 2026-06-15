@@ -43,10 +43,7 @@ function stripComments(src: string): string {
 }
 
 describe("global-setup.ts source — dynamic-mode orchestration", () => {
-  const RAW_SETUP_SRC = readFileSync(
-    resolve(UI_ROOT, "e2e", "global-setup.ts"),
-    "utf-8"
-  );
+  const RAW_SETUP_SRC = readFileSync(resolve(UI_ROOT, "e2e", "global-setup.ts"), "utf-8");
   const SETUP_SRC = stripComments(RAW_SETUP_SRC);
 
   it("imports the dynamic-mode helpers from the fixture loader", () => {
@@ -85,7 +82,9 @@ describe("global-setup.ts source — dynamic-mode orchestration", () => {
   });
 
   it("captures stdio: inherit so the IDP CLI's non-secret stderr reaches the operator", () => {
-    expect(SETUP_SRC).toMatch(/stdio:\s*\[\s*["']ignore["'],\s*["']inherit["'],\s*["']inherit["']\s*\]/);
+    expect(SETUP_SRC).toMatch(
+      /stdio:\s*\[\s*["']ignore["'],\s*["']inherit["'],\s*["']inherit["']\s*\]/
+    );
   });
 
   it("creates the host fixture directory with mode 0700", () => {
@@ -114,10 +113,7 @@ describe("global-setup.ts source — dynamic-mode orchestration", () => {
 // ── Dynamic-fixture preflight ───────────────────────────────────────────────
 
 describe("global-setup.ts — dynamic-fixture preflight diagnostics", () => {
-  const RAW_SETUP_SRC = readFileSync(
-    resolve(UI_ROOT, "e2e", "global-setup.ts"),
-    "utf-8"
-  );
+  const RAW_SETUP_SRC = readFileSync(resolve(UI_ROOT, "e2e", "global-setup.ts"), "utf-8");
   const SETUP_SRC = stripComments(RAW_SETUP_SRC);
 
   it("declares runDynamicFixturePreflight and invokes it before runIDPCreateFixture", () => {
@@ -151,22 +147,16 @@ describe("global-setup.ts — dynamic-fixture preflight diagnostics", () => {
   });
 
   it("checks IDENTUUM_E2E_FIXTURE_CLI_ENABLED=true via shell test (no value print)", () => {
-    expect(SETUP_SRC).toMatch(
-      /test\s+"\$IDENTUUM_E2E_FIXTURE_CLI_ENABLED"\s*=\s*"true"/
-    );
-    expect(SETUP_SRC).toMatch(
-      /IDENTUUM_E2E_FIXTURE_CLI_ENABLED=true is not present/
-    );
+    expect(SETUP_SRC).toMatch(/test\s+"\$IDENTUUM_E2E_FIXTURE_CLI_ENABLED"\s*=\s*"true"/);
+    expect(SETUP_SRC).toMatch(/IDENTUUM_E2E_FIXTURE_CLI_ENABLED=true is not present/);
   });
 
   it("checks the local insecure gate (IDENTUUM_IDP_INSECURE_DEV_MODE or INSECURE_MFA_BYPASS)", () => {
+    expect(SETUP_SRC).toMatch(/test\s+"\$IDENTUUM_IDP_INSECURE_DEV_MODE"\s*=\s*"true"/);
+    expect(SETUP_SRC).toMatch(/test\s+"\$IDENTUUM_IDP_INSECURE_MFA_BYPASS"\s*=\s*"true"/);
     expect(SETUP_SRC).toMatch(
-      /test\s+"\$IDENTUUM_IDP_INSECURE_DEV_MODE"\s*=\s*"true"/
+      /neither IDENTUUM_IDP_INSECURE_DEV_MODE=true nor IDENTUUM_IDP_INSECURE_MFA_BYPASS=true/
     );
-    expect(SETUP_SRC).toMatch(
-      /test\s+"\$IDENTUUM_IDP_INSECURE_MFA_BYPASS"\s*=\s*"true"/
-    );
-    expect(SETUP_SRC).toMatch(/neither IDENTUUM_IDP_INSECURE_DEV_MODE=true nor IDENTUUM_IDP_INSECURE_MFA_BYPASS=true/);
   });
 
   it("runs a bind-mount probe (container touch → host existsSync)", () => {
@@ -179,16 +169,12 @@ describe("global-setup.ts — dynamic-fixture preflight diagnostics", () => {
     expect(SETUP_SRC).toMatch(/probeContainerPath\s*=\s*`\/e2e-auth\//);
     // The host check must use fs.existsSync against the probe's host path.
     expect(SETUP_SRC).toMatch(/fs\.existsSync\s*\(\s*probeHostPath\s*\)/);
-    expect(SETUP_SRC).toMatch(
-      /\/e2e-auth is not connected to the UI e2e\/\.auth directory/
-    );
+    expect(SETUP_SRC).toMatch(/\/e2e-auth is not connected to the UI e2e\/\.auth directory/);
   });
 
   it("cleans up the probe file via finally block (both host and container side)", () => {
     // The cleanup MUST run unconditionally, hence the `finally` block.
-    const preflightBody = SETUP_SRC.match(
-      /function\s+runDynamicFixturePreflight[\s\S]*?\n\}/
-    )?.[0];
+    const preflightBody = SETUP_SRC.match(/function\s+runDynamicFixturePreflight[\s\S]*?\n\}/)?.[0];
     expect(preflightBody).toBeTruthy();
     expect(preflightBody).toMatch(/finally\s*\{/);
     expect(preflightBody).toMatch(/fs\.rmSync\s*\(\s*probeHostPath/);
@@ -219,25 +205,19 @@ describe("global-setup.ts — dynamic-fixture preflight diagnostics", () => {
     // Every Error message in the preflight body must point at a fix
     // command (`make local-restart` is the canonical fix) and must NOT
     // interpolate any env value via `${process.env.…}` or `${IDP_…}`.
-    const preflightBody = SETUP_SRC.match(
-      /function\s+runDynamicFixturePreflight[\s\S]*?\n\}/
-    )?.[0] ?? "";
+    const preflightBody =
+      SETUP_SRC.match(/function\s+runDynamicFixturePreflight[\s\S]*?\n\}/)?.[0] ?? "";
     expect(preflightBody).toMatch(/make local-restart/);
     // No env-value interpolation in any Error message produced by the
     // preflight.
     expect(preflightBody).not.toMatch(/\$\{\s*process\.env\./);
-    expect(preflightBody).not.toMatch(
-      /\$\{\s*IDENTUUM_E2E_FIXTURE_CLI_ENABLED/
-    );
-    expect(preflightBody).not.toMatch(
-      /\$\{\s*IDENTUUM_IDP_INSECURE_DEV_MODE/
-    );
+    expect(preflightBody).not.toMatch(/\$\{\s*IDENTUUM_E2E_FIXTURE_CLI_ENABLED/);
+    expect(preflightBody).not.toMatch(/\$\{\s*IDENTUUM_IDP_INSECURE_DEV_MODE/);
   });
 
   it("preflight does not console.log fixture JSON or credentials", () => {
-    const preflightBody = SETUP_SRC.match(
-      /function\s+runDynamicFixturePreflight[\s\S]*?\n\}/
-    )?.[0] ?? "";
+    const preflightBody =
+      SETUP_SRC.match(/function\s+runDynamicFixturePreflight[\s\S]*?\n\}/)?.[0] ?? "";
     expect(preflightBody).not.toMatch(/console\.log/);
     expect(preflightBody).not.toMatch(/console\.error/);
     // The preflight may use process.stdout.write for non-secret status —
@@ -251,9 +231,8 @@ describe("global-setup.ts — dynamic-fixture preflight diagnostics", () => {
     // A regression that invoked `env` or `printenv` with no args would
     // dump every env var (including the unsuffixed `IDENTUUM_*` set) to
     // the operator's stdout — a leak vector for any future env addition.
-    const preflightBody = SETUP_SRC.match(
-      /function\s+runDynamicFixturePreflight[\s\S]*?\n\}/
-    )?.[0] ?? "";
+    const preflightBody =
+      SETUP_SRC.match(/function\s+runDynamicFixturePreflight[\s\S]*?\n\}/)?.[0] ?? "";
     // Bare `env` or `printenv` with no following identifier argument.
     expect(preflightBody).not.toMatch(/"env"\s*\]/);
     expect(preflightBody).not.toMatch(/"printenv"\s*\]/);
@@ -261,10 +240,7 @@ describe("global-setup.ts — dynamic-fixture preflight diagnostics", () => {
 });
 
 describe("global-setup.ts source — security invariants", () => {
-  const RAW_SETUP_SRC = readFileSync(
-    resolve(UI_ROOT, "e2e", "global-setup.ts"),
-    "utf-8"
-  );
+  const RAW_SETUP_SRC = readFileSync(resolve(UI_ROOT, "e2e", "global-setup.ts"), "utf-8");
   const SETUP_SRC = stripComments(RAW_SETUP_SRC);
 
   it("contains no console.log of fixture JSON or secrets", () => {
@@ -310,10 +286,7 @@ describe("global-setup.ts source — security invariants", () => {
 });
 
 describe("global-teardown.ts source — dynamic-mode purge orchestration", () => {
-  const RAW_TEARDOWN_SRC = readFileSync(
-    resolve(UI_ROOT, "e2e", "global-teardown.ts"),
-    "utf-8"
-  );
+  const RAW_TEARDOWN_SRC = readFileSync(resolve(UI_ROOT, "e2e", "global-teardown.ts"), "utf-8");
   const TEARDOWN_SRC = stripComments(RAW_TEARDOWN_SRC);
 
   it("imports the dynamic-mode helpers from the fixture loader", () => {

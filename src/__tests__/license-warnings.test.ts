@@ -6,9 +6,7 @@ import type { BackendComponentState } from "../lib/types";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeBackend(
-  overrides: Partial<BackendComponentState> = {}
-): BackendComponentState {
+function makeBackend(overrides: Partial<BackendComponentState> = {}): BackendComponentState {
   return {
     configured: true,
     reachable: true,
@@ -24,9 +22,7 @@ function makeBackend(
   };
 }
 
-function makeAGBackend(
-  overrides: Partial<BackendComponentState> = {}
-): BackendComponentState {
+function makeAGBackend(overrides: Partial<BackendComponentState> = {}): BackendComponentState {
   return {
     ...makeBackend(),
     component: "identuum-ag",

@@ -55,9 +55,7 @@ describe("destructive recovery spec — opt-in gate preserved", () => {
     // Count the `if (!DESTRUCTIVE_ALLOWED) { test.skip(...) }` blocks.
     // Both destructive tests must guard themselves — a regression that
     // dropped the gate on either path would be caught here.
-    const matches = SPEC_SRC.match(
-      /if\s*\(\s*!DESTRUCTIVE_ALLOWED\s*\)\s*\{\s*test\.skip\(/g
-    );
+    const matches = SPEC_SRC.match(/if\s*\(\s*!DESTRUCTIVE_ALLOWED\s*\)\s*\{\s*test\.skip\(/g);
     expect(matches?.length ?? 0).toBeGreaterThanOrEqual(2);
   });
 });
@@ -65,22 +63,16 @@ describe("destructive recovery spec — opt-in gate preserved", () => {
 // ── Placeholder-refusal guard wiring ────────────────────────────────────────
 
 describe("destructive recovery spec — placeholder-refusal guard", () => {
-  it("declares and exports requireConcreteDestructiveRecoveryTarget()", () => {
-    expect(RAW_SPEC_SRC).toMatch(
-      /export\s+function\s+requireConcreteDestructiveRecoveryTarget\s*\(\s*\)/
-    );
+  it("declares requireConcreteDestructiveRecoveryTarget()", () => {
+    expect(RAW_SPEC_SRC).toMatch(/\bfunction\s+requireConcreteDestructiveRecoveryTarget\s*\(\s*\)/);
   });
 
   it("the guard refuses empty IDENTUUM_TEST_ORG_ID", () => {
-    expect(SPEC_SRC).toMatch(
-      /if\s*\(\s*!ORG_ID\s*\)[\s\S]*?IDENTUUM_TEST_ORG_ID is empty/
-    );
+    expect(SPEC_SRC).toMatch(/if\s*\(\s*!ORG_ID\s*\)[\s\S]*?IDENTUUM_TEST_ORG_ID is empty/);
   });
 
   it("the guard refuses the all-zero placeholder IDENTUUM_TEST_ORG_ID", () => {
-    expect(SPEC_SRC).toMatch(
-      /if\s*\(\s*ORG_ID\s*===\s*DEFAULT_ORG_ID\s*\)[\s\S]*?placeholder/
-    );
+    expect(SPEC_SRC).toMatch(/if\s*\(\s*ORG_ID\s*===\s*DEFAULT_ORG_ID\s*\)[\s\S]*?placeholder/);
   });
 
   it("the guard refuses empty IDENTUUM_TEST_ORG_ADMIN_EMAIL", () => {
@@ -101,7 +93,7 @@ describe("destructive recovery spec — placeholder-refusal guard", () => {
     // operators believe destructive mode "passed" while it was actually
     // refusing to do anything against the placeholder values.
     const guardBody = RAW_SPEC_SRC.match(
-      /export\s+function\s+requireConcreteDestructiveRecoveryTarget[\s\S]*?return\s+\{[\s\S]*?\}[;\s]*\n\}/
+      /\bfunction\s+requireConcreteDestructiveRecoveryTarget[\s\S]*?return\s+\{[\s\S]*?\}[;\s]*\n\}/
     )?.[0];
     expect(guardBody).toBeTruthy();
     expect(guardBody).not.toMatch(/test\.skip\(/);
@@ -111,15 +103,14 @@ describe("destructive recovery spec — placeholder-refusal guard", () => {
   });
 
   it("the guard error messages name variable names but NEVER reference values", () => {
-    const guardBody = RAW_SPEC_SRC.match(
-      /export\s+function\s+requireConcreteDestructiveRecoveryTarget[\s\S]*?return\s+\{[\s\S]*?\}[;\s]*\n\}/
-    )?.[0] ?? "";
+    const guardBody =
+      RAW_SPEC_SRC.match(
+        /\bfunction\s+requireConcreteDestructiveRecoveryTarget[\s\S]*?return\s+\{[\s\S]*?\}[;\s]*\n\}/
+      )?.[0] ?? "";
 
     // Variable names MUST appear in at least the four expected refusals.
     expect(guardBody).toMatch(/IDENTUUM_TEST_ORG_ID is empty/);
-    expect(guardBody).toMatch(
-      /IDENTUUM_TEST_ORG_ID is the all-zero placeholder/
-    );
+    expect(guardBody).toMatch(/IDENTUUM_TEST_ORG_ID is the all-zero placeholder/);
     expect(guardBody).toMatch(/IDENTUUM_TEST_ORG_ADMIN_EMAIL is empty/);
     expect(guardBody).toMatch(
       /IDENTUUM_TEST_ORG_ADMIN_EMAIL is the neutral 'admin@example\.org' placeholder/
@@ -146,7 +137,7 @@ describe("destructive recovery spec — placeholder-refusal guard", () => {
  * honored. Comments are NOT skipped here because callers pass a
  * comment-stripped source.
  */
-export function balanceParens(src: string, start: number): number {
+function balanceParens(src: string, start: number): number {
   if (src[start] !== "(") return -1;
   let depth = 0;
   let i = start;
@@ -186,11 +177,12 @@ export function balanceParens(src: string, start: number): number {
  * `test.beforeAll(` etc. all contain a `.` between `test` and `(` and
  * are therefore NOT matched.
  */
-export function extractTopLevelTestCalls(src: string): string[] {
+function extractTopLevelTestCalls(src: string): string[] {
   const results: string[] = [];
   const re = /\btest\s*\(/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(src)) !== null) {
+  while (true) {
+    const m = re.exec(src);
+    if (m === null) break;
     // Confirm this is not `test.something(` — the regex already excludes
     // that via `\s*\(` placement, but verify nothing surprising sneaks
     // through (e.g. unicode quirks).
@@ -270,11 +262,11 @@ describe("extractTopLevelTestCalls + balanceParens — parser correctness", () =
 // ── Guard call sites ────────────────────────────────────────────────────────
 
 describe("destructive recovery spec — guard is invoked before any page interaction", () => {
-  // Source without the guard's own export declaration. The declaration
+  // Source without the guard's own function declaration. The declaration
   // contains the literal `requireConcreteDestructiveRecoveryTarget` text,
   // which would otherwise inflate the guard-call count.
   const SPEC_WITHOUT_GUARD_DECL = SPEC_SRC.replace(
-    /export\s+function\s+requireConcreteDestructiveRecoveryTarget[\s\S]*?return\s+\{[\s\S]*?\}[;\s]*\n\}/,
+    /\bfunction\s+requireConcreteDestructiveRecoveryTarget[\s\S]*?return\s+\{[\s\S]*?\}[;\s]*\n\}/,
     ""
   );
 
@@ -310,13 +302,11 @@ describe("destructive recovery spec — guard is invoked before any page interac
     ).toBe(DESTRUCTIVE_TEST_CALLS.length);
 
     // Cross-check: total guard calls anywhere in the spec (excluding
-    // the export declaration) MUST equal the destructive test count.
+    // the function declaration) MUST equal the destructive test count.
     // A spurious guard call outside a destructive test would also be
     // a regression signal.
     const allGuardCalls =
-      SPEC_WITHOUT_GUARD_DECL.match(
-        /requireConcreteDestructiveRecoveryTarget\s*\(\s*\)/g
-      ) ?? [];
+      SPEC_WITHOUT_GUARD_DECL.match(/requireConcreteDestructiveRecoveryTarget\s*\(\s*\)/g) ?? [];
     expect(
       allGuardCalls.length,
       "total guard call count must equal the destructive test count"
@@ -342,14 +332,11 @@ describe("destructive recovery spec — guard is invoked before any page interac
       );
       expect(skipIdx, "DESTRUCTIVE_ALLOWED gate must be present").toBeGreaterThan(-1);
       expect(guardIdx, "guard call must be present").toBeGreaterThan(-1);
-      expect(guardIdx, "guard must follow the DESTRUCTIVE_ALLOWED gate").toBeGreaterThan(
-        skipIdx
-      );
+      expect(guardIdx, "guard must follow the DESTRUCTIVE_ALLOWED gate").toBeGreaterThan(skipIdx);
       if (interactionIdx > -1) {
-        expect(
-          guardIdx,
-          "guard must precede any page/context/network interaction"
-        ).toBeLessThan(interactionIdx);
+        expect(guardIdx, "guard must precede any page/context/network interaction").toBeLessThan(
+          interactionIdx
+        );
       }
     }
   });

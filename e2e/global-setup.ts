@@ -1,7 +1,11 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { fixtureDirectory, isDynamicFixtureModeRequested, resolveFixturePath } from "./helpers/fixture";
+import {
+  fixtureDirectory,
+  isDynamicFixtureModeRequested,
+  resolveFixturePath,
+} from "./helpers/fixture";
 
 /**
  * Playwright global setup — runs once before any test or webServer starts.
@@ -174,19 +178,13 @@ async function orchestrateDynamicFixtureCreate(): Promise<void> {
     runIDPCreateFixture();
   } catch (err) {
     throw new Error(
-      `[e2e setup] dynamic mode: IDP --e2e-create-org-admin-fixture failed. ` +
-        `Ensure the IDP container is rebuilt with the new CLI/migration ` +
-        `(make local-restart from identuum-idp) and that the compose env has ` +
-        `IDENTUUM_E2E_FIXTURE_CLI_ENABLED=true + IDENTUUM_IDP_INSECURE_DEV_MODE=true. ` +
-        `Underlying error: ${(err as Error).message}`
+      `[e2e setup] dynamic mode: IDP --e2e-create-org-admin-fixture failed. Ensure the IDP container is rebuilt with the new CLI/migration (make local-restart from identuum-idp) and that the compose env has IDENTUUM_E2E_FIXTURE_CLI_ENABLED=true + IDENTUUM_IDP_INSECURE_DEV_MODE=true. Underlying error: ${(err as Error).message}`
     );
   }
 
   if (!fs.existsSync(hostFixturePath)) {
     throw new Error(
-      `[e2e setup] dynamic mode: IDP CLI reported success but ${hostFixturePath} is missing. ` +
-        `Verify the compose bind mount of ../identuum-ui/e2e/.auth into /e2e-auth is in place ` +
-        `and the IDP container was restarted after the compose change.`
+      `[e2e setup] dynamic mode: IDP CLI reported success but ${hostFixturePath} is missing. Verify the compose bind mount of ../identuum-ui/e2e/.auth into /e2e-auth is in place and the IDP container was restarted after the compose change.`
     );
   }
   process.stdout.write("[e2e setup] dynamic mode: fixture created.\n");
@@ -326,9 +324,7 @@ function runDynamicFixturePreflight(hostFixtureDir: string): void {
   // 3. The fixture-CLI env gate must be set to the literal "true". The
   //    `sh -c 'test "$X" = "true"'` form returns exit code only — the value
   //    is NEVER printed to stdout.
-  if (
-    !dockerExec(["sh", "-c", 'test "$IDENTUUM_E2E_FIXTURE_CLI_ENABLED" = "true"']).ok
-  ) {
+  if (!dockerExec(["sh", "-c", 'test "$IDENTUUM_E2E_FIXTURE_CLI_ENABLED" = "true"']).ok) {
     throw new Error(
       "Dynamic fixture preflight failed: IDENTUUM_E2E_FIXTURE_CLI_ENABLED=true is not present in the IDP container. " +
         "Run `make local-restart` from identuum-idp."
@@ -338,16 +334,8 @@ function runDynamicFixturePreflight(hostFixtureDir: string): void {
   // 4. One of the accepted insecure local gates must be set. The IDP
   //    appconfig validation requires this — the CLI would otherwise refuse
   //    at first invocation. Checking here gives a clearer up-front error.
-  const insecureDev = dockerExec([
-    "sh",
-    "-c",
-    'test "$IDENTUUM_IDP_INSECURE_DEV_MODE" = "true"',
-  ]);
-  const insecureMFA = dockerExec([
-    "sh",
-    "-c",
-    'test "$IDENTUUM_IDP_INSECURE_MFA_BYPASS" = "true"',
-  ]);
+  const insecureDev = dockerExec(["sh", "-c", 'test "$IDENTUUM_IDP_INSECURE_DEV_MODE" = "true"']);
+  const insecureMFA = dockerExec(["sh", "-c", 'test "$IDENTUUM_IDP_INSECURE_MFA_BYPASS" = "true"']);
   if (!insecureDev.ok && !insecureMFA.ok) {
     throw new Error(
       "Dynamic fixture preflight failed: neither IDENTUUM_IDP_INSECURE_DEV_MODE=true nor IDENTUUM_IDP_INSECURE_MFA_BYPASS=true is present in the IDP container. " +
@@ -358,8 +346,7 @@ function runDynamicFixturePreflight(hostFixtureDir: string): void {
   // 5. Host fixture directory existence — already created above; re-verify.
   if (!fs.existsSync(hostFixtureDir)) {
     throw new Error(
-      `Dynamic fixture preflight failed: host fixture directory ${hostFixtureDir} is missing. ` +
-        "Reinvoke globalSetup or create the directory manually with mode 0700."
+      `Dynamic fixture preflight failed: host fixture directory ${hostFixtureDir} is missing. Reinvoke globalSetup or create the directory manually with mode 0700.`
     );
   }
 

@@ -37,8 +37,10 @@ test.describe("identuum-ui login flow", () => {
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    // Root redirects to /login when configured.
-    await page.goto("/");
+    // Navigate directly to the IDP login page. Do not use "/" — in a
+    // split-runtime deployment the UI root redirects to /ag-admin/login,
+    // not the IDP login page.
+    await page.goto("/login");
     await page.waitForURL(/\/login/);
 
     // Email step.
@@ -103,6 +105,182 @@ test.describe("identuum-ui login flow", () => {
 //     BEFORE any page script runs (via addInitScript) so the affordance
 //     is gated off cleanly — the password form must still render.
 
+// ── MFA enrollment flow — mocked responses ───────────────────────────────────
+//
+// These tests verify UI state transitions for the in-browser enrollment flow
+// using Playwright's page.route() to mock all backend calls. No real backend,
+// TOTP secret, or live credentials are required.
+//
+// Route patterns use exact regex anchors ($) so longer paths like
+// /mfa/enroll/initiate are not accidentally matched by the /login pattern.
+//
+// Assertions check UI structure (headings, button text) — NOT secret values.
+
+// ── fetch-mock helper ─────────────────────────────────────────────────────────
+//
+// page.route() has proven unreliable for these tests — the Next.js dev
+// server's keep-alive connections cause some requests to bypass Playwright's
+// network-layer intercept. Instead we use page.addInitScript() to patch
+// window.fetch before any React/Next.js hydration code runs. The patched
+// fetch intercepts client-side calls (which is all we need for UI state
+// testing) and falls through to the original for everything else.
+//
+// Rules:
+//  - Scripts contain NO secrets, tokens, TOTP seeds, or real credentials.
+//  - "AAAAAAAAAAAAAAAA" is a deliberately fake placeholder, not a TOTP secret.
+//  - "019e7000-mock-*" UUIDs are fake; the real backend rejects them.
+//  - No cookies are set — the mocked session has no actual auth; the server
+//    redirects any post-login navigation back to /login, which is expected.
+
+// ── fetch interceptor helper ──────────────────────────────────────────────────
+//
+// page.route() is unreliable for these tests (Next.js dev-server keep-alive
+// connections bypass Playwright's network-layer intercept in some cases).
+// page.addInitScript() patches window.fetch BEFORE React/Next.js hydration,
+// guaranteeing the intercept runs for all client-side fetch calls.
+//
+// Scripts are passed as raw strings so TypeScript does not attempt to
+// type-check the browser-context code.
+
+test.describe("/login — MFA enrollment flow (mocked backend)", () => {
+  test("mfa_enrollment_required with session_id shows enrollment form → QR → verify → recovery codes", async ({
+    page,
+  }) => {
+    // Patch window.fetch with all four mocked endpoints.
+    // Runs on every navigation within this page fixture.
+    // Contains NO secrets — values are placeholder stubs only.
+    await page.addInitScript(`
+      (function() {
+        var _orig = window.fetch.bind(window);
+        window.fetch = function(input, init) {
+          var url = typeof input === 'string' ? input : (input ? input.url : '');
+          var method = ((init && init.method) || 'GET').toUpperCase();
+          if (url.indexOf('/api/idp/api/v1/auth/organization-lookup') !== -1) {
+            return Promise.resolve(new Response('null', {status: 404, headers: {'Content-Type': 'application/json'}}));
+          }
+          if (/\\/api\\/idp\\/api\\/v1\\/auth\\/login$/.test(url) && method === 'POST') {
+            return Promise.resolve(new Response(JSON.stringify({error:'mfa_enrollment_required',mfa_required:true,mfa_enrollment_required:true,session_id:'019e7000-mock-enroll-session'}), {status:401,headers:{'Content-Type':'application/json'}}));
+          }
+          if (/\\/api\\/idp\\/api\\/v1\\/auth\\/login\\/mfa\\/enroll\\/initiate$/.test(url) && method === 'POST') {
+            return Promise.resolve(new Response(JSON.stringify({secret:'AAAAAAAAAAAAAAAA',otpauth_url:'otpauth://totp/Test%3Atest%40example.com?secret=AAAAAAAAAAAAAAAA&issuer=Test',recovery_codes:['AAAAA-AAAAA','BBBBB-BBBBB'],expires_at:'2099-01-01T00:00:00Z'}), {status:200,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}}));
+          }
+          if (/\\/api\\/idp\\/api\\/v1\\/auth\\/login\\/mfa\\/enroll\\/complete$/.test(url) && method === 'POST') {
+            return Promise.resolve(new Response(JSON.stringify({role:'site_admin',success:true}), {status:200,headers:{'Content-Type':'application/json'}}));
+          }
+          return _orig(input, init);
+        };
+      })();
+    `);
+
+    await page.goto("/login");
+    await page.waitForLoadState("networkidle");
+
+    // Email step.
+    await page.getByLabel("Email or domain").fill("test@example.com");
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    // Password step.
+    await expect(page.getByLabel("Password")).toBeVisible();
+    await page.getByLabel("Password").fill("any-password");
+    await page.getByRole("button", { name: "Sign in" }).click();
+
+    // MFA enrollment form — QR code section must appear.
+    await expect(page.getByText("Set up two-factor authentication")).toBeVisible({ timeout: 8000 });
+    const codeInput = page.getByLabel("Verification code");
+    await expect(codeInput).toBeVisible();
+
+    // Enter any 6-digit code (backend is mocked to succeed).
+    await codeInput.fill("123456");
+    await page.getByRole("button", { name: "Verify and sign in" }).click();
+
+    // Recovery codes phase must appear — user must acknowledge before proceeding.
+    await expect(page.getByText("Save your recovery codes")).toBeVisible({ timeout: 8000 });
+    await expect(page.getByRole("button", { name: "I've saved my recovery codes" })).toBeVisible();
+
+    // Structural assertion: monospaced code elements are rendered in the recovery section.
+    const codeElements = page.locator(".font-mono.text-slate-800");
+    await expect(codeElements.first()).toBeVisible();
+
+    // Warning must be visible.
+    await expect(page.getByText("These codes will not be shown again.")).toBeVisible();
+
+    // Click acknowledge. onSuccess(role) fires → router.push to dashboard.
+    // No URL assertion: mocked session has no real cookies so the server
+    // redirects back to /login — this is expected behavior for a mock-only test.
+    await page.getByRole("button", { name: "I've saved my recovery codes" }).click();
+  });
+
+  test("mfa_enrollment_required with null sessionId (old OSS path) shows fallback message", async ({
+    page,
+  }) => {
+    // Old OSS contract: 401 + error field only — no booleans, no session_id.
+    await page.addInitScript(`
+      (function() {
+        var _orig = window.fetch.bind(window);
+        window.fetch = function(input, init) {
+          var url = typeof input === 'string' ? input : (input ? input.url : '');
+          var method = ((init && init.method) || 'GET').toUpperCase();
+          if (url.indexOf('/api/idp/api/v1/auth/organization-lookup') !== -1) {
+            return Promise.resolve(new Response('null', {status:404,headers:{'Content-Type':'application/json'}}));
+          }
+          if (/\\/api\\/idp\\/api\\/v1\\/auth\\/login$/.test(url) && method === 'POST') {
+            return Promise.resolve(new Response(JSON.stringify({error:'mfa_enrollment_required'}), {status:401,headers:{'Content-Type':'application/json'}}));
+          }
+          return _orig(input, init);
+        };
+      })();
+    `);
+
+    await page.goto("/login");
+    await page.getByLabel("Email or domain").fill("testuser@example.com");
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    await expect(page.getByLabel("Password")).toBeVisible();
+    await page.getByLabel("Password").fill("any-password");
+    await page.getByRole("button", { name: "Sign in" }).click();
+
+    // Fallback message must appear — enrollment form must NOT appear.
+    await expect(page.getByText(/Two-factor authentication enrollment is required/)).toBeVisible({
+      timeout: 8000,
+    });
+    await expect(page.getByText("Set up two-factor authentication")).not.toBeVisible();
+  });
+
+  test("mfa_required with session_id (OSS 401) shows MFA verify form", async ({ page }) => {
+    await page.addInitScript(`
+      (function() {
+        var _orig = window.fetch.bind(window);
+        window.fetch = function(input, init) {
+          var url = typeof input === 'string' ? input : (input ? input.url : '');
+          var method = ((init && init.method) || 'GET').toUpperCase();
+          if (url.indexOf('/api/idp/api/v1/auth/organization-lookup') !== -1) {
+            return Promise.resolve(new Response('null', {status:404,headers:{'Content-Type':'application/json'}}));
+          }
+          if (/\\/api\\/idp\\/api\\/v1\\/auth\\/login$/.test(url) && method === 'POST') {
+            return Promise.resolve(new Response(JSON.stringify({error:'mfa_required',mfa_required:true,mfa_enrollment_required:false,session_id:'019e7000-mock-mfa-session'}), {status:401,headers:{'Content-Type':'application/json'}}));
+          }
+          return _orig(input, init);
+        };
+      })();
+    `);
+
+    await page.goto("/login");
+    await page.getByLabel("Email or domain").fill("testuser@example.com");
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    await expect(page.getByLabel("Password")).toBeVisible();
+    await page.getByLabel("Password").fill("any-password");
+    await page.getByRole("button", { name: "Sign in" }).click();
+
+    // MFA verify form (not enrollment form) must appear.
+    await expect(page.getByText("Two-factor authentication")).toBeVisible({ timeout: 8000 });
+    await expect(page.getByLabel("Verification code")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Verify" })).toBeVisible();
+    // Enrollment heading must NOT appear.
+    await expect(page.getByText("Set up two-factor authentication")).not.toBeVisible();
+  });
+});
+
 test.describe("/login — passkey/WebAuthn login affordance (non-destructive)", () => {
   test("password login form renders without auto-submitting on a fresh /login visit", async ({
     page,
@@ -160,7 +338,7 @@ test.describe("/login — passkey/WebAuthn login affordance (non-destructive)", 
     const ctx = await browser.newContext();
     await ctx.addInitScript(() => {
       // biome-ignore lint/suspicious/noExplicitAny: deliberate browser-API removal for test
-      delete (window as any).PublicKeyCredential;
+      Reflect.deleteProperty(window as any, "PublicKeyCredential");
     });
     const page = await ctx.newPage();
     try {

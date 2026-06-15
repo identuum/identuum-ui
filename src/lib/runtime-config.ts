@@ -90,9 +90,7 @@ export function idpBaseUrl(cfg: RuntimeConfig): string {
 // Priority: internal_base_url → management_base_url (legacy alias) → public_base_url.
 export function agBaseUrl(cfg: RuntimeConfig): string {
   return (
-    cfg.ag.internal_base_url?.trim() ||
-    cfg.ag.management_base_url?.trim() ||
-    cfg.ag.public_base_url
+    cfg.ag.internal_base_url?.trim() || cfg.ag.management_base_url?.trim() || cfg.ag.public_base_url
   );
 }
 

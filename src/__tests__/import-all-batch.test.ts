@@ -37,7 +37,9 @@ function deriveImportCandidates(
 const VALID_UUID_A = "aaaaaaaa-0000-0000-0000-000000000001";
 const VALID_UUID_B = "bbbbbbbb-0000-0000-0000-000000000002";
 
-function makeIDPOrg(overrides: Partial<{ id: string; name: string; active: boolean; deleted: boolean }> = {}) {
+function makeIDPOrg(
+  overrides: Partial<{ id: string; name: string; active: boolean; deleted: boolean }> = {}
+) {
   return { id: VALID_UUID_A, name: "acme", active: true, deleted: false, ...overrides };
 }
 
@@ -104,9 +106,7 @@ describe("trust boundary: server does not accept client-supplied candidates", ()
   it("server-derived candidates ignore any orgs the client might have omitted", () => {
     // A client that renders 0 unlinked orgs (stale display) cannot prevent the
     // server from discovering real unlinked orgs at action time.
-    const serverFetchedOrgs = [
-      makeIDPOrg({ id: VALID_UUID_A, name: "real-unlinked" }),
-    ];
+    const serverFetchedOrgs = [makeIDPOrg({ id: VALID_UUID_A, name: "real-unlinked" })];
     // Server filter finds them even if client would have shown 0.
     const candidates = deriveImportCandidates(serverFetchedOrgs, new Set());
     expect(candidates).toHaveLength(1);
@@ -115,9 +115,7 @@ describe("trust boundary: server does not accept client-supplied candidates", ()
   it("server-derived candidates filter out orgs the client might have injected", () => {
     // A tampered client that adds extra org IDs to the form cannot bypass the
     // server filter; the server re-fetches from IDP/AG and the filter applies.
-    const serverFetchedOrgs = [
-      makeIDPOrg({ id: VALID_UUID_A, name: "real-org" }),
-    ];
+    const serverFetchedOrgs = [makeIDPOrg({ id: VALID_UUID_A, name: "real-org" })];
     // Suppose a tampered client tried to inject VALID_UUID_B — server never
     // received it; only server-fetched orgs are candidates.
     const candidates = deriveImportCandidates(serverFetchedOrgs, new Set());
@@ -130,18 +128,35 @@ describe("trust boundary: server does not accept client-supplied candidates", ()
 describe("ImportAllBatchResult shape", () => {
   it("no secret-like fields in success result", () => {
     const result: ImportAllBatchResult = {
-      ok: true, imported: 3, skipped: 1, failed: 0,
+      ok: true,
+      imported: 3,
+      skipped: 1,
+      failed: 0,
       message: "3 imported, 1 already linked.",
     };
     const json = JSON.stringify(result);
-    for (const forbidden of ["password", "token", "secret", "mfa", "admin", "role", "permission", "credential", "bearer", "cookie"]) {
+    for (const forbidden of [
+      "password",
+      "token",
+      "secret",
+      "mfa",
+      "admin",
+      "role",
+      "permission",
+      "credential",
+      "bearer",
+      "cookie",
+    ]) {
       expect(json).not.toContain(forbidden);
     }
   });
 
   it("no internal URL in any result field", () => {
     const result: ImportAllBatchResult = {
-      ok: false, imported: 0, skipped: 0, failed: 1,
+      ok: false,
+      imported: 0,
+      skipped: 0,
+      failed: 1,
       message: "AG is not reachable. Try again later.",
       error_code: "ag_unavailable",
     };
@@ -154,23 +169,38 @@ describe("ImportAllBatchResult shape", () => {
 
   it("ok=false when failed > 0", () => {
     const result: ImportAllBatchResult = {
-      ok: false, imported: 2, skipped: 0, failed: 1, message: "2 imported, 1 failed.",
+      ok: false,
+      imported: 2,
+      skipped: 0,
+      failed: 1,
+      message: "2 imported, 1 failed.",
     };
     expect(result.ok).toBe(false);
   });
 
   it("ok=true when failed=0 even with skipped", () => {
     const result: ImportAllBatchResult = {
-      ok: true, imported: 5, skipped: 2, failed: 0, message: "5 imported, 2 already linked.",
+      ok: true,
+      imported: 5,
+      skipped: 2,
+      failed: 0,
+      message: "5 imported, 2 already linked.",
     };
     expect(result.ok).toBe(true);
   });
 
   it("abort result uses safe error_code not raw backend message", () => {
-    const safeCodes: OrgLinkWriteErrorCode[] = ["ag_auth_required", "not_configured", "ag_unavailable"];
+    const safeCodes: OrgLinkWriteErrorCode[] = [
+      "ag_auth_required",
+      "not_configured",
+      "ag_unavailable",
+    ];
     for (const code of safeCodes) {
       const result: ImportAllBatchResult = {
-        ok: false, imported: 0, skipped: 0, failed: 1,
+        ok: false,
+        imported: 0,
+        skipped: 0,
+        failed: 1,
         message: "Import stopped: AG session or connectivity issue.",
         error_code: code,
       };
@@ -183,7 +213,10 @@ describe("ImportAllBatchResult shape", () => {
 
   it("no-op result when server finds zero candidates", () => {
     const result: ImportAllBatchResult = {
-      ok: true, imported: 0, skipped: 0, failed: 0,
+      ok: true,
+      imported: 0,
+      skipped: 0,
+      failed: 0,
       message: "No organizations to import.",
     };
     expect(result.ok).toBe(true);
@@ -194,7 +227,11 @@ describe("ImportAllBatchResult shape", () => {
     // Documents the concurrent-safe contract: if AG reports already linked,
     // another session imported first — safe to count as skipped.
     const skippedResult: ImportAllBatchResult = {
-      ok: true, imported: 2, skipped: 1, failed: 0, message: "2 imported, 1 already linked.",
+      ok: true,
+      imported: 2,
+      skipped: 1,
+      failed: 0,
+      message: "2 imported, 1 already linked.",
     };
     expect(skippedResult.ok).toBe(true);
     expect(skippedResult.skipped).toBe(1);
@@ -203,7 +240,11 @@ describe("ImportAllBatchResult shape", () => {
 
   it("org_name_already_exists is failed not skipped", () => {
     const failedResult: ImportAllBatchResult = {
-      ok: false, imported: 1, skipped: 0, failed: 1, message: "1 imported, 1 failed.",
+      ok: false,
+      imported: 1,
+      skipped: 0,
+      failed: 1,
+      message: "1 imported, 1 failed.",
     };
     expect(failedResult.ok).toBe(false);
     expect(failedResult.failed).toBe(1);
@@ -224,6 +265,8 @@ describe("ImportAllForm displayCount is display-only", () => {
 
   it("displayCount=0 disables the button", () => {
     // When the server-rendered page shows 0 unlinked orgs, the button is disabled.
-    expect(0 === 0).toBe(true);
+    const displayCount = 0;
+    const buttonDisabled = displayCount === 0;
+    expect(buttonDisabled).toBe(true);
   });
 });

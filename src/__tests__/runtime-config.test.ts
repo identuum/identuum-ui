@@ -179,6 +179,113 @@ describe("idpBaseUrl", () => {
   it("falls back to public_base_url when internal_base_url is absent", () => {
     expect(idpBaseUrl(baseConfig())).toBe("http://localhost:7113");
   });
+
+  it("trims whitespace from internal_base_url", () => {
+    const cfg = baseConfig({
+      idp: {
+        enabled: true,
+        public_base_url: "http://localhost:7113",
+        internal_base_url: "  http://host.docker.internal:7113  ",
+      },
+    });
+    expect(idpBaseUrl(cfg)).toBe("http://host.docker.internal:7113");
+  });
+
+  it("falls back to public_base_url when internal_base_url is blank whitespace", () => {
+    const cfg = baseConfig({
+      idp: {
+        enabled: true,
+        public_base_url: "http://localhost:7113",
+        internal_base_url: "   ",
+      },
+    });
+    expect(idpBaseUrl(cfg)).toBe("http://localhost:7113");
+  });
+
+  // Split-runtime scenario: UI container on host machine, IDP on host port.
+  // The proxy MUST use host.docker.internal to escape the container's loopback.
+  it("uses host.docker.internal URL for server-side proxy in split-runtime Docker setup", () => {
+    const cfg = baseConfig({
+      idp: {
+        enabled: true,
+        public_base_url: "http://localhost:7113",
+        internal_base_url: "http://host.docker.internal:7113",
+      },
+    });
+    expect(idpBaseUrl(cfg)).toBe("http://host.docker.internal:7113");
+    expect(idpBaseUrl(cfg)).not.toBe("http://localhost:7113");
+  });
+
+  it("does not use public localhost URL when internal_base_url is set (no 502 fallback)", () => {
+    const cfg = baseConfig({
+      idp: {
+        enabled: true,
+        public_base_url: "http://localhost:7113",
+        internal_base_url: "http://host.docker.internal:7113",
+      },
+    });
+    // Regression guard: public localhost is unreachable from inside a container;
+    // the server-side proxy MUST route via internal_base_url.
+    expect(idpBaseUrl(cfg)).not.toContain("localhost");
+  });
+});
+
+// ── toPublicConfig — split-runtime URL hiding ────────────────────────────────
+
+describe("toPublicConfig — does not expose server-side IDP URL to browser", () => {
+  it("strips host.docker.internal from IDP public config", () => {
+    const cfg = baseConfig({
+      idp: {
+        enabled: true,
+        public_base_url: "http://localhost:7113",
+        internal_base_url: "http://host.docker.internal:7113",
+      },
+    });
+    const pub = toPublicConfig(cfg);
+    expect(JSON.stringify(pub)).not.toContain("host.docker.internal");
+    expect(JSON.stringify(pub)).not.toContain("internal_base_url");
+    expect(pub.idp.public_base_url).toBe("http://localhost:7113");
+  });
+
+  it("split-runtime config carries distinct public and internal IDP URLs", () => {
+    const cfg = baseConfig({
+      idp: {
+        enabled: true,
+        public_base_url: "http://localhost:7113",
+        internal_base_url: "http://host.docker.internal:7113",
+      },
+    });
+    // Both URLs present in the full config
+    expect(cfg.idp.public_base_url).toBe("http://localhost:7113");
+    expect(cfg.idp.internal_base_url).toBe("http://host.docker.internal:7113");
+    // Only public URL exposed to browser
+    const pub = toPublicConfig(cfg);
+    expect(pub.idp.public_base_url).toBe("http://localhost:7113");
+  });
+});
+
+// ── IDP proxy route source invariant ─────────────────────────────────────────
+
+describe("IDP proxy route — uses idpBaseUrl(), not raw public_base_url", () => {
+  const proxyRoute = (() => {
+    const { readFileSync } = require("node:fs");
+    const { resolve } = require("node:path");
+    return readFileSync(
+      resolve(import.meta.dirname, "../../src/app/api/idp/[...path]/route.ts"),
+      "utf8"
+    );
+  })();
+
+  it("imports idpBaseUrl from runtime-config", () => {
+    expect(proxyRoute).toContain("idpBaseUrl");
+    expect(proxyRoute).toContain("runtime-config");
+  });
+
+  it("does not read cfg.idp.public_base_url directly in proxy logic", () => {
+    // The proxy must go through idpBaseUrl() which respects internal_base_url.
+    // Direct access would bypass the internal URL and cause 502 in Docker.
+    expect(proxyRoute).not.toContain("cfg.idp.public_base_url");
+  });
 });
 
 // ── agIdentityBaseUrl / agIdentityPublicUrl ───────────────────────────────────

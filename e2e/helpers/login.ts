@@ -30,10 +30,10 @@
  * Does NOT print credentials, cookies, session headers, or TOTP codes.
  */
 
-import type { BrowserContext, Page } from "@playwright/test";
-import { generateTOTP } from "./totp";
-import { loadOrgAdminFixture } from "./fixture";
 import { statSync } from "node:fs";
+import type { BrowserContext, Page } from "@playwright/test";
+import { loadOrgAdminFixture } from "./fixture";
+import { generateTOTP } from "./totp";
 
 // ── Site-admin credentials (canonical names only) ─────────────────────────────
 
@@ -94,7 +94,6 @@ export const skipOrgAdminTests = !ORG_ADMIN_EMAIL || !ORG_ADMIN_PASSWORD;
 // Do not store secrets or tokens here — only epoch-ms timestamps.
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
 
 const COOLDOWN_FILE = "/tmp/identuum-totp-cooldown.json";
 
@@ -227,8 +226,10 @@ export async function loginAsSiteAdmin(page: Page): Promise<void> {
   // Full login with TOTP cooldown
   await waitForSafeTOTPWindow(SITE_ADMIN_EMAIL, page);
 
-  await page.goto("/");
-  await page.waitForURL(/\/login/);
+  // Navigate directly to the IDP login page. Do not use "/" — in a
+  // split-runtime deployment the UI root redirects to /ag-admin/login,
+  // not the IDP login page.
+  await page.goto("/login");
 
   const emailInput = page.getByLabel("Email or domain");
   await emailInput.fill(SITE_ADMIN_EMAIL);
@@ -267,8 +268,10 @@ export async function loginAsOrgAdmin(page: Page): Promise<void> {
   // Full login with TOTP cooldown
   await waitForSafeTOTPWindow(ORG_ADMIN_EMAIL, page);
 
-  await page.goto("/");
-  await page.waitForURL(/\/login/);
+  // Navigate directly to the IDP login page. Do not use "/" — in a
+  // split-runtime deployment the UI root redirects to /ag-admin/login,
+  // not the IDP login page.
+  await page.goto("/login");
 
   const emailInput = page.getByLabel("Email or domain");
   await emailInput.fill(ORG_ADMIN_EMAIL);

@@ -82,7 +82,7 @@ export function AccountMenu({ email }: AccountMenuProps) {
             Account settings
           </a>
 
-          <div role="separator" className="my-1 border-t border-stone-100" />
+          <div aria-hidden="true" className="my-1 border-t border-stone-100" />
 
           {/* Logout uses POST so the session cookie is sent correctly. */}
           <form method="POST" action="/api/auth/logout">

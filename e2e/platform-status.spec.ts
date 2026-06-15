@@ -177,7 +177,12 @@ test.describe("/platform-status — backend card status rows", () => {
     }
 
     await page.goto("/platform-status");
-    await expect(page.getByText(idpVersion)).toBeVisible();
+    // IDP and AG can legitimately share a version string in the local dev
+    // environment (both renderable as "0.0.0-dev"). The assertion here is that
+    // the IDP version appears SOMEWHERE on the page — not that it's the only
+    // match. Anchor with .first() to mirror the convention used by the
+    // sibling "page shows at least one Operational label" test above.
+    await expect(page.getByText(idpVersion).first()).toBeVisible();
   });
 });
 

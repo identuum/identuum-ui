@@ -77,12 +77,7 @@ async function orchestrateDynamicFixturePurge(): Promise<void> {
     );
   } catch (err) {
     process.stderr.write(
-      `[e2e teardown] dynamic mode: IDP --e2e-purge-org-fixture failed; ` +
-        `leaving host fixture file in place at ${hostFixturePath}. ` +
-        `Inspect the DB and re-run the purge manually:\n` +
-        `  docker compose -f ${IDP_COMPOSE_FILE} exec -T ${IDP_SERVICE_NAME} ` +
-        `/app/identuum --e2e-purge-org-fixture --fixture-file ${IDP_CONTAINER_FIXTURE_PATH} --confirm-e2e-purge\n` +
-        `Underlying error: ${(err as Error).message}\n`
+      `[e2e teardown] dynamic mode: IDP --e2e-purge-org-fixture failed; leaving host fixture file in place at ${hostFixturePath}. Inspect the DB and re-run the purge manually:\n  docker compose -f ${IDP_COMPOSE_FILE} exec -T ${IDP_SERVICE_NAME} /app/identuum --e2e-purge-org-fixture --fixture-file ${IDP_CONTAINER_FIXTURE_PATH} --confirm-e2e-purge\nUnderlying error: ${(err as Error).message}\n`
     );
     return;
   }

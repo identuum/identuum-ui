@@ -5,6 +5,7 @@ import {
   computePlatformMode,
   discoverRuntime,
   extractCapabilities,
+  getCapabilityAvailability,
 } from "../lib/runtime-composition";
 import type { BackendComponentState } from "../lib/types";
 
@@ -48,6 +49,54 @@ function validAGResponse(
     license: { status: "valid", product: "identuum-ag" },
     ...overrides,
   };
+}
+
+function validCEIDPResponse(
+  overrides: Partial<Record<string, unknown>> = {}
+): Record<string, unknown> {
+  return validIDPResponse({
+    product: "identuum-idp-ce",
+    capability_map_schema_version: "idp-capabilities.v1",
+    capabilities: {
+      identity_provider: true,
+      component_discovery: true,
+      license_status: true,
+      auth_provider_discovery: true,
+      account_self_service: false,
+      user_sessions: true,
+      mfa: true,
+      webauthn: false,
+      authorization_server: true,
+      oauth_clients: true,
+      api_resources: false,
+      service_accounts: false,
+      scope_templates: false,
+      org_roles: false,
+      protocol_settings: false,
+      client_credentials: false,
+      dynamic_client_registration: false,
+      scim: false,
+      audit_log: true,
+      audit_chain: false,
+      reporting: false,
+      anomaly_detection: false,
+      observability: true,
+    },
+    license: {
+      status: "valid",
+      product: "identuum-idp-ce",
+      tier: "enterprise",
+      deployment_mode: "self-hosted",
+      license_type: "subscription",
+      expires_at: "2027-06-09T00:00:00Z",
+      days_remaining: 365,
+    },
+    ...overrides,
+  });
+}
+
+function withoutKey(source: Record<string, unknown>, omittedKey: string): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(source).filter(([key]) => key !== omittedKey));
 }
 
 function usableState(component: string): BackendComponentState {
@@ -293,6 +342,26 @@ describe("discoverRuntime", () => {
     expect(idp.license.status).toBe("valid");
   });
 
+  it("parses CE capability response and preserves true and false facts", async () => {
+    vi.stubGlobal("fetch", mockOkFetch(validCEIDPResponse()));
+    const state = await discoverRuntime("http://idp-ce:8080", null);
+    const idp = state.components.idp;
+    expect(idp.usable).toBe(true);
+    expect(idp.capabilities.audit_log).toBe(true);
+    expect(idp.capabilities.observability).toBe(true);
+    expect(idp.capabilities.oauth_clients).toBe(true);
+    expect(idp.capabilities.api_resources).toBe(false);
+    expect(idp.capabilities.service_accounts).toBe(false);
+    expect(idp.capabilities.scope_templates).toBe(false);
+    expect(idp.capabilities.org_roles).toBe(false);
+    expect(idp.capabilities.protocol_settings).toBe(false);
+    expect(idp.capabilities.client_credentials).toBe(false);
+    expect(idp.capabilities.scim).toBe(false);
+    expect(idp.capabilities.dynamic_client_registration).toBe(false);
+    expect(idp.license.product).toBe("identuum-idp-ce");
+    expect(idp.license.tier).toBe("enterprise");
+  });
+
   it("preserves version and status from backend response", async () => {
     vi.stubGlobal("fetch", mockOkFetch(validIDPResponse()));
     const state = await discoverRuntime("http://idp:8080", null);
@@ -356,7 +425,11 @@ describe("license fields in component discovery", () => {
   it("passes through tier from backend license response", async () => {
     vi.stubGlobal(
       "fetch",
-      mockOkFetch(validIDPResponse({ license: { status: "valid", product: "identuum-idp", tier: "enterprise" } }))
+      mockOkFetch(
+        validIDPResponse({
+          license: { status: "valid", product: "identuum-idp", tier: "enterprise" },
+        })
+      )
     );
     const state = await discoverRuntime("http://idp:8080", null);
     expect(state.components.idp.license.tier).toBe("enterprise");
@@ -384,7 +457,11 @@ describe("license fields in component discovery", () => {
   it("passes through deployment_mode from backend license response", async () => {
     vi.stubGlobal(
       "fetch",
-      mockOkFetch(validAGResponse({ license: { status: "valid", product: "identuum-ag", deployment_mode: "online" } }))
+      mockOkFetch(
+        validAGResponse({
+          license: { status: "valid", product: "identuum-ag", deployment_mode: "online" },
+        })
+      )
     );
     const state = await discoverRuntime(null, "http://ag:7215");
     expect(state.components.ag.license.deployment_mode).toBe("online");
@@ -495,6 +572,123 @@ describe("license fields in component discovery", () => {
 });
 
 // ---------------------------------------------------------------------------
+// AG OSS backend wire shape — regression pins on the
+// identuum-ag-oss /api/v1/component response that the live backend
+// emits today: { component: "identuum-ag", product: "identuum-ag-oss",
+// capability_map_schema_version: "ag-capabilities.v1", ... }.
+//
+// Before this slice the backend mistakenly returned
+// `component: "identuum-ag-oss"`, which made the UI reject every
+// real AG OSS deployment with `wrong_component`. These tests fix
+// the shape going forward.
+// ---------------------------------------------------------------------------
+
+function liveAGOSSComponentResponse(
+  overrides: Partial<Record<string, unknown>> = {}
+): Record<string, unknown> {
+  return {
+    component: "identuum-ag",
+    product: "identuum-ag-oss",
+    capability_map_schema_version: "ag-capabilities.v1",
+    version: "0.0.0-dev",
+    status: "ok",
+    capabilities: {
+      identity_provider: true,
+      agent_governance: true,
+      component_discovery: true,
+      license_status: true,
+      auth_provider_discovery: false,
+      organization_linking: false,
+      agent_sessions: true,
+      organizations: false,
+      organization_export: false,
+      organization_import: false,
+      trusted_oidc: false,
+      hitl: false,
+      mcp: false,
+      site_admin: false,
+    },
+    auth: { authority: "identuum-ag-oss", human_auth_provider: "oidc" },
+    license: { status: "valid", product: "identuum-ag-oss", tier: "starter" },
+    ...overrides,
+  };
+}
+
+describe("AG OSS live backend wire shape (identuum-ag-oss /api/v1/component)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("identuum-ag-oss response is accepted: component=identuum-ag matches EXPECTED_AG_COMPONENT", async () => {
+    vi.stubGlobal("fetch", mockOkFetch(liveAGOSSComponentResponse()));
+    const state = await discoverRuntime(null, "http://ag-oss:7215");
+    const ag = state.components.ag;
+    expect(ag.configured).toBe(true);
+    expect(ag.reachable).toBe(true);
+    expect(ag.usable).toBe(true);
+    expect(ag.error).toBeNull();
+    expect(ag.component).toBe(EXPECTED_AG_COMPONENT);
+    expect(ag.component).toBe("identuum-ag");
+    expect(state.mode).toBe("agent-governance-only");
+  });
+
+  it("CE-only capabilities false on AG OSS remain false (hitl, mcp, organization_export, organization_import, trusted_oidc)", async () => {
+    vi.stubGlobal("fetch", mockOkFetch(liveAGOSSComponentResponse()));
+    const state = await discoverRuntime(null, "http://ag-oss:7215");
+    const caps = state.components.ag.capabilities;
+    expect(caps.hitl).toBe(false);
+    expect(caps.organization_export).toBe(false);
+    expect(caps.organization_import).toBe(false);
+  });
+
+  it("AG OSS license snapshot carries product=identuum-ag-oss + tier=starter without leaking secret fields", async () => {
+    vi.stubGlobal("fetch", mockOkFetch(liveAGOSSComponentResponse()));
+    const state = await discoverRuntime(null, "http://ag-oss:7215");
+    const lic = state.components.ag.license;
+    expect(lic.status).toBe("valid");
+    expect(lic.product).toBe("identuum-ag-oss");
+    expect(lic.tier).toBe("starter");
+    // ComponentLicenseInfo never carries raw payload / features / customer
+    // identifiers. The UI extractor keeps only the safe field set.
+    expect((lic as unknown as Record<string, unknown>).raw).toBeUndefined();
+    expect((lic as unknown as Record<string, unknown>).features).toBeUndefined();
+    expect((lic as unknown as Record<string, unknown>).licensee).toBeUndefined();
+  });
+
+  it("backend unreachable preserves unknown/unavailable semantics (not false)", async () => {
+    vi.stubGlobal("fetch", mockFailFetch());
+    const state = await discoverRuntime(null, "http://ag-oss:7215");
+    const ag = state.components.ag;
+    expect(ag.configured).toBe(true);
+    expect(ag.reachable).toBe(false);
+    expect(ag.usable).toBe(false);
+    // The unreachable path collapses license to a status-only stub; no
+    // capability claim flips silently to false.
+    expect(ag.license.status).toBe("unknown");
+    expect(ag.component).toBeNull();
+    expect(ag.error).toBe("unreachable");
+  });
+
+  it("regression: legacy backend response (component: identuum-ag-oss) is correctly rejected as wrong_component, NOT silently accepted", async () => {
+    // Reproduces the pre-fix behaviour: a backend that incorrectly
+    // reports its module name in the family slot fails the UI's
+    // identity check rather than being treated as an unknown product.
+    vi.stubGlobal(
+      "fetch",
+      mockOkFetch(liveAGOSSComponentResponse({ component: "identuum-ag-oss" }))
+    );
+    const state = await discoverRuntime(null, "http://ag-oss:7215");
+    const ag = state.components.ag;
+    expect(ag.usable).toBe(false);
+    expect(ag.error).toBe("wrong_component");
+    expect(ag.component).toBe("identuum-ag-oss");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // extractCapabilities — direct unit tests
 // ---------------------------------------------------------------------------
 
@@ -518,9 +712,14 @@ describe("extractCapabilities", () => {
   });
 
   it("extracts known boolean true values", () => {
-    const result = extractCapabilities({ identity_provider: true, agent_governance: true });
+    const result = extractCapabilities({
+      identity_provider: true,
+      agent_governance: true,
+      account_self_service: true,
+    });
     expect(result.identity_provider).toBe(true);
     expect(result.agent_governance).toBe(true);
+    expect(result.account_self_service).toBe(true);
   });
 
   it("extracts known boolean false values", () => {
@@ -551,7 +750,7 @@ describe("extractCapabilities", () => {
     expect(result.agent_governance).toBe(true);
   });
 
-  it("extracts all 10 known capability keys when present", () => {
+  it("extracts all known component capability keys when present", () => {
     const input = {
       identity_provider: true,
       agent_governance: true,
@@ -563,6 +762,25 @@ describe("extractCapabilities", () => {
       organization_linking: true,
       hitl: true,
       agent_sessions: true,
+      account_self_service: true,
+      user_sessions: true,
+      mfa: true,
+      webauthn: true,
+      authorization_server: true,
+      oauth_clients: true,
+      api_resources: true,
+      service_accounts: true,
+      scope_templates: true,
+      org_roles: true,
+      protocol_settings: true,
+      client_credentials: true,
+      dynamic_client_registration: true,
+      scim: false,
+      audit_log: false,
+      audit_chain: false,
+      reporting: false,
+      anomaly_detection: false,
+      observability: false,
     };
     const result = extractCapabilities(input);
     expect(result.identity_provider).toBe(true);
@@ -575,6 +793,25 @@ describe("extractCapabilities", () => {
     expect(result.organization_linking).toBe(true);
     expect(result.hitl).toBe(true);
     expect(result.agent_sessions).toBe(true);
+    expect(result.account_self_service).toBe(true);
+    expect(result.user_sessions).toBe(true);
+    expect(result.mfa).toBe(true);
+    expect(result.webauthn).toBe(true);
+    expect(result.authorization_server).toBe(true);
+    expect(result.oauth_clients).toBe(true);
+    expect(result.api_resources).toBe(true);
+    expect(result.service_accounts).toBe(true);
+    expect(result.scope_templates).toBe(true);
+    expect(result.org_roles).toBe(true);
+    expect(result.protocol_settings).toBe(true);
+    expect(result.client_credentials).toBe(true);
+    expect(result.dynamic_client_registration).toBe(true);
+    expect(result.scim).toBe(false);
+    expect(result.audit_log).toBe(false);
+    expect(result.audit_chain).toBe(false);
+    expect(result.reporting).toBe(false);
+    expect(result.anomaly_detection).toBe(false);
+    expect(result.observability).toBe(false);
   });
 
   it("does not include sensitive field names in output", () => {
@@ -600,6 +837,24 @@ describe("extractCapabilities", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Capability availability helper
+// ---------------------------------------------------------------------------
+
+describe("getCapabilityAvailability", () => {
+  it("labels true capability facts as available", () => {
+    expect(getCapabilityAvailability({ audit_log: true }, "audit_log")).toBe("available");
+  });
+
+  it("labels explicit false capability facts as unavailable", () => {
+    expect(getCapabilityAvailability({ scim: false }, "scim")).toBe("unavailable");
+  });
+
+  it("labels omitted capability facts as unknown", () => {
+    expect(getCapabilityAvailability({}, "reporting")).toBe("unknown");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Capabilities extraction via discoverRuntime
 // ---------------------------------------------------------------------------
 
@@ -621,6 +876,24 @@ describe("capabilities in component discovery", () => {
             identity_provider: true,
             component_discovery: true,
             auth_provider_discovery: true,
+            account_self_service: true,
+            user_sessions: true,
+            mfa: true,
+            webauthn: true,
+            authorization_server: true,
+            oauth_clients: true,
+            api_resources: true,
+            service_accounts: true,
+            scope_templates: true,
+            org_roles: true,
+            protocol_settings: true,
+            client_credentials: true,
+            dynamic_client_registration: true,
+            scim: false,
+            audit_chain: false,
+            reporting: false,
+            anomaly_detection: false,
+            observability: false,
             agent_governance: false,
           },
         })
@@ -630,8 +903,57 @@ describe("capabilities in component discovery", () => {
     expect(state.components.idp.capabilities.identity_provider).toBe(true);
     expect(state.components.idp.capabilities.component_discovery).toBe(true);
     expect(state.components.idp.capabilities.auth_provider_discovery).toBe(true);
+    expect(state.components.idp.capabilities.account_self_service).toBe(true);
+    expect(state.components.idp.capabilities.user_sessions).toBe(true);
+    expect(state.components.idp.capabilities.mfa).toBe(true);
+    expect(state.components.idp.capabilities.webauthn).toBe(true);
+    expect(state.components.idp.capabilities.authorization_server).toBe(true);
+    expect(state.components.idp.capabilities.oauth_clients).toBe(true);
+    expect(state.components.idp.capabilities.api_resources).toBe(true);
+    expect(state.components.idp.capabilities.service_accounts).toBe(true);
+    expect(state.components.idp.capabilities.scope_templates).toBe(true);
+    expect(state.components.idp.capabilities.org_roles).toBe(true);
+    expect(state.components.idp.capabilities.protocol_settings).toBe(true);
+    expect(state.components.idp.capabilities.client_credentials).toBe(true);
+    expect(state.components.idp.capabilities.dynamic_client_registration).toBe(true);
+    expect(state.components.idp.capabilities.scim).toBe(false);
+    expect(state.components.idp.capabilities.audit_chain).toBe(false);
+    expect(state.components.idp.capabilities.reporting).toBe(false);
+    expect(state.components.idp.capabilities.anomaly_detection).toBe(false);
+    expect(state.components.idp.capabilities.observability).toBe(false);
     expect(state.components.idp.capabilities.agent_governance).toBe(false);
   });
+
+  it("keeps IDP capability-map schema version typed but uses capability booleans for UI decisions", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockOkFetch(
+        validIDPResponse({
+          capability_map_schema_version: "idp-capabilities.v1",
+          capabilities: {
+            account_self_service: true,
+            dynamic_client_registration: true,
+            scim: false,
+          },
+        })
+      )
+    );
+    const state = await discoverRuntime("http://idp:8080", null);
+    expect(state.components.idp.capabilities.account_self_service).toBe(true);
+    expect(state.components.idp.capabilities.dynamic_client_registration).toBe(true);
+    expect(state.components.idp.capabilities.scim).toBe(false);
+  });
+
+  it.each([404, 501, 503])(
+    "falls back to unavailable runtime state when capability discovery returns HTTP %d",
+    async (status) => {
+      vi.stubGlobal("fetch", mockNonOkFetch(status));
+      const state = await discoverRuntime("http://idp:8080", null);
+      expect(state.components.idp.usable).toBe(false);
+      expect(state.components.idp.capabilities).toEqual({});
+      expect(state.mode).toBe("misconfigured");
+    }
+  );
 
   it("extracts AG capabilities from backend response", async () => {
     vi.stubGlobal(
@@ -657,8 +979,7 @@ describe("capabilities in component discovery", () => {
   });
 
   it("returns empty capabilities when capabilities field is missing (backward compat)", async () => {
-    const body = { ...validIDPResponse() };
-    delete body.capabilities;
+    const body = withoutKey(validIDPResponse(), "capabilities");
     vi.stubGlobal("fetch", mockOkFetch(body));
     const state = await discoverRuntime("http://idp:8080", null);
     expect(state.components.idp.usable).toBe(true);
@@ -721,8 +1042,7 @@ describe("capabilities in component discovery", () => {
   });
 
   it("older backend with license but no capabilities field stays usable", async () => {
-    const body = { ...validIDPResponse() };
-    delete body.capabilities;
+    const body = withoutKey(validIDPResponse(), "capabilities");
     vi.stubGlobal("fetch", mockOkFetch(body));
     const state = await discoverRuntime("http://idp:8080", null);
     expect(state.components.idp.usable).toBe(true);

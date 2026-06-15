@@ -98,8 +98,10 @@ export function AuditFilterPanel({
       : KNOWN_AUDIT_EVENT_TYPES;
 
   // If the current eventType is set but not in the known list, show it as a custom option.
-  const showCustomEventType =
-    filters.eventType !== null && filters.eventType !== "" && !knownValues.has(filters.eventType);
+  const customEventType =
+    filters.eventType !== null && filters.eventType !== "" && !knownValues.has(filters.eventType)
+      ? filters.eventType
+      : null;
 
   return (
     <details
@@ -148,7 +150,7 @@ export function AuditFilterPanel({
           >
             <option value="">All events</option>
             {/* If the current value is an unknown/custom type, surface it at the top */}
-            {showCustomEventType && <option value={filters.eventType!}>{filters.eventType}</option>}
+            {customEventType !== null && <option value={customEventType}>{customEventType}</option>}
             {resolvedGroups.map((group) => (
               <optgroup key={group.label} label={group.label}>
                 {group.types.map((t) => (
