@@ -2,7 +2,7 @@
 
 ## Problem: localhost fails inside the UI container
 
-When `identuum-ui` runs in Docker and `identuum-idp-oss` runs on a host-published port, the Next.js IDP proxy (`src/app/api/idp/[...path]/route.ts`) makes server-side fetch requests from **inside** the UI container. Inside the container, `localhost` (and `127.0.0.1`) refer to the container's own loopback interface — not the host machine. A request to `http://localhost:7113` from inside `identuum-ui-app` hits nothing and fails with `ECONNREFUSED`. The proxy catches this and returns `502 {"error":"IdP unreachable"}`.
+When `identuum-ui` runs in Docker and `identuum-idp-oss` runs on a host-published port, the Next.js IDP proxy (`src/app/api/idp/[...path]/route.ts`) makes server-side fetch requests from **inside** the UI container. Inside the container, `localhost` (and `127.0.0.1`) refer to the container's own loopback interface — not the host machine. A request to `http://localhost:7113` from inside `identuum-ui` hits nothing and fails with `ECONNREFUSED`. The proxy catches this and returns `502 {"error":"IdP unreachable"}`.
 
 The browser's `orgLookup` call sees the 502, throws `ApiError`, and the `LoginFlow` state machine stays on the EMAIL step with "Unable to look up your organization." — the PASSWORD step never renders.
 
@@ -57,7 +57,7 @@ The `identuum-ui` compose file (`deployment/docker-compose.local.yml`) joins the
 The config file (`config/ui-runtime.json`) is bind-mounted read-only into the container (`../config:/app/config:ro`). `loadRuntimeConfig()` reads it from disk on every request — no restart is strictly required for new requests to use the updated value. A restart ensures all in-flight state is flushed:
 
 ```sh
-docker restart identuum-ui-app
+docker restart identuum-ui
 ```
 
 Or via compose:

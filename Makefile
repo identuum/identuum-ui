@@ -133,7 +133,7 @@ dev-smoke-runtime:
 
 # ─── AG OSS alternate-port UI profile ───────────────────────────────────────
 #
-# These targets recreate identuum-ui-app pointed at the AG OSS host
+# These targets recreate identuum-ui (the container; pre-2026-06-15 named identuum-ui-app) pointed at the AG OSS host
 # binary on 127.0.0.1:7315 (management) and 7314 (identity), instead of
 # the default monolith on 7215. Pair with identuum-ag-oss/`make dev-up`
 # + `make dev-run-app-alt`, which the operator must start in a separate

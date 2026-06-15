@@ -330,8 +330,10 @@ Both forms wrap `e2e/scripts/run-upgrade-backup-live.sh`. The runner:
 1. Brings up a throwaway Compose project named
    `idp-ce-upgrade-backup-playwright-20260617` on host ports
    `7129` (IDP) and `7130` (UI). Postgres is internal-only. The
-   project is independent of the standing `identuum-ui-app` dev
-   container on `:7114` and never touches it.
+   project is independent of the standing `identuum-ui` dev
+   container on `:7114` (renamed from `identuum-ui-app` on
+   2026-06-15; the standing container may still hold the old name
+   until the next `make dev-rebuild`) and never touches it.
 2. Seeds the OSS-shape schema into the throwaway Postgres BEFORE
    the IDP first-boot probe runs.
 3. Captures the one-time upgrade token to a mode-0600 file under

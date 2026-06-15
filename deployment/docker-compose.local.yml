@@ -34,7 +34,7 @@ services:
       context: ..
       dockerfile: Dockerfile
     image: identuum-ui:local
-    container_name: identuum-ui-app
+    container_name: identuum-ui
     restart: unless-stopped
     ports:
       # Loopback-only bind keeps the dev UI off any non-localhost
