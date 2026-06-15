@@ -98,6 +98,18 @@ describe("setup wizard imports the right client surface", () => {
     expect(pageSource).toMatch(/redirect\("\/login"\)/);
   });
 
+  it("page consults the server-runtime composition for setup state (authoritative absolute-URL probe, ahead of the relative-URL proxy probe)", () => {
+    // The relative-URL `getSetupStatus()` probe can fall through to
+    // a probe-failure on environments where the bundled UI proxy is
+    // unreliable but the in-network IDP DNS is reachable (observed
+    // during the 2026-06-15 CE customer-smoke). Pin both signals.
+    expect(pageSource).toMatch(/getServerRuntimeState/);
+    expect(pageSource).toMatch(/from "@\/lib\/server-runtime-state"/);
+    expect(pageSource).toMatch(
+      /runtime\?\.components\.idp\.setupState\?\.state === "setup_complete"/
+    );
+  });
+
   it("page also redirects to /setup-required when the UI is not configured", () => {
     expect(pageSource).toMatch(/loadRuntimeConfig/);
     expect(pageSource).toMatch(/redirect\("\/setup-required"\)/);

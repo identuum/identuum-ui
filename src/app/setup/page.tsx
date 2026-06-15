@@ -1,6 +1,7 @@
 import { getLicenseStatus } from "@/lib/idp-license-client";
 import { getSetupStatus } from "@/lib/idp-setup-client";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
+import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { SetupWizard } from "./setup-wizard";
@@ -30,6 +31,23 @@ export default async function SetupPage() {
     redirect("/setup-required");
   }
 
+  // Server-side runtime composition is the AUTHORITATIVE source for
+  // the IDP's setup state on this page. It uses an absolute IDP base
+  // URL composed from the runtime config (idp.internal_base_url) and
+  // calls fetchIdpSetupState directly — independent of the relative-
+  // path `/api/idp/...` proxy that getSetupStatus() walks. When the
+  // bundled UI runs in a Compose container that has a working
+  // in-network DNS path to the IDP service but a flaky same-origin
+  // proxy (observed during the 2026-06-15 CE customer-smoke), the
+  // proxy-based probe can fall through to a probe-failure result
+  // while the runtime composition still sees setup_complete. We
+  // redirect in that case BEFORE running the relative-URL probe so
+  // the page reliably forwards completed installs to /login.
+  const runtime = await getServerRuntimeState();
+  if (runtime?.components.idp.setupState?.state === "setup_complete") {
+    redirect("/login");
+  }
+
   // Probe setup + license state in parallel so a slow IDP boot does
   // not double the page TTFB. The license probe is best-effort —
   // older OSS backends do not expose the endpoint, and the wizard
@@ -37,8 +55,11 @@ export default async function SetupPage() {
   const [status, licenseProbe] = await Promise.all([getSetupStatus(), getLicenseStatus()]);
 
   if (status.kind === "ok" && status.status.state === "setup_complete") {
-    // Defense in depth: a stale tab landing here after completion goes
-    // straight to login rather than showing a confusing empty wizard.
+    // Defense in depth (relative-URL probe path): a stale tab landing
+    // here after completion goes straight to login rather than showing
+    // a confusing empty wizard. The earlier server-runtime check above
+    // catches the absolute-URL path; this catch fires when only the
+    // proxy path returns a usable setup_complete signal.
     redirect("/login");
   }
 
