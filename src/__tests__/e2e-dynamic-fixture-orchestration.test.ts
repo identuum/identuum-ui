@@ -349,8 +349,43 @@ describe("global-teardown.ts source — dynamic-mode purge orchestration", () =>
   });
 });
 
-describe("docker-compose.local.yml — local-only E2E fixture bind mount", () => {
-  const COMPOSE_SRC = readFileSync(IDP_COMPOSE_FILE, "utf-8");
+// Read the sibling identuum-idp compose file at suite-collection time.
+// On the local developer workspace the sibling repo lives at
+// `../identuum-idp/deployment/docker-compose.local.yml`. In CI (where
+// only identuum-ui is checked out via actions/checkout@v4) the sibling
+// file is absent — we register the suite with describe.skip so the
+// invariant remains exercised locally but does not break CI. Only
+// ENOENT is treated as "expected absent"; any other read error
+// (permission, EISDIR, etc.) is re-thrown so it surfaces loudly.
+const composeProbe: { src: string } | { skipReason: string } = (() => {
+  try {
+    return { src: readFileSync(IDP_COMPOSE_FILE, "utf-8") };
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      return {
+        skipReason: `sibling IDP compose file absent at ${IDP_COMPOSE_FILE} (expected in CI / standalone identuum-ui checkouts where the sibling identuum-idp repo is not on disk; the invariant is still exercised by local make verify when the sibling exists)`,
+      };
+    }
+    throw err;
+  }
+})();
+
+const composeSuite = "skipReason" in composeProbe ? describe.skip : describe;
+
+composeSuite("docker-compose.local.yml — local-only E2E fixture bind mount", () => {
+  if ("skipReason" in composeProbe) {
+    // When skipped, all `it(...)` registrations below are no-ops at the
+    // vitest level, but we still want a single visible row in the
+    // reporter explaining WHY the suite skipped so future maintainers
+    // do not silently lose coverage. composeProbe is narrowed to the
+    // skipReason variant inside this branch.
+    it("SIBLING_IDP_COMPOSE_ABSENT: registered describe.skip — see suite skipReason", () => {
+      // intentionally empty; describe.skip prevents this from running
+    });
+    return;
+  }
+
+  const COMPOSE_SRC = composeProbe.src;
 
   it("exposes the host UI .auth directory as /e2e-auth on the IDP service", () => {
     // The relative path is ../../identuum-ui/e2e/.auth because Docker
