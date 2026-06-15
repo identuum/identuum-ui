@@ -4,9 +4,9 @@
   "private": true,
   "packageManager": "pnpm@11.3.0",
   "scripts": {
-    "dev": "next dev --port 7114",
+    "dev": "next dev --port 7104",
     "build": "next build",
-    "start": "PORT=7114 node .next/standalone/server.js",
+    "start": "PORT=7104 node .next/standalone/server.js",
     "lint": "biome check .",
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",

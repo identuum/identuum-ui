@@ -38,8 +38,8 @@ const FIXTURE_ORG_DOMAIN = "playwright-expired.local";
 const FIXTURE_ORG_NAME = "Playwright Expired Recovery Org";
 const FIXTURE_ADMIN_EMAIL = "expired-admin@playwright-expired.local";
 
-// /api/idp/ proxy at localhost:7114 carries the browser session cookies
-const IDP_PROXY = "http://localhost:7114/api/idp";
+// /api/idp/ proxy at localhost:7104 carries the browser session cookies
+const IDP_PROXY = "http://localhost:7104/api/idp";
 
 // Local dev DB — credentials are public in deployment/docker-compose.local.yml
 const PSQL = "PGPASSWORD=idp_local_password psql -h localhost -p 5432 -U idp_user -d identuum_idp";

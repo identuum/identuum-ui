@@ -30,11 +30,11 @@ Then bring up the UI:
 ```sh
 # In identuum-ui/
 docker compose -f deployment/docker-compose.local.yml up -d
-curl http://localhost:7114/api/health
+curl http://localhost:7104/api/health
 # {"status":"ok","configured":true}
 ```
 
-Open the UI at <http://localhost:7114>.
+Open the UI at <http://localhost:7104>.
 
 ### Operator commands (UI only)
 
@@ -48,14 +48,14 @@ docker compose -f deployment/docker-compose.local.yml build --no-cache
 docker compose -f deployment/docker-compose.local.yml up -d
 
 # Verify the public runtime config the UI advertises to the browser
-curl http://localhost:7114/api/runtime-config
+curl http://localhost:7104/api/runtime-config
 ```
 
 ### How the network wiring works
 
 | Caller | Target | URL used | Resolves via |
 |---|---|---|---|
-| Browser → UI | UI | `http://localhost:7114` | host port-publish |
+| Browser → UI | UI | `http://localhost:7104` | host port-publish |
 | Browser → IdP | IdP | `http://localhost:7113` | host port-publish |
 | Browser → AG mgmt | AG | `http://localhost:7215` | host port-publish |
 | Browser → AG identity | AG | `http://localhost:7214` | host port-publish |
@@ -71,7 +71,7 @@ runtime configuration without rebuilding the image.
 ### Production-shape build
 
 The Compose file builds the existing `Dockerfile` at the repo root,
-which uses Next.js standalone output (`node server.js`, port 7114, no
+which uses Next.js standalone output (`node server.js`, port 7104, no
 `next dev`). The dev mode `pnpm dev` path is unchanged — both the
 host-side dev workflow and the containerized demo work side by side.
 
@@ -79,7 +79,7 @@ host-side dev workflow and the containerized demo work side by side.
 
 ```sh
 pnpm install
-pnpm dev          # http://localhost:7114 with hot reload
+pnpm dev          # http://localhost:7104 with hot reload
 pnpm typecheck
 pnpm build
 ```
@@ -92,7 +92,7 @@ needed). Schema:
 ```json
 {
   "configured": true,
-  "ui_origin": "http://localhost:7114",
+  "ui_origin": "http://localhost:7104",
   "idp": {
     "enabled": true,
     "public_base_url": "http://localhost:7113",

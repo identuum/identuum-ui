@@ -2,7 +2,7 @@
  * E2E tests for the /org-admin route guard.
  *
  * These tests verify the guard behavior without requiring org_admin credentials.
- * The UI must be running at http://localhost:7114 (started automatically by webServer).
+ * The UI must be running at http://localhost:7104 (started automatically by webServer).
  *
  * The guard in org-admin/layout.tsx:
  *   - Unauthenticated → redirect to /login?reason=session_expired

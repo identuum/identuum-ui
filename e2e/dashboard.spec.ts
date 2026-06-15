@@ -2,7 +2,7 @@
  * E2E tests for the /dashboard route guard.
  *
  * These tests verify the guard behavior without requiring org_user credentials.
- * The UI must be running at http://localhost:7114 (started automatically by webServer).
+ * The UI must be running at http://localhost:7104 (started automatically by webServer).
  *
  * The guard in dashboard/layout.tsx:
  *   - Unauthenticated → redirect to /login?reason=session_expired

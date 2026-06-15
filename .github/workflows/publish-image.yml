@@ -3,7 +3,7 @@
 # ★ MANUAL ONLY. workflow_dispatch — never runs on push or PR. ★
 #
 # Builds the UI container image from the repo-root `Dockerfile` (Node 22
-# + Next.js standalone, port 7114, healthcheck) and pushes it to
+# + Next.js standalone, port 7104, healthcheck) and pushes it to
 # ghcr.io/identuum/identuum-ui with a user-specified version tag and a
 # short-SHA tag. An opt-in `latest_tag` input also pushes :latest; that
 # input defaults to `false` so an accidental run NEVER moves the rolling

@@ -44,7 +44,7 @@
  *   nor session cookies. No setup/claim/recovery URL is ever surfaced
  *   by this flow.
  *
- * Requires the full Compose stack (IdP at localhost:7113, UI at localhost:7114).
+ * Requires the full Compose stack (IdP at localhost:7113, UI at localhost:7104).
  * Run with --workers=1 (shared with the rest of the auth suite).
  */
 

@@ -19,7 +19,7 @@
  * This avoids TOTP replay-protection failures from back-to-back logins.
  *
  * Skipped unless IDENTUUM_TEST_SITE_ADMIN_PASSWORD and _TOTP_SECRET are set.
- * Requires: full Compose stack (IdP at localhost:7113, UI at localhost:7114).
+ * Requires: full Compose stack (IdP at localhost:7113, UI at localhost:7104).
  */
 
 import type { BrowserContext } from "@playwright/test";

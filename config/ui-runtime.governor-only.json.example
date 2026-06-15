@@ -8,7 +8,7 @@
   "_comment_health": "The AG /health endpoint is management-surface-only after Phase 5.1.",
   "_comment_idp": "Set idp.enabled=true and idp.public_base_url to switch to hybrid mode.",
   "configured": true,
-  "ui_origin": "http://localhost:7114",
+  "ui_origin": "http://localhost:7104",
   "idp": {
     "enabled": false,
     "public_base_url": ""

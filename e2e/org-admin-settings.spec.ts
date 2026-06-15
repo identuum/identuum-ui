@@ -26,7 +26,7 @@
  *     keeps total IdP roundtrips low.
  *
  * Requires:
- *   - Full Compose stack (IdP at localhost:7113, UI at localhost:7114).
+ *   - Full Compose stack (IdP at localhost:7113, UI at localhost:7104).
  *   - Run with --workers=1 to avoid TOTP replay-protection failures.
  *
  * SECURITY:

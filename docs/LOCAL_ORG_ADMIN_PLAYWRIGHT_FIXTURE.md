@@ -73,7 +73,7 @@ read-only checks. They print booleans and presence flags only.
 
 ```sh
 curl -s http://localhost:7113/health
-curl -s http://localhost:7114/api/health
+curl -s http://localhost:7104/api/health
 ```
 
 Both should report `status: healthy` / `status: ok`. If either fails, the
@@ -165,7 +165,7 @@ section 5) and skip to section 4.
 
 ### 3b. Rotate the password as site_admin (supported REST endpoint)
 
-1. Sign in to the local stack at `http://localhost:7114/login` as
+1. Sign in to the local stack at `http://localhost:7104/login` as
    `site_admin` (canonical email `site_admin@system.local`).
 2. From an authenticated session, issue:
 

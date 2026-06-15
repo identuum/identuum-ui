@@ -31,7 +31,7 @@ import {
 // safely via caught fetch errors in server actions.
 const MINIMAL_E2E_CONFIG = {
   configured: true,
-  ui_origin: "http://localhost:7114",
+  ui_origin: "http://localhost:7104",
   idp: { enabled: true, public_base_url: "http://localhost:7113" },
   ag: { enabled: false, public_base_url: "" },
 };

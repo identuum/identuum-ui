@@ -2,7 +2,7 @@
  * E2E tests for the public /claim page.
  *
  * These tests exercise the safe states that do not require a valid claim token.
- * The UI must be running at http://localhost:7114.
+ * The UI must be running at http://localhost:7104.
  *
  * Missing-token test: no backend call is made (SSR returns early before any fetch),
  * so it passes even without the IdP running.

@@ -87,7 +87,7 @@ services:
   identuum-ui:
     container_name: ${PROJECT_NAME}-ui
     ports: !override
-      - "${UI_PORT}:7114"
+      - "${UI_PORT}:7104"
     configs: !override
       - source: ui-runtime-live-spec
         target: /app/config/ui-runtime.json

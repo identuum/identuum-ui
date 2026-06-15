@@ -23,7 +23,7 @@
  *   - Every lifecycle action route redirects to /login when not authenticated.
  *   - No 500 or framework crash on any action route.
  *
- * Requires: full Compose stack (IdP at localhost:7113, UI at localhost:7114).
+ * Requires: full Compose stack (IdP at localhost:7113, UI at localhost:7104).
  */
 
 import type { BrowserContext } from "@playwright/test";

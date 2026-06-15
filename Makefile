@@ -1,9 +1,9 @@
 COMPOSE_FILE ?= deployment/docker-compose.local.yml
 COMPOSE_CMD ?= docker compose
 DEV_SERVICE ?= identuum-ui
-DEV_HEALTH_URL ?= http://127.0.0.1:7114/api/health
-DEV_RUNTIME_URL ?= http://127.0.0.1:7114/api/runtime
-DEV_PLATFORM_STATUS_URL ?= http://127.0.0.1:7114/platform-status
+DEV_HEALTH_URL ?= http://127.0.0.1:7104/api/health
+DEV_RUNTIME_URL ?= http://127.0.0.1:7104/api/runtime
+DEV_PLATFORM_STATUS_URL ?= http://127.0.0.1:7104/platform-status
 
 # AG OSS alternate-port profile (see deployment/docker-compose.local.ag-oss-alt.yml
 # and config/ui-runtime.ag-oss-alt.json). Combine with COMPOSE_FILE via

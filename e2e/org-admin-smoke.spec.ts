@@ -18,7 +18,7 @@
  * Skipped unless IDENTUUM_TEST_ORG_ADMIN_EMAIL and
  * IDENTUUM_TEST_ORG_ADMIN_PASSWORD are set (auto-loaded from .env.playwright.local).
  *
- * Requires: full Compose stack (IdP at localhost:7113, UI at localhost:7114).
+ * Requires: full Compose stack (IdP at localhost:7113, UI at localhost:7104).
  * Run with --workers=1 to avoid TOTP replay failures.
  */
 

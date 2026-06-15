@@ -25,7 +25,7 @@
  *     failures.
  *
  * Requires:
- *   - Full Compose stack (IdP at localhost:7113, UI at localhost:7114).
+ *   - Full Compose stack (IdP at localhost:7113, UI at localhost:7104).
  *   - Run with --workers=1 to avoid TOTP replay-protection failures.
  *
  * SECURITY:
@@ -222,10 +222,10 @@ test.describe("/org-admin/applications — read-only foundation", () => {
 
       // Safe-field labels — the seeded client has one redirect URI and
       // a default scope, so both labels render. The seeded client's
-      // redirect URI is operator-safe loopback (http://localhost:7114/callback)
+      // redirect URI is operator-safe loopback (http://localhost:7104/callback)
       // — we assert presence of the label and the loopback value.
       await expect(page.getByText("Redirect URIs", { exact: true })).toBeVisible();
-      await expect(page.getByText("http://localhost:7114/callback", { exact: true })).toBeVisible();
+      await expect(page.getByText("http://localhost:7104/callback", { exact: true })).toBeVisible();
       await expect(page.getByText("Default scope", { exact: true })).toBeVisible();
       await expect(page.getByText("openid profile email", { exact: true })).toBeVisible();
       // Client ID dt label is also present (separate from the mono
@@ -435,9 +435,9 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       const redirectsInput = page.getByRole("textbox", { name: "Redirect URIs *" });
       await expect(redirectsInput).toBeVisible();
       // The fixture-seeded client carries exactly one redirect URI —
-      // the loopback "http://localhost:7114/callback" the IDP CLI
+      // the loopback "http://localhost:7104/callback" the IDP CLI
       // hard-codes. The textarea's initial value is that single URI.
-      expect(await redirectsInput.inputValue()).toBe("http://localhost:7114/callback");
+      expect(await redirectsInput.inputValue()).toBe("http://localhost:7104/callback");
 
       const postLogoutInput = page.getByRole("textbox", {
         name: "Post-logout redirect URIs",

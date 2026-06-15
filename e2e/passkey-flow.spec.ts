@@ -8,13 +8,13 @@
  * KNOWN BACKEND BLOCKER (as of 2026-06-05):
  *   identuum-idp-oss/cmd/identuum-idp/main.go does not set UIPublicBaseURL in
  *   WebAuthnServiceConfig. RPOrigins = ["http://localhost:7113"] only.
- *   Browser ceremonies originate from http://localhost:7114 (the UI port).
+ *   Browser ceremonies originate from http://localhost:7104 (the UI port).
  *   go-webauthn v0.15.0 compares url.URL.Host strings exactly:
- *     "localhost:7113" ≠ "localhost:7114" → all FINISH calls rejected.
+ *     "localhost:7113" ≠ "localhost:7104" → all FINISH calls rejected.
  *
  *   Required one-line fix in identuum-idp-oss/cmd/identuum-idp/main.go
  *   inside the WebAuthnServiceConfig block (~line 685-703):
- *     UIPublicBaseURL: "http://localhost:7114"
+ *     UIPublicBaseURL: "http://localhost:7104"
  *   (or derive from WEBAUTHN_UI_BASE_URL env var / config flag).
  *
  *   The WebAuthnService.normalizeUIOriginForRPID helper already handles this

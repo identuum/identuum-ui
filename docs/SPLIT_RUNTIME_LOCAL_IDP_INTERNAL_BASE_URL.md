@@ -35,7 +35,7 @@ The fix is a one-field change in `config/ui-runtime.json`:
 ## Expected proxy smoke result after fix
 
 ```sh
-curl -si http://127.0.0.1:7114/api/idp/api/v1/auth/organization-lookup?domain=system.local
+curl -si http://127.0.0.1:7104/api/idp/api/v1/auth/organization-lookup?domain=system.local
 ```
 
 **Before fix:** `HTTP/1.1 502` — proxy could not reach IDP.

@@ -3,7 +3,7 @@
  * authenticated PasskeySection rendering surface.
  *
  * Tests guard behavior and tab URL routing without requiring authenticated credentials.
- * The UI must be running at http://localhost:7114 (started by webServer).
+ * The UI must be running at http://localhost:7104 (started by webServer).
  *
  * Guard rules (account/layout.tsx):
  *   - Unauthenticated  → redirect to /login?reason=session_expired

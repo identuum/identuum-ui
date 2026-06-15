@@ -18,7 +18,7 @@
  * checks and silent skips would defeat their purpose.
  *
  * Service URLs:
- *   UI    : IDENTUUM_E2E_BASE_URL or http://localhost:7114 (Playwright baseURL)
+ *   UI    : IDENTUUM_E2E_BASE_URL or http://localhost:7104 (Playwright baseURL)
  *   IDP   : IDENTUUM_IDP_BASE_URL or http://localhost:7113
  */
 

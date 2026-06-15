@@ -3,14 +3,14 @@
 # `deployment/docker-compose.dev.yml` operator-facing models.
 #
 # Purpose: a deterministic local/demo-style way to bring up the Next.js
-# UI in production shape (standalone server, port 7114) without typing
+# UI in production shape (standalone server, port 7104) without typing
 # pnpm commands by hand.
 #
 # Operator flow (clean):
 #
 #   docker compose -f deployment/docker-compose.local.yml down
 #   docker compose -f deployment/docker-compose.local.yml up -d
-#   curl http://localhost:7114/api/health
+#   curl http://localhost:7104/api/health
 #
 # Pre-requisite for full demo: the identuum-idp and identuum-ag local
 # stacks must already be running (their `up -d` produces the networks
@@ -38,8 +38,8 @@ services:
     restart: unless-stopped
     ports:
       # Loopback-only bind keeps the dev UI off any non-localhost
-      # interface; the published port mirrors PORT=7114 in the Dockerfile.
-      - "127.0.0.1:7114:7114"
+      # interface; the published port mirrors PORT=7104 in the Dockerfile.
+      - "127.0.0.1:7104:7104"
     volumes:
       # Bind-mount the host's runtime config so the operator can edit
       # config/ui-runtime.json (issuer URLs, feature toggles) without

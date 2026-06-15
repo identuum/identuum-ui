@@ -14,7 +14,7 @@
  * Legacy IDENTUUM_TEST_EMAIL / _PASSWORD / _TOTP_SECRET are no longer
  * read — operators with stale .env files must rename them.
  *
- * The full Compose stack must be running (IdP at localhost:7113, UI at localhost:7114).
+ * The full Compose stack must be running (IdP at localhost:7113, UI at localhost:7104).
  * The Playwright runner reuses the existing server automatically; see playwright.config.ts.
  *
  * Before first run: pnpm e2e:install

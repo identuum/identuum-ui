@@ -4,7 +4,7 @@
   "_comment_internal_base_url": "host.docker.internal resolves to the macOS host loopback under Docker Desktop and OrbStack.",
   "_comment_select": "Selected at container start via IDENTUUM_UI_CONFIG_FILE=/app/config/ui-runtime.ag-oss-alt.json — see deployment/docker-compose.local.ag-oss-alt.yml.",
   "configured": true,
-  "ui_origin": "http://localhost:7114",
+  "ui_origin": "http://localhost:7104",
   "idp": {
     "enabled": true,
     "public_base_url": "http://localhost:7113",

@@ -33,9 +33,9 @@ try {
  * Running tests:
  *   pnpm e2e
  *
- *   The runner auto-starts `pnpm dev` (port 7114) when no server is already
+ *   The runner auto-starts `pnpm dev` (port 7104) when no server is already
  *   listening there. When the local Docker Compose stack is already running,
- *   the existing server at http://localhost:7114 is reused instead.
+ *   the existing server at http://localhost:7104 is reused instead.
  *
  * Runtime config:
  *   e2e/global-setup.ts runs before any test and ensures config/ui-runtime.json
@@ -60,14 +60,14 @@ try {
  *   config/ui-runtime.json if absent — no manual CI setup step needed.
  */
 // Port + base URL overrides for environments where the canonical
-// :7114 is held by an outdated Compose UI container (so a freshly
+// :7104 is held by an outdated Compose UI container (so a freshly
 // rebuilt dev server cannot bind it without stopping unrelated
 // containers). The defaults reproduce the existing contract; when
 // IDENTUUM_E2E_PORT is set, the dev server starts on that port and
 // baseURL is composed automatically — useful for one-spec smoke runs
 // that need source-fresh code without touching the standing dev
 // container.
-const e2ePort = process.env.IDENTUUM_E2E_PORT ?? "7114";
+const e2ePort = process.env.IDENTUUM_E2E_PORT ?? "7104";
 const e2eBaseURL = process.env.IDENTUUM_E2E_BASE_URL ?? `http://localhost:${e2ePort}`;
 
 export default defineConfig({

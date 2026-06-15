@@ -36,7 +36,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV PORT=7114
+ENV PORT=7104
 ENV HOSTNAME=0.0.0.0
 
 # Non-root user. UID/GID 10001 is within Debian's default UID_MIN/UID_MAX
@@ -53,10 +53,10 @@ RUN mkdir -p /app/config && chown nonroot:nonroot /app/config
 
 USER nonroot
 
-EXPOSE 7114
+EXPOSE 7104
 
 # Health check using Node's built-in fetch (no wget/curl needed in slim images).
 HEALTHCHECK --interval=10s --timeout=5s --retries=12 --start-period=30s \
-  CMD node -e "fetch('http://localhost:7114/api/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://localhost:7104/api/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"
 
 CMD ["node", "server.js"]

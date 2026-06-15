@@ -333,8 +333,8 @@ describe("upgrade-backup-live target: e2e/README.md documentation", () => {
     expect(E2E_README).toMatch(/\b7130\b/);
   });
 
-  it("documents that the standing :7114 dev container is NOT touched", () => {
-    expect(E2E_README).toMatch(/7114/);
+  it("documents that the standing :7104 dev container is NOT touched", () => {
+    expect(E2E_README).toMatch(/7104/);
   });
 
   it("does NOT inline a token plaintext literal in the documentation", () => {
