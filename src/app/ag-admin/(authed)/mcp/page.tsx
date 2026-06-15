@@ -191,8 +191,8 @@ function UnavailableState() {
     <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm px-6 py-10 text-center">
       <p className="text-sm font-semibold text-sky-950">MCP Server status unavailable</p>
       <p className="text-xs text-stone-400 mt-1.5 max-w-xs mx-auto leading-relaxed">
-        Could not reach the AG management surface. Check that identuum-ag is running and the
-        runtime configuration points to the correct management URL.
+        Could not reach the AG management surface. Check that identuum-ag is running and the runtime
+        configuration points to the correct management URL.
       </p>
       <div className="flex flex-wrap justify-center gap-2 mt-4">
         <a href="/ag-admin/sessions" className="text-xs text-sky-600 hover:underline">

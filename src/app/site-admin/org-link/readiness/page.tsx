@@ -1,3 +1,17 @@
+import {
+  type OrgExportFetchResult,
+  type OrganizationCandidateMatch,
+  deriveOrganizationCandidateMatches,
+} from "@/lib/org-export-candidates";
+import {
+  fetchAGOrganizationExportCandidates,
+  fetchIDPOrganizationExportCandidates,
+} from "@/lib/org-export-candidates-client";
+import { dryRunImportIDPOrganizationToAG } from "@/lib/org-import-dry-run-client";
+import {
+  type LinkingPrerequisite,
+  deriveOrganizationLinkingReadiness,
+} from "@/lib/org-linking-readiness";
 /**
  * /site-admin/org-link/readiness
  *
@@ -19,21 +33,6 @@
  * license keys, customer IDs, signatures, ciphertext, or user data are rendered.
  */
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
-import {
-  deriveOrganizationLinkingReadiness,
-  type LinkingPrerequisite,
-} from "@/lib/org-linking-readiness";
-import {
-  fetchAGOrganizationExportCandidates,
-  fetchIDPOrganizationExportCandidates,
-} from "@/lib/org-export-candidates-client";
-import {
-  deriveOrganizationCandidateMatches,
-  type OrgExportFetchResult,
-  type OrganizationCandidateMatch,
-} from "@/lib/org-export-candidates";
-import { dryRunImportIDPOrganizationToAG } from "@/lib/org-import-dry-run-client";
-import { executeOrganizationImportFormAction } from "./actions";
 import type {
   BackendComponentState,
   ComponentCapabilities,
@@ -41,6 +40,7 @@ import type {
   OrganizationExportCandidate,
 } from "@/lib/types";
 import type { Metadata } from "next";
+import { executeOrganizationImportFormAction } from "./actions";
 
 /** Maximum dry-run previews to issue per render. Bounded to keep the page snappy. */
 const DRY_RUN_PREVIEW_CAP = 10;
@@ -163,10 +163,7 @@ export default async function OrgLinkReadinessPage() {
       )}
 
       {/* Organization candidates (read-only) */}
-      <CandidatesSection
-        idpResult={idpCandidatesResult}
-        agResult={agCandidatesResult}
-      />
+      <CandidatesSection idpResult={idpCandidatesResult} agResult={agCandidatesResult} />
 
       {/* Possible matches preview (read-only, non-mutating) */}
       <PossibleMatchesPreview matches={possibleMatches} />
@@ -196,10 +193,16 @@ export default async function OrgLinkReadinessPage() {
 
       {/* Navigation */}
       <div className="border-t border-stone-200 pt-4 flex gap-6">
-        <a href="/site-admin/org-link" className="text-sm text-sky-600 hover:text-sky-700 underline">
+        <a
+          href="/site-admin/org-link"
+          className="text-sm text-sky-600 hover:text-sky-700 underline"
+        >
           Go to organization link
         </a>
-        <a href="/platform-status" className="text-sm text-stone-400 hover:text-stone-500 underline">
+        <a
+          href="/platform-status"
+          className="text-sm text-stone-400 hover:text-stone-500 underline"
+        >
           Platform status
         </a>
         <a href="/site-admin" className="text-sm text-stone-400 hover:text-stone-500 underline">
@@ -319,9 +322,7 @@ function BackendReadinessCard({
 function StatusRow({ label, met }: { label: string; met: boolean }) {
   return (
     <div className="flex items-center gap-2 text-xs">
-      <span className={met ? "text-emerald-500" : "text-stone-300"}>
-        {met ? "✓" : "✗"}
-      </span>
+      <span className={met ? "text-emerald-500" : "text-stone-300"}>{met ? "✓" : "✗"}</span>
       <span className={met ? "text-stone-700" : "text-stone-400"}>{label}</span>
     </div>
   );
@@ -381,8 +382,7 @@ function CandidatesSection({
       <div>
         <p className="text-sm font-semibold text-sky-950">Organization candidates</p>
         <p className="text-xs text-stone-500 mt-0.5">
-          Read-only preview of organizations on each backend. Nothing is written, copied, or
-          linked.
+          Read-only preview of organizations on each backend. Nothing is written, copied, or linked.
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -425,8 +425,7 @@ function CandidateCard({
         </div>
         {result.ok && (
           <span className="text-xs font-medium text-stone-500">
-            {result.organizations.length}{" "}
-            {result.organizations.length === 1 ? "org" : "orgs"}
+            {result.organizations.length} {result.organizations.length === 1 ? "org" : "orgs"}
           </span>
         )}
       </div>
@@ -471,9 +470,7 @@ function CandidateList({ orgs }: { orgs: OrganizationExportCandidate[] }) {
       {shown.map((o) => (
         <CandidateRow key={`${o.source_component}:${o.id}`} org={o} />
       ))}
-      {overflow > 0 && (
-        <li className="text-xs text-stone-400">…and {overflow} more</li>
-      )}
+      {overflow > 0 && <li className="text-xs text-stone-400">…and {overflow} more</li>}
     </ul>
   );
 }
@@ -496,12 +493,12 @@ function CandidateRow({ org }: { org: OrganizationExportCandidate }) {
             </span>
           )}
           {isUnlinked && (
-            <span className="text-[10px] uppercase tracking-wide text-stone-400">
-              Unlinked
-            </span>
+            <span className="text-[10px] uppercase tracking-wide text-stone-400">Unlinked</span>
           )}
           {org.status && (
-            <span className={`text-[10px] uppercase tracking-wide ${candidateStatusClass(org.status)}`}>
+            <span
+              className={`text-[10px] uppercase tracking-wide ${candidateStatusClass(org.status)}`}
+            >
               {safeDisplayString(org.status)}
             </span>
           )}
@@ -530,7 +527,7 @@ function shortenIDPUUID(s: string): string {
   if (typeof s !== "string") return "";
   const trimmed = s.trim();
   if (trimmed.length <= 8) return trimmed;
-  return trimmed.slice(0, 8) + "…";
+  return `${trimmed.slice(0, 8)}…`;
 }
 
 function candidateStatusClass(status: string): string {
@@ -573,7 +570,7 @@ function safeDisplayString(s: string): string {
   if (typeof s !== "string") return "";
   const trimmed = s.trim();
   if (trimmed.length <= 80) return trimmed;
-  return trimmed.slice(0, 77) + "…";
+  return `${trimmed.slice(0, 77)}…`;
 }
 
 // ---------------------------------------------------------------------------
@@ -586,8 +583,8 @@ function PossibleMatchesPreview({ matches }: { matches: OrganizationCandidateMat
       <div>
         <p className="text-sm font-semibold text-sky-950">Possible matches</p>
         <p className="text-xs text-stone-500 mt-0.5">
-          Preview only. These are not real links. Matched by exact slug, then exact name
-          (case- and whitespace-insensitive). Nothing is written.
+          Preview only. These are not real links. Matched by exact slug, then exact name (case- and
+          whitespace-insensitive). Nothing is written.
         </p>
       </div>
       {matches.length === 0 ? (
@@ -712,8 +709,8 @@ function DryRunPreviewSection({ rows, cap }: { rows: DryRunPreviewRow[]; cap: nu
       <div>
         <p className="text-sm font-semibold text-sky-950">Import/link dry-run preview</p>
         <p className="text-xs text-stone-500 mt-0.5">
-          Dry-run only. Nothing is written. This does not create organizations or links.
-          Previews are capped to the first {cap} candidates per render.
+          Dry-run only. Nothing is written. This does not create organizations or links. Previews
+          are capped to the first {cap} candidates per render.
         </p>
       </div>
 
@@ -788,9 +785,7 @@ function DryRunPreviewRow({ row }: { row: DryRunPreviewRow }) {
       )}
       {row.result.ok &&
         isExecutableDryRun(row.result.response.action, row.result.response.status) &&
-        !shouldSuppressExecuteForAlreadyLinkedAG(row) && (
-          <ExecuteRowForm row={row} />
-        )}
+        !shouldSuppressExecuteForAlreadyLinkedAG(row) && <ExecuteRowForm row={row} />}
     </li>
   );
 }
@@ -879,11 +874,7 @@ function ExecuteRowForm({ row }: { row: DryRunPreviewRow }) {
         name="idp_updated_at"
         value={typeof row.idp.updated_at === "string" ? row.idp.updated_at : ""}
       />
-      <input
-        type="hidden"
-        name="idp_source_component"
-        value="identuum-idp"
-      />
+      <input type="hidden" name="idp_source_component" value="identuum-idp" />
       {isLinkExisting && row.ag && (
         <input type="hidden" name="ag_organization_id" value={row.ag.id} />
       )}
@@ -908,9 +899,8 @@ function ExecuteRowForm({ row }: { row: DryRunPreviewRow }) {
           className="mt-0.5 shrink-0 accent-sky-600"
         />
         <span>
-          I understand this action only creates or links the organization record. It does
-          not copy users, passwords, MFA, roles, admins, reviewers, auditors, sessions, or
-          tokens.
+          I understand this action only creates or links the organization record. It does not copy
+          users, passwords, MFA, roles, admins, reviewers, auditors, sessions, or tokens.
         </span>
       </label>
       <button

@@ -69,7 +69,9 @@ interface OrgDisplay {
   display_name: string;
 }
 
-async function fetchSession(id: string): Promise<AgentSession | "auth_error" | "not_found" | "unavailable"> {
+async function fetchSession(
+  id: string
+): Promise<AgentSession | "auth_error" | "not_found" | "unavailable"> {
   const res = await agRequest(`/admin/agent-sessions/${encodeURIComponent(id)}`);
   if (!res) return "unavailable";
   if (res.status === 401 || res.status === 403) return "auth_error";
@@ -180,7 +182,10 @@ export default async function SessionDetailPage({ params, searchParams }: PagePr
   return (
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center gap-3">
-        <a href="/ag-admin/sessions" className="text-xs text-stone-400 hover:text-sky-700 transition-colors">
+        <a
+          href="/ag-admin/sessions"
+          className="text-xs text-stone-400 hover:text-sky-700 transition-colors"
+        >
           ← Sessions
         </a>
       </div>
@@ -239,7 +244,9 @@ function SessionDetailView({
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${statusStyles[status]}`}>
+            <span
+              className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${statusStyles[status]}`}
+            >
               {status}
             </span>
             <span className="text-[10px] font-medium text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full">
@@ -273,7 +280,8 @@ function SessionDetailView({
         <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3">
           <p className="text-xs font-semibold text-amber-800 mb-0.5">Revocation failed</p>
           <p className="text-xs text-amber-700 leading-relaxed">
-            {REVOKE_ERROR_MESSAGES[revokeError] ?? "An unexpected error occurred. Please try again."}
+            {REVOKE_ERROR_MESSAGES[revokeError] ??
+              "An unexpected error occurred. Please try again."}
           </p>
         </div>
       )}
@@ -327,7 +335,6 @@ function SessionDetailView({
         </div>
       )}
 
-
       {/* Session Identity */}
       <Card title="Session Identity">
         <Field
@@ -359,11 +366,11 @@ function SessionDetailView({
                   </a>
                 )}
                 {agentInfo && agentInfo.name !== agentInfo.slug && (
-                  <p className="text-[11px] text-stone-400 font-mono">Agent key: {agentInfo.slug}</p>
+                  <p className="text-[11px] text-stone-400 font-mono">
+                    Agent key: {agentInfo.slug}
+                  </p>
                 )}
-                <p className="text-[11px] text-stone-300 font-mono">
-                  Technical ID: {s.agent_id}
-                </p>
+                <p className="text-[11px] text-stone-300 font-mono">Technical ID: {s.agent_id}</p>
               </div>
             }
           />
@@ -376,7 +383,9 @@ function SessionDetailView({
                 {operatorDisplay ? (
                   <>
                     {operatorDisplay.display_name && (
-                      <p className="text-sm font-medium text-stone-800">{operatorDisplay.display_name}</p>
+                      <p className="text-sm font-medium text-stone-800">
+                        {operatorDisplay.display_name}
+                      </p>
                     )}
                     <p className="text-xs text-stone-600">{operatorDisplay.email}</p>
                   </>
@@ -393,10 +402,14 @@ function SessionDetailView({
           value={
             <div className="space-y-0.5">
               {isSystemOrg(s.organization_id) ? (
-                <p className="text-sm font-medium text-stone-700">System organization (platform scope)</p>
+                <p className="text-sm font-medium text-stone-700">
+                  System organization (platform scope)
+                </p>
               ) : orgDisplay ? (
                 <>
-                  <p className="text-sm font-medium text-stone-800">{orgDisplay.display_name || orgDisplay.name}</p>
+                  <p className="text-sm font-medium text-stone-800">
+                    {orgDisplay.display_name || orgDisplay.name}
+                  </p>
                   {orgDisplay.display_name && orgDisplay.name !== orgDisplay.display_name && (
                     <p className="text-xs text-stone-500 font-mono">{orgDisplay.name}</p>
                   )}
@@ -412,17 +425,27 @@ function SessionDetailView({
 
       {/* Task */}
       <Card title="Task & Capabilities">
-        <Field label="Intent" value={
-          <span className="text-stone-800 leading-relaxed break-words whitespace-pre-wrap">
-            {s.intent || "No intent provided"}
-          </span>
-        } />
+        <Field
+          label="Intent"
+          value={
+            <span className="text-stone-800 leading-relaxed break-words whitespace-pre-wrap">
+              {s.intent || "No intent provided"}
+            </span>
+          }
+        />
         {s.task_id && (
-          <Field label="Task ID" value={<span className="font-mono text-xs break-all text-stone-700">{s.task_id}</span>} />
+          <Field
+            label="Task ID"
+            value={<span className="font-mono text-xs break-all text-stone-700">{s.task_id}</span>}
+          />
         )}
         <Field
           label="Agent mode"
-          value={<span className="font-medium text-sky-700 bg-sky-50 px-2 py-0.5 rounded text-xs">{s.agent_mode}</span>}
+          value={
+            <span className="font-medium text-sky-700 bg-sky-50 px-2 py-0.5 rounded text-xs">
+              {s.agent_mode}
+            </span>
+          }
         />
         {s.allowed_tools.length > 0 ? (
           <Field
@@ -430,7 +453,10 @@ function SessionDetailView({
             value={
               <div className="flex flex-wrap gap-1">
                 {s.allowed_tools.map((t) => (
-                  <span key={t} className="text-xs bg-stone-100 text-stone-700 px-2 py-0.5 rounded font-mono">
+                  <span
+                    key={t}
+                    className="text-xs bg-stone-100 text-stone-700 px-2 py-0.5 rounded font-mono"
+                  >
                     {t}
                   </span>
                 ))}
@@ -438,13 +464,28 @@ function SessionDetailView({
             }
           />
         ) : (
-          <Field label="Allowed tools" value={<span className="text-xs text-stone-500">No tool restriction (all tools permitted)</span>} />
+          <Field
+            label="Allowed tools"
+            value={
+              <span className="text-xs text-stone-500">
+                No tool restriction (all tools permitted)
+              </span>
+            }
+          />
         )}
         {s.max_input_tokens != null && (
-          <Field label="Max input tokens" value={<span className="font-mono text-xs">{s.max_input_tokens.toLocaleString()}</span>} />
+          <Field
+            label="Max input tokens"
+            value={<span className="font-mono text-xs">{s.max_input_tokens.toLocaleString()}</span>}
+          />
         )}
         {s.max_session_tokens != null && (
-          <Field label="Max session tokens" value={<span className="font-mono text-xs">{s.max_session_tokens.toLocaleString()}</span>} />
+          <Field
+            label="Max session tokens"
+            value={
+              <span className="font-mono text-xs">{s.max_session_tokens.toLocaleString()}</span>
+            }
+          />
         )}
       </Card>
 
@@ -453,7 +494,9 @@ function SessionDetailView({
         <Field
           label="Status"
           value={
-            <span className={`text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded ${statusStyles[status]}`}>
+            <span
+              className={`text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded ${statusStyles[status]}`}
+            >
               {status}
             </span>
           }
@@ -508,7 +551,10 @@ function NotFoundState({ id }: { id: string }) {
       <p className="text-xs text-stone-400 mt-2 max-w-xs mx-auto">
         The session may have expired and been cleaned up, or the ID is invalid.
       </p>
-      <a href="/ag-admin/sessions" className="mt-4 inline-block text-xs text-sky-600 hover:underline">
+      <a
+        href="/ag-admin/sessions"
+        className="mt-4 inline-block text-xs text-sky-600 hover:underline"
+      >
         Back to Sessions
       </a>
     </div>
@@ -529,8 +575,11 @@ function UnavailableState() {
 function formatDateFull(iso: string): string {
   try {
     return new Date(iso).toLocaleString("en-US", {
-      month: "short", day: "numeric", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   } catch {
     return iso.slice(0, 19);

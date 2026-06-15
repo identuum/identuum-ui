@@ -95,19 +95,22 @@ async function fetchRevocations(params: {
   try {
     const data = await res.json();
     if (!data || !Array.isArray(data.revocations)) return "unavailable";
-    const records: RevocationRecord[] = (data.revocations as Array<Record<string, unknown>>).map((r) => ({
-      id: String(r.id ?? ""),
-      kind: String(r.kind ?? ""),
-      // jti intentionally not mapped
-      agent_session_id: r.agent_session_id != null ? String(r.agent_session_id) : null,
-      reason: String(r.reason ?? ""),
-      revoked_at: String(r.revoked_at ?? ""),
-      revoked_by_user_id: r.revoked_by_user_id != null ? String(r.revoked_by_user_id) : null,
-      expires_at: r.expires_at != null ? String(r.expires_at) : null,
-    }));
-    const pagination = data.pagination && typeof data.pagination === "object"
-      ? (data.pagination as PaginationMeta)
-      : null;
+    const records: RevocationRecord[] = (data.revocations as Array<Record<string, unknown>>).map(
+      (r) => ({
+        id: String(r.id ?? ""),
+        kind: String(r.kind ?? ""),
+        // jti intentionally not mapped
+        agent_session_id: r.agent_session_id != null ? String(r.agent_session_id) : null,
+        reason: String(r.reason ?? ""),
+        revoked_at: String(r.revoked_at ?? ""),
+        revoked_by_user_id: r.revoked_by_user_id != null ? String(r.revoked_by_user_id) : null,
+        expires_at: r.expires_at != null ? String(r.expires_at) : null,
+      })
+    );
+    const pagination =
+      data.pagination && typeof data.pagination === "object"
+        ? (data.pagination as PaginationMeta)
+        : null;
     return { records, pagination, count: pagination?.total_items ?? records.length };
   } catch {
     return "unavailable";
@@ -124,12 +127,12 @@ export default async function RevocationsPage({ searchParams }: PageProps) {
   const kindFilter: KindFilter = KIND_OPTIONS.includes(rawKind as KindFilter)
     ? (rawKind as KindFilter)
     : "all";
-  const rawPageSize = parseInt(typeof sp.pageSize === "string" ? sp.pageSize : "", 10);
+  const rawPageSize = Number.parseInt(typeof sp.pageSize === "string" ? sp.pageSize : "", 10);
   const pageSize = (PAGE_SIZES as readonly number[]).includes(rawPageSize)
     ? rawPageSize
     : DEFAULT_PAGE_SIZE;
-  const rawPage = parseInt(typeof sp.page === "string" ? sp.page : "", 10);
-  const page = Math.max(1, isNaN(rawPage) ? 1 : rawPage);
+  const rawPage = Number.parseInt(typeof sp.page === "string" ? sp.page : "", 10);
+  const page = Math.max(1, Number.isNaN(rawPage) ? 1 : rawPage);
   const rawSort = typeof sp.sort === "string" ? sp.sort : "revoked_at";
   const sortField = BACKEND_SORT_FIELDS.has(rawSort) ? rawSort : "revoked_at";
   const sortDir = typeof sp.dir === "string" && sp.dir === "asc" ? "asc" : "desc";
@@ -203,20 +206,16 @@ export default async function RevocationsPage({ searchParams }: PageProps) {
 
       {/* Summary cards — counts from parallel count-only calls */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <SummaryCard
-          label="Total revocations"
-          value={totalCount}
-          href={`/ag-admin/revocations`}
-        />
+        <SummaryCard label="Total revocations" value={totalCount} href="/ag-admin/revocations" />
         <SummaryCard
           label="Session revocations"
           value={sessionCount}
-          href={`/ag-admin/revocations?kind=session`}
+          href="/ag-admin/revocations?kind=session"
         />
         <SummaryCard
           label="Token (JTI) revocations"
           value={jtiCount}
-          href={`/ag-admin/revocations?kind=jti`}
+          href="/ag-admin/revocations?kind=jti"
         />
       </div>
 
@@ -252,10 +251,14 @@ export default async function RevocationsPage({ searchParams }: PageProps) {
           ps.set("page", "1");
           const href = `/ag-admin/revocations${ps.toString() ? `?${ps.toString()}` : ""}`;
           return (
-            <a key={n} href={href} aria-current={active ? "true" : undefined}
+            <a
+              key={n}
+              href={href}
+              aria-current={active ? "true" : undefined}
               className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
-                active ? "bg-sky-700 text-white border-sky-700"
-                : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
+                active
+                  ? "bg-sky-700 text-white border-sky-700"
+                  : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
               }`}
             >
               {n}
@@ -289,24 +292,39 @@ export default async function RevocationsPage({ searchParams }: PageProps) {
           {/* Pagination */}
           {pagination && (
             <div className="flex items-center justify-between text-xs text-stone-500">
-              <span>{Math.min((page - 1) * pageSize + 1, pagination.total_items)}–{Math.min(page * pageSize, pagination.total_items)} of {pagination.total_items}</span>
+              <span>
+                {Math.min((page - 1) * pageSize + 1, pagination.total_items)}–
+                {Math.min(page * pageSize, pagination.total_items)} of {pagination.total_items}
+              </span>
               <div className="flex items-center gap-1.5">
                 {hasPrev ? (
-                  <a href={buildUrl({ page: page - 1 })} aria-label="Previous page"
-                    className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors">
+                  <a
+                    href={buildUrl({ page: page - 1 })}
+                    aria-label="Previous page"
+                    className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors"
+                  >
                     ← Prev
                   </a>
                 ) : (
-                  <span className="px-3 py-1.5 rounded-lg border border-stone-100 bg-stone-50 text-stone-300 cursor-default">← Prev</span>
+                  <span className="px-3 py-1.5 rounded-lg border border-stone-100 bg-stone-50 text-stone-300 cursor-default">
+                    ← Prev
+                  </span>
                 )}
-                <span className="px-3 py-1.5 font-medium text-sky-950">{page} / {totalPages}</span>
+                <span className="px-3 py-1.5 font-medium text-sky-950">
+                  {page} / {totalPages}
+                </span>
                 {hasNext ? (
-                  <a href={buildUrl({ page: page + 1 })} aria-label="Next page"
-                    className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors">
+                  <a
+                    href={buildUrl({ page: page + 1 })}
+                    aria-label="Next page"
+                    className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors"
+                  >
                     Next →
                   </a>
                 ) : (
-                  <span className="px-3 py-1.5 rounded-lg border border-stone-100 bg-stone-50 text-stone-300 cursor-default">Next →</span>
+                  <span className="px-3 py-1.5 rounded-lg border border-stone-100 bg-stone-50 text-stone-300 cursor-default">
+                    Next →
+                  </span>
                 )}
               </div>
             </div>
@@ -319,9 +337,16 @@ export default async function RevocationsPage({ searchParams }: PageProps) {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function SummaryCard({ label, value, href }: { label: string; value: number | null; href: string }) {
+function SummaryCard({
+  label,
+  value,
+  href,
+}: { label: string; value: number | null; href: string }) {
   return (
-    <a href={href} className="bg-white border border-stone-200 rounded-2xl shadow-sm px-4 py-3 hover:border-sky-200 hover:shadow-md transition-all block">
+    <a
+      href={href}
+      className="bg-white border border-stone-200 rounded-2xl shadow-sm px-4 py-3 hover:border-sky-200 hover:shadow-md transition-all block"
+    >
       <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400 mb-1">{label}</p>
       <p className="text-xl font-bold tabular-nums text-sky-950">
         {value !== null ? value.toLocaleString() : "—"}
@@ -333,9 +358,11 @@ function SummaryCard({ label, value, href }: { label: string; value: number | nu
 function RevocationRow({ record: r }: { record: RevocationRecord }) {
   return (
     <div className="px-6 py-4 grid grid-cols-[auto_1fr_auto] gap-4 items-start hover:bg-stone-50/60 transition-colors">
-      <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full mt-0.5 whitespace-nowrap ${
-        r.kind === "session" ? "bg-red-50 text-red-600" : "bg-stone-100 text-stone-500"
-      }`}>
+      <span
+        className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full mt-0.5 whitespace-nowrap ${
+          r.kind === "session" ? "bg-red-50 text-red-600" : "bg-stone-100 text-stone-500"
+        }`}
+      >
         {KIND_LABELS[r.kind] ?? r.kind}
       </span>
       <div className="min-w-0 space-y-1">
@@ -343,7 +370,10 @@ function RevocationRow({ record: r }: { record: RevocationRecord }) {
           {r.kind === "session" && r.agent_session_id ? (
             <span>
               Session:{" "}
-              <a href={`/ag-admin/sessions/${r.agent_session_id}`} className="font-mono text-sky-600 hover:underline">
+              <a
+                href={`/ag-admin/sessions/${r.agent_session_id}`}
+                className="font-mono text-sky-600 hover:underline"
+              >
                 {r.agent_session_id.slice(0, 12)}…
               </a>
             </span>
@@ -391,9 +421,15 @@ function UnavailableState() {
         Could not reach the AG management surface. Check that identuum-ag is running.
       </p>
       <div className="flex flex-wrap justify-center gap-3 mt-4">
-        <a href="/ag-admin/sessions" className="text-xs text-sky-600 hover:underline">Agent Sessions →</a>
-        <a href="/ag-admin/agents" className="text-xs text-sky-600 hover:underline">Agent Registry →</a>
-        <a href="/ag-admin" className="text-xs text-sky-600 hover:underline">Dashboard →</a>
+        <a href="/ag-admin/sessions" className="text-xs text-sky-600 hover:underline">
+          Agent Sessions →
+        </a>
+        <a href="/ag-admin/agents" className="text-xs text-sky-600 hover:underline">
+          Agent Registry →
+        </a>
+        <a href="/ag-admin" className="text-xs text-sky-600 hover:underline">
+          Dashboard →
+        </a>
       </div>
     </div>
   );
@@ -402,8 +438,11 @@ function UnavailableState() {
 function formatDate(iso: string): string {
   try {
     return new Date(iso).toLocaleString("en-US", {
-      month: "short", day: "numeric", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   } catch {
     return iso.slice(0, 19);

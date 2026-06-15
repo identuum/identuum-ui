@@ -32,12 +32,9 @@
  *     preview reflects the new linked/created state on the next render.
  */
 
-import { revalidatePath } from "next/cache";
 import { executeImportIDPOrganizationToAG } from "@/lib/org-import-execute-client";
-import type {
-  OrganizationExportCandidate,
-  OrgImportExecuteResult,
-} from "@/lib/types";
+import type { OrgImportExecuteResult, OrganizationExportCandidate } from "@/lib/types";
+import { revalidatePath } from "next/cache";
 
 const READINESS_PATH = "/site-admin/org-link/readiness";
 
@@ -70,6 +67,8 @@ const ALLOWED_FORM_FIELDS = [
   "idp_source_component",
   "ag_organization_id",
 ] as const;
+
+type AllowedFormField = (typeof ALLOWED_FORM_FIELDS)[number];
 
 /**
  * Field names that must never appear in the FormData. If a client tampers
@@ -201,7 +200,7 @@ export async function executeOrganizationImportAction(
 }
 
 /** Reads a single named string field from FormData, defaulting to "". */
-function readFormString(form: FormData, key: string): string {
+function readFormString(form: FormData, key: AllowedFormField): string {
   const v = form.get(key);
   if (typeof v === "string") return v;
   return "";
@@ -230,8 +229,6 @@ function emptyToNull(s: string): string | null {
  * FormData unchanged. All confirmation, allowlist, forbidden-field, and
  * dry_run=false guarantees live in executeOrganizationImportAction.
  */
-export async function executeOrganizationImportFormAction(
-  formData: FormData
-): Promise<void> {
+export async function executeOrganizationImportFormAction(formData: FormData): Promise<void> {
   await executeOrganizationImportAction(formData);
 }

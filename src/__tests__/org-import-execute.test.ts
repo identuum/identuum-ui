@@ -19,17 +19,31 @@ function validRaw(overrides: Partial<Record<string, unknown>> = {}): Record<stri
   };
 }
 
+function withoutKey(source: Record<string, unknown>, omittedKey: string): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(source).filter(([key]) => key !== omittedKey));
+}
+
+function expectNotNull<T>(
+  value: T | null,
+  message = "expected non-null value"
+): asserts value is T {
+  expect(value, message).not.toBeNull();
+  if (value === null) {
+    throw new Error(message);
+  }
+}
+
 describe("parseOrgImportExecuteResponse", () => {
   // ── Happy paths ─────────────────────────────────────────────────────────
 
   it("parses a valid create/created response", () => {
     const got = parseOrgImportExecuteResponse(validRaw());
-    expect(got).not.toBeNull();
-    expect(got!.dry_run).toBe(false);
-    expect(got!.action).toBe("create_ag_organization");
-    expect(got!.status).toBe("created");
-    expect(got!.ag_organization_created).toBe(true);
-    expect(got!.link_created).toBe(true);
+    expectNotNull(got);
+    expect(got.dry_run).toBe(false);
+    expect(got.action).toBe("create_ag_organization");
+    expect(got.status).toBe("created");
+    expect(got.ag_organization_created).toBe(true);
+    expect(got.link_created).toBe(true);
   });
 
   it("parses a valid link/linked response", () => {
@@ -42,11 +56,11 @@ describe("parseOrgImportExecuteResponse", () => {
         message: "linked the existing AG organization to this IDP organization",
       })
     );
-    expect(got).not.toBeNull();
-    expect(got!.action).toBe("link_existing_ag_organization");
-    expect(got!.status).toBe("linked");
-    expect(got!.ag_organization_created).toBe(false);
-    expect(got!.link_created).toBe(true);
+    expectNotNull(got);
+    expect(got.action).toBe("link_existing_ag_organization");
+    expect(got.status).toBe("linked");
+    expect(got.ag_organization_created).toBe(false);
+    expect(got.link_created).toBe(true);
   });
 
   it("parses a valid noop/already_linked response", () => {
@@ -59,9 +73,9 @@ describe("parseOrgImportExecuteResponse", () => {
         message: "this IDP organization is already linked to an AG organization",
       })
     );
-    expect(got).not.toBeNull();
-    expect(got!.action).toBe("noop");
-    expect(got!.status).toBe("already_linked");
+    expectNotNull(got);
+    expect(got.action).toBe("noop");
+    expect(got.status).toBe("already_linked");
   });
 
   it("parses a valid rejected response", () => {
@@ -74,9 +88,9 @@ describe("parseOrgImportExecuteResponse", () => {
         message: "an AG organization with this name already exists",
       })
     );
-    expect(got).not.toBeNull();
-    expect(got!.action).toBe("rejected");
-    expect(got!.status).toBe("rejected");
+    expectNotNull(got);
+    expect(got.action).toBe("rejected");
+    expect(got.status).toBe("rejected");
   });
 
   // ── Rejection paths ─────────────────────────────────────────────────────
@@ -94,8 +108,7 @@ describe("parseOrgImportExecuteResponse", () => {
   });
 
   it("returns null when dry_run is missing", () => {
-    const raw = validRaw();
-    delete raw.dry_run;
+    const raw = withoutKey(validRaw(), "dry_run");
     expect(parseOrgImportExecuteResponse(raw)).toBeNull();
   });
 
@@ -105,8 +118,7 @@ describe("parseOrgImportExecuteResponse", () => {
   });
 
   it("returns null when idp_organization_id is missing or non-string", () => {
-    const raw = validRaw();
-    delete raw.idp_organization_id;
+    const raw = withoutKey(validRaw(), "idp_organization_id");
     expect(parseOrgImportExecuteResponse(raw)).toBeNull();
     expect(parseOrgImportExecuteResponse(validRaw({ idp_organization_id: 42 }))).toBeNull();
     expect(parseOrgImportExecuteResponse(validRaw({ idp_organization_id: "" }))).toBeNull();
@@ -137,20 +149,20 @@ describe("parseOrgImportExecuteResponse", () => {
         link_created: 1,
       })
     );
-    expect(got).not.toBeNull();
-    expect(got!.ag_organization_created).toBe(false);
-    expect(got!.link_created).toBe(false);
+    expectNotNull(got);
+    expect(got.ag_organization_created).toBe(false);
+    expect(got.link_created).toBe(false);
   });
 
   it("coerces missing/non-string message to empty string", () => {
-    const raw = validRaw();
-    delete raw.message;
+    const raw = withoutKey(validRaw(), "message");
     const got = parseOrgImportExecuteResponse(raw);
-    expect(got).not.toBeNull();
-    expect(got!.message).toBe("");
+    expectNotNull(got);
+    expect(got.message).toBe("");
 
     const got2 = parseOrgImportExecuteResponse(validRaw({ message: 42 }));
-    expect(got2!.message).toBe("");
+    expectNotNull(got2);
+    expect(got2.message).toBe("");
   });
 
   it("discards unknown and sensitive top-level keys silently", () => {
@@ -179,7 +191,7 @@ describe("parseOrgImportExecuteResponse", () => {
         audit: [{ ok: true }],
       })
     );
-    expect(got).not.toBeNull();
+    expectNotNull(got);
     const json = JSON.stringify(got);
     for (const forbidden of [
       "users",
@@ -216,7 +228,7 @@ describe("parseOrgImportExecuteResponse", () => {
         debug: { traceback: "internal" },
       })
     );
-    expect(got).not.toBeNull();
+    expectNotNull(got);
     const json = JSON.stringify(got);
     expect(json).not.toContain("stack trace");
     expect(json).not.toContain("SQL error");
@@ -241,7 +253,7 @@ describe("parseOrgImportExecuteResponse", () => {
 
 describe("execute client / dry-run client source invariants", () => {
   function readSrc(rel: string): string {
-    const fs = require("fs");
+    const fs = require("node:fs");
     return fs.readFileSync(new URL(rel, import.meta.url).pathname, "utf-8");
   }
 
@@ -300,7 +312,7 @@ describe("execute client / dry-run client source invariants", () => {
 
 describe("server action source invariants", () => {
   function readSrc(rel: string): string {
-    const fs = require("fs");
+    const fs = require("node:fs");
     return fs.readFileSync(new URL(rel, import.meta.url).pathname, "utf-8");
   }
 
@@ -349,8 +361,8 @@ describe("server action source invariants", () => {
   it("server action allowlist contains no forbidden field names", () => {
     const src = readSrc("../app/site-admin/org-link/readiness/actions.ts");
     const match = src.match(/ALLOWED_FORM_FIELDS\s*=\s*\[([\s\S]*?)\]/);
-    expect(match).not.toBeNull();
-    const body = match![1];
+    expectNotNull(match);
+    const body = match[1];
     for (const fk of [
       "password",
       "passwords",
@@ -377,7 +389,7 @@ describe("server action source invariants", () => {
 
 describe("readiness page execute-form invariants", () => {
   function readSrc(rel: string): string {
-    const fs = require("fs");
+    const fs = require("node:fs");
     return fs.readFileSync(new URL(rel, import.meta.url).pathname, "utf-8");
   }
 
@@ -426,9 +438,7 @@ describe("readiness page execute-form invariants", () => {
     const src = readSrc(PAGE);
     // The visible label must clearly call out organization-only scope and
     // every forbidden category the server action defends against.
-    expect(src).toContain(
-      "I understand this action only creates or links the organization record"
-    );
+    expect(src).toContain("I understand this action only creates or links the organization record");
     for (const term of [
       "users",
       "passwords",

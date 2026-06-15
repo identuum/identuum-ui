@@ -82,7 +82,13 @@ describe("fetchAGOrgLinkPlan", () => {
         json: async () => ({
           component: "identuum-ag",
           organizations: [
-            { id: "org-1", name: "acme", display_name: "Acme", status: "active", linked_idp_org_id: null },
+            {
+              id: "org-1",
+              name: "acme",
+              display_name: "Acme",
+              status: "active",
+              linked_idp_org_id: null,
+            },
           ],
           import_available: true,
         }),
@@ -111,7 +117,11 @@ describe("fetchAGOrgLinkPlan", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ component: "identuum-idp", organizations: [], import_available: false }),
+        json: async () => ({
+          component: "identuum-idp",
+          organizations: [],
+          import_available: false,
+        }),
       })
     );
     const result = await fetchAGOrgLinkPlan("http://ag:7215");
@@ -141,7 +151,11 @@ describe("fetchAGOrgLinkPlan", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ component: "identuum-ag", organizations: [], import_available: false }),
+        json: async () => ({
+          component: "identuum-ag",
+          organizations: [],
+          import_available: false,
+        }),
       })
     );
 
@@ -200,7 +214,14 @@ describe("fetchAGOrgLinkPlan", () => {
         json: async () => ({
           component: "identuum-ag",
           organizations: [
-            { id: "org-1", name: "acme", display_name: "Acme Corp", status: "active", created_at: "2026-01-01T00:00:00Z", linked_idp_org_id: null },
+            {
+              id: "org-1",
+              name: "acme",
+              display_name: "Acme Corp",
+              status: "active",
+              created_at: "2026-01-01T00:00:00Z",
+              linked_idp_org_id: null,
+            },
           ],
           import_available: true,
         }),
@@ -211,7 +232,15 @@ describe("fetchAGOrgLinkPlan", () => {
     const org = result?.organizations[0];
     expect(org).toBeDefined();
     const keys = Object.keys(org ?? {});
-    const allowed = ["id", "name", "display_name", "status", "created_at", "linked_idp_org_id", "link_status"];
+    const allowed = [
+      "id",
+      "name",
+      "display_name",
+      "status",
+      "created_at",
+      "linked_idp_org_id",
+      "link_status",
+    ];
     for (const k of keys) {
       expect(allowed).toContain(k);
     }

@@ -7,9 +7,9 @@
  * Covers: agent detail governance card, edit page HITL form, create HITL section.
  */
 
-import { describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { describe, expect, it } from "vitest";
 
 const uiRoot = path.resolve(import.meta.dirname, "../../");
 function readFile(relPath: string): string {
@@ -133,7 +133,7 @@ describe("edit page — governance HITL form", () => {
 
   it("clear_hitl action removes only hitl key, preserves unknown keys", () => {
     expect(editPage).toContain("clear_hitl");
-    expect(editPage).toContain("delete merged.hitl");
+    expect(editPage).toContain('key !== "hitl"');
   });
 
   it("clear_all action sends empty object to backend", () => {
@@ -153,7 +153,7 @@ describe("edit page — governance HITL form", () => {
 
   it("null/absent/invalid ceiling treated as empty object for merge", () => {
     expect(editPage).toContain("existingCeiling");
-    expect(editPage).toContain("typeof agent.capability_ceiling === \"object\"");
+    expect(editPage).toContain('typeof agent.capability_ceiling === "object"');
     expect(editPage).toContain("!Array.isArray");
   });
 

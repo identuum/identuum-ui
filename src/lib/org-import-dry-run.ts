@@ -85,16 +85,11 @@ export function parseOrgImportDryRunResponse(raw: unknown): OrgImportDryRunRespo
   // Defensive: dry-run must never indicate completed writes. Even if the
   // backend incorrectly sets these flags to true under dry_run=true, the
   // UI clamps them to false so no surface treats the row as a real mutation.
-  const agCreated =
-    o.ag_organization_created === true ? false : false;
-  const linkCreated =
-    o.link_created === true ? false : false;
-  // The above ternaries are intentionally constant-false: every dry-run row,
-  // by contract, has both flags false. Keeping the read on the source object
-  // documents that we intentionally ignore those fields rather than letting
-  // them through.
-  void agCreated;
-  void linkCreated;
+  // Every dry-run row, by contract, has both flags false. Keep the source
+  // property reads explicit to document that those fields are intentionally
+  // ignored rather than passed through.
+  void o.ag_organization_created;
+  void o.link_created;
 
   return {
     dry_run: true,

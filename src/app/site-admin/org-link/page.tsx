@@ -1,3 +1,8 @@
+import { hasAgSession } from "@/lib/ag-client";
+import { fetchAGOrgLinkPlan } from "@/lib/ag-org-client";
+import { listOrganizations } from "@/lib/idp-admin-client";
+import type { IDPOrgSummaryForLink } from "@/lib/org-link-types";
+import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 /**
  * /site-admin/org-link
  *
@@ -14,12 +19,7 @@
  * Security: no internal backend URLs, no tokens, no credentials are rendered.
  */
 import type { Metadata } from "next";
-import type { IDPOrgSummaryForLink } from "@/lib/org-link-types";
-import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
-import { listOrganizations } from "@/lib/idp-admin-client";
-import { fetchAGOrgLinkPlan } from "@/lib/ag-org-client";
-import { hasAgSession } from "@/lib/ag-client";
-import { OrgLinkActions, IDPImportSection } from "./org-link-actions";
+import { IDPImportSection, OrgLinkActions } from "./org-link-actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Organization Link — Identuum" };
@@ -51,7 +51,7 @@ export default async function OrgLinkPlanPage() {
     }
   }
 
-  const agUrl = agEnabled ? agBaseUrl(cfg!) : null;
+  const agUrl = agEnabled && cfg ? agBaseUrl(cfg) : null;
   const agPlan = await fetchAGOrgLinkPlan(agUrl);
   const agAvailable = agPlan !== null;
   const agSession = await hasAgSession();
@@ -75,13 +75,13 @@ export default async function OrgLinkPlanPage() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-xl font-bold text-sky-950 tracking-tight">
-          Organization Link
-        </h1>
+        <h1 className="text-xl font-bold text-sky-950 tracking-tight">Organization Link</h1>
         <p className="text-sm text-stone-500 mt-1">
           Link AG organizations to IDP organizations. Organization scope only.
         </p>
       </div>
+
+      <RelatedReadOnlyViews />
 
       <ScopeWarning />
 
@@ -131,11 +131,7 @@ export default async function OrgLinkPlanPage() {
         {!agAvailable ? (
           <p className="text-xs text-stone-400">AG is not configured or not reachable.</p>
         ) : (
-          <OrgLinkActions
-            agOrgs={agPlan?.organizations ?? []}
-            idpOrgs={idpOrgs}
-            canAct={canAct}
-          />
+          <OrgLinkActions agOrgs={agPlan?.organizations ?? []} idpOrgs={idpOrgs} canAct={canAct} />
         )}
       </div>
 
@@ -146,16 +142,41 @@ export default async function OrgLinkPlanPage() {
           </h2>
           <p className="text-xs text-stone-500 mb-3">
             IDP organizations not yet linked to an AG organization. Import creates a new AG
-            organization and links it. Organizations only — no users, admins, or credentials
-            are imported.
+            organization and links it. Organizations only — no users, admins, or credentials are
+            imported.
           </p>
-          <IDPImportSection
-            idpOrgs={idpOrgs}
-            linkedIDPOrgIds={linkedIDPOrgIds}
-            canAct={canAct}
-          />
+          <IDPImportSection idpOrgs={idpOrgs} linkedIDPOrgIds={linkedIDPOrgIds} canAct={canAct} />
         </div>
       )}
+    </div>
+  );
+}
+
+// RelatedReadOnlyViews surfaces sibling pages that present the same
+// org-link data in a strictly read-only view, distinct from the link /
+// unlink / import controls on this page. Added 2026-06-11 to make the
+// AG OSS plan page reachable from the existing org-link landing surface.
+// This component is read-only: it renders <a> anchors only — no
+// <button>, no onClick handler, no form, no server action.
+function RelatedReadOnlyViews() {
+  return (
+    <div className="rounded-xl border border-stone-200 bg-white p-4">
+      <p className="text-[10px] uppercase tracking-wide text-stone-400 mb-2">
+        Related read-only views
+      </p>
+      <ul className="space-y-1.5">
+        <li>
+          <a
+            href="/site-admin/org-link/ag-plan"
+            className="text-sm text-sky-600 hover:text-sky-700 underline"
+          >
+            AG OSS org-link plan (read-only)
+          </a>
+          <span className="text-xs text-stone-500 ml-2">
+            Summary of AG organizations and their IDP link status. No write actions.
+          </span>
+        </li>
+      </ul>
     </div>
   );
 }
@@ -165,9 +186,9 @@ function ScopeWarning() {
     <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 space-y-1">
       <p className="text-xs font-semibold text-amber-800">Organization scope only</p>
       <p className="text-xs text-amber-700 leading-relaxed">
-        This page links organizations only. Users, org admins, passwords, MFA state,
-        role bindings, and all credential or identity data are never imported or linked here.
-        Admin assignment is a separate explicit workflow performed after organizations are linked.
+        This page links organizations only. Users, org admins, passwords, MFA state, role bindings,
+        and all credential or identity data are never imported or linked here. Admin assignment is a
+        separate explicit workflow performed after organizations are linked.
       </p>
     </div>
   );
@@ -201,9 +222,7 @@ function IDPOrgCard({ orgs, available }: { orgs: IDPOrgSummaryForLink[]; availab
               />
               <span className="font-medium text-stone-700">{o.name}</span>
               {o.domain && <span className="text-stone-400">{o.domain}</span>}
-              {!o.has_admin && (
-                <span className="text-amber-600 text-[10px]">no admin</span>
-              )}
+              {!o.has_admin && <span className="text-amber-600 text-[10px]">no admin</span>}
             </li>
           ))}
           {orgs.length > 10 && (

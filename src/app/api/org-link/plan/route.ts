@@ -56,7 +56,7 @@ export async function GET(): Promise<Response> {
 
   // Fetch AG org-link plan if AG is configured.
   // This is an unauthenticated call to the AG management surface.
-  const agUrl = agEnabled ? agBaseUrl(cfg!) : null;
+  const agUrl = agEnabled && cfg ? agBaseUrl(cfg) : null;
   const agPlan = await fetchAGOrgLinkPlan(agUrl);
   const agAvailable = agPlan !== null;
 

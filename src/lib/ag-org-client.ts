@@ -25,9 +25,7 @@ const EXPECTED_COMPONENT = "identuum-ag";
  * Returns a safe sanitized response — no internal URLs or raw errors.
  * Organizations include linked_idp_org_id and link_status from AG migration 0028.
  */
-export async function fetchAGOrgLinkPlan(
-  agManagementBaseUrl: string | null
-): Promise<{
+export async function fetchAGOrgLinkPlan(agManagementBaseUrl: string | null): Promise<{
   organizations: AGOrgSummaryWithLink[];
   import_available: boolean;
   unavailable_reason: string | null;

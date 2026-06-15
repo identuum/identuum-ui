@@ -61,7 +61,9 @@ interface SessionsResult {
   hasMore: boolean;
 }
 
-async function fetchAgent(id: string): Promise<AgentDetail | "auth_error" | "not_found" | "unavailable"> {
+async function fetchAgent(
+  id: string
+): Promise<AgentDetail | "auth_error" | "not_found" | "unavailable"> {
   const res = await agRequest(`/admin/agent-registry/${encodeURIComponent(id)}`);
   if (!res) return "unavailable";
   if (res.status === 401 || res.status === 403) return "auth_error";
@@ -180,7 +182,8 @@ export default async function AgentDetailPage({ params, searchParams }: PageProp
 }
 
 const LIFECYCLE_ERROR_MESSAGES: Record<string, string> = {
-  failed: "Lifecycle action failed. The agent may have been modified by another operator. Refresh and try again.",
+  failed:
+    "Lifecycle action failed. The agent may have been modified by another operator. Refresh and try again.",
   unavailable: "Could not reach the AG management surface. Check that identuum-ag is running.",
 };
 
@@ -255,7 +258,8 @@ function AgentDetailView({
         <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3">
           <p className="text-xs text-amber-700 leading-relaxed">
             <strong>Lifecycle action failed:</strong>{" "}
-            {LIFECYCLE_ERROR_MESSAGES[lifecycleError] ?? "An unexpected error occurred. Please try again."}
+            {LIFECYCLE_ERROR_MESSAGES[lifecycleError] ??
+              "An unexpected error occurred. Please try again."}
           </p>
         </div>
       )}
@@ -292,7 +296,6 @@ function AgentDetailView({
         </div>
       )}
 
-
       {/* Operational Summary */}
       <OperationalSummary agent={agent} sessions={sessions} />
 
@@ -312,7 +315,10 @@ function AgentDetailView({
             value={
               <div className="flex flex-wrap gap-1">
                 {agent.allowed_tools_default.map((t) => (
-                  <span key={t} className="text-xs bg-stone-100 text-stone-600 px-2 py-0.5 rounded font-mono">
+                  <span
+                    key={t}
+                    className="text-xs bg-stone-100 text-stone-600 px-2 py-0.5 rounded font-mono"
+                  >
                     {t}
                   </span>
                 ))}
@@ -324,7 +330,10 @@ function AgentDetailView({
           <Field label="Max input tokens" value={agent.default_max_input_tokens.toLocaleString()} />
         )}
         {agent.default_max_session_tokens != null && (
-          <Field label="Max session tokens" value={agent.default_max_session_tokens.toLocaleString()} />
+          <Field
+            label="Max session tokens"
+            value={agent.default_max_session_tokens.toLocaleString()}
+          />
         )}
         <Field
           label="Max session duration"
@@ -342,7 +351,9 @@ function AgentDetailView({
         {agent.created_by_user_id && (
           <Field
             label="Created by"
-            value={<span className="font-mono text-xs">{agent.created_by_user_id.slice(0, 8)}…</span>}
+            value={
+              <span className="font-mono text-xs">{agent.created_by_user_id.slice(0, 8)}…</span>
+            }
           />
         )}
       </Card>
@@ -407,10 +418,7 @@ function OperationalSummary({
             )
           }
         />
-        <StatCell
-          label="Default mode"
-          value={<ModeBadge mode={agent.default_agent_mode} />}
-        />
+        <StatCell label="Default mode" value={<ModeBadge mode={agent.default_agent_mode} />} />
       </div>
     </div>
   );
@@ -453,7 +461,9 @@ function RecentSessions({
       ) : sessions.items.length === 0 ? (
         <div className="px-6 py-8 text-center">
           <p className="text-sm text-stone-400">No sessions recorded for this agent yet.</p>
-          <p className="text-xs text-stone-300 mt-1">Sessions appear here when this agent is activated.</p>
+          <p className="text-xs text-stone-300 mt-1">
+            Sessions appear here when this agent is activated.
+          </p>
         </div>
       ) : (
         <div className="divide-y divide-stone-100">
@@ -505,7 +515,9 @@ function SessionRow({ session: s }: { session: SessionSummary }) {
         <p className="text-[11px] text-stone-400 font-mono">{s.id.slice(0, 12)}…</p>
       </div>
       <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-        <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${SESSION_STATUS_STYLES[status]}`}>
+        <span
+          className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${SESSION_STATUS_STYLES[status]}`}
+        >
           {status}
         </span>
         <span className="text-[10px] font-medium text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded">
@@ -540,7 +552,10 @@ const ACR_LABELS: Record<string, string> = {
   "urn:identuum:loa:phishing-resistant": "Phishing-resistant",
 };
 
-function GovernanceCard({ ceiling, agentId }: { ceiling?: CapabilityCeiling | null; agentId: string }) {
+function GovernanceCard({
+  ceiling,
+  agentId,
+}: { ceiling?: CapabilityCeiling | null; agentId: string }) {
   const hitl = ceiling?.hitl;
   return (
     <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
@@ -556,8 +571,8 @@ function GovernanceCard({ ceiling, agentId }: { ceiling?: CapabilityCeiling | nu
       {!hitl ? (
         <div className="px-6 py-4">
           <p className="text-xs text-stone-400 italic">
-            No capability ceiling configured. Agent operates with default bearer-only issuance
-            (no HITL gate).
+            No capability ceiling configured. Agent operates with default bearer-only issuance (no
+            HITL gate).
           </p>
         </div>
       ) : (
@@ -565,10 +580,15 @@ function GovernanceCard({ ceiling, agentId }: { ceiling?: CapabilityCeiling | nu
           <div className="flex items-start gap-4">
             <dt className="text-xs text-stone-400 w-44 shrink-0 pt-0.5">HITL posture</dt>
             <dd className="text-xs text-stone-700">
-              <span className={`font-semibold ${
-                hitl.posture === "required" ? "text-amber-700" :
-                hitl.posture === "optional" ? "text-sky-700" : "text-stone-500"
-              }`}>
+              <span
+                className={`font-semibold ${
+                  hitl.posture === "required"
+                    ? "text-amber-700"
+                    : hitl.posture === "optional"
+                      ? "text-sky-700"
+                      : "text-stone-500"
+                }`}
+              >
                 {POSTURE_LABELS[hitl.posture] ?? hitl.posture}
               </span>
             </dd>
@@ -584,7 +604,9 @@ function GovernanceCard({ ceiling, agentId }: { ceiling?: CapabilityCeiling | nu
           {hitl.review_auth_max_age_seconds ? (
             <div className="flex items-start gap-4">
               <dt className="text-xs text-stone-400 w-44 shrink-0 pt-0.5">Reviewer freshness</dt>
-              <dd className="text-xs text-stone-700">{hitl.review_auth_max_age_seconds}s max age</dd>
+              <dd className="text-xs text-stone-700">
+                {hitl.review_auth_max_age_seconds}s max age
+              </dd>
             </div>
           ) : null}
         </dl>
@@ -617,9 +639,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 
 function ModeBadge({ mode }: { mode: string }) {
   return (
-    <span className="text-xs font-medium text-sky-700 bg-sky-50 px-2 py-0.5 rounded">
-      {mode}
-    </span>
+    <span className="text-xs font-medium text-sky-700 bg-sky-50 px-2 py-0.5 rounded">{mode}</span>
   );
 }
 
@@ -651,8 +671,11 @@ function UnavailableState() {
 function formatDateFull(iso: string): string {
   try {
     return new Date(iso).toLocaleString("en-US", {
-      month: "short", day: "numeric", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   } catch {
     return iso.slice(0, 19);

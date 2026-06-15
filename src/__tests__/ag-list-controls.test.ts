@@ -9,24 +9,43 @@
  *   - Structural invariants of page files
  */
 
-import { describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { describe, expect, it } from "vitest";
 
 const uiRoot = path.resolve(import.meta.dirname, "../../");
 function readPage(relPath: string): string {
   return fs.readFileSync(path.join(uiRoot, relPath), "utf-8");
 }
 
+function expectNotNull<T>(
+  value: T | null,
+  message = "expected non-null value"
+): asserts value is T {
+  expect(value, message).not.toBeNull();
+  if (value === null) {
+    throw new Error(message);
+  }
+}
+
 // ── Backend sort allowlists (mirroring page constants) ────────────────────────
 
 const AGENT_BACKEND_SORT = new Set(["slug", "name", "created_at", "updated_at", "enabled"]);
-const SESSION_BACKEND_SORT = new Set(["created_at", "expires_at", "last_activity_at", "agent_mode"]);
+const SESSION_BACKEND_SORT = new Set([
+  "created_at",
+  "expires_at",
+  "last_activity_at",
+  "agent_mode",
+]);
 
 // ── Backend query string builder helpers ──────────────────────────────────────
 
 function buildAgentQuery(opts: {
-  page?: number; pageSize?: number; q?: string; sort?: string; dir?: string;
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  sort?: string;
+  dir?: string;
 }): URLSearchParams {
   const qs = new URLSearchParams();
   qs.set("page", String(opts.page ?? 1));
@@ -39,7 +58,12 @@ function buildAgentQuery(opts: {
 }
 
 function buildSessionQuery(opts: {
-  page?: number; pageSize?: number; q?: string; sort?: string; dir?: string; status?: string;
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  sort?: string;
+  dir?: string;
+  status?: string;
 }): URLSearchParams {
   const qs = new URLSearchParams();
   qs.set("page", String(opts.page ?? 1));
@@ -55,12 +79,26 @@ function buildSessionQuery(opts: {
 // ── Paginated response parsing ────────────────────────────────────────────────
 
 interface PaginationMeta {
-  page: number; page_size: number; total_items: number;
-  total_pages: number; has_previous: boolean; has_next: boolean;
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+  has_previous: boolean;
+  has_next: boolean;
 }
 
-function parsePaginatedResponse(raw: unknown): { items: unknown[]; pagination: PaginationMeta | null; rawArray: boolean } {
-  if (raw && typeof raw === "object" && !Array.isArray(raw) && "items" in raw && "pagination" in raw) {
+function parsePaginatedResponse(raw: unknown): {
+  items: unknown[];
+  pagination: PaginationMeta | null;
+  rawArray: boolean;
+} {
+  if (
+    raw &&
+    typeof raw === "object" &&
+    !Array.isArray(raw) &&
+    "items" in raw &&
+    "pagination" in raw
+  ) {
     const typed = raw as { items: unknown[]; pagination: PaginationMeta };
     return { items: typed.items ?? [], pagination: typed.pagination, rawArray: false };
   }
@@ -150,7 +188,14 @@ describe("paginated response parsing", () => {
   it("parses paginated shape correctly", () => {
     const raw = {
       items: [{ id: "abc" }],
-      pagination: { page: 1, page_size: 25, total_items: 100, total_pages: 4, has_previous: false, has_next: true },
+      pagination: {
+        page: 1,
+        page_size: 25,
+        total_items: 100,
+        total_pages: 4,
+        has_previous: false,
+        has_next: true,
+      },
     };
     const result = parsePaginatedResponse(raw);
     expect(result.rawArray).toBe(false);
@@ -178,7 +223,14 @@ describe("paginated response parsing", () => {
   it("pagination has_previous false on first page", () => {
     const raw = {
       items: [],
-      pagination: { page: 1, page_size: 25, total_items: 30, total_pages: 2, has_previous: false, has_next: true },
+      pagination: {
+        page: 1,
+        page_size: 25,
+        total_items: 30,
+        total_pages: 2,
+        has_previous: false,
+        has_next: true,
+      },
     };
     const result = parsePaginatedResponse(raw);
     expect(result.pagination?.has_previous).toBe(false);
@@ -238,8 +290,8 @@ describe("sessions page — uses backend pagination", () => {
     // BACKEND_SORT_FIELDS must NOT include intent or status as sort keys
     // (status is a filter, not a sort field)
     const backendSortMatch = page.match(/BACKEND_SORT_FIELDS\s*=\s*new Set\(\[([^\]]+)\]\)/);
-    expect(backendSortMatch).toBeTruthy();
-    const sortFields = backendSortMatch![1];
+    expectNotNull(backendSortMatch);
+    const sortFields = backendSortMatch[1];
     expect(sortFields).not.toContain('"intent"');
     expect(sortFields).not.toContain('"status"');
   });
@@ -285,13 +337,13 @@ describe("page size navigation links — no defaultValue select", () => {
   it("agents page uses navigation links for page size, not a <select>", () => {
     // The fix replaces <select name="pageSize"> with anchor links to avoid
     // React's defaultValue reconciliation bug on client-side navigation.
-    expect(agentsPage).not.toContain('<select');
-    expect(agentsPage).not.toContain('defaultValue={pageSize}');
+    expect(agentsPage).not.toContain("<select");
+    expect(agentsPage).not.toContain("defaultValue={pageSize}");
   });
 
   it("sessions page uses navigation links for page size, not a <select>", () => {
-    expect(sessionsPage).not.toContain('<select');
-    expect(sessionsPage).not.toContain('defaultValue={pageSize}');
+    expect(sessionsPage).not.toContain("<select");
+    expect(sessionsPage).not.toContain("defaultValue={pageSize}");
   });
 
   it("agents page size links reset page to 1 and preserve q/sort/dir", () => {
@@ -320,12 +372,12 @@ describe("page size navigation links — no defaultValue select", () => {
 
   it("agents search form preserves pageSize via hidden input when non-default", () => {
     // The search form includes a hidden pageSize input so searching doesn't reset page size.
-    expect(agentsPage).toContain('pageSize !== DEFAULT_PAGE_SIZE');
+    expect(agentsPage).toContain("pageSize !== DEFAULT_PAGE_SIZE");
     expect(agentsPage).toContain('<input type="hidden" name="pageSize"');
   });
 
   it("sessions search form preserves pageSize via hidden input when non-default", () => {
-    expect(sessionsPage).toContain('pageSize !== DEFAULT_PAGE_SIZE');
+    expect(sessionsPage).toContain("pageSize !== DEFAULT_PAGE_SIZE");
     expect(sessionsPage).toContain('<input type="hidden" name="pageSize"');
   });
 });
@@ -334,7 +386,10 @@ describe("page size URL construction helpers", () => {
   // Pure helpers mirroring the inline URL construction in the pages.
   const DEFAULT = 25;
 
-  function pageSizeUrl(current: { q: string; sort: string; dir: string; pageSize?: number }, n: number): string {
+  function pageSizeUrl(
+    current: { q: string; sort: string; dir: string; pageSize?: number },
+    n: number
+  ): string {
     const ps = new URLSearchParams();
     if (current.q) ps.set("q", current.q);
     if (current.sort !== "created_at") ps.set("sort", current.sort);

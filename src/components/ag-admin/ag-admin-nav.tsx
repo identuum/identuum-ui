@@ -16,6 +16,7 @@ const NAV_LINKS: NavLink[] = [
   { label: "Revocations", href: "/ag-admin/revocations", match: "prefix" },
   { label: "Audit / Activity", href: "/ag-admin/audit", match: "prefix" },
   { label: "MCP Server", href: "/ag-admin/mcp", match: "prefix" },
+  { label: "PolicyPacks", href: "/ag-admin/policy-packs", match: "prefix" },
 ];
 
 /** Items that exist on the AG management surface but not yet in the UI. */

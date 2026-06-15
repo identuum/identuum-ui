@@ -6,9 +6,9 @@
  * No pagination in current backend.
  */
 
-import { describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { describe, expect, it } from "vitest";
 
 const uiRoot = path.resolve(import.meta.dirname, "../../");
 function readFile(relPath: string): string {
@@ -128,7 +128,7 @@ describe("revocations page — summary cards", () => {
   it("main list still renders when a count call fails (null is graceful)", () => {
     // fetchCount catches all errors and returns null independently from result
     expect(page).toContain("fetchCount");
-    expect(page).toContain("result !== \"unavailable\"");
+    expect(page).toContain('result !== "unavailable"');
   });
 });
 

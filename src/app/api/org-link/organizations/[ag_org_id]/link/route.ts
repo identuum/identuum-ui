@@ -14,9 +14,9 @@
  *   - Organization-only: never writes users, admins, credentials, MFA, or roles.
  */
 import {
+  isValidUUID,
   linkAGOrganizationToIDPOrg,
   unlinkAGOrganizationFromIDPOrg,
-  isValidUUID,
 } from "@/lib/ag-org-link-write-client";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -46,7 +46,11 @@ export async function PUT(req: NextRequest, { params }: Params): Promise<Respons
     idpOrgId = body.idp_org_id;
   } catch {
     return NextResponse.json(
-      { ok: false, error_code: "invalid_request", message: "Request body is missing or malformed." },
+      {
+        ok: false,
+        error_code: "invalid_request",
+        message: "Request body is missing or malformed.",
+      },
       { status: 400 }
     );
   }

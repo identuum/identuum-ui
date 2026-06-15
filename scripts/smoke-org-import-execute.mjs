@@ -69,6 +69,9 @@
  *       the harness prints the safe status code only, never the credentials.
  */
 
+import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { basename } from "node:path";
 // ── Imports — Node stdlib only, no third-party packages ──────────────────
 //
 // node:fs is used ONLY to read the file path the operator explicitly passes
@@ -77,9 +80,6 @@
 // any other file unless --env-file <path> is on argv. The path is opened
 // exactly once and never persisted.
 import process from "node:process";
-import { createHmac } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { basename } from "node:path";
 
 // ── Constants ────────────────────────────────────────────────────────────
 const SYSTEM_ORG_ID = "00000000-0000-0000-0000-000000000001";
@@ -115,22 +115,22 @@ const PRODUCTION_HINT_REGEX =
 
 // ── Output helpers — never print secrets ─────────────────────────────────
 function log(line) {
-  process.stdout.write(line + "\n");
+  process.stdout.write(`${line}\n`);
 }
 function err(line) {
-  process.stderr.write(line + "\n");
+  process.stderr.write(`${line}\n`);
 }
 function redactID(id) {
   if (typeof id !== "string") return "";
   const trimmed = id.trim();
   if (trimmed.length <= 8) return trimmed;
-  return trimmed.slice(0, 8) + "…";
+  return `${trimmed.slice(0, 8)}…`;
 }
 function safeDisplayString(s) {
   if (typeof s !== "string") return "";
   const trimmed = s.trim();
   if (trimmed.length <= 80) return trimmed;
-  return trimmed.slice(0, 77) + "…";
+  return `${trimmed.slice(0, 77)}…`;
 }
 
 // ── Env + arg parsing ────────────────────────────────────────────────────
@@ -198,7 +198,7 @@ function parseEnvFile(path) {
     if (e && e.code === "ENOENT") {
       throw new Error(`env file not found: ${basename(path)}`);
     }
-    const code = e && e.code ? e.code : "read-error";
+    const code = e?.code ? e.code : "read-error";
     throw new Error(`could not read env file ${basename(path)}: ${code}`);
   }
   const out = {};
@@ -299,8 +299,10 @@ function readEnv(fileEnv) {
 // hex characters). Strict so a stray "1" or "" cannot be passed through
 // the override env var.
 function isValidUUID(s) {
-  return typeof s === "string" &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+  return (
+    typeof s === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)
+  );
 }
 
 // ── TOTP (RFC 6238) — HMAC-SHA1, 30-second step, 6 digits ────────────────
@@ -338,7 +340,7 @@ function base32decode(s) {
   }
   const bytes = [];
   for (let i = 0; i + 8 <= bits.length; i += 8) {
-    bytes.push(parseInt(bits.slice(i, i + 8), 2));
+    bytes.push(Number.parseInt(bits.slice(i, i + 8), 2));
   }
   return Buffer.from(bytes);
 }
@@ -352,13 +354,13 @@ function base32decode(s) {
 async function performIDPLogin(env) {
   if (!env.siteAdminEmail || !env.siteAdminPassword) {
     throw new Error(
-      "IDP automated login requires IDENTUUM_SITE_ADMIN_EMAIL and IDENTUUM_SITE_ADMIN_PASSWORD",
+      "IDP automated login requires IDENTUUM_SITE_ADMIN_EMAIL and IDENTUUM_SITE_ADMIN_PASSWORD"
     );
   }
-  const loginRes = await rawPostJSON(
-    `${env.idpUrl}/api/v1/auth/login`,
-    { email: env.siteAdminEmail, password: env.siteAdminPassword },
-  );
+  const loginRes = await rawPostJSON(`${env.idpUrl}/api/v1/auth/login`, {
+    email: env.siteAdminEmail,
+    password: env.siteAdminPassword,
+  });
   if (loginRes.status < 200 || loginRes.status >= 300) {
     throw new Error(`IDP /api/v1/auth/login returned HTTP ${loginRes.status}`);
   }
@@ -367,7 +369,7 @@ async function performIDPLogin(env) {
   if (body.mfa_required === true) {
     if (!env.siteAdminTotpSecret) {
       throw new Error(
-        "IDP login returned mfa_required=true but IDENTUUM_SITE_ADMIN_TOTP_SECRET is not set",
+        "IDP login returned mfa_required=true but IDENTUUM_SITE_ADMIN_TOTP_SECRET is not set"
       );
     }
     const sessionID = body.session_id;
@@ -377,10 +379,10 @@ async function performIDPLogin(env) {
     // Generate the TOTP code from the operator's secret. The code is held
     // in this local variable only; it is never logged.
     const code = generateTOTP(env.siteAdminTotpSecret);
-    const mfaRes = await rawPostJSON(
-      `${env.idpUrl}/api/v1/auth/login/mfa`,
-      { session_id: sessionID, code },
-    );
+    const mfaRes = await rawPostJSON(`${env.idpUrl}/api/v1/auth/login/mfa`, {
+      session_id: sessionID,
+      code,
+    });
     if (mfaRes.status < 200 || mfaRes.status >= 300) {
       throw new Error(`IDP /api/v1/auth/login/mfa returned HTTP ${mfaRes.status}`);
     }
@@ -405,7 +407,7 @@ async function performIDPLogin(env) {
 async function performAGLogin(env) {
   if (!env.agOperatorEmail || !env.agOperatorPassword) {
     throw new Error(
-      "AG automated login requires IDENTUUM_AG_OPERATOR_EMAIL and IDENTUUM_AG_OPERATOR_PASSWORD",
+      "AG automated login requires IDENTUUM_AG_OPERATOR_EMAIL and IDENTUUM_AG_OPERATOR_PASSWORD"
     );
   }
   const res = await rawPostJSON(`${env.agIdentityUrl}/login`, {
@@ -490,7 +492,7 @@ function buildHeaders(authHeader) {
   const idx = authHeader.indexOf(":");
   if (idx <= 0) {
     throw new Error(
-      "auth header value must start with 'Cookie:' or 'Authorization:' followed by ':' and the header value",
+      "auth header value must start with 'Cookie:' or 'Authorization:' followed by ':' and the header value"
     );
   }
   const name = authHeader.slice(0, idx).trim();
@@ -503,7 +505,7 @@ function buildHeaders(authHeader) {
   // refused to keep the surface tight.
   if (name !== "Cookie" && name !== "Authorization") {
     throw new Error(
-      `unsupported auth header name '${name}'; only 'Cookie' or 'Authorization' are accepted`,
+      `unsupported auth header name '${name}'; only 'Cookie' or 'Authorization' are accepted`
     );
   }
   headers[name] = value;
@@ -570,8 +572,7 @@ function projectCandidate(raw, fallbackSource) {
         ? raw.source_component
         : fallbackSource,
     linked_idp_organization_id:
-      typeof raw.linked_idp_organization_id === "string" &&
-      raw.linked_idp_organization_id !== ""
+      typeof raw.linked_idp_organization_id === "string" && raw.linked_idp_organization_id !== ""
         ? raw.linked_idp_organization_id
         : "",
     link_status: typeof raw.link_status === "string" ? raw.link_status : "",
@@ -591,9 +592,7 @@ function projectCandidatesList(rawBody, fallbackSource) {
 
 // ── Selection priority ────────────────────────────────────────────────────
 function looksDisposable(c) {
-  return (
-    DISPOSABLE_NAME_REGEX.test(c.name) || DISPOSABLE_NAME_REGEX.test(c.slug || "")
-  );
+  return DISPOSABLE_NAME_REGEX.test(c.name) || DISPOSABLE_NAME_REGEX.test(c.slug || "");
 }
 function looksProduction(c) {
   return PRODUCTION_HINT_REGEX.test(c.name) || PRODUCTION_HINT_REGEX.test(c.slug || "");
@@ -655,7 +654,8 @@ function chooseCandidate(idpCandidates, agCandidates, overrideIDPID) {
     if (isSystemOrg(target)) {
       return { kind: "none", reason: "override targeted the system organization (refused)" };
     }
-    const match = findAGBySlug(agCandidates, target.slug) ?? findAGByName(agCandidates, target.name);
+    const match =
+      findAGBySlug(agCandidates, target.slug) ?? findAGByName(agCandidates, target.name);
     if (!match) {
       return { kind: "create", idp: target, ag: null, override: true };
     }
@@ -779,7 +779,9 @@ async function main() {
   const env = readEnv(fileEnv);
 
   log("== smoke-org-import-execute ==");
-  log(`mode: ${flags.executeOne ? "execute-one (requires IDENTUUM_CONFIRM_ORG_ONLY)" : "dry-run-only"}`);
+  log(
+    `mode: ${flags.executeOne ? "execute-one (requires IDENTUUM_CONFIRM_ORG_ONLY)" : "dry-run-only"}`
+  );
   // env-file status — basename only, never the path or values.
   log(`env file: ${flags.envFile ? `PROVIDED (${envFileBasename})` : "NOT PROVIDED"}`);
   log(`IDP url:          ${env.idpUrl}`);
@@ -793,13 +795,21 @@ async function main() {
   // value when an alias was used (IDENTUUM_TEST_* from IDP bootstrap).
   const presenceTag = (value, source, preferred) =>
     value ? (source && source !== preferred ? `set (via ${source})` : "set") : "-";
-  log(`  IDENTUUM_SITE_ADMIN_EMAIL:        ${presenceTag(env.siteAdminEmail, env.siteAdminEmailSource, "IDENTUUM_SITE_ADMIN_EMAIL")}`);
-  log(`  IDENTUUM_SITE_ADMIN_PASSWORD:     ${presenceTag(env.siteAdminPassword, env.siteAdminPasswordSource, "IDENTUUM_SITE_ADMIN_PASSWORD")}`);
-  log(`  IDENTUUM_SITE_ADMIN_TOTP_SECRET:  ${presenceTag(env.siteAdminTotpSecret, env.siteAdminTotpSecretSource, "IDENTUUM_SITE_ADMIN_TOTP_SECRET")}`);
+  log(
+    `  IDENTUUM_SITE_ADMIN_EMAIL:        ${presenceTag(env.siteAdminEmail, env.siteAdminEmailSource, "IDENTUUM_SITE_ADMIN_EMAIL")}`
+  );
+  log(
+    `  IDENTUUM_SITE_ADMIN_PASSWORD:     ${presenceTag(env.siteAdminPassword, env.siteAdminPasswordSource, "IDENTUUM_SITE_ADMIN_PASSWORD")}`
+  );
+  log(
+    `  IDENTUUM_SITE_ADMIN_TOTP_SECRET:  ${presenceTag(env.siteAdminTotpSecret, env.siteAdminTotpSecretSource, "IDENTUUM_SITE_ADMIN_TOTP_SECRET")}`
+  );
   log(`  IDENTUUM_AG_OPERATOR_EMAIL:       ${env.agOperatorEmail ? "set" : "-"}`);
   log(`  IDENTUUM_AG_OPERATOR_PASSWORD:    ${env.agOperatorPassword ? "set" : "-"}`);
   log(`  IDENTUUM_AG_OPERATOR_TOKEN:       ${env.agOperatorToken ? "set" : "-"}`);
-  log(`  IDENTUUM_CONFIRM_ORG_ONLY=organization_only: ${env.confirmOrgOnly === "organization_only" ? "YES" : "NO"}`);
+  log(
+    `  IDENTUUM_CONFIRM_ORG_ONLY=organization_only: ${env.confirmOrgOnly === "organization_only" ? "YES" : "NO"}`
+  );
   log(`  IDENTUUM_ORG_IMPORT_ALLOW_IDP_ORG_ID:        ${env.allowIDPOrgID ? "set" : "-"}`);
 
   // Public health checks BEFORE any auth attempt — fast-fails on a misconfigured
@@ -815,7 +825,9 @@ async function main() {
       err(`[blocker] ${label} /api/v1/component returned status=${status}`);
       process.exit(1);
     }
-    log(`  ${label}: component=${body.component} status=${body.status} license.status=${body?.license?.status}`);
+    log(
+      `  ${label}: component=${body.component} status=${body.status} license.status=${body?.license?.status}`
+    );
   }
 
   // Resolve auth headers — manual override or automated login.
@@ -859,7 +871,7 @@ async function main() {
   const idpResp = await httpJSON(
     "GET",
     `${env.idpUrl}/api/v1/organizations/export-candidates`,
-    auth.idp,
+    auth.idp
   );
   log(`  IDP HTTP ${idpResp.status}`);
   if (idpResp.status !== 200) {
@@ -876,7 +888,7 @@ async function main() {
   const agResp = await httpJSON(
     "GET",
     `${env.agUrl}/api/v1/organizations/export-candidates`,
-    auth.ag,
+    auth.ag
   );
   log(`  AG HTTP ${agResp.status}`);
   if (agResp.status !== 200) {
@@ -909,7 +921,9 @@ async function main() {
   if (choice.kind === "none") {
     err(`[blocker] no disposable safe IDP candidate found: ${choice.reason}`);
     err("Automatic selection is restricted to IDP organizations whose name or slug clearly");
-    err("matches a disposable marker (test/demo/local/sandbox/smoke/dev/qa/playwright/recovery/etc.).");
+    err(
+      "matches a disposable marker (test/demo/local/sandbox/smoke/dev/qa/playwright/recovery/etc.)."
+    );
     err("Company/customer-looking orgs are never chosen automatically.");
     err("To exercise a specific non-disposable org locally, set:");
     err("  IDENTUUM_ORG_IMPORT_ALLOW_IDP_ORG_ID=<exact-IDP-UUID>");
@@ -922,9 +936,13 @@ async function main() {
     log("  override candidate selected: NO (default disposable-only selection)");
   }
   log(`  chosen kind: ${choice.kind}`);
-  log(`  IDP candidate: id=${redactID(choice.idp.id)} name=${safeDisplayString(choice.idp.name)} slug=${safeDisplayString(choice.idp.slug)} status=${choice.idp.status}`);
+  log(
+    `  IDP candidate: id=${redactID(choice.idp.id)} name=${safeDisplayString(choice.idp.name)} slug=${safeDisplayString(choice.idp.slug)} status=${choice.idp.status}`
+  );
   if (choice.ag) {
-    log(`  matched AG:    id=${redactID(choice.ag.id)} name=${safeDisplayString(choice.ag.name)} link_status=${choice.ag.link_status || "unknown"}`);
+    log(
+      `  matched AG:    id=${redactID(choice.ag.id)} name=${safeDisplayString(choice.ag.name)} link_status=${choice.ag.link_status || "unknown"}`
+    );
   } else {
     log("  matched AG: (none — create-new path)");
   }
@@ -951,20 +969,24 @@ async function main() {
     "POST",
     `${env.agUrl}/api/v1/organizations/import-from-idp`,
     auth.ag,
-    dryReqBody,
+    dryReqBody
   );
   log(`  HTTP ${dryResp.status}`);
   const dryBody = dryResp.body || {};
   printActionSummary("dry-run", dryBody);
   if (dryResp.status !== 200 || dryBody.dry_run !== true || dryBody.status !== "planned") {
-    err("[blocker] dry-run did not return dry_run=true and status=planned; stopping without execute.");
+    err(
+      "[blocker] dry-run did not return dry_run=true and status=planned; stopping without execute."
+    );
     process.exit(4);
   }
   if (
     dryBody.action !== "create_ag_organization" &&
     dryBody.action !== "link_existing_ag_organization"
   ) {
-    err(`[blocker] dry-run returned unexpected action=${dryBody.action}; stopping without execute.`);
+    err(
+      `[blocker] dry-run returned unexpected action=${dryBody.action}; stopping without execute.`
+    );
     process.exit(4);
   }
 
@@ -977,7 +999,9 @@ async function main() {
   }
   if (env.confirmOrgOnly !== "organization_only") {
     err("");
-    err("[blocker] --execute-one supplied but IDENTUUM_CONFIRM_ORG_ONLY is not 'organization_only'.");
+    err(
+      "[blocker] --execute-one supplied but IDENTUUM_CONFIRM_ORG_ONLY is not 'organization_only'."
+    );
     err("set the env var to that exact string in the same shell as the run and re-invoke.");
     err("no dry_run=false request was sent.");
     process.exit(2);
@@ -995,7 +1019,7 @@ async function main() {
     "POST",
     `${env.agUrl}/api/v1/organizations/import-from-idp`,
     auth.ag,
-    execReqBody,
+    execReqBody
   );
   log(`  HTTP ${execResp.status}`);
   const execBody = execResp.body || {};
@@ -1005,10 +1029,12 @@ async function main() {
   if (execResp.status >= 200 && execResp.status < 300 && okStatuses.has(execBody.status)) {
     log(`  execute accepted with status=${execBody.status}`);
   } else if (execBody.status === "rejected") {
-    log(`  execute returned rejected (possibly a race or newly detected conflict); not retrying.`);
+    log("  execute returned rejected (possibly a race or newly detected conflict); not retrying.");
     process.exit(0);
   } else {
-    err(`[blocker] execute returned unexpected status=${execBody.status} HTTP=${execResp.status}; not retrying.`);
+    err(
+      `[blocker] execute returned unexpected status=${execBody.status} HTTP=${execResp.status}; not retrying.`
+    );
     process.exit(1);
   }
 
@@ -1018,10 +1044,12 @@ async function main() {
   const agAfter = await httpJSON(
     "GET",
     `${env.agUrl}/api/v1/organizations/export-candidates`,
-    auth.ag,
+    auth.ag
   );
   if (agAfter.status !== 200) {
-    err(`[blocker] AG re-fetch returned ${agAfter.status}; cannot verify post-state. mutation already happened — do not retry.`);
+    err(
+      `[blocker] AG re-fetch returned ${agAfter.status}; cannot verify post-state. mutation already happened — do not retry.`
+    );
     process.exit(5);
   }
   scanForbiddenFields(agAfter.body, "AG export-candidates (post-execute)");
@@ -1029,16 +1057,20 @@ async function main() {
   log(`  AG organization count after execute: ${agAfterCandidates.length}`);
 
   if (choice.kind === "create") {
-    const created = agAfterCandidates.find(
-      (c) => c.linked_idp_organization_id === choice.idp.id,
-    );
+    const created = agAfterCandidates.find((c) => c.linked_idp_organization_id === choice.idp.id);
     if (!created) {
-      err("[blocker] post-execute: no AG org found linked to the selected IDP org id. do not retry.");
+      err(
+        "[blocker] post-execute: no AG org found linked to the selected IDP org id. do not retry."
+      );
       process.exit(5);
     }
-    log(`  new AG org: id=${redactID(created.id)} name=${safeDisplayString(created.name)} link_status=${created.link_status} idp=${redactID(created.linked_idp_organization_id)}`);
+    log(
+      `  new AG org: id=${redactID(created.id)} name=${safeDisplayString(created.name)} link_status=${created.link_status} idp=${redactID(created.linked_idp_organization_id)}`
+    );
     if (created.source_component !== "identuum-ag" || created.link_status !== "linked") {
-      err("[blocker] post-execute: new AG org has wrong source_component or link_status. do not retry.");
+      err(
+        "[blocker] post-execute: new AG org has wrong source_component or link_status. do not retry."
+      );
       process.exit(5);
     }
   } else {
@@ -1048,9 +1080,13 @@ async function main() {
       err("[blocker] post-execute: previously-known AG org disappeared. do not retry.");
       process.exit(5);
     }
-    log(`  updated AG org: id=${redactID(updated.id)} name=${safeDisplayString(updated.name)} link_status=${updated.link_status} idp=${redactID(updated.linked_idp_organization_id)}`);
+    log(
+      `  updated AG org: id=${redactID(updated.id)} name=${safeDisplayString(updated.name)} link_status=${updated.link_status} idp=${redactID(updated.linked_idp_organization_id)}`
+    );
     if (updated.link_status !== "linked" || updated.linked_idp_organization_id !== choice.idp.id) {
-      err("[blocker] post-execute: AG org link state did not move to linked or links to a different IDP id. do not retry.");
+      err(
+        "[blocker] post-execute: AG org link state did not move to linked or links to a different IDP id. do not retry."
+      );
       process.exit(5);
     }
   }
@@ -1063,15 +1099,19 @@ async function main() {
 function printCandidates(list) {
   for (const c of list) {
     log(
-      `   - id=${redactID(c.id)} name=${safeDisplayString(c.name)} slug=${safeDisplayString(c.slug)} status=${c.status} src=${c.source_component} link=${c.link_status || "-"} idp=${c.linked_idp_organization_id ? redactID(c.linked_idp_organization_id) : "-"}`,
+      `   - id=${redactID(c.id)} name=${safeDisplayString(c.name)} slug=${safeDisplayString(c.slug)} status=${c.status} src=${c.source_component} link=${c.link_status || "-"} idp=${c.linked_idp_organization_id ? redactID(c.linked_idp_organization_id) : "-"}`
     );
   }
 }
 
 function printActionSummary(label, body) {
   log(`  [${label}] dry_run=${body.dry_run} action=${body.action} status=${body.status}`);
-  log(`             idp_org_id=${redactID(body.idp_organization_id || "")} ag_org_id=${redactID(body.ag_organization_id || "")}`);
-  log(`             ag_organization_created=${!!body.ag_organization_created} link_created=${!!body.link_created}`);
+  log(
+    `             idp_org_id=${redactID(body.idp_organization_id || "")} ag_org_id=${redactID(body.ag_organization_id || "")}`
+  );
+  log(
+    `             ag_organization_created=${!!body.ag_organization_created} link_created=${!!body.link_created}`
+  );
   if (typeof body.message === "string" && body.message !== "") {
     log(`             message: ${safeDisplayString(body.message)}`);
   }

@@ -6,9 +6,9 @@
  * payload field MUST NOT be rendered (may contain sensitive data).
  */
 
-import { describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { describe, expect, it } from "vitest";
 
 const uiRoot = path.resolve(import.meta.dirname, "../../");
 function readFile(relPath: string): string {
@@ -124,7 +124,7 @@ describe("audit page — chain verification (on-demand)", () => {
 
   it("default page does NOT auto-call fetchAuditVerify (requires verify=1)", () => {
     expect(page).toContain("shouldVerify");
-    expect(page).toContain("sp.verify === \"1\"");
+    expect(page).toContain('sp.verify === "1"');
     // Only called when shouldVerify is true
     expect(page).toContain("shouldVerify ? fetchAuditVerify()");
   });
@@ -137,7 +137,7 @@ describe("audit page — chain verification (on-demand)", () => {
   it("Run verification link includes verify=1 and preserves current filters", () => {
     expect(page).toContain("Run verification");
     expect(page).toContain("runVerifyUrl");
-    expect(page).toContain('verify: 1');
+    expect(page).toContain("verify: 1");
   });
 
   it("Run again link present in result states", () => {
@@ -282,7 +282,7 @@ describe("audit page — operator display (batch)", () => {
   it("sends unique ag_user_id values as ids array", () => {
     expect(page).toContain("new Set(events.map((e) => e.ag_user_id)");
     expect(page).toContain("uniqueUserIds");
-    expect(page).toContain('JSON.stringify({ ids }');
+    expect(page).toContain("JSON.stringify({ ids }");
   });
 
   it("batch request body contains ids field", () => {
@@ -311,7 +311,7 @@ describe("audit page — operator display (batch)", () => {
 
   it("no operator lookup for empty/null ag_user_id values", () => {
     // filter ensures only non-null IDs are looked up
-    expect(page).toContain('filter((id): id is string => !!id)');
+    expect(page).toContain("filter((id): id is string => !!id)");
   });
 
   it("audit list still renders when operator lookups return null", () => {

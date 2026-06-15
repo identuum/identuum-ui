@@ -11,9 +11,9 @@
  *   - Login page remains sidebar-free
  */
 
-import { describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { describe, expect, it } from "vitest";
 
 const uiRoot = path.resolve(import.meta.dirname, "../../");
 function readFile(relPath: string): string {
@@ -73,7 +73,7 @@ describe("sessions list — intent safety and fallback", () => {
 
   it("empty intent gets 'Untitled session' fallback in list rows", () => {
     expect(page).toContain('"Untitled session"');
-    expect(page).not.toContain('`Session ${s.id.slice(0, 8)}');
+    expect(page).not.toContain("`Session ${s.id.slice(0, 8)}");
   });
 
   it("list row intent uses truncate to prevent layout overflow on long text", () => {
@@ -176,7 +176,7 @@ describe("sessions list — agentId filter", () => {
 
   it("search form preserves valid agentId via hidden input", () => {
     expect(page).toContain('name="agentId"');
-    expect(page).toContain('value={validAgentId}');
+    expect(page).toContain("value={validAgentId}");
   });
 
   it("sort links reset page to 1 while preserving agentId", () => {
@@ -360,7 +360,7 @@ describe("session detail page", () => {
 
   it("does NOT use the old list+filter workaround", () => {
     expect(page).not.toContain("q: id");
-    expect(page).not.toContain('new URLSearchParams({ q: id');
+    expect(page).not.toContain("new URLSearchParams({ q: id");
     expect(page).not.toContain("s.id === id");
   });
 
@@ -393,7 +393,7 @@ describe("session detail page", () => {
   it("intent is the primary page title (h1), not UUID prefix", () => {
     // pageTitle must be intent, not raw UUID
     expect(page).toContain("pageTitle = s.intent");
-    const h1Idx = page.indexOf('<h1 ');
+    const h1Idx = page.indexOf("<h1 ");
     const pageTitleIdx = page.indexOf("{pageTitle}");
     expect(pageTitleIdx).toBeGreaterThan(h1Idx);
     expect(pageTitleIdx - h1Idx).toBeLessThan(300);

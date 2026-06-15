@@ -45,7 +45,9 @@ async function fetchPaginated<T>(
   }
 }
 
-function totalItems<T>(result: PaginatedResponse<T> | T[] | "auth_error" | "unavailable"): number | null {
+function totalItems<T>(
+  result: PaginatedResponse<T> | T[] | "auth_error" | "unavailable"
+): number | null {
   if (result === "auth_error" || result === "unavailable") return null;
   if (Array.isArray(result)) return result.length;
   return result.pagination?.total_items ?? null;
@@ -110,7 +112,9 @@ export default async function AgDashboardPage() {
     fetchPaginated<DashSession>("/admin/agent-sessions?page=1&page_size=1&status=expired"),
     fetchPaginated<DashSession>("/admin/agent-sessions?page=1&page_size=1&status=revoked"),
     fetchPaginated<DashAgent>("/admin/agent-registry?page=1&page_size=1"),
-    fetchPaginated<DashSession>("/admin/agent-sessions?page=1&page_size=10&sort=last_activity_at&dir=desc&status=all"),
+    fetchPaginated<DashSession>(
+      "/admin/agent-sessions?page=1&page_size=10&sort=last_activity_at&dir=desc&status=all"
+    ),
     fetchPaginated<DashAgent>("/admin/agent-registry?page=1&page_size=10&sort=updated_at&dir=desc"),
   ]);
 
@@ -140,10 +144,13 @@ export default async function AgDashboardPage() {
   const agPublicUrl = cfg?.ag.public_base_url ?? null;
 
   const modeLabel =
-    mode === "governor-only" ? "Governor-only"
-    : mode === "hybrid" ? "Hybrid (IdP + AG)"
-    : mode === "auth-service" ? "Auth-service"
-    : "Unconfigured";
+    mode === "governor-only"
+      ? "Governor-only"
+      : mode === "hybrid"
+        ? "Hybrid (IdP + AG)"
+        : mode === "auth-service"
+          ? "Auth-service"
+          : "Unconfigured";
 
   return (
     <div className="space-y-8 max-w-4xl">
@@ -154,12 +161,20 @@ export default async function AgDashboardPage() {
           <p className="text-sm text-stone-500 mt-0.5">Agentic Governor operational overview</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${
-            agHealthy === true ? "bg-emerald-100 text-emerald-700"
-            : agHealthy === false ? "bg-red-100 text-red-600"
-            : "bg-stone-100 text-stone-500"
-          }`}>
-            {agHealthy === true ? "AG healthy" : agHealthy === false ? "AG unreachable" : "AG unknown"}
+          <span
+            className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${
+              agHealthy === true
+                ? "bg-emerald-100 text-emerald-700"
+                : agHealthy === false
+                  ? "bg-red-100 text-red-600"
+                  : "bg-stone-100 text-stone-500"
+            }`}
+          >
+            {agHealthy === true
+              ? "AG healthy"
+              : agHealthy === false
+                ? "AG unreachable"
+                : "AG unknown"}
           </span>
           <span className="text-[10px] text-stone-400 bg-stone-50 border border-stone-200 px-2 py-0.5 rounded-full">
             {modeLabel}
@@ -170,10 +185,24 @@ export default async function AgDashboardPage() {
       {/* Summary stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
         <StatCard label="Total agents" value={agentCount} href="/ag-admin/agents" />
-        <StatCard label="Total sessions" value={totalSessions} href="/ag-admin/sessions?status=all" />
-        <StatCard label="Active" value={activeCount} href="/ag-admin/sessions?status=active" accent="green" />
+        <StatCard
+          label="Total sessions"
+          value={totalSessions}
+          href="/ag-admin/sessions?status=all"
+        />
+        <StatCard
+          label="Active"
+          value={activeCount}
+          href="/ag-admin/sessions?status=active"
+          accent="green"
+        />
         <StatCard label="Expired" value={expiredCount} href="/ag-admin/sessions?status=expired" />
-        <StatCard label="Revoked" value={revokedCount} href="/ag-admin/sessions?status=revoked" accent="red" />
+        <StatCard
+          label="Revoked"
+          value={revokedCount}
+          href="/ag-admin/sessions?status=revoked"
+          accent="red"
+        />
         <StatCard
           label="AG backend"
           value={agHealthy === true ? "Online" : agHealthy === false ? "Offline" : "Unknown"}
@@ -244,11 +273,13 @@ export default async function AgDashboardPage() {
             error={agHealthy === false}
           />
           <StatusRow label="Deployment mode" value={modeLabel} />
-          {agPublicUrl && (
-            <StatusRow label="Management surface" value={agPublicUrl} mono />
-          )}
+          {agPublicUrl && <StatusRow label="Management surface" value={agPublicUrl} mono />}
           {cfg?.idp.enabled !== undefined && (
-            <StatusRow label="IdP" value={cfg.idp.enabled ? "Enabled" : "Disabled"} ok={cfg.idp.enabled} />
+            <StatusRow
+              label="IdP"
+              value={cfg.idp.enabled ? "Enabled" : "Disabled"}
+              ok={cfg.idp.enabled}
+            />
           )}
         </div>
       </div>
@@ -309,7 +340,11 @@ export default async function AgDashboardPage() {
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
 function StatCard({
-  label, value, href, accent, text = false,
+  label,
+  value,
+  href,
+  accent,
+  text = false,
 }: {
   label: string;
   value: number | string | null;
@@ -318,9 +353,7 @@ function StatCard({
   text?: boolean;
 }) {
   const accentCls =
-    accent === "green" ? "text-emerald-700" :
-    accent === "red" ? "text-red-600" :
-    "text-sky-950";
+    accent === "green" ? "text-emerald-700" : accent === "red" ? "text-red-600" : "text-sky-950";
 
   return (
     <a
@@ -328,7 +361,9 @@ function StatCard({
       className="bg-white border border-stone-200 rounded-2xl shadow-sm px-4 py-3 hover:border-sky-200 hover:shadow-md transition-all block"
     >
       <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400 mb-1">{label}</p>
-      <p className={`font-bold tabular-nums leading-none ${text ? "text-sm" : "text-xl"} ${accentCls}`}>
+      <p
+        className={`font-bold tabular-nums leading-none ${text ? "text-sm" : "text-xl"} ${accentCls}`}
+      >
         {value !== null ? (typeof value === "number" ? value.toLocaleString() : value) : "—"}
       </p>
     </a>
@@ -373,7 +408,9 @@ function DashSessionRow({ session: s }: { session: DashSession }) {
         <p className="text-[11px] text-stone-400 font-mono">{s.id.slice(0, 12)}…</p>
       </div>
       <div className="shrink-0 flex items-center gap-2 flex-wrap justify-end">
-        <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${SESSION_STATUS_STYLES[status]}`}>
+        <span
+          className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${SESSION_STATUS_STYLES[status]}`}
+        >
           {status}
         </span>
         <span className="text-[10px] font-medium text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded whitespace-nowrap">
@@ -407,14 +444,14 @@ function DashAgentRow({ agent: a }: { agent: DashAgent }) {
         {a.name !== a.slug && (
           <p className="text-[11px] text-stone-400 font-mono">Agent key: {a.slug}</p>
         )}
-        {a.description && (
-          <p className="text-xs text-stone-400 line-clamp-1">{a.description}</p>
-        )}
+        {a.description && <p className="text-xs text-stone-400 line-clamp-1">{a.description}</p>}
       </div>
       <div className="shrink-0 flex items-center gap-2 flex-wrap justify-end">
-        <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full ${
-          a.enabled ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-        }`}>
+        <span
+          className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full ${
+            a.enabled ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+          }`}
+        >
           {a.enabled ? "enabled" : "disabled"}
         </span>
         <span className="text-[10px] font-medium text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded whitespace-nowrap">
@@ -432,7 +469,11 @@ function DashAgentRow({ agent: a }: { agent: DashAgent }) {
   );
 }
 
-function GovernanceCard({ title, description, href }: { title: string; description: string; href: string }) {
+function GovernanceCard({
+  title,
+  description,
+  href,
+}: { title: string; description: string; href: string }) {
   return (
     <a
       href={href}
@@ -450,14 +491,25 @@ function GovernanceCard({ title, description, href }: { title: string; descripti
 }
 
 function StatusRow({
-  label, value, ok, error, mono,
+  label,
+  value,
+  ok,
+  error,
+  mono,
 }: {
-  label: string; value: string; ok?: boolean; error?: boolean; mono?: boolean;
+  label: string;
+  value: string;
+  ok?: boolean;
+  error?: boolean;
+  mono?: boolean;
 }) {
-  const valueCls = ok ? "text-emerald-700 font-semibold"
-    : error ? "text-red-600 font-semibold"
-    : mono ? "text-stone-600 font-mono text-xs"
-    : "text-stone-600";
+  const valueCls = ok
+    ? "text-emerald-700 font-semibold"
+    : error
+      ? "text-red-600 font-semibold"
+      : mono
+        ? "text-stone-600 font-mono text-xs"
+        : "text-stone-600";
   return (
     <div className="flex items-baseline justify-between gap-4 py-0.5">
       <span className="text-xs text-stone-500 shrink-0">{label}</span>
@@ -469,7 +521,10 @@ function StatusRow({
 function formatDate(iso: string): string {
   try {
     return new Date(iso).toLocaleString("en-US", {
-      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   } catch {
     return iso.slice(0, 16);

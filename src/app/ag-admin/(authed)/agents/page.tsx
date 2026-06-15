@@ -92,7 +92,13 @@ async function fetchAgents(params: {
   }
 
   // Paginated response shape: { items: [...], pagination: {...} }
-  if (raw && typeof raw === "object" && !Array.isArray(raw) && "items" in raw && "pagination" in raw) {
+  if (
+    raw &&
+    typeof raw === "object" &&
+    !Array.isArray(raw) &&
+    "items" in raw &&
+    "pagination" in raw
+  ) {
     const typed = raw as { items: AgentEntry[]; pagination: PaginationMeta };
     return { items: typed.items ?? [], pagination: typed.pagination, rawArray: false };
   }
@@ -117,10 +123,15 @@ export default async function AgentsPage({ searchParams }: PageProps) {
   const rawSort = typeof params.sort === "string" ? params.sort : "created_at";
   const sortField = BACKEND_SORT_FIELDS.has(rawSort) ? rawSort : "created_at";
   const sortDir: SortDir = typeof params.dir === "string" && params.dir === "asc" ? "asc" : "desc";
-  const rawPageSize = parseInt(typeof params.pageSize === "string" ? params.pageSize : "", 10);
-  const pageSize = (PAGE_SIZES as readonly number[]).includes(rawPageSize) ? rawPageSize : DEFAULT_PAGE_SIZE;
-  const rawPage = parseInt(typeof params.page === "string" ? params.page : "", 10);
-  const page = Math.max(1, isNaN(rawPage) ? 1 : rawPage);
+  const rawPageSize = Number.parseInt(
+    typeof params.pageSize === "string" ? params.pageSize : "",
+    10
+  );
+  const pageSize = (PAGE_SIZES as readonly number[]).includes(rawPageSize)
+    ? rawPageSize
+    : DEFAULT_PAGE_SIZE;
+  const rawPage = Number.parseInt(typeof params.page === "string" ? params.page : "", 10);
+  const page = Math.max(1, Number.isNaN(rawPage) ? 1 : rawPage);
 
   const result = await fetchAgents({ page, pageSize, q, sort: sortField, dir: sortDir });
 
@@ -171,11 +182,7 @@ export default async function AgentsPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        total={totalDisplay}
-        query={q}
-        rawArray={rawArray}
-      />
+      <PageHeader total={totalDisplay} query={q} rawArray={rawArray} />
 
       {/* Page size selector — navigation links, not a form select.
            Using links avoids the React uncontrolled/defaultValue reconciliation
@@ -212,8 +219,12 @@ export default async function AgentsPage({ searchParams }: PageProps) {
         <form method="GET" action="/ag-admin/agents" className="flex items-center gap-2">
           {sortField !== "created_at" && <input type="hidden" name="sort" value={sortField} />}
           {sortDir !== "desc" && <input type="hidden" name="dir" value={sortDir} />}
-          {pageSize !== DEFAULT_PAGE_SIZE && <input type="hidden" name="pageSize" value={String(pageSize)} />}
-          <label className="sr-only" htmlFor="ag-agent-search">Search agents</label>
+          {pageSize !== DEFAULT_PAGE_SIZE && (
+            <input type="hidden" name="pageSize" value={String(pageSize)} />
+          )}
+          <label className="sr-only" htmlFor="ag-agent-search">
+            Search agents
+          </label>
           <input
             id="ag-agent-search"
             type="search"
@@ -244,7 +255,8 @@ export default async function AgentsPage({ searchParams }: PageProps) {
           <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm px-6 py-10 text-center">
             <p className="text-sm font-semibold text-sky-950">No agents match</p>
             <p className="text-xs text-stone-400 mt-1.5">
-              No agents matching <span className="font-mono text-stone-600">&ldquo;{q}&rdquo;</span> found.
+              No agents matching <span className="font-mono text-stone-600">&ldquo;{q}&rdquo;</span>{" "}
+              found.
             </p>
           </div>
         ) : (
@@ -290,7 +302,11 @@ export default async function AgentsPage({ searchParams }: PageProps) {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function PageHeader({ total, query, rawArray }: { total?: number; query?: string; rawArray?: boolean }) {
+function PageHeader({
+  total,
+  query,
+  rawArray,
+}: { total?: number; query?: string; rawArray?: boolean }) {
   return (
     <div className="flex items-center justify-between">
       <div>
@@ -306,7 +322,9 @@ function PageHeader({ total, query, rawArray }: { total?: number; query?: string
             {rawArray && <span className="ml-1 text-stone-300">(all loaded)</span>}
           </span>
         )}
-        {query && <span className="text-xs text-sky-600 bg-sky-50 px-2 py-0.5 rounded-full">filtered</span>}
+        {query && (
+          <span className="text-xs text-sky-600 bg-sky-50 px-2 py-0.5 rounded-full">filtered</span>
+        )}
         <a
           href="/ag-admin/agents/new"
           className="text-xs font-medium text-white bg-sky-700 hover:bg-sky-800 px-3 py-1.5 rounded-lg transition-colors"
@@ -341,7 +359,8 @@ function AgentRow({ agent }: { agent: AgentEntry }) {
             Tools:{" "}
             <span className="text-stone-500">
               {agent.allowed_tools_default.slice(0, 3).join(", ")}
-              {agent.allowed_tools_default.length > 3 && ` +${agent.allowed_tools_default.length - 3}`}
+              {agent.allowed_tools_default.length > 3 &&
+                ` +${agent.allowed_tools_default.length - 3}`}
             </span>
           </p>
         )}
@@ -349,9 +368,11 @@ function AgentRow({ agent }: { agent: AgentEntry }) {
       <span className="text-xs text-stone-500 font-medium whitespace-nowrap self-start pt-1">
         {agent.default_agent_mode}
       </span>
-      <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded self-start mt-0.5 ${
-        agent.enabled ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
-      }`}>
+      <span
+        className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded self-start mt-0.5 ${
+          agent.enabled ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+        }`}
+      >
         {agent.enabled ? "enabled" : "disabled"}
       </span>
       <div className="shrink-0 text-right text-[11px] text-stone-400 space-y-0.5 self-start">
@@ -369,10 +390,21 @@ function AgentRow({ agent }: { agent: AgentEntry }) {
 }
 
 function PaginationBar({
-  page, totalPages, total, pageSize, rawArray, prevUrl, nextUrl,
+  page,
+  totalPages,
+  total,
+  pageSize,
+  rawArray,
+  prevUrl,
+  nextUrl,
 }: {
-  page: number; totalPages: number; total: number; pageSize: number;
-  rawArray: boolean; prevUrl: string | null; nextUrl: string | null;
+  page: number;
+  totalPages: number;
+  total: number;
+  pageSize: number;
+  rawArray: boolean;
+  prevUrl: string | null;
+  nextUrl: string | null;
 }) {
   if (rawArray) {
     return (
@@ -385,22 +417,38 @@ function PaginationBar({
   const to = Math.min(page * pageSize, total);
   return (
     <div className="flex items-center justify-between text-xs text-stone-500">
-      <span>{from}–{to} of {total}</span>
+      <span>
+        {from}–{to} of {total}
+      </span>
       <div className="flex items-center gap-1.5">
         {prevUrl ? (
-          <a href={prevUrl} aria-label="Previous page" className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors">
+          <a
+            href={prevUrl}
+            aria-label="Previous page"
+            className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors"
+          >
             ← Prev
           </a>
         ) : (
-          <span className="px-3 py-1.5 rounded-lg border border-stone-100 bg-stone-50 text-stone-300 cursor-default">← Prev</span>
+          <span className="px-3 py-1.5 rounded-lg border border-stone-100 bg-stone-50 text-stone-300 cursor-default">
+            ← Prev
+          </span>
         )}
-        <span className="px-3 py-1.5 font-medium text-sky-950">{page} / {totalPages}</span>
+        <span className="px-3 py-1.5 font-medium text-sky-950">
+          {page} / {totalPages}
+        </span>
         {nextUrl ? (
-          <a href={nextUrl} aria-label="Next page" className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors">
+          <a
+            href={nextUrl}
+            aria-label="Next page"
+            className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors"
+          >
             Next →
           </a>
         ) : (
-          <span className="px-3 py-1.5 rounded-lg border border-stone-100 bg-stone-50 text-stone-300 cursor-default">Next →</span>
+          <span className="px-3 py-1.5 rounded-lg border border-stone-100 bg-stone-50 text-stone-300 cursor-default">
+            Next →
+          </span>
         )}
       </div>
     </div>
@@ -424,7 +472,8 @@ function EmptyState() {
     <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm px-6 py-10 text-center">
       <p className="text-sm font-semibold text-sky-950">No agents registered</p>
       <p className="text-xs text-stone-400 mt-1.5 max-w-xs mx-auto leading-relaxed">
-        No agent registry entries found. Agents can be registered via the AG management API or MCP server.
+        No agent registry entries found. Agents can be registered via the AG management API or MCP
+        server.
       </p>
     </div>
   );
@@ -432,7 +481,11 @@ function EmptyState() {
 
 function formatDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    return new Date(iso).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
   } catch {
     return iso.slice(0, 10);
   }

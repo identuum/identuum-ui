@@ -46,10 +46,7 @@ function isAllowedAction(s: unknown): s is OrgImportDryRunAction {
 }
 
 function isAllowedExecuteStatus(s: unknown): s is OrgImportExecuteStatus {
-  return (
-    typeof s === "string" &&
-    (ALLOWED_EXECUTE_STATUSES as ReadonlyArray<string>).includes(s)
-  );
+  return typeof s === "string" && (ALLOWED_EXECUTE_STATUSES as ReadonlyArray<string>).includes(s);
 }
 
 /**
@@ -72,9 +69,7 @@ function isAllowedExecuteStatus(s: unknown): s is OrgImportExecuteStatus {
  * these flags carry meaningful information here — they indicate whether
  * the backend actually created the AG org and/or wrote the link row.
  */
-export function parseOrgImportExecuteResponse(
-  raw: unknown
-): OrgImportExecuteResponse | null {
+export function parseOrgImportExecuteResponse(raw: unknown): OrgImportExecuteResponse | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const o = raw as Record<string, unknown>;
 

@@ -21,9 +21,13 @@
 import "server-only";
 
 import { agRequest, getAgOperatorToken } from "./ag-client";
-import { loadRuntimeConfig } from "./runtime-config";
-import type { AGOrgSummaryWithLink, OrgLinkWriteErrorCode, OrgLinkWriteResult } from "./org-link-types";
+import type {
+  AGOrgSummaryWithLink,
+  OrgLinkWriteErrorCode,
+  OrgLinkWriteResult,
+} from "./org-link-types";
 import { isValidUUID } from "./org-link-utils";
+import { loadRuntimeConfig } from "./runtime-config";
 
 export { isValidUUID } from "./org-link-utils";
 
@@ -70,8 +74,7 @@ function sanitizeWriteOrg(raw: unknown): AGOrgSummaryWithLink | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const o = raw as Record<string, unknown>;
   if (typeof o.id !== "string" || typeof o.name !== "string") return null;
-  const linkedIDPOrgID =
-    typeof o.linked_idp_org_id === "string" ? o.linked_idp_org_id : null;
+  const linkedIDPOrgID = typeof o.linked_idp_org_id === "string" ? o.linked_idp_org_id : null;
   return {
     id: o.id,
     name: typeof o.name === "string" ? o.name : "",
@@ -110,13 +113,21 @@ export async function linkAGOrganizationToIDPOrg(
       body: JSON.stringify({ idp_org_id: idpOrgId }),
     });
   } catch {
-    return { ok: false, error_code: "ag_unavailable", message: safeMessageForCode("ag_unavailable") };
+    return {
+      ok: false,
+      error_code: "ag_unavailable",
+      message: safeMessageForCode("ag_unavailable"),
+    };
   }
 
   // agRequest returns null only when AG is not configured or no token, but preflight
   // already covered those cases. Treat null here as not_configured defensively.
   if (!res) {
-    return { ok: false, error_code: "not_configured", message: safeMessageForCode("not_configured") };
+    return {
+      ok: false,
+      error_code: "not_configured",
+      message: safeMessageForCode("not_configured"),
+    };
   }
 
   if (res.ok) {
@@ -162,11 +173,19 @@ export async function unlinkAGOrganizationFromIDPOrg(agOrgId: string): Promise<O
       method: "DELETE",
     });
   } catch {
-    return { ok: false, error_code: "ag_unavailable", message: safeMessageForCode("ag_unavailable") };
+    return {
+      ok: false,
+      error_code: "ag_unavailable",
+      message: safeMessageForCode("ag_unavailable"),
+    };
   }
 
   if (!res) {
-    return { ok: false, error_code: "not_configured", message: safeMessageForCode("not_configured") };
+    return {
+      ok: false,
+      error_code: "not_configured",
+      message: safeMessageForCode("not_configured"),
+    };
   }
 
   if (res.ok) {
@@ -205,7 +224,11 @@ export async function importAGOrganization(
     return { ok: false, error_code: "invalid_request", message: "Invalid IDP org ID format." };
   }
   if (!name.trim()) {
-    return { ok: false, error_code: "invalid_request", message: "Organization name must not be empty." };
+    return {
+      ok: false,
+      error_code: "invalid_request",
+      message: "Organization name must not be empty.",
+    };
   }
 
   const preflightError = await writePreflightCheck();
@@ -222,11 +245,19 @@ export async function importAGOrganization(
       body: JSON.stringify(body),
     });
   } catch {
-    return { ok: false, error_code: "ag_unavailable", message: safeMessageForCode("ag_unavailable") };
+    return {
+      ok: false,
+      error_code: "ag_unavailable",
+      message: safeMessageForCode("ag_unavailable"),
+    };
   }
 
   if (!res) {
-    return { ok: false, error_code: "not_configured", message: safeMessageForCode("not_configured") };
+    return {
+      ok: false,
+      error_code: "not_configured",
+      message: safeMessageForCode("not_configured"),
+    };
   }
 
   if (res.ok) {

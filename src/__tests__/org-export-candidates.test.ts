@@ -53,10 +53,7 @@ describe("parseOrganizationExportCandidate", () => {
   });
 
   it("projects minimal valid object onto safe shape with defaults", () => {
-    const got = parseOrganizationExportCandidate(
-      { id: "abc", name: "Acme" },
-      "identuum-idp"
-    );
+    const got = parseOrganizationExportCandidate({ id: "abc", name: "Acme" }, "identuum-idp");
     expect(got).toEqual({
       id: "abc",
       name: "Acme",
@@ -101,16 +98,12 @@ describe("parseOrganizationExportCandidate", () => {
       parseOrganizationExportCandidate({ id: "a", name: "x" }, "identuum-ag")?.source_component
     ).toBe("identuum-ag");
     expect(
-      parseOrganizationExportCandidate(
-        { id: "a", name: "x", source_component: 42 },
-        "identuum-ag"
-      )?.source_component
+      parseOrganizationExportCandidate({ id: "a", name: "x", source_component: 42 }, "identuum-ag")
+        ?.source_component
     ).toBe("identuum-ag");
     expect(
-      parseOrganizationExportCandidate(
-        { id: "a", name: "x", source_component: "" },
-        "identuum-ag"
-      )?.source_component
+      parseOrganizationExportCandidate({ id: "a", name: "x", source_component: "" }, "identuum-ag")
+        ?.source_component
     ).toBe("identuum-ag");
   });
 
@@ -281,16 +274,11 @@ describe("parseOrganizationExportCandidate", () => {
     expect(json).not.toContain("linked_idp_id");
     expect(json).not.toContain("ag_link_status");
     expect(json).not.toContain("link_metadata");
-    expect(got?.linked_idp_organization_id).toBe(
-      "11111111-1111-1111-1111-111111111111"
-    );
+    expect(got?.linked_idp_organization_id).toBe("11111111-1111-1111-1111-111111111111");
   });
 
   it("link fields default to empty string when missing", () => {
-    const got = parseOrganizationExportCandidate(
-      { id: "abc", name: "Acme" },
-      "identuum-idp"
-    );
+    const got = parseOrganizationExportCandidate({ id: "abc", name: "Acme" }, "identuum-idp");
     expect(got?.linked_idp_organization_id).toBe("");
     expect(got?.link_status).toBe("");
   });
@@ -420,9 +408,7 @@ describe("parseOrganizationExportCandidatesResponse", () => {
 describe("deriveOrganizationCandidateMatches", () => {
   it("returns empty list when either side is empty", () => {
     expect(deriveOrganizationCandidateMatches([], [])).toEqual([]);
-    expect(
-      deriveOrganizationCandidateMatches([makeCandidate()], [])
-    ).toEqual([]);
+    expect(deriveOrganizationCandidateMatches([makeCandidate()], [])).toEqual([]);
     expect(
       deriveOrganizationCandidateMatches([], [makeCandidate({ source_component: "identuum-ag" })])
     ).toEqual([]);
@@ -579,7 +565,7 @@ describe("deriveOrganizationCandidateMatches", () => {
 
 describe("readiness page — candidate section invariants", () => {
   it("page source renders IDP and AG candidate cards", () => {
-    const fs = require("fs");
+    const fs = require("node:fs");
     const src = fs.readFileSync(
       new URL("../app/site-admin/org-link/readiness/page.tsx", import.meta.url).pathname,
       "utf-8"
@@ -595,7 +581,7 @@ describe("readiness page — candidate section invariants", () => {
   });
 
   it("page source does not include sensitive field reads from candidate rows", () => {
-    const fs = require("fs");
+    const fs = require("node:fs");
     const src = fs.readFileSync(
       new URL("../app/site-admin/org-link/readiness/page.tsx", import.meta.url).pathname,
       "utf-8"
@@ -622,7 +608,7 @@ describe("readiness page — candidate section invariants", () => {
   });
 
   it("page source renders 'Linked to IDP' / 'Unlinked' badges and shortens IDP UUID", () => {
-    const fs = require("fs");
+    const fs = require("node:fs");
     const src = fs.readFileSync(
       new URL("../app/site-admin/org-link/readiness/page.tsx", import.meta.url).pathname,
       "utf-8"
@@ -638,7 +624,7 @@ describe("readiness page — candidate section invariants", () => {
   });
 
   it("page source surfaces 'AG linked' badge and 'AG already linked' state", () => {
-    const fs = require("fs");
+    const fs = require("node:fs");
     const src = fs.readFileSync(
       new URL("../app/site-admin/org-link/readiness/page.tsx", import.meta.url).pathname,
       "utf-8"
@@ -651,7 +637,7 @@ describe("readiness page — candidate section invariants", () => {
   });
 
   it("page existing readiness/candidate/dry-run/execute sections remain intact", () => {
-    const fs = require("fs");
+    const fs = require("node:fs");
     const src = fs.readFileSync(
       new URL("../app/site-admin/org-link/readiness/page.tsx", import.meta.url).pathname,
       "utf-8"
@@ -669,9 +655,7 @@ describe("readiness page — candidate section invariants", () => {
     // (see src/__tests__/org-import-execute.test.ts for the full label +
     // checkbox-shape invariants). The substring below is a stable anchor
     // for "the safety statement is present on the page".
-    expect(src).toContain(
-      "I understand this action only creates or links the organization record"
-    );
+    expect(src).toContain("I understand this action only creates or links the organization record");
     // Disabled global Start linking preserved.
     expect(src).toContain("Start linking");
     expect(src).toContain('aria-disabled="true"');
@@ -684,7 +668,7 @@ describe("readiness page — candidate section invariants", () => {
 
 describe("parser source — link field allowlist", () => {
   it("parser source reads only the two allowlisted link fields", () => {
-    const fs = require("fs");
+    const fs = require("node:fs");
     const src = fs.readFileSync(
       new URL("../lib/org-export-candidates.ts", import.meta.url).pathname,
       "utf-8"

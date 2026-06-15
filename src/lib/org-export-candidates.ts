@@ -14,10 +14,7 @@
  * always discarded by the allowlist parser.
  */
 
-import type {
-  OrganizationExportCandidate,
-  OrganizationExportCandidatesResponse,
-} from "./types";
+import type { OrganizationExportCandidate, OrganizationExportCandidatesResponse } from "./types";
 
 // ---------------------------------------------------------------------------
 // Allowlist parser

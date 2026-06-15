@@ -11,9 +11,9 @@
  *   - No secret-like fields or internal URLs are referenced in login layout
  */
 
-import { describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { describe, expect, it } from "vitest";
 
 const uiRoot = path.resolve(import.meta.dirname, "../../");
 
@@ -134,7 +134,13 @@ describe("ag-admin login page — desktop split-panel layout", () => {
   });
 
   it("does not expose cookies, tokens, or internal URLs", () => {
-    for (const forbidden of ["ag_operator_session", "bearer", "client_secret", "host.docker.internal", "internal_base_url"]) {
+    for (const forbidden of [
+      "ag_operator_session",
+      "bearer",
+      "client_secret",
+      "host.docker.internal",
+      "internal_base_url",
+    ]) {
       expect(page).not.toContain(forbidden);
     }
   });
@@ -157,7 +163,7 @@ describe("ag-admin (authed) layout — sidebar present", () => {
 
   it("still contains session guard redirect to login", () => {
     expect(layout).toContain("hasAgSession");
-    expect(layout).toContain('/ag-admin/login');
+    expect(layout).toContain("/ag-admin/login");
   });
 
   it("does not expose internal URLs or secret-like fields", () => {

@@ -35,7 +35,9 @@ interface HeldRequest {
   decided_at?: string | null;
 }
 
-async function fetchItem(interventionId: string): Promise<HeldRequest | "auth_error" | "not_found" | "unavailable"> {
+async function fetchItem(
+  interventionId: string
+): Promise<HeldRequest | "auth_error" | "not_found" | "unavailable"> {
   const res = await agRequest(`/admin/hitl/${encodeURIComponent(interventionId)}`);
   if (!res) return "unavailable";
   if (res.status === 401 || res.status === 403) return "auth_error";
@@ -64,19 +66,22 @@ async function fetchItem(interventionId: string): Promise<HeldRequest | "auth_er
 // Approval error codes carried via searchParams so Server Actions can
 // communicate failure states without exposing raw backend errors.
 type ReviewError =
-  | "acr_required"       // 403 Reviewer ACR insufficient
-  | "auth_too_old"       // 403 Reviewer authentication too old
-  | "already_decided"    // 409 Intervention already has a recorded decision
-  | "not_found"          // 404 Intervention not found
-  | "reason_required"    // UI validation: deny reason is empty
-  | "reason_too_long"    // UI validation: reason > 1024 chars
-  | "failed"             // Unexpected backend error
-  | "unavailable";       // Cannot reach AG management surface
+  | "acr_required" // 403 Reviewer ACR insufficient
+  | "auth_too_old" // 403 Reviewer authentication too old
+  | "already_decided" // 409 Intervention already has a recorded decision
+  | "not_found" // 404 Intervention not found
+  | "reason_required" // UI validation: deny reason is empty
+  | "reason_too_long" // UI validation: reason > 1024 chars
+  | "failed" // Unexpected backend error
+  | "unavailable"; // Cannot reach AG management surface
 
 const REVIEW_ERROR_MESSAGES: Record<ReviewError, string> = {
-  acr_required: "Stronger authentication is required before you can approve or deny this request. Re-authenticate with a higher-assurance method (e.g. MFA, passkey) and try again.",
-  auth_too_old: "Your authentication session is too old to perform this review. Please re-authenticate and try again.",
-  already_decided: "This intervention has already been decided. Refresh the queue to see the current state.",
+  acr_required:
+    "Stronger authentication is required before you can approve or deny this request. Re-authenticate with a higher-assurance method (e.g. MFA, passkey) and try again.",
+  auth_too_old:
+    "Your authentication session is too old to perform this review. Please re-authenticate and try again.",
+  already_decided:
+    "This intervention has already been decided. Refresh the queue to see the current state.",
   not_found: "Intervention not found. It may have expired or been decided by another operator.",
   reason_required: "A reason is required when denying an intervention.",
   reason_too_long: "The reason must be 1024 characters or fewer.",
@@ -115,7 +120,9 @@ export default async function ReviewPage({ params, searchParams }: PageProps) {
         if (body?.message === "Reviewer ACR insufficient") errorKey = "acr_required";
         else if (body?.message === "Reviewer authentication too old") errorKey = "auth_too_old";
         else errorKey = "acr_required"; // default for 403
-      } catch { errorKey = "acr_required"; }
+      } catch {
+        errorKey = "acr_required";
+      }
       redirect(`/ag-admin/hitl/${id}?error=${errorKey}`);
     }
     if (res.status === 404) redirect(`/ag-admin/hitl/${id}?error=not_found`);
@@ -141,7 +148,9 @@ export default async function ReviewPage({ params, searchParams }: PageProps) {
         if (body?.message === "Reviewer ACR insufficient") errorKey = "acr_required";
         else if (body?.message === "Reviewer authentication too old") errorKey = "auth_too_old";
         else errorKey = "acr_required";
-      } catch { errorKey = "acr_required"; }
+      } catch {
+        errorKey = "acr_required";
+      }
       redirect(`/ag-admin/hitl/${id}?error=${errorKey}`);
     }
     if (res.status === 404) redirect(`/ag-admin/hitl/${id}?error=not_found`);
@@ -154,13 +163,18 @@ export default async function ReviewPage({ params, searchParams }: PageProps) {
     <div className="space-y-6 max-w-2xl">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <a href="/ag-admin/hitl" className="text-xs text-stone-400 hover:text-sky-700 transition-colors">
+        <a
+          href="/ag-admin/hitl"
+          className="text-xs text-stone-400 hover:text-sky-700 transition-colors"
+        >
           ← HITL / CBAA Queue
         </a>
       </div>
 
       <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-sky-950">Review HITL / CBAA request</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight text-sky-950">
+          Review HITL / CBAA request
+        </h1>
         <p className="text-sm text-stone-500 mt-0.5">
           Approve to allow the agent to continue, or deny to block it.
         </p>
@@ -168,13 +182,17 @@ export default async function ReviewPage({ params, searchParams }: PageProps) {
 
       {/* Success state (after redirect back) */}
       {reviewedDecision && (
-        <div className={`rounded-2xl border px-5 py-4 text-xs font-medium ${
-          reviewedDecision === "approved"
-            ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-            : "bg-red-50 border-red-200 text-red-800"
-        }`}>
+        <div
+          className={`rounded-2xl border px-5 py-4 text-xs font-medium ${
+            reviewedDecision === "approved"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+              : "bg-red-50 border-red-200 text-red-800"
+          }`}
+        >
           Intervention {reviewedDecision === "approved" ? "approved" : "denied"} successfully.{" "}
-          <a href="/ag-admin/hitl" className="underline">Back to queue →</a>
+          <a href="/ag-admin/hitl" className="underline">
+            Back to queue →
+          </a>
         </div>
       )}
 
@@ -231,7 +249,9 @@ function ReviewDetail({
         </div>
         <dl className="px-6 py-4 space-y-3">
           <Field label="State">
-            <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded ${stateCls}`}>
+            <span
+              className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded ${stateCls}`}
+            >
               {item.gate_state}
             </span>
           </Field>
@@ -253,9 +273,7 @@ function ReviewDetail({
           </Field>
           <Field label="Pending since">{formatDate(item.pending_since)}</Field>
           <Field label="Expires">{formatDate(item.expires_at)}</Field>
-          {item.decided_at && (
-            <Field label="Decided at">{formatDate(item.decided_at)}</Field>
-          )}
+          {item.decided_at && <Field label="Decided at">{formatDate(item.decided_at)}</Field>}
         </dl>
       </div>
 
@@ -298,7 +316,9 @@ function ReviewDetail({
             <div className="px-6 py-4">
               <form action={deny} className="space-y-3">
                 <div>
-                  <label htmlFor="deny-reason" className="sr-only">Reason for denial</label>
+                  <label htmlFor="deny-reason" className="sr-only">
+                    Reason for denial
+                  </label>
                   <textarea
                     id="deny-reason"
                     name="reason"
@@ -326,7 +346,10 @@ function ReviewDetail({
               ? "This intervention has expired and can no longer be approved or denied."
               : `This intervention is in state "${item.gate_state}" and cannot be reviewed.`}
           </p>
-          <a href="/ag-admin/hitl" className="mt-2 inline-block text-xs text-sky-600 hover:underline">
+          <a
+            href="/ag-admin/hitl"
+            className="mt-2 inline-block text-xs text-sky-600 hover:underline"
+          >
             Back to queue
           </a>
         </div>
@@ -349,9 +372,8 @@ function NotFoundState({ interventionId }: { interventionId: string }) {
     <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm px-6 py-10 text-center">
       <p className="text-sm font-semibold text-sky-950">Intervention not found</p>
       <p className="text-xs text-stone-400 mt-1.5 max-w-sm mx-auto leading-relaxed">
-        Intervention{" "}
-        <span className="font-mono">{interventionId.slice(0, 12)}…</span> was not found. It may
-        not exist or may not be accessible from this deployment.
+        Intervention <span className="font-mono">{interventionId.slice(0, 12)}…</span> was not
+        found. It may not exist or may not be accessible from this deployment.
       </p>
       <a href="/ag-admin/hitl" className="mt-4 inline-block text-xs text-sky-600 hover:underline">
         Back to queue
@@ -377,8 +399,11 @@ function UnavailableState() {
 function formatDate(iso: string): string {
   try {
     return new Date(iso).toLocaleString("en-US", {
-      month: "short", day: "numeric", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   } catch {
     return iso.slice(0, 19);

@@ -74,7 +74,11 @@ export function deriveLicenseWarnings(backends: {
         if (days == null) continue;
         if (days > 30) continue;
         if (days <= 0) {
-          warnings.push({ backendId: id, severity: "critical", message: `${label} license has expired.` });
+          warnings.push({
+            backendId: id,
+            severity: "critical",
+            message: `${label} license has expired.`,
+          });
         } else {
           warnings.push({
             backendId: id,
@@ -85,14 +89,26 @@ export function deriveLicenseWarnings(backends: {
         break;
       }
       case "expired":
-        warnings.push({ backendId: id, severity: "critical", message: `${label} license has expired.` });
+        warnings.push({
+          backendId: id,
+          severity: "critical",
+          message: `${label} license has expired.`,
+        });
         break;
       case "invalid":
-        warnings.push({ backendId: id, severity: "critical", message: `${label} license is invalid.` });
+        warnings.push({
+          backendId: id,
+          severity: "critical",
+          message: `${label} license is invalid.`,
+        });
         break;
       default:
         // unknown, missing, empty, or any unrecognised status for a reachable backend
-        warnings.push({ backendId: id, severity: "warning", message: `${label} license status is unknown.` });
+        warnings.push({
+          backendId: id,
+          severity: "warning",
+          message: `${label} license status is unknown.`,
+        });
         break;
     }
   }

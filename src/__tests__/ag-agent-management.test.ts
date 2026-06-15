@@ -5,9 +5,9 @@
  * agent detail edit link, safety and security requirements.
  */
 
-import { describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { describe, expect, it } from "vitest";
 
 const uiRoot = path.resolve(import.meta.dirname, "../../");
 function readFile(relPath: string): string {
@@ -175,7 +175,12 @@ describe("new agent page — security", () => {
 
   it("no credential input fields in the form", () => {
     // These field names must not appear as form input names
-    for (const forbidden of ['name="password"', 'name="private_key"', 'name="client_secret"', 'name="token"']) {
+    for (const forbidden of [
+      'name="password"',
+      'name="private_key"',
+      'name="client_secret"',
+      'name="token"',
+    ]) {
       expect(newPage).not.toContain(forbidden);
     }
   });
@@ -207,7 +212,7 @@ describe("edit agent page — immutable fields", () => {
     expect(editPage).toContain("Technical ID (immutable)");
     expect(editPage).toContain("agent.id");
     // ID must not be in a form input
-    const idInInput = editPage.includes('name="id"') || editPage.includes("name={\"id\"}");
+    const idInInput = editPage.includes('name="id"') || editPage.includes('name={"id"}');
     expect(idInInput).toBe(false);
   });
 });

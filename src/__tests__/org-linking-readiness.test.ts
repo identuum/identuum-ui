@@ -123,7 +123,9 @@ describe("deriveOrganizationLinkingReadiness", () => {
     };
     const result = deriveOrganizationLinkingReadiness(state);
     const unmet = result.prerequisites.filter((p) => !p.met);
-    expect(unmet.some((p) => p.failMessage === "Identity Provider backend is not configured.")).toBe(true);
+    expect(
+      unmet.some((p) => p.failMessage === "Identity Provider backend is not configured.")
+    ).toBe(true);
   });
 
   it("returns ready=false when AG is unconfigured", () => {
@@ -146,7 +148,9 @@ describe("deriveOrganizationLinkingReadiness", () => {
     };
     const result = deriveOrganizationLinkingReadiness(state);
     const unmet = result.prerequisites.filter((p) => !p.met);
-    expect(unmet.some((p) => p.failMessage === "Agent Governance backend is not configured.")).toBe(true);
+    expect(unmet.some((p) => p.failMessage === "Agent Governance backend is not configured.")).toBe(
+      true
+    );
   });
 
   it("returns ready=false when IDP is configured but unreachable/not usable", () => {
@@ -169,7 +173,9 @@ describe("deriveOrganizationLinkingReadiness", () => {
     };
     const result = deriveOrganizationLinkingReadiness(state);
     const unmet = result.prerequisites.filter((p) => !p.met);
-    expect(unmet.some((p) => p.failMessage === "Identity Provider backend is unreachable.")).toBe(true);
+    expect(unmet.some((p) => p.failMessage === "Identity Provider backend is unreachable.")).toBe(
+      true
+    );
   });
 
   it("returns ready=false when AG is configured but unreachable/not usable", () => {
@@ -191,8 +197,8 @@ describe("deriveOrganizationLinkingReadiness", () => {
     expect(result.ready).toBe(false);
     const unmet = result.prerequisites.filter((p) => !p.met);
     expect(
-      unmet.some((p) =>
-        p.failMessage === "Identity Provider does not report organization export capability."
+      unmet.some(
+        (p) => p.failMessage === "Identity Provider does not report organization export capability."
       )
     ).toBe(true);
   });
@@ -204,8 +210,9 @@ describe("deriveOrganizationLinkingReadiness", () => {
     expect(result.ready).toBe(false);
     const unmet = result.prerequisites.filter((p) => !p.met);
     expect(
-      unmet.some((p) =>
-        p.failMessage === "Identity Provider does not report organization linking capability."
+      unmet.some(
+        (p) =>
+          p.failMessage === "Identity Provider does not report organization linking capability."
       )
     ).toBe(true);
   });
@@ -217,8 +224,8 @@ describe("deriveOrganizationLinkingReadiness", () => {
     expect(result.ready).toBe(false);
     const unmet = result.prerequisites.filter((p) => !p.met);
     expect(
-      unmet.some((p) =>
-        p.failMessage === "Agent Governance does not report organization import capability."
+      unmet.some(
+        (p) => p.failMessage === "Agent Governance does not report organization import capability."
       )
     ).toBe(true);
   });
@@ -230,8 +237,8 @@ describe("deriveOrganizationLinkingReadiness", () => {
     expect(result.ready).toBe(false);
     const unmet = result.prerequisites.filter((p) => !p.met);
     expect(
-      unmet.some((p) =>
-        p.failMessage === "Agent Governance does not report organization linking capability."
+      unmet.some(
+        (p) => p.failMessage === "Agent Governance does not report organization linking capability."
       )
     ).toBe(true);
   });
@@ -253,9 +260,7 @@ describe("deriveOrganizationLinkingReadiness", () => {
 
   it("capability checks fail gracefully when capabilities object is empty (no crash)", () => {
     expect(() =>
-      deriveOrganizationLinkingReadiness(
-        makeState({ capabilities: {} }, { capabilities: {} })
-      )
+      deriveOrganizationLinkingReadiness(makeState({ capabilities: {} }, { capabilities: {} }))
     ).not.toThrow();
   });
 
@@ -329,7 +334,7 @@ describe("org-linking-readiness — scope and security", () => {
     // This test validates the navigation contract by importing the page module source.
     // The platform-status page must contain a link to /site-admin/org-link/readiness.
     // We verify this at the source level since rendering requires Next.js infrastructure.
-    const fs = require("fs");
+    const fs = require("node:fs");
     const src = fs.readFileSync(
       new URL("../app/platform-status/page.tsx", import.meta.url).pathname,
       "utf-8"
@@ -338,7 +343,7 @@ describe("org-linking-readiness — scope and security", () => {
   });
 
   it("readiness page source explicitly states users/passwords/MFA/role bindings are not copied", () => {
-    const fs = require("fs");
+    const fs = require("node:fs");
     const src = fs.readFileSync(
       new URL("../app/site-admin/org-link/readiness/page.tsx", import.meta.url).pathname,
       "utf-8"

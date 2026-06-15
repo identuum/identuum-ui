@@ -22,15 +22,16 @@ export const metadata: Metadata = { title: "Register Agent — Identuum AG" };
 
 // Error codes carried in ?error= searchParam.
 type CreateError =
-  | "slug_collision"   // 409 slug already in use
-  | "quota_exceeded"   // 403 tier quota exceeded
-  | "auth_error"       // 401/403 session invalid
-  | "validation"       // 400 field validation failed
-  | "failed";          // other backend failure
+  | "slug_collision" // 409 slug already in use
+  | "quota_exceeded" // 403 tier quota exceeded
+  | "auth_error" // 401/403 session invalid
+  | "validation" // 400 field validation failed
+  | "failed"; // other backend failure
 
 const CREATE_ERROR_MESSAGES: Record<CreateError, string> = {
   slug_collision: "Agent key is already in use. Choose a different agent key.",
-  quota_exceeded: "Agent registry quota exceeded for this license tier. Contact your account team to upgrade.",
+  quota_exceeded:
+    "Agent registry quota exceeded for this license tier. Contact your account team to upgrade.",
   auth_error: "Your session is invalid. Please re-authenticate.",
   validation: "One or more fields failed validation. Correct the highlighted fields and try again.",
   failed: "Registration failed. Please try again.",
@@ -60,14 +61,16 @@ export default async function NewAgentPage({ searchParams }: PageProps) {
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
     const maxDurationRaw = formData.get("max_session_duration_seconds")?.toString().trim() ?? "";
-    const maxDuration = maxDurationRaw ? parseInt(maxDurationRaw, 10) : undefined;
+    const maxDuration = maxDurationRaw ? Number.parseInt(maxDurationRaw, 10) : undefined;
     const enabledRaw = formData.get("enabled")?.toString();
     const enabled = enabledRaw !== "false";
 
     // Client-side pattern is already enforced; do a quick pre-check to give
     // a better error than a raw 400 from AG.
     if (!slug || !/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/.test(slug)) {
-      redirect("/ag-admin/agents/new?error=validation&field=slug&msg=Agent+key+must+be+lowercase+alphanumeric+with+hyphens+(max+64+chars)");
+      redirect(
+        "/ag-admin/agents/new?error=validation&field=slug&msg=Agent+key+must+be+lowercase+alphanumeric+with+hyphens+(max+64+chars)"
+      );
     }
     if (!name) {
       redirect("/ag-admin/agents/new?error=validation&field=name&msg=Display+name+is+required");
@@ -76,7 +79,7 @@ export default async function NewAgentPage({ searchParams }: PageProps) {
     const body: Record<string, unknown> = { slug, name, enabled };
     if (description) body.description = description;
     if (allowedTools.length > 0) body.allowed_tools_default = allowedTools;
-    if (maxDuration !== undefined && !isNaN(maxDuration) && maxDuration > 0) {
+    if (maxDuration !== undefined && !Number.isNaN(maxDuration) && maxDuration > 0) {
       body.max_session_duration_seconds = maxDuration;
     }
 
@@ -86,7 +89,7 @@ export default async function NewAgentPage({ searchParams }: PageProps) {
       const posture = formData.get("hitl_posture")?.toString() ?? "not_required";
       const acrFloor = formData.get("hitl_review_acr_floor")?.toString() ?? "";
       const maxAgeRaw = formData.get("hitl_review_auth_max_age_seconds")?.toString().trim() ?? "";
-      const maxAge = maxAgeRaw ? parseInt(maxAgeRaw, 10) : 0;
+      const maxAge = maxAgeRaw ? Number.parseInt(maxAgeRaw, 10) : 0;
       const hitl: Record<string, unknown> = { posture };
       if (acrFloor) hitl.review_acr_floor = acrFloor;
       if (maxAge > 0) hitl.review_auth_max_age_seconds = maxAge;
@@ -107,9 +110,13 @@ export default async function NewAgentPage({ searchParams }: PageProps) {
         const data = (await res.json()) as { details?: Record<string, string> };
         const firstEntry = Object.entries(data.details ?? {})[0];
         if (firstEntry) {
-          redirect(`/ag-admin/agents/new?error=validation&field=${encodeURIComponent(firstEntry[0])}&msg=${encodeURIComponent(firstEntry[1])}`);
+          redirect(
+            `/ag-admin/agents/new?error=validation&field=${encodeURIComponent(firstEntry[0])}&msg=${encodeURIComponent(firstEntry[1])}`
+          );
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       redirect("/ag-admin/agents/new?error=validation");
     }
 
@@ -122,14 +129,19 @@ export default async function NewAgentPage({ searchParams }: PageProps) {
       if (created.id) {
         redirect(`/ag-admin/agents/${created.id}`);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     redirect("/ag-admin/agents");
   }
 
   return (
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center gap-3">
-        <a href="/ag-admin/agents" className="text-xs text-stone-400 hover:text-sky-700 transition-colors">
+        <a
+          href="/ag-admin/agents"
+          className="text-xs text-stone-400 hover:text-sky-700 transition-colors"
+        >
           ← Agent Registry
         </a>
       </div>
@@ -252,7 +264,9 @@ export default async function NewAgentPage({ searchParams }: PageProps) {
             <label htmlFor="enabled" className="text-sm text-stone-700 font-medium">
               Enabled
             </label>
-            <span className="text-xs text-stone-400">Disabled agents cannot issue new sessions.</span>
+            <span className="text-xs text-stone-400">
+              Disabled agents cannot issue new sessions.
+            </span>
           </div>
         </FormCard>
 
@@ -270,13 +284,15 @@ export default async function NewAgentPage({ searchParams }: PageProps) {
               </label>
             </div>
             <p className="text-xs text-stone-400 leading-relaxed">
-              When checked, sets the capability ceiling HITL posture at creation time. Leave unchecked to
-              configure later via Edit. Absent = bearer-only issuance (no HITL gate).
+              When checked, sets the capability ceiling HITL posture at creation time. Leave
+              unchecked to configure later via Edit. Absent = bearer-only issuance (no HITL gate).
             </p>
 
             <div className="space-y-3 border-t border-stone-100 pt-3">
               <div className="space-y-1.5">
-                <label htmlFor="hitl_posture" className="block text-xs font-medium text-stone-700">HITL posture</label>
+                <label htmlFor="hitl_posture" className="block text-xs font-medium text-stone-700">
+                  HITL posture
+                </label>
                 <select
                   id="hitl_posture"
                   name="hitl_posture"
@@ -289,7 +305,12 @@ export default async function NewAgentPage({ searchParams }: PageProps) {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="hitl_review_acr_floor" className="block text-xs font-medium text-stone-700">Reviewer ACR floor</label>
+                <label
+                  htmlFor="hitl_review_acr_floor"
+                  className="block text-xs font-medium text-stone-700"
+                >
+                  Reviewer ACR floor
+                </label>
                 <select
                   id="hitl_review_acr_floor"
                   name="hitl_review_acr_floor"
@@ -303,7 +324,12 @@ export default async function NewAgentPage({ searchParams }: PageProps) {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="hitl_review_auth_max_age_seconds" className="block text-xs font-medium text-stone-700">Reviewer freshness (seconds)</label>
+                <label
+                  htmlFor="hitl_review_auth_max_age_seconds"
+                  className="block text-xs font-medium text-stone-700"
+                >
+                  Reviewer freshness (seconds)
+                </label>
                 <input
                   id="hitl_review_auth_max_age_seconds"
                   name="hitl_review_auth_max_age_seconds"
@@ -350,7 +376,12 @@ function FormCard({ title, children }: { title: string; children: React.ReactNod
 }
 
 function FormField({
-  id, label, hint, error, required, children,
+  id,
+  label,
+  hint,
+  error,
+  required,
+  children,
 }: {
   id: string;
   label: string;
@@ -362,7 +393,8 @@ function FormField({
   return (
     <div className="space-y-1.5">
       <label htmlFor={id} className="block text-xs font-medium text-stone-700">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+        {label}
+        {required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       {children}
       {error ? (

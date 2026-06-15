@@ -1,0 +1,30 @@
+# identuum-ui local Compose override — AG OSS alternate-port profile.
+#
+# Use ONLY with docker-compose.local.yml to repoint runtime-composition
+# at the AG OSS host binary on 127.0.0.1:7315 (management) and 7314
+# (identity), instead of the default monolith on 7215/7214. Pairs with
+# identuum-ag-oss/make dev-run-app-alt (which the operator must already
+# have started in a separate shell, alongside `make dev-up` for AG OSS
+# Postgres).
+#
+# IDENTUUM_UI_CONFIG_FILE forces src/lib/runtime-config.ts to read the
+# AG-OSS-alt profile instead of the default ui-runtime.json. host.docker.internal
+# is added explicitly so the resolution works on all local Docker engines
+# (Docker Desktop, OrbStack, Linux Docker with host-gateway).
+#
+# Operator command (set as the make dev-rebuild-ag-oss-alt body):
+#   docker compose \
+#     -f deployment/docker-compose.local.yml \
+#     -f deployment/docker-compose.local.ag-oss-alt.yml \
+#     up -d --build --force-recreate identuum-ui
+#
+# Restoring the default monolith profile: re-run `make dev-rebuild`
+# (which only uses docker-compose.local.yml — the override env var is
+# unset and the container reads ui-runtime.json again).
+
+services:
+  identuum-ui:
+    environment:
+      IDENTUUM_UI_CONFIG_FILE: /app/config/ui-runtime.ag-oss-alt.json
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

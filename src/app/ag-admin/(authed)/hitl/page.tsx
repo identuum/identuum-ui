@@ -55,17 +55,24 @@ async function fetchQueue(): Promise<QueueResult | "auth_error" | "unavailable">
   try {
     const raw = await res.json();
     // Backend returns {"success": true, "held_requests": [...], "count": N}
-    if (raw && typeof raw === "object" && "held_requests" in raw && Array.isArray(raw.held_requests)) {
-      const items: HeldRequest[] = (raw.held_requests as Array<Record<string, unknown>>).map((r) => ({
-        id: String(r.id ?? ""),
-        agent_session_id: String(r.agent_session_id ?? ""),
-        intervention_id: r.intervention_id != null ? String(r.intervention_id) : null,
-        gate_state: String(r.gate_state ?? "unknown"),
-        pending_since: String(r.pending_since ?? ""),
-        expires_at: String(r.expires_at ?? ""),
-        decided_at: r.decided_at != null ? String(r.decided_at) : null,
-        // request_payload intentionally not mapped
-      }));
+    if (
+      raw &&
+      typeof raw === "object" &&
+      "held_requests" in raw &&
+      Array.isArray(raw.held_requests)
+    ) {
+      const items: HeldRequest[] = (raw.held_requests as Array<Record<string, unknown>>).map(
+        (r) => ({
+          id: String(r.id ?? ""),
+          agent_session_id: String(r.agent_session_id ?? ""),
+          intervention_id: r.intervention_id != null ? String(r.intervention_id) : null,
+          gate_state: String(r.gate_state ?? "unknown"),
+          pending_since: String(r.pending_since ?? ""),
+          expires_at: String(r.expires_at ?? ""),
+          decided_at: r.decided_at != null ? String(r.decided_at) : null,
+          // request_payload intentionally not mapped
+        })
+      );
       return { items, count: typeof raw.count === "number" ? raw.count : items.length };
     }
     return "unavailable";
@@ -89,7 +96,8 @@ export default async function HitlPage() {
   }
 
   const items = result === "unavailable" ? [] : result.items;
-  const pendingCount = result === "unavailable" ? null : items.filter((i) => i.gate_state === "pending").length;
+  const pendingCount =
+    result === "unavailable" ? null : items.filter((i) => i.gate_state === "pending").length;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -124,13 +132,8 @@ export default async function HitlPage() {
         <p className="text-xs text-amber-700 leading-relaxed">
           <strong>Approve / Deny actions are not yet wired in this UI.</strong> The AG backend
           exposes{" "}
-          <span className="font-mono bg-amber-100 px-1 rounded">
-            POST /admin/hitl/:id/approve
-          </span>{" "}
-          and{" "}
-          <span className="font-mono bg-amber-100 px-1 rounded">
-            POST /admin/hitl/:id/deny
-          </span>{" "}
+          <span className="font-mono bg-amber-100 px-1 rounded">POST /admin/hitl/:id/approve</span>{" "}
+          and <span className="font-mono bg-amber-100 px-1 rounded">POST /admin/hitl/:id/deny</span>{" "}
           — these require sufficient reviewer authentication level (ACR) and are deferred to a
           dedicated review workflow.
         </p>
@@ -145,17 +148,25 @@ export default async function HitlPage() {
         />
         <CountCard
           label="Approved"
-          value={result === "unavailable" ? null : items.filter((i) => i.gate_state === "approved").length}
+          value={
+            result === "unavailable"
+              ? null
+              : items.filter((i) => i.gate_state === "approved").length
+          }
           accent="green"
         />
         <CountCard
           label="Denied"
-          value={result === "unavailable" ? null : items.filter((i) => i.gate_state === "denied").length}
+          value={
+            result === "unavailable" ? null : items.filter((i) => i.gate_state === "denied").length
+          }
           accent="red"
         />
         <CountCard
           label="Expired"
-          value={result === "unavailable" ? null : items.filter((i) => i.gate_state === "expired").length}
+          value={
+            result === "unavailable" ? null : items.filter((i) => i.gate_state === "expired").length
+          }
         />
       </div>
 
@@ -190,10 +201,13 @@ function CountCard({
   accent?: "amber" | "green" | "red";
 }) {
   const valueCls =
-    accent === "amber" ? "text-amber-700" :
-    accent === "green" ? "text-emerald-700" :
-    accent === "red" ? "text-red-600" :
-    "text-sky-950";
+    accent === "amber"
+      ? "text-amber-700"
+      : accent === "green"
+        ? "text-emerald-700"
+        : accent === "red"
+          ? "text-red-600"
+          : "text-sky-950";
   return (
     <div className="bg-white border border-stone-200 rounded-2xl shadow-sm px-4 py-3">
       <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400 mb-1">{label}</p>
@@ -210,12 +224,8 @@ function QueueTable({ items }: { items: HeldRequest[] }) {
 
   return (
     <div className="space-y-4">
-      {pending.length > 0 && (
-        <QueueSection title="Pending review" items={pending} />
-      )}
-      {decided.length > 0 && (
-        <QueueSection title="Decided / expired" items={decided} />
-      )}
+      {pending.length > 0 && <QueueSection title="Pending review" items={pending} />}
+      {decided.length > 0 && <QueueSection title="Decided / expired" items={decided} />}
     </div>
   );
 }
@@ -255,8 +265,7 @@ function QueueRow({ item }: { item: HeldRequest }) {
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-stone-500">
           <span>
-            Intervention:{" "}
-            <span className="font-mono text-stone-600">{item.id.slice(0, 12)}…</span>
+            Intervention: <span className="font-mono text-stone-600">{item.id.slice(0, 12)}…</span>
           </span>
           <span>
             Session:{" "}
@@ -312,8 +321,8 @@ function UnavailableState() {
     <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm px-6 py-10 text-center">
       <p className="text-sm font-semibold text-sky-950">HITL / CBAA backend unavailable</p>
       <p className="text-xs text-stone-400 mt-1.5 max-w-sm mx-auto leading-relaxed">
-        Could not reach the AG management surface. Check that identuum-ag is running and the
-        runtime configuration points to the correct management URL.
+        Could not reach the AG management surface. Check that identuum-ag is running and the runtime
+        configuration points to the correct management URL.
       </p>
     </div>
   );

@@ -27,12 +27,12 @@ vi.mock("../lib/runtime-config", () => ({
   agBaseUrl: vi.fn(),
 }));
 
+import { agRequest, getAgOperatorToken } from "../lib/ag-client";
 import {
+  importAGOrganization,
   linkAGOrganizationToIDPOrg,
   unlinkAGOrganizationFromIDPOrg,
-  importAGOrganization,
 } from "../lib/ag-org-link-write-client";
-import { agRequest, getAgOperatorToken } from "../lib/ag-client";
 import { loadRuntimeConfig } from "../lib/runtime-config";
 
 const mockAgRequest = vi.mocked(agRequest);
@@ -170,9 +170,7 @@ describe("linkAGOrganizationToIDPOrg — AG response mapping", () => {
   });
 
   it("returns idp_org_already_linked when AG responds 409", async () => {
-    mockAgRequest.mockResolvedValue(
-      mockResponse(409, { code: "idp_org_already_linked" })
-    );
+    mockAgRequest.mockResolvedValue(mockResponse(409, { code: "idp_org_already_linked" }));
 
     const result = await linkAGOrganizationToIDPOrg(VALID_AG_ORG, VALID_IDP_ORG);
 
@@ -228,9 +226,7 @@ describe("unlinkAGOrganizationFromIDPOrg — AG response mapping", () => {
   });
 
   it("returns ag_auth_required when AG responds 401", async () => {
-    mockAgRequest.mockResolvedValue(
-      mockResponse(401, { code: "token_expired" })
-    );
+    mockAgRequest.mockResolvedValue(mockResponse(401, { code: "token_expired" }));
 
     const result = await unlinkAGOrganizationFromIDPOrg(VALID_AG_ORG);
 
@@ -239,9 +235,7 @@ describe("unlinkAGOrganizationFromIDPOrg — AG response mapping", () => {
   });
 
   it("returns ag_forbidden when AG responds 403 with generic code", async () => {
-    mockAgRequest.mockResolvedValue(
-      mockResponse(403, { code: "read_only_mode" })
-    );
+    mockAgRequest.mockResolvedValue(mockResponse(403, { code: "read_only_mode" }));
 
     const result = await unlinkAGOrganizationFromIDPOrg(VALID_AG_ORG);
 
@@ -250,9 +244,7 @@ describe("unlinkAGOrganizationFromIDPOrg — AG response mapping", () => {
   });
 
   it("returns system_org_not_allowed for system org 403", async () => {
-    mockAgRequest.mockResolvedValue(
-      mockResponse(403, { code: "system_org_not_allowed" })
-    );
+    mockAgRequest.mockResolvedValue(mockResponse(403, { code: "system_org_not_allowed" }));
 
     const result = await unlinkAGOrganizationFromIDPOrg(VALID_AG_ORG);
 
@@ -416,19 +408,23 @@ describe("importAGOrganization — AG response mapping", () => {
 
   it("returns ok:true with sanitized org on 201 success", async () => {
     mockAgRequest.mockResolvedValue(
-      mockResponse(201, {
-        success: true,
-        organization: {
-          id: VALID_AG_ORG,
-          name: "acme",
-          display_name: "Acme Corp",
-          status: "active",
-          created_at: "2026-01-01T00:00:00Z",
-          linked_idp_org_id: VALID_IDP_ORG,
-          link_status: "linked",
-          admin_token: "should-be-stripped",
+      mockResponse(
+        201,
+        {
+          success: true,
+          organization: {
+            id: VALID_AG_ORG,
+            name: "acme",
+            display_name: "Acme Corp",
+            status: "active",
+            created_at: "2026-01-01T00:00:00Z",
+            linked_idp_org_id: VALID_IDP_ORG,
+            link_status: "linked",
+            admin_token: "should-be-stripped",
+          },
         },
-      }, true)
+        true
+      )
     );
     const result = await importAGOrganization(VALID_IDP_ORG, "acme");
     expect(result.ok).toBe(true);
@@ -446,18 +442,22 @@ describe("importAGOrganization — AG response mapping", () => {
 
   it("does not expose secret-like fields in success response", async () => {
     mockAgRequest.mockResolvedValue(
-      mockResponse(201, {
-        organization: {
-          id: VALID_AG_ORG,
-          name: "acme",
-          display_name: "Acme",
-          status: "active",
-          created_at: "2026-01-01T00:00:00Z",
-          linked_idp_org_id: VALID_IDP_ORG,
-          password: "secret",
-          mfa_secret: "secret",
+      mockResponse(
+        201,
+        {
+          organization: {
+            id: VALID_AG_ORG,
+            name: "acme",
+            display_name: "Acme",
+            status: "active",
+            created_at: "2026-01-01T00:00:00Z",
+            linked_idp_org_id: VALID_IDP_ORG,
+            password: "secret",
+            mfa_secret: "secret",
+          },
         },
-      }, true)
+        true
+      )
     );
     const result = await importAGOrganization(VALID_IDP_ORG, "acme");
     const json = JSON.stringify(result);

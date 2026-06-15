@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Source-invariant tests for scripts/smoke-org-import-execute.mjs
@@ -27,6 +27,16 @@ const RUNBOOK_PATH = "../../docs/ORG_IMPORT_FIRST_EXECUTE_SMOKE.md";
 // doesn't false-positive against the code-level scan.
 function codeOnly(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+}
+
+function expectNotNull<T>(
+  value: T | null,
+  message = "expected non-null value"
+): asserts value is T {
+  expect(value, message).not.toBeNull();
+  if (value === null) {
+    throw new Error(message);
+  }
 }
 
 describe("smoke-org-import-execute.mjs — file presence and shape", () => {
@@ -238,7 +248,7 @@ describe("smoke-org-import-execute.mjs — redaction", () => {
     const src = readSrc(HARNESS_PATH);
     expect(src).toContain("redactID");
     // The trim-to-8 + ellipsis pattern.
-    expect(src).toMatch(/slice\(0,\s*8\)\s*\+\s*"…"/);
+    expect(src).toMatch(/\$\{trimmed\.slice\(0,\s*8\)\}…/);
   });
 
   it("printActionSummary redacts IDP and AG org IDs", () => {
@@ -318,8 +328,8 @@ describe("smoke-org-import-execute.mjs — automated login mode", () => {
     // resolveAuthHeaders() must check the manual header BEFORE attempting
     // automated login on each side.
     const fn = code.match(/async function resolveAuthHeaders\([\s\S]*?\n\}/);
-    expect(fn).not.toBeNull();
-    const body = fn![0];
+    expectNotNull(fn);
+    const body = fn[0];
     // IDP: manual header check comes first, then automated-login check.
     const idpManualIdx = body.indexOf("env.idpAuthHeader");
     const idpLoginIdx = body.indexOf("siteAdminEmail");
@@ -440,8 +450,8 @@ describe("smoke-org-import-execute.mjs — explicit env-file flag", () => {
     // Source-level: the throw() calls in parseEnvFile reference `i + 1`
     // but never `lines[i]`, `trimmed`, `value`, or `key`.
     const parserMatch = code.match(/function parseEnvFile[\s\S]*?\n\}/);
-    expect(parserMatch).not.toBeNull();
-    const body = parserMatch![0];
+    expectNotNull(parserMatch);
+    const body = parserMatch[0];
     const throwLines = body.match(/throw new Error\([^)]*\)/g) ?? [];
     expect(throwLines.length).toBeGreaterThan(0);
     for (const t of throwLines) {
@@ -455,8 +465,8 @@ describe("smoke-org-import-execute.mjs — explicit env-file flag", () => {
   it("env-file parser does not evaluate shell commands or expand ${VAR}", () => {
     const code = codeOnly(readSrc(HARNESS_PATH));
     const parserMatch = code.match(/function parseEnvFile[\s\S]*?\n\}/);
-    expect(parserMatch).not.toBeNull();
-    const body = parserMatch![0];
+    expectNotNull(parserMatch);
+    const body = parserMatch[0];
     // No child_process, no exec, no spawn — the parser does not invoke
     // any shell at any time.
     expect(body).not.toContain("child_process");
@@ -474,8 +484,8 @@ describe("smoke-org-import-execute.mjs — explicit env-file flag", () => {
     // readEnv builds a `get(name)` closure that checks process.env FIRST
     // and only falls back to fileEnv when the shell value is empty.
     const readEnvBlock = code.match(/function readEnv\(fileEnv\)[\s\S]*?\n\}/);
-    expect(readEnvBlock).not.toBeNull();
-    const body = readEnvBlock![0];
+    expectNotNull(readEnvBlock);
+    const body = readEnvBlock[0];
     const processIdx = body.indexOf("process.env[name]");
     const fileEnvIdx = body.indexOf("fileEnv[name]");
     expect(processIdx).toBeGreaterThan(-1);
@@ -510,11 +520,8 @@ describe("ORG_IMPORT_FIRST_EXECUTE_SMOKE.md — env-file content", () => {
 
 describe(".gitignore — operator-supplied smoke env files", () => {
   it(".gitignore excludes .smoke-org-import.env and *.smoke.env", () => {
-    const fs = require("fs");
-    const gi = fs.readFileSync(
-      new URL("../../.gitignore", import.meta.url).pathname,
-      "utf-8",
-    );
+    const fs = require("node:fs");
+    const gi = fs.readFileSync(new URL("../../.gitignore", import.meta.url).pathname, "utf-8");
     expect(gi).toContain(".smoke-org-import.env");
     expect(gi).toContain("*.smoke.env");
   });
@@ -696,8 +703,8 @@ describe("smoke-org-import-execute.mjs — disposable-only candidate selection",
     // We verify the body contains the disposable filter and does NOT
     // contain a second for-loop that skips looksDisposable.
     const fn = code.match(/function chooseCandidate\([\s\S]*?\n\}/);
-    expect(fn).not.toBeNull();
-    const body = fn![0];
+    expectNotNull(fn);
+    const body = fn[0];
     // Every selection for-loop that produces a `kind: "create"` or
     // `kind: "link_existing"` must originate from the `disposable`
     // pre-filtered array (constructed via .filter that requires
@@ -731,15 +738,15 @@ describe("smoke-org-import-execute.mjs — disposable-only candidate selection",
   it("override still rejects system org and already-linked AG match", () => {
     const code = codeOnly(readSrc(HARNESS_PATH));
     const fn = code.match(/function chooseCandidate\([\s\S]*?\n\}/);
-    expect(fn).not.toBeNull();
-    const body = fn![0];
+    expectNotNull(fn);
+    const body = fn[0];
     // The override branch (overrideIDPID truthy) must contain its own
     // isSystemOrg check and its own already-linked guard.
     const overrideBranch = body.match(
-      /if \(typeof overrideIDPID === "string" && overrideIDPID !== ""\)[\s\S]*?\n  \}/,
+      /if \(typeof overrideIDPID === "string" && overrideIDPID !== ""\)[\s\S]*?\n {2}\}/
     );
-    expect(overrideBranch).not.toBeNull();
-    const ob = overrideBranch![0];
+    expectNotNull(overrideBranch);
+    const ob = overrideBranch[0];
     expect(ob).toContain("isSystemOrg(target)");
     expect(ob).toMatch(/match\.link_status === "linked"/);
     expect(ob).toMatch(/match\.linked_idp_organization_id !== ""/);
@@ -755,8 +762,8 @@ describe("smoke-org-import-execute.mjs — disposable-only candidate selection",
     // any dry-run preview. Re-assert here that the override neither
     // touches dry_run nor sets flags.executeOne.
     const fn = code.match(/function chooseCandidate\([\s\S]*?\n\}/);
-    expect(fn).not.toBeNull();
-    const body = fn![0];
+    expectNotNull(fn);
+    const body = fn[0];
     expect(body).not.toContain("dry_run");
     expect(body).not.toContain("executeOne");
     expect(body).not.toContain("confirmOrgOnly");
@@ -786,9 +793,9 @@ describe("smoke-org-import-execute.mjs — disposable-only candidate selection",
     // test/demo/sandbox names.
     const src = readSrc(HARNESS_PATH);
     const m = src.match(/const DISPOSABLE_NAME_REGEX\s*=\s*(\/[\s\S]*?\/[gimsuy]*);/);
-    expect(m).not.toBeNull();
+    expectNotNull(m);
     // Reconstruct the runtime regex from the source literal.
-    const regexSrc = m![1];
+    const regexSrc = m[1];
     const lastSlash = regexSrc.lastIndexOf("/");
     const body = regexSrc.slice(1, lastSlash);
     const flags = regexSrc.slice(lastSlash + 1);

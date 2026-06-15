@@ -106,7 +106,13 @@ async function fetchSessions(params: {
     return "unavailable";
   }
 
-  if (raw && typeof raw === "object" && !Array.isArray(raw) && "items" in raw && "pagination" in raw) {
+  if (
+    raw &&
+    typeof raw === "object" &&
+    !Array.isArray(raw) &&
+    "items" in raw &&
+    "pagination" in raw
+  ) {
     const typed = raw as { items: AgentSession[]; pagination: PaginationMeta };
     return { items: typed.items ?? [], pagination: typed.pagination, rawArray: false };
   }
@@ -151,10 +157,15 @@ export default async function SessionsPage({ searchParams }: PageProps) {
   const statusFilter = (
     STATUS_FILTER_OPTIONS.includes(params.status as StatusFilter) ? params.status : "all"
   ) as StatusFilter;
-  const rawPageSize = parseInt(typeof params.pageSize === "string" ? params.pageSize : "", 10);
-  const pageSize = (PAGE_SIZES as readonly number[]).includes(rawPageSize) ? rawPageSize : DEFAULT_PAGE_SIZE;
-  const rawPage = parseInt(typeof params.page === "string" ? params.page : "", 10);
-  const page = Math.max(1, isNaN(rawPage) ? 1 : rawPage);
+  const rawPageSize = Number.parseInt(
+    typeof params.pageSize === "string" ? params.pageSize : "",
+    10
+  );
+  const pageSize = (PAGE_SIZES as readonly number[]).includes(rawPageSize)
+    ? rawPageSize
+    : DEFAULT_PAGE_SIZE;
+  const rawPage = Number.parseInt(typeof params.page === "string" ? params.page : "", 10);
+  const page = Math.max(1, Number.isNaN(rawPage) ? 1 : rawPage);
 
   // agentId: read from URL, validate as UUID before forwarding to backend.
   const rawAgentId = typeof params.agentId === "string" ? params.agentId.trim() : "";
@@ -163,7 +174,15 @@ export default async function SessionsPage({ searchParams }: PageProps) {
 
   // Fetch sessions and agent label (when filter active) in parallel.
   const [result, agentLabel] = await Promise.all([
-    fetchSessions({ page, pageSize, q, sort: sortField, dir: sortDir, status: statusFilter, agentId: validAgentId ?? undefined }),
+    fetchSessions({
+      page,
+      pageSize,
+      q,
+      sort: sortField,
+      dir: sortDir,
+      status: statusFilter,
+      agentId: validAgentId ?? undefined,
+    }),
     validAgentId ? fetchAgentLabel(validAgentId) : Promise.resolve(null),
   ]);
 
@@ -244,7 +263,9 @@ export default async function SessionsPage({ searchParams }: PageProps) {
                   {agentLabel.name}
                 </a>
                 {agentLabel.name !== agentLabel.slug && (
-                  <span className="text-sky-500 ml-1 font-mono text-[10px]">(Agent key: {agentLabel.slug})</span>
+                  <span className="text-sky-500 ml-1 font-mono text-[10px]">
+                    (Agent key: {agentLabel.slug})
+                  </span>
                 )}
               </>
             ) : (
@@ -268,8 +289,7 @@ export default async function SessionsPage({ searchParams }: PageProps) {
       {invalidAgentId && (
         <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-xs">
           <span className="flex-1 text-amber-800">
-            Invalid agent filter —{" "}
-            <span className="font-mono">{invalidAgentId.slice(0, 40)}</span>{" "}
+            Invalid agent filter — <span className="font-mono">{invalidAgentId.slice(0, 40)}</span>{" "}
             is not a valid UUID. Showing all sessions.
           </span>
           <a
@@ -339,8 +359,12 @@ export default async function SessionsPage({ searchParams }: PageProps) {
           {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}
           {sortField !== "created_at" && <input type="hidden" name="sort" value={sortField} />}
           {sortDir !== "desc" && <input type="hidden" name="dir" value={sortDir} />}
-          {pageSize !== DEFAULT_PAGE_SIZE && <input type="hidden" name="pageSize" value={String(pageSize)} />}
-          <label className="sr-only" htmlFor="ag-session-search">Search sessions</label>
+          {pageSize !== DEFAULT_PAGE_SIZE && (
+            <input type="hidden" name="pageSize" value={String(pageSize)} />
+          )}
+          <label className="sr-only" htmlFor="ag-session-search">
+            Search sessions
+          </label>
           <input
             id="ag-session-search"
             type="search"
@@ -391,7 +415,10 @@ export default async function SessionsPage({ searchParams }: PageProps) {
               <span>Session / Intent</span>
               <span>Status</span>
               <span>Mode</span>
-              <a href={sortUrl("last_activity_at")} className="hover:text-sky-700 flex items-center">
+              <a
+                href={sortUrl("last_activity_at")}
+                className="hover:text-sky-700 flex items-center"
+              >
                 Last active {sortArrow("last_activity_at")}
               </a>
               <a href={sortUrl("created_at")} className="hover:text-sky-700 flex items-center">
@@ -469,7 +496,10 @@ function SessionRow({ session: s }: { session: AgentSession }) {
           {s.agent_id && (
             <span>
               Agent:{" "}
-              <a href={`/ag-admin/agents/${s.agent_id}`} className="font-mono hover:text-sky-600 hover:underline">
+              <a
+                href={`/ag-admin/agents/${s.agent_id}`}
+                className="font-mono hover:text-sky-600 hover:underline"
+              >
                 {s.agent_id.slice(0, 8)}…
               </a>
             </span>
@@ -484,7 +514,9 @@ function SessionRow({ session: s }: { session: AgentSession }) {
           <p className="text-xs text-red-500">Reason: {s.revocation_reason}</p>
         )}
       </div>
-      <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded self-start mt-0.5 ${STATUS_STYLES[status]}`}>
+      <span
+        className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded self-start mt-0.5 ${STATUS_STYLES[status]}`}
+      >
         {status}
       </span>
       <span className="text-xs text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded text-[10px] font-medium self-start mt-0.5 whitespace-nowrap">
@@ -508,10 +540,21 @@ function SessionRow({ session: s }: { session: AgentSession }) {
 }
 
 function PaginationBar({
-  page, totalPages, total, pageSize, rawArray, prevUrl, nextUrl,
+  page,
+  totalPages,
+  total,
+  pageSize,
+  rawArray,
+  prevUrl,
+  nextUrl,
 }: {
-  page: number; totalPages: number; total: number; pageSize: number;
-  rawArray: boolean; prevUrl: string | null; nextUrl: string | null;
+  page: number;
+  totalPages: number;
+  total: number;
+  pageSize: number;
+  rawArray: boolean;
+  prevUrl: string | null;
+  nextUrl: string | null;
 }) {
   if (rawArray) {
     return (
@@ -524,22 +567,38 @@ function PaginationBar({
   const to = Math.min(page * pageSize, total);
   return (
     <div className="flex items-center justify-between text-xs text-stone-500">
-      <span>{from}–{to} of {total}</span>
+      <span>
+        {from}–{to} of {total}
+      </span>
       <div className="flex items-center gap-1.5">
         {prevUrl ? (
-          <a href={prevUrl} aria-label="Previous page" className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors">
+          <a
+            href={prevUrl}
+            aria-label="Previous page"
+            className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors"
+          >
             ← Prev
           </a>
         ) : (
-          <span className="px-3 py-1.5 rounded-lg border border-stone-100 bg-stone-50 text-stone-300 cursor-default">← Prev</span>
+          <span className="px-3 py-1.5 rounded-lg border border-stone-100 bg-stone-50 text-stone-300 cursor-default">
+            ← Prev
+          </span>
         )}
-        <span className="px-3 py-1.5 font-medium text-sky-950">{page} / {totalPages}</span>
+        <span className="px-3 py-1.5 font-medium text-sky-950">
+          {page} / {totalPages}
+        </span>
         {nextUrl ? (
-          <a href={nextUrl} aria-label="Next page" className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors">
+          <a
+            href={nextUrl}
+            aria-label="Next page"
+            className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors"
+          >
             Next →
           </a>
         ) : (
-          <span className="px-3 py-1.5 rounded-lg border border-stone-100 bg-stone-50 text-stone-300 cursor-default">Next →</span>
+          <span className="px-3 py-1.5 rounded-lg border border-stone-100 bg-stone-50 text-stone-300 cursor-default">
+            Next →
+          </span>
         )}
       </div>
     </div>
@@ -559,7 +618,12 @@ function UnavailableState() {
 
 function formatDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   } catch {
     return iso.slice(0, 16);
   }

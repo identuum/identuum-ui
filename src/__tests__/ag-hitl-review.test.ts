@@ -5,9 +5,9 @@
  * page (approve/deny, ACR error handling, request_payload exclusion).
  */
 
-import { describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { describe, expect, it } from "vitest";
 
 const uiRoot = path.resolve(import.meta.dirname, "../../");
 function readFile(relPath: string): string {
@@ -158,7 +158,7 @@ describe("HITL review page — approve/deny actions", () => {
   });
 
   it("deny textarea has maxLength and required attributes", () => {
-    expect(reviewPage).toContain('maxLength={1024}');
+    expect(reviewPage).toContain("maxLength={1024}");
     expect(reviewPage).toContain("required");
     expect(reviewPage).toContain('name="reason"');
   });
@@ -224,7 +224,7 @@ describe("HITL review page — success states", () => {
   it("success state shows decision and back link", () => {
     expect(reviewPage).toContain("reviewedDecision");
     // Template string renders to "approved/denied successfully" at runtime
-    expect(reviewPage).toContain('successfully.');
+    expect(reviewPage).toContain("successfully.");
     expect(reviewPage).toContain("Back to queue →");
   });
 });

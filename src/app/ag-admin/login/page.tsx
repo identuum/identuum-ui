@@ -76,13 +76,17 @@ export default async function AgAdminLoginPage() {
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-12">
             <div className="h-9 w-9 bg-white/10 rounded-xl flex items-center justify-center border border-white/10">
-              <span className="font-black text-white text-[11px] tracking-tight leading-none">AG</span>
+              <span className="font-black text-white text-[11px] tracking-tight leading-none">
+                AG
+              </span>
             </div>
             <span className="text-sm font-semibold text-white/80 tracking-wide">Identuum</span>
           </div>
 
           <h1 className="text-4xl xl:text-5xl font-extrabold tracking-tight text-white leading-tight mb-5">
-            AG<br />Governance
+            AG
+            <br />
+            Governance
           </h1>
           <p className="text-base text-sky-300 leading-relaxed max-w-xs mb-10">
             Operator control plane for AI agent access, oversight, and compliance.
@@ -91,11 +95,11 @@ export default async function AgAdminLoginPage() {
           {/* Feature bullets */}
           <ul className="space-y-4">
             {[
-              { icon: "○", label: "Agent session oversight and supervision" },
-              { icon: "○", label: "HITL review and CBAA approval flows" },
-              { icon: "○", label: "MCP governance and operator controls" },
-              { icon: "○", label: "Token lifecycle and capability bounds" },
-            ].map(({ icon, label }) => (
+              "Agent session oversight and supervision",
+              "HITL review and CBAA approval flows",
+              "MCP governance and operator controls",
+              "Token lifecycle and capability bounds",
+            ].map((label) => (
               <li key={label} className="flex items-start gap-3">
                 <span className="mt-0.5 text-sky-400 text-xs leading-none font-bold">◆</span>
                 <span className="text-sm text-sky-200 leading-snug">{label}</span>
@@ -126,9 +130,13 @@ export default async function AgAdminLoginPage() {
           {/* Mobile-only header (hidden on desktop where left panel shows branding) */}
           <div className="lg:hidden mb-8 text-center flex flex-col items-center gap-3">
             <div className="h-10 w-10 bg-sky-700 rounded-xl flex items-center justify-center shadow-sm">
-              <span className="font-black text-white text-[11px] tracking-tight leading-none">AG</span>
+              <span className="font-black text-white text-[11px] tracking-tight leading-none">
+                AG
+              </span>
             </div>
-            <span className="text-2xl font-extrabold tracking-tight text-sky-950">AG Governance</span>
+            <span className="text-2xl font-extrabold tracking-tight text-sky-950">
+              AG Governance
+            </span>
           </div>
 
           {/* Desktop-only subheading above the card */}
@@ -278,9 +286,8 @@ function AgLocalSetupRequired() {
         Operator credentials
       </h3>
       <p className="text-xs text-stone-500 mb-4 leading-relaxed">
-        AG reports that the site-admin account has not been provisioned for this
-        deployment yet. Run the AG setup or recovery command on the host, then
-        reload this page.
+        AG reports that the site-admin account has not been provisioned for this deployment yet. Run
+        the AG setup or recovery command on the host, then reload this page.
       </p>
       <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600 leading-relaxed">
         On the AG host, run one of:

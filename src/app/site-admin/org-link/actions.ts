@@ -13,17 +13,17 @@
  *   - Session validation is handled by ag-client.ts (ag_access_token cookie).
  */
 
-import { revalidatePath } from "next/cache";
+import { fetchAGOrgLinkPlan } from "@/lib/ag-org-client";
 import {
-  linkAGOrganizationToIDPOrg,
-  unlinkAGOrganizationFromIDPOrg,
   importAGOrganization,
   isValidUUID,
+  linkAGOrganizationToIDPOrg,
+  unlinkAGOrganizationFromIDPOrg,
 } from "@/lib/ag-org-link-write-client";
-import { fetchAGOrgLinkPlan } from "@/lib/ag-org-client";
 import { listOrganizations } from "@/lib/idp-admin-client";
-import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 import type { ImportAllBatchResult, OrgLinkWriteResult } from "@/lib/org-link-types";
+import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
+import { revalidatePath } from "next/cache";
 
 export async function linkOrgAction(
   agOrgId: string,
@@ -82,16 +82,37 @@ export async function importAllOrgsAction(): Promise<ImportAllBatchResult> {
   const cfg = loadRuntimeConfig();
 
   if (!cfg?.ag.enabled) {
-    return { ok: false, imported: 0, skipped: 0, failed: 0, message: "AG is not configured.", error_code: "not_configured" };
+    return {
+      ok: false,
+      imported: 0,
+      skipped: 0,
+      failed: 0,
+      message: "AG is not configured.",
+      error_code: "not_configured",
+    };
   }
 
   const agUrl = agBaseUrl(cfg);
   const agPlan = await fetchAGOrgLinkPlan(agUrl);
   if (!agPlan) {
-    return { ok: false, imported: 0, skipped: 0, failed: 0, message: "AG is not reachable. Try again later.", error_code: "ag_unavailable" };
+    return {
+      ok: false,
+      imported: 0,
+      skipped: 0,
+      failed: 0,
+      message: "AG is not reachable. Try again later.",
+      error_code: "ag_unavailable",
+    };
   }
   if (!agPlan.import_available) {
-    return { ok: false, imported: 0, skipped: 0, failed: 0, message: "AG org-link import path is not available.", error_code: "not_configured" };
+    return {
+      ok: false,
+      imported: 0,
+      skipped: 0,
+      failed: 0,
+      message: "AG org-link import path is not available.",
+      error_code: "not_configured",
+    };
   }
 
   // Fetch IDP organizations using the server-side session cookie.
@@ -113,7 +134,13 @@ export async function importAllOrgsAction(): Promise<ImportAllBatchResult> {
   }
 
   if (idpOrgs.length === 0) {
-    return { ok: true, imported: 0, skipped: 0, failed: 0, message: "No IDP organizations available to import." };
+    return {
+      ok: true,
+      imported: 0,
+      skipped: 0,
+      failed: 0,
+      message: "No IDP organizations available to import.",
+    };
   }
 
   // Build the set of IDP org IDs already linked to an AG organization.
@@ -125,7 +152,12 @@ export async function importAllOrgsAction(): Promise<ImportAllBatchResult> {
 
   // Derive candidates server-side: active, not deleted, not already linked, valid UUID.
   const candidates = idpOrgs.filter(
-    (o) => o.active && !o.deleted && !linkedIDPOrgIds.has(o.id) && isValidUUID(o.id) && o.name.trim() !== ""
+    (o) =>
+      o.active &&
+      !o.deleted &&
+      !linkedIDPOrgIds.has(o.id) &&
+      isValidUUID(o.id) &&
+      o.name.trim() !== ""
   );
 
   if (candidates.length === 0) {
@@ -168,7 +200,7 @@ export async function importAllOrgsAction(): Promise<ImportAllBatchResult> {
   if (imported > 0) parts.push(`${imported} imported`);
   if (skipped > 0) parts.push(`${skipped} already linked`);
   if (failed > 0) parts.push(`${failed} failed`);
-  const message = parts.length > 0 ? parts.join(", ") + "." : "Done.";
+  const message = parts.length > 0 ? `${parts.join(", ")}.` : "Done.";
 
   return { ok: failed === 0, imported, skipped, failed, message };
 }
@@ -182,7 +214,11 @@ export async function importOrgAction(
     return { ok: false, error_code: "invalid_request", message: "Invalid IDP organization ID." };
   }
   if (!name.trim()) {
-    return { ok: false, error_code: "invalid_request", message: "Organization name must not be empty." };
+    return {
+      ok: false,
+      error_code: "invalid_request",
+      message: "Organization name must not be empty.",
+    };
   }
 
   const result = await importAGOrganization(idpOrgId, name, displayName);

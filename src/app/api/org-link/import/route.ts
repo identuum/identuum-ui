@@ -11,10 +11,7 @@
  *   - Requires an active AG operator session (ag_access_token cookie).
  *   - Organization-only: never creates users, admins, credentials, MFA, or roles.
  */
-import {
-  importAGOrganization,
-  isValidUUID,
-} from "@/lib/ag-org-link-write-client";
+import { importAGOrganization, isValidUUID } from "@/lib/ag-org-link-write-client";
 import { type NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -47,12 +44,17 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     idpOrgId = body.idp_org_id;
     name = body.name.trim();
-    displayName = typeof body.display_name === "string" && body.display_name.trim()
-      ? body.display_name.trim()
-      : undefined;
+    displayName =
+      typeof body.display_name === "string" && body.display_name.trim()
+        ? body.display_name.trim()
+        : undefined;
   } catch {
     return NextResponse.json(
-      { ok: false, error_code: "invalid_request", message: "Request body is missing or malformed." },
+      {
+        ok: false,
+        error_code: "invalid_request",
+        message: "Request body is missing or malformed.",
+      },
       { status: 400 }
     );
   }

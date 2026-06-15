@@ -170,12 +170,86 @@ test.describe("/platform-status — backend card status rows", () => {
     const apiRes = await request.get("/api/runtime");
     const body = (await apiRes.json()) as RuntimeState;
 
-    if (!body.components.idp.usable || !body.components.idp.version) {
+    const idpVersion = body.components.idp.version;
+    if (!body.components.idp.usable || !idpVersion) {
       test.skip();
       return;
     }
 
     await page.goto("/platform-status");
-    await expect(page.getByText(body.components.idp.version!)).toBeVisible();
+    await expect(page.getByText(idpVersion)).toBeVisible();
+  });
+});
+
+test.describe("/platform-status — AG backend identity rows", () => {
+  // These tests prove the page renders the new backend identity rows
+  // (Backend product, Capability schema) when the configured AG backend
+  // emits them — i.e. the AG OSS alternate-runtime profile. Tests
+  // self-skip against backends that do not advertise those fields (the
+  // identuum-ag monolith on default 7215 — null/null path), so the
+  // suite remains green under either profile.
+  test("AG card renders Backend product row when /api/runtime advertises components.ag.product", async ({
+    page,
+    request,
+  }) => {
+    const apiRes = await request.get("/api/runtime");
+    const body = (await apiRes.json()) as RuntimeState;
+    const product = body.components.ag.product;
+    if (!product) {
+      test.skip();
+      return;
+    }
+    await page.goto("/platform-status");
+    // "Backend product" appears once per backend card that reports it
+    // (IDP + AG when both emit it). Likewise the product value may
+    // appear in both the Backend product row and the License Product
+    // row. Match at least one of each — the value-side assertion below
+    // anchors the specific value we care about.
+    await expect(page.getByText("Backend product").first()).toBeVisible();
+    await expect(page.getByText(product).first()).toBeVisible();
+  });
+
+  test("AG card renders Capability schema row when /api/runtime advertises components.ag.capability_map_schema_version", async ({
+    page,
+    request,
+  }) => {
+    const apiRes = await request.get("/api/runtime");
+    const body = (await apiRes.json()) as RuntimeState;
+    const schema = body.components.ag.capability_map_schema_version;
+    if (!schema) {
+      test.skip();
+      return;
+    }
+    await page.goto("/platform-status");
+    await expect(page.getByText("Capability schema").first()).toBeVisible();
+    await expect(page.getByText(schema).first()).toBeVisible();
+  });
+
+  test("AG OSS alternate profile renders the canonical identuum-ag-oss + ag-capabilities.v1 values", async ({
+    page,
+    request,
+  }) => {
+    const apiRes = await request.get("/api/runtime");
+    const body = (await apiRes.json()) as RuntimeState;
+    // Activate only when the canonical AG OSS triple is live — i.e. the
+    // operator is on the AG OSS alternate runtime profile and AG OSS is
+    // up. Against the monolith default this test self-skips.
+    if (
+      body.components.ag.component !== "identuum-ag" ||
+      body.components.ag.product !== "identuum-ag-oss" ||
+      body.components.ag.capability_map_schema_version !== "ag-capabilities.v1"
+    ) {
+      test.skip();
+      return;
+    }
+    await page.goto("/platform-status");
+    await expect(page.getByText("Agent Governance (AG)")).toBeVisible();
+    // "identuum-ag-oss" appears in both Backend product and License
+    // Product rows; assert at least one is visible.
+    await expect(page.getByText("identuum-ag-oss").first()).toBeVisible();
+    await expect(page.getByText("ag-capabilities.v1").first()).toBeVisible();
+    // The "Wrong component" warning must NOT appear — AG OSS still
+    // emits the family identifier identuum-ag.
+    await expect(page.getByText(/Wrong component/i)).toHaveCount(0);
   });
 });

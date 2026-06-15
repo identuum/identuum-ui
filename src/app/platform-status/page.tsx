@@ -12,8 +12,9 @@
  * traces are rendered. Only public metadata from each backend is shown.
  */
 import { fetchAgAuthProviders } from "@/lib/ag-auth-providers";
-import { getServerRuntimeState } from "@/lib/server-runtime-state";
+import { getCapabilityAvailability } from "@/lib/runtime-composition";
 import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
+import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type {
   AgAuthProviderDiscoveryState,
   BackendComponentState,
@@ -154,7 +155,7 @@ function licenseStatusClass(status: string): string {
 function formatExpiresAt(s: string): string {
   try {
     const d = new Date(s);
-    if (isNaN(d.getTime())) return s;
+    if (Number.isNaN(d.getTime())) return s;
     return d.toISOString().slice(0, 10);
   } catch {
     return s;
@@ -243,6 +244,19 @@ function BackendCard({
         <StatusRow label="Configured" value={backend.configured ? "Yes" : "No"} />
         <StatusRow label="Reachable" value={backend.reachable ? "Yes" : "No"} />
         <StatusRow label="Usable" value={backend.usable ? "Yes" : "No"} />
+        {/*
+          Backend identity rows. Shown only when the backend reported them;
+          when absent (older backend, unreachable, not configured) the rows
+          stay hidden so unknown/unavailable remains the displayed state.
+        */}
+        {backend.product && <StatusRow label="Backend product" value={backend.product} />}
+        {backend.capability_map_schema_version && (
+          <StatusRow
+            label="Capability schema"
+            value={backend.capability_map_schema_version}
+            valueClass="text-stone-600 font-mono"
+          />
+        )}
         <LicenseRows lic={backend.license} />
         {backend.version && <StatusRow label="Version" value={backend.version} />}
         {backend.error && (
@@ -285,12 +299,35 @@ const CAPABILITY_LABELS: Record<keyof ComponentCapabilities, string> = {
   agent_governance: "Agent governance",
   hitl: "HITL",
   agent_sessions: "Agent sessions",
+  account_self_service: "Account self-service",
+  user_sessions: "User sessions",
+  mfa: "MFA",
+  webauthn: "WebAuthn",
+  authorization_server: "Authorization Server",
+  oauth_clients: "OAuth clients",
+  api_resources: "API resources",
+  service_accounts: "Service accounts",
+  scope_templates: "Scope templates",
+  org_roles: "Organization roles",
+  protocol_settings: "Protocol settings",
+  client_credentials: "Client credentials",
+  dynamic_client_registration: "DCR",
+  scim: "SCIM",
+  audit_log: "Audit log",
+  audit_chain: "Audit chain",
+  reporting: "Reporting",
+  anomaly_detection: "Anomaly detection",
+  observability: "Observability",
 };
 
 function CapabilitiesList({ capabilities }: { capabilities: ComponentCapabilities }) {
   const entries = (Object.keys(CAPABILITY_LABELS) as Array<keyof ComponentCapabilities>)
-    .filter((k) => capabilities[k] === true)
-    .map((k) => ({ key: k, label: CAPABILITY_LABELS[k] }));
+    .map((k) => ({
+      key: k,
+      label: CAPABILITY_LABELS[k],
+      availability: getCapabilityAvailability(capabilities, k),
+    }))
+    .filter((entry) => entry.availability !== "unknown");
 
   if (entries.length === 0) return null;
 
@@ -298,12 +335,16 @@ function CapabilitiesList({ capabilities }: { capabilities: ComponentCapabilitie
     <div>
       <p className="text-[10px] uppercase tracking-wide text-stone-400 mb-1.5">Capabilities</p>
       <div className="flex flex-wrap gap-1.5">
-        {entries.map(({ key, label }) => (
+        {entries.map(({ key, label, availability }) => (
           <span
             key={key}
-            className="rounded-md bg-stone-100 border border-stone-200 px-2 py-0.5 text-[10px] font-medium text-stone-600"
+            className={
+              availability === "available"
+                ? "rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-medium text-emerald-700"
+                : "rounded-md bg-stone-100 border border-stone-200 px-2 py-0.5 text-[10px] font-medium text-stone-500"
+            }
           >
-            {label}
+            {label}: {availability === "available" ? "Available" : "Unavailable"}
           </span>
         ))}
       </div>

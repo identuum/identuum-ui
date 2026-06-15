@@ -1,0 +1,20 @@
+{
+  "_comment": "AG OSS alternate-port runtime config. Use when the identuum-ag (monolith) container owns 7213-7215 and AG OSS runs on 73xx as a host process.",
+  "_comment_ag_oss_workflow": "Pair with identuum-ag-oss/make dev-run-app-alt (defaults: agent 7313, identity 7314, management 7315).",
+  "_comment_internal_base_url": "host.docker.internal resolves to the macOS host loopback under Docker Desktop and OrbStack.",
+  "_comment_select": "Selected at container start via IDENTUUM_UI_CONFIG_FILE=/app/config/ui-runtime.ag-oss-alt.json — see deployment/docker-compose.local.ag-oss-alt.yml.",
+  "configured": true,
+  "ui_origin": "http://localhost:7114",
+  "idp": {
+    "enabled": true,
+    "public_base_url": "http://localhost:7113",
+    "internal_base_url": "http://host.docker.internal:7113"
+  },
+  "ag": {
+    "enabled": true,
+    "public_base_url": "http://localhost:7315",
+    "internal_base_url": "http://host.docker.internal:7315",
+    "identity_base_url": "http://localhost:7314",
+    "identity_internal_base_url": "http://host.docker.internal:7314"
+  }
+}

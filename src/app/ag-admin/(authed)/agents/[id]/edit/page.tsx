@@ -46,7 +46,9 @@ interface AgentDetail {
   enabled: boolean;
 }
 
-async function fetchAgent(id: string): Promise<AgentDetail | "auth_error" | "not_found" | "unavailable"> {
+async function fetchAgent(
+  id: string
+): Promise<AgentDetail | "auth_error" | "not_found" | "unavailable"> {
   const res = await agRequest(`/admin/agent-registry/${encodeURIComponent(id)}`);
   if (!res) return "unavailable";
   if (res.status === 401 || res.status === 403) return "auth_error";
@@ -59,7 +61,13 @@ async function fetchAgent(id: string): Promise<AgentDetail | "auth_error" | "not
   }
 }
 
-type UpdateError = "slug_collision" | "quota_exceeded" | "auth_error" | "validation" | "not_found" | "failed";
+type UpdateError =
+  | "slug_collision"
+  | "quota_exceeded"
+  | "auth_error"
+  | "validation"
+  | "not_found"
+  | "failed";
 
 const UPDATE_ERROR_MESSAGES: Record<UpdateError, string> = {
   slug_collision: "Agent key is already in use. Choose a different agent key.",
@@ -99,15 +107,19 @@ export default async function EditAgentPage({ params, searchParams }: PageProps)
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
     const maxDurationRaw = formData.get("max_session_duration_seconds")?.toString().trim() ?? "";
-    const maxDuration = maxDurationRaw ? parseInt(maxDurationRaw, 10) : undefined;
+    const maxDuration = maxDurationRaw ? Number.parseInt(maxDurationRaw, 10) : undefined;
     const enabledRaw = formData.get("enabled")?.toString();
     const enabled = enabledRaw === "on" || enabledRaw === "true";
 
     if (slug !== undefined && slug !== "" && !/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/.test(slug)) {
-      redirect(`/ag-admin/agents/${id}/edit?error=validation&field=slug&msg=Agent+key+must+be+lowercase+alphanumeric+with+hyphens+(max+64+chars)`);
+      redirect(
+        `/ag-admin/agents/${id}/edit?error=validation&field=slug&msg=Agent+key+must+be+lowercase+alphanumeric+with+hyphens+(max+64+chars)`
+      );
     }
     if (name !== undefined && name.trim() === "") {
-      redirect(`/ag-admin/agents/${id}/edit?error=validation&field=name&msg=Display+name+must+not+be+empty`);
+      redirect(
+        `/ag-admin/agents/${id}/edit?error=validation&field=name&msg=Display+name+must+not+be+empty`
+      );
     }
 
     const body: Record<string, unknown> = { enabled };
@@ -115,7 +127,7 @@ export default async function EditAgentPage({ params, searchParams }: PageProps)
     if (name) body.name = name;
     if (description !== undefined) body.description = description;
     body.allowed_tools_default = allowedTools;
-    if (maxDuration !== undefined && !isNaN(maxDuration) && maxDuration > 0) {
+    if (maxDuration !== undefined && !Number.isNaN(maxDuration) && maxDuration > 0) {
       body.max_session_duration_seconds = maxDuration;
     }
 
@@ -125,7 +137,7 @@ export default async function EditAgentPage({ params, searchParams }: PageProps)
     //
     //   "keep"       — omit capability_ceiling from PATCH body (backend preserves existing)
     //   "set_hitl"   — merge: set/replace hitl key, preserve unknown top-level keys
-    //   "clear_hitl" — merge: delete hitl key, preserve unknown top-level keys
+    //   "clear_hitl" — merge: omit hitl key, preserve unknown top-level keys
     //   "clear_all"  — send {} to clear all capability bounds (explicit destructive action)
     const ceilingAction = formData.get("ceiling_action")?.toString() ?? "keep";
 
@@ -147,11 +159,13 @@ export default async function EditAgentPage({ params, searchParams }: PageProps)
       const posture = formData.get("hitl_posture")?.toString() ?? "not_required";
       const validPostures = ["required", "optional", "not_required"];
       if (!validPostures.includes(posture)) {
-        redirect(`/ag-admin/agents/${id}/edit?error=validation&field=hitl_posture&msg=Invalid+HITL+posture`);
+        redirect(
+          `/ag-admin/agents/${id}/edit?error=validation&field=hitl_posture&msg=Invalid+HITL+posture`
+        );
       }
       const acrFloor = formData.get("hitl_review_acr_floor")?.toString() ?? "";
       const maxAgeRaw = formData.get("hitl_review_auth_max_age_seconds")?.toString().trim() ?? "";
-      const maxAge = maxAgeRaw ? parseInt(maxAgeRaw, 10) : 0;
+      const maxAge = maxAgeRaw ? Number.parseInt(maxAgeRaw, 10) : 0;
       const hitl: Record<string, unknown> = { posture };
       if (acrFloor) hitl.review_acr_floor = acrFloor;
       if (maxAge > 0) hitl.review_auth_max_age_seconds = maxAge;
@@ -159,8 +173,9 @@ export default async function EditAgentPage({ params, searchParams }: PageProps)
       body.capability_ceiling = { ...existingCeiling, hitl };
     } else if (ceilingAction === "clear_hitl") {
       // Remove only the hitl key, preserve other top-level keys.
-      const merged = { ...existingCeiling };
-      delete merged.hitl;
+      const merged = Object.fromEntries(
+        Object.entries(existingCeiling).filter(([key]) => key !== "hitl")
+      );
       body.capability_ceiling = merged; // may be {} if hitl was the only key
     }
     // ceilingAction === "keep": capability_ceiling absent from body → PATCH leaves unchanged
@@ -179,9 +194,13 @@ export default async function EditAgentPage({ params, searchParams }: PageProps)
         const data = (await res.json()) as { details?: Record<string, string> };
         const firstEntry = Object.entries(data.details ?? {})[0];
         if (firstEntry) {
-          redirect(`/ag-admin/agents/${id}/edit?error=validation&field=${encodeURIComponent(firstEntry[0])}&msg=${encodeURIComponent(firstEntry[1])}`);
+          redirect(
+            `/ag-admin/agents/${id}/edit?error=validation&field=${encodeURIComponent(firstEntry[0])}&msg=${encodeURIComponent(firstEntry[1])}`
+          );
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       redirect(`/ag-admin/agents/${id}/edit?error=validation`);
     }
 
@@ -194,7 +213,10 @@ export default async function EditAgentPage({ params, searchParams }: PageProps)
   return (
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center gap-3">
-        <a href={`/ag-admin/agents/${id}`} className="text-xs text-stone-400 hover:text-sky-700 transition-colors">
+        <a
+          href={`/ag-admin/agents/${id}`}
+          className="text-xs text-stone-400 hover:text-sky-700 transition-colors"
+        >
           ← Agent detail
         </a>
       </div>
@@ -209,7 +231,10 @@ export default async function EditAgentPage({ params, searchParams }: PageProps)
       {agent === "not_found" && (
         <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm px-6 py-10 text-center">
           <p className="text-sm font-semibold text-sky-950">Agent not found</p>
-          <a href="/ag-admin/agents" className="mt-4 inline-block text-xs text-sky-600 hover:underline">
+          <a
+            href="/ag-admin/agents"
+            className="mt-4 inline-block text-xs text-sky-600 hover:underline"
+          >
             Back to Registry
           </a>
         </div>
@@ -218,7 +243,9 @@ export default async function EditAgentPage({ params, searchParams }: PageProps)
       {agent === "unavailable" && (
         <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm px-6 py-10 text-center">
           <p className="text-sm font-semibold text-sky-950">Agent data unavailable</p>
-          <p className="text-xs text-stone-400 mt-1.5">Could not reach the AG management surface.</p>
+          <p className="text-xs text-stone-400 mt-1.5">
+            Could not reach the AG management surface.
+          </p>
         </div>
       )}
 
@@ -236,7 +263,9 @@ export default async function EditAgentPage({ params, searchParams }: PageProps)
           <form action={updateAgent} className="space-y-5">
             {/* Immutable technical ID */}
             <div className="bg-stone-50 border border-stone-200 rounded-2xl px-5 py-3">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400 mb-0.5">Technical ID (immutable)</p>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400 mb-0.5">
+                Technical ID (immutable)
+              </p>
               <p className="font-mono text-xs text-stone-600 break-all">{agent.id}</p>
             </div>
 
@@ -326,7 +355,8 @@ export default async function EditAgentPage({ params, searchParams }: PageProps)
               </FormField>
 
               <div className="text-xs text-stone-400 bg-stone-50 rounded-xl px-4 py-2.5 leading-relaxed">
-                <strong>Current mode:</strong> {agent.default_agent_mode} (read-only — only "readonly" is supported in the current release).
+                <strong>Current mode:</strong> {agent.default_agent_mode} (read-only — only
+                "readonly" is supported in the current release).
               </div>
             </FormCard>
 
@@ -344,7 +374,9 @@ export default async function EditAgentPage({ params, searchParams }: PageProps)
                 <label htmlFor="enabled" className="text-sm text-stone-700 font-medium">
                   Enabled
                 </label>
-                <span className="text-xs text-stone-400">Disabled agents cannot issue new sessions.</span>
+                <span className="text-xs text-stone-400">
+                  Disabled agents cannot issue new sessions.
+                </span>
               </div>
             </FormCard>
 
@@ -386,8 +418,11 @@ function GovernanceFormCard({ agent, fieldError }: { agent: AgentDetail; fieldEr
       </div>
       <div className="px-6 py-5 space-y-4">
         <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-stone-700">Capability ceiling action</label>
+          <label htmlFor="ceiling_action" className="block text-xs font-medium text-stone-700">
+            Capability ceiling action
+          </label>
           <select
+            id="ceiling_action"
             name="ceiling_action"
             defaultValue={defaultAction}
             className="w-full text-sm rounded-xl border border-stone-200 bg-white px-3 py-2 text-stone-700 focus:outline-none focus:ring-1 focus:ring-sky-500"
@@ -398,8 +433,9 @@ function GovernanceFormCard({ agent, fieldError }: { agent: AgentDetail; fieldEr
             <option value="clear_all">Clear all capability bounds</option>
           </select>
           <p className="text-xs text-stone-400 leading-relaxed">
-            "Keep existing" omits capability_ceiling from the PATCH body — backend leaves it unchanged.
-            "Set or update HITL gate" and "Clear HITL gate only" preserve other top-level capability keys.
+            "Keep existing" omits capability_ceiling from the PATCH body — backend leaves it
+            unchanged. "Set or update HITL gate" and "Clear HITL gate only" preserve other top-level
+            capability keys.
           </p>
           <p className="text-xs text-amber-600 leading-relaxed">
             "Clear all capability bounds" removes all governance configuration including future
@@ -408,7 +444,9 @@ function GovernanceFormCard({ agent, fieldError }: { agent: AgentDetail; fieldEr
         </div>
 
         <div className="space-y-4 border-t border-stone-100 pt-4">
-          <p className="text-xs font-medium text-stone-600">HITL gate configuration (applies when action = "Set or update HITL gate")</p>
+          <p className="text-xs font-medium text-stone-600">
+            HITL gate configuration (applies when action = "Set or update HITL gate")
+          </p>
 
           <div className="space-y-1.5">
             <label htmlFor="hitl_posture" className="block text-xs font-medium text-stone-700">
@@ -419,7 +457,9 @@ function GovernanceFormCard({ agent, fieldError }: { agent: AgentDetail; fieldEr
               name="hitl_posture"
               defaultValue={existingHITL?.posture ?? "not_required"}
               className={`w-full text-sm rounded-xl border ${
-                fieldError ? "border-red-400 focus:ring-red-400" : "border-stone-200 focus:ring-sky-500"
+                fieldError
+                  ? "border-red-400 focus:ring-red-400"
+                  : "border-stone-200 focus:ring-sky-500"
               } bg-white px-3 py-2 text-stone-700 focus:outline-none focus:ring-1`}
             >
               <option value="required">required — all sessions pause for review</option>
@@ -430,7 +470,10 @@ function GovernanceFormCard({ agent, fieldError }: { agent: AgentDetail; fieldEr
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="hitl_review_acr_floor" className="block text-xs font-medium text-stone-700">
+            <label
+              htmlFor="hitl_review_acr_floor"
+              className="block text-xs font-medium text-stone-700"
+            >
               Reviewer ACR floor
             </label>
             <select
@@ -444,11 +487,16 @@ function GovernanceFormCard({ agent, fieldError }: { agent: AgentDetail; fieldEr
               <option value="urn:identuum:loa:mfa">Multi-factor (MFA)</option>
               <option value="urn:identuum:loa:phishing-resistant">Phishing-resistant</option>
             </select>
-            <p className="text-xs text-stone-400">Minimum authentication level required of the human reviewer.</p>
+            <p className="text-xs text-stone-400">
+              Minimum authentication level required of the human reviewer.
+            </p>
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="hitl_review_auth_max_age_seconds" className="block text-xs font-medium text-stone-700">
+            <label
+              htmlFor="hitl_review_auth_max_age_seconds"
+              className="block text-xs font-medium text-stone-700"
+            >
               Reviewer session freshness (seconds)
             </label>
             <input
@@ -482,7 +530,12 @@ function FormCard({ title, children }: { title: string; children: React.ReactNod
 }
 
 function FormField({
-  id, label, hint, error, required, children,
+  id,
+  label,
+  hint,
+  error,
+  required,
+  children,
 }: {
   id: string;
   label: string;
@@ -494,7 +547,8 @@ function FormField({
   return (
     <div className="space-y-1.5">
       <label htmlFor={id} className="block text-xs font-medium text-stone-700">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+        {label}
+        {required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       {children}
       {error ? (

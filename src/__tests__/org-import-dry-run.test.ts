@@ -20,18 +20,35 @@ describe("parseOrgImportDryRunResponse", () => {
     };
   }
 
+  function withoutKey(
+    source: Record<string, unknown>,
+    omittedKey: string
+  ): Record<string, unknown> {
+    return Object.fromEntries(Object.entries(source).filter(([key]) => key !== omittedKey));
+  }
+
+  function expectNotNull<T>(
+    value: T | null,
+    message = "expected non-null value"
+  ): asserts value is T {
+    expect(value, message).not.toBeNull();
+    if (value === null) {
+      throw new Error(message);
+    }
+  }
+
   // ── Happy paths ─────────────────────────────────────────────────────────
 
   it("parses a valid create_ag_organization planned response", () => {
     const got = parseOrgImportDryRunResponse(validRaw());
-    expect(got).not.toBeNull();
-    expect(got!.dry_run).toBe(true);
-    expect(got!.action).toBe("create_ag_organization");
-    expect(got!.status).toBe("planned");
-    expect(got!.idp_organization_id).toBe("00000000-0000-0000-0000-000000000001");
-    expect(got!.ag_organization_id).toBe("");
-    expect(got!.ag_organization_created).toBe(false);
-    expect(got!.link_created).toBe(false);
+    expectNotNull(got);
+    expect(got.dry_run).toBe(true);
+    expect(got.action).toBe("create_ag_organization");
+    expect(got.status).toBe("planned");
+    expect(got.idp_organization_id).toBe("00000000-0000-0000-0000-000000000001");
+    expect(got.ag_organization_id).toBe("");
+    expect(got.ag_organization_created).toBe(false);
+    expect(got.link_created).toBe(false);
   });
 
   it("parses a valid link_existing_ag_organization planned response", () => {
@@ -42,9 +59,9 @@ describe("parseOrgImportDryRunResponse", () => {
         message: "would link the existing AG organization to this IDP organization",
       })
     );
-    expect(got).not.toBeNull();
-    expect(got!.action).toBe("link_existing_ag_organization");
-    expect(got!.ag_organization_id).toBe("11111111-1111-1111-1111-111111111111");
+    expectNotNull(got);
+    expect(got.action).toBe("link_existing_ag_organization");
+    expect(got.ag_organization_id).toBe("11111111-1111-1111-1111-111111111111");
   });
 
   it("parses a valid noop already_linked response", () => {
@@ -56,9 +73,9 @@ describe("parseOrgImportDryRunResponse", () => {
         message: "this IDP organization is already linked to an AG organization",
       })
     );
-    expect(got).not.toBeNull();
-    expect(got!.action).toBe("noop");
-    expect(got!.status).toBe("already_linked");
+    expectNotNull(got);
+    expect(got.action).toBe("noop");
+    expect(got.status).toBe("already_linked");
   });
 
   it("parses a valid rejected response", () => {
@@ -69,9 +86,9 @@ describe("parseOrgImportDryRunResponse", () => {
         message: "an AG organization with this name already exists",
       })
     );
-    expect(got).not.toBeNull();
-    expect(got!.action).toBe("rejected");
-    expect(got!.status).toBe("rejected");
+    expectNotNull(got);
+    expect(got.action).toBe("rejected");
+    expect(got.status).toBe("rejected");
   });
 
   // ── Rejection paths ─────────────────────────────────────────────────────
@@ -85,8 +102,7 @@ describe("parseOrgImportDryRunResponse", () => {
   });
 
   it("returns null when dry_run is missing", () => {
-    const raw = validRaw();
-    delete raw.dry_run;
+    const raw = withoutKey(validRaw(), "dry_run");
     expect(parseOrgImportDryRunResponse(raw)).toBeNull();
   });
 
@@ -100,21 +116,14 @@ describe("parseOrgImportDryRunResponse", () => {
   });
 
   it("returns null when idp_organization_id is missing or non-string", () => {
-    const raw = validRaw();
-    delete raw.idp_organization_id;
+    const raw = withoutKey(validRaw(), "idp_organization_id");
     expect(parseOrgImportDryRunResponse(raw)).toBeNull();
-    expect(
-      parseOrgImportDryRunResponse(validRaw({ idp_organization_id: 42 }))
-    ).toBeNull();
-    expect(
-      parseOrgImportDryRunResponse(validRaw({ idp_organization_id: "" }))
-    ).toBeNull();
+    expect(parseOrgImportDryRunResponse(validRaw({ idp_organization_id: 42 }))).toBeNull();
+    expect(parseOrgImportDryRunResponse(validRaw({ idp_organization_id: "" }))).toBeNull();
   });
 
   it("returns null for unknown action values", () => {
-    expect(
-      parseOrgImportDryRunResponse(validRaw({ action: "delete_everything" }))
-    ).toBeNull();
+    expect(parseOrgImportDryRunResponse(validRaw({ action: "delete_everything" }))).toBeNull();
     expect(parseOrgImportDryRunResponse(validRaw({ action: 42 }))).toBeNull();
     expect(parseOrgImportDryRunResponse(validRaw({ action: null }))).toBeNull();
   });
@@ -136,29 +145,28 @@ describe("parseOrgImportDryRunResponse", () => {
         link_created: true,
       })
     );
-    expect(got).not.toBeNull();
+    expectNotNull(got);
     // Defensive clamp: dry-run must never indicate completed mutations.
-    expect(got!.ag_organization_created).toBe(false);
-    expect(got!.link_created).toBe(false);
+    expect(got.ag_organization_created).toBe(false);
+    expect(got.link_created).toBe(false);
   });
 
   it("coerces missing/non-string message to empty string", () => {
-    const raw = validRaw();
-    delete raw.message;
+    const raw = withoutKey(validRaw(), "message");
     const got = parseOrgImportDryRunResponse(raw);
-    expect(got).not.toBeNull();
-    expect(got!.message).toBe("");
+    expectNotNull(got);
+    expect(got.message).toBe("");
 
     const got2 = parseOrgImportDryRunResponse(validRaw({ message: 42 }));
-    expect(got2!.message).toBe("");
+    expectNotNull(got2);
+    expect(got2.message).toBe("");
   });
 
   it("coerces missing/non-string ag_organization_id to empty string", () => {
-    const raw = validRaw();
-    delete raw.ag_organization_id;
+    const raw = withoutKey(validRaw(), "ag_organization_id");
     const got = parseOrgImportDryRunResponse(raw);
-    expect(got).not.toBeNull();
-    expect(got!.ag_organization_id).toBe("");
+    expectNotNull(got);
+    expect(got.ag_organization_id).toBe("");
   });
 
   it("discards unknown and sensitive top-level keys silently", () => {
@@ -187,7 +195,7 @@ describe("parseOrgImportDryRunResponse", () => {
         audit: [{ logged: true }],
       })
     );
-    expect(got).not.toBeNull();
+    expectNotNull(got);
     const json = JSON.stringify(got);
     for (const forbidden of [
       "users",
@@ -229,7 +237,7 @@ describe("parseOrgImportDryRunResponse", () => {
         raw_response: "ERROR: malformed UUID",
       })
     );
-    expect(got).not.toBeNull();
+    expectNotNull(got);
     const json = JSON.stringify(got);
     expect(json).not.toContain("stack trace");
     expect(json).not.toContain("SQL error");
@@ -253,7 +261,7 @@ describe("parseOrgImportDryRunResponse", () => {
 
 describe("readiness page — dry-run section invariants", () => {
   it("page source includes the dry-run section text and never enables mutation", () => {
-    const fs = require("fs");
+    const fs = require("node:fs");
     const src = fs.readFileSync(
       new URL("../app/site-admin/org-link/readiness/page.tsx", import.meta.url).pathname,
       "utf-8"
@@ -271,7 +279,7 @@ describe("readiness page — dry-run section invariants", () => {
   });
 
   it("page source never sends dry_run=false from anywhere", () => {
-    const fs = require("fs");
+    const fs = require("node:fs");
     const src = fs.readFileSync(
       new URL("../app/site-admin/org-link/readiness/page.tsx", import.meta.url).pathname,
       "utf-8"
@@ -283,7 +291,7 @@ describe("readiness page — dry-run section invariants", () => {
   });
 
   it("client source never allows dry_run=false in code", () => {
-    const fs = require("fs");
+    const fs = require("node:fs");
     const src = fs.readFileSync(
       new URL("../lib/org-import-dry-run-client.ts", import.meta.url).pathname,
       "utf-8"
@@ -293,9 +301,7 @@ describe("readiness page — dry-run section invariants", () => {
     // Strip line/block comments before scanning for code patterns that would
     // actually send dry_run=false on the wire. Documentation comments
     // mentioning "dry_run=false" as forbidden are legitimate.
-    const codeOnly = src
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/\/\/[^\n]*/g, "");
+    const codeOnly = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
     expect(codeOnly).not.toContain("dry_run: false");
     expect(codeOnly).not.toContain('"dry_run":false');
     expect(codeOnly).not.toContain("dry_run = false");
@@ -304,7 +310,7 @@ describe("readiness page — dry-run section invariants", () => {
   });
 
   it("client source only sends safe idp_organization fields", () => {
-    const fs = require("fs");
+    const fs = require("node:fs");
     const src = fs.readFileSync(
       new URL("../lib/org-import-dry-run-client.ts", import.meta.url).pathname,
       "utf-8"

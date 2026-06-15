@@ -126,7 +126,9 @@ async function fetchAuditLog(params: {
     try {
       const body = await res.json();
       if (body?.error === "feature_not_enabled") return "feature_not_enabled";
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return "auth_error";
   }
   if (!res.ok) return "unavailable";
@@ -170,9 +172,7 @@ interface OperatorDisplay {
 //
 // Backend enforces max 250 IDs, matching audit page max pageSize.
 // No per-user N+1 HTTP requests — one batch call for the whole page.
-async function fetchOperatorDisplayBatch(
-  ids: string[]
-): Promise<Map<string, OperatorDisplay>> {
+async function fetchOperatorDisplayBatch(ids: string[]): Promise<Map<string, OperatorDisplay>> {
   if (ids.length === 0) return new Map();
   try {
     const res = await agRequest("/admin/ag-users/display-batch", {
@@ -211,9 +211,7 @@ interface SessionDisplay {
 // Returns an empty Map on any failure — rows fall back to existing session link.
 // Safe fields only: id, agent_id, intent, task_id, agent_mode, timestamps.
 // Excludes token material, auth claims, tool inputs, HITL review requirements.
-async function fetchSessionDisplayBatch(
-  ids: string[]
-): Promise<Map<string, SessionDisplay>> {
+async function fetchSessionDisplayBatch(ids: string[]): Promise<Map<string, SessionDisplay>> {
   if (ids.length === 0) return new Map();
   try {
     const res = await agRequest("/admin/agent-sessions/display-batch", {
@@ -260,23 +258,28 @@ interface VerifyResult {
 //
 // Safety: raw `error` field from backend is never forwarded to the browser.
 // service_error is a safe operator-friendly note derived from backend `valid` state.
-async function fetchAuditVerify(): Promise<VerifyResult | "feature_not_enabled" | "auth_error" | "unavailable"> {
+async function fetchAuditVerify(): Promise<
+  VerifyResult | "feature_not_enabled" | "auth_error" | "unavailable"
+> {
   const res = await agRequest("/admin/audit-log/verify");
   if (!res) return "unavailable";
   if (res.status === 401 || res.status === 403) {
     try {
       const body = await res.json();
       if (body?.error === "feature_not_enabled") return "feature_not_enabled";
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return "auth_error";
   }
   // 200 = valid chain, 409 = tamper detected — both return the same shape.
   if (res.status === 200 || res.status === 409) {
     try {
       const data = await res.json();
-      const serviceError = (!data?.valid && data?.tampered_at == null)
-        ? "Chain verification encountered an unexpected error. Contact your administrator."
-        : null;
+      const serviceError =
+        !data?.valid && data?.tampered_at == null
+          ? "Chain verification encountered an unexpected error. Contact your administrator."
+          : null;
       return {
         valid: data?.valid === true,
         total_rows: typeof data?.total_rows === "number" ? data.total_rows : 0,
@@ -304,12 +307,12 @@ export default async function AuditPage({ searchParams }: PageProps) {
   const severity: SeverityFilter = SEVERITY_OPTIONS.includes(rawSeverity as SeverityFilter)
     ? (rawSeverity as SeverityFilter)
     : "all";
-  const rawPageSize = parseInt(typeof sp.pageSize === "string" ? sp.pageSize : "", 10);
+  const rawPageSize = Number.parseInt(typeof sp.pageSize === "string" ? sp.pageSize : "", 10);
   const pageSize = (PAGE_SIZES as readonly number[]).includes(rawPageSize)
     ? rawPageSize
     : DEFAULT_PAGE_SIZE;
-  const rawPage = parseInt(typeof sp.page === "string" ? sp.page : "", 10);
-  const page = Math.max(1, isNaN(rawPage) ? 1 : rawPage);
+  const rawPage = Number.parseInt(typeof sp.page === "string" ? sp.page : "", 10);
+  const page = Math.max(1, Number.isNaN(rawPage) ? 1 : rawPage);
   const offset = (page - 1) * pageSize;
 
   // eventType: forwarded to backend as event_type; empty string means no filter.
@@ -326,10 +329,8 @@ export default async function AuditPage({ searchParams }: PageProps) {
 
   if (result === "auth_error") redirect("/ag-admin/login");
 
-  const events = result !== "unavailable" && result !== "feature_not_enabled"
-    ? result.events : [];
-  const total = result !== "unavailable" && result !== "feature_not_enabled"
-    ? result.total : 0;
+  const events = result !== "unavailable" && result !== "feature_not_enabled" ? result.events : [];
+  const total = result !== "unavailable" && result !== "feature_not_enabled" ? result.total : 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const hasPrev = page > 1;
   const hasNext = page < totalPages;
@@ -379,7 +380,8 @@ export default async function AuditPage({ searchParams }: PageProps) {
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-sky-950">Audit / Activity</h1>
           <p className="text-sm text-stone-500 mt-0.5">
-            AG governance events: agent changes, session activity, HITL decisions, and administrative actions.
+            AG governance events: agent changes, session activity, HITL decisions, and
+            administrative actions.
           </p>
         </div>
         <span className="text-xs font-medium text-stone-400 bg-stone-100 px-2.5 py-1 rounded-full">
@@ -397,15 +399,23 @@ export default async function AuditPage({ searchParams }: PageProps) {
       {/* Feature-not-enabled state */}
       {result === "feature_not_enabled" && (
         <div className="bg-amber-50 border border-amber-200 rounded-[1.5rem] shadow-sm px-6 py-10 text-center">
-          <p className="text-sm font-semibold text-amber-900">Audit log requires Professional or Enterprise tier</p>
+          <p className="text-sm font-semibold text-amber-900">
+            Audit log requires Professional or Enterprise tier
+          </p>
           <p className="text-xs text-amber-700 mt-1.5 max-w-sm mx-auto leading-relaxed">
-            The audit log read API is not available on your current license tier.
-            Upgrade to Professional or Enterprise to enable audit event access.
+            The audit log read API is not available on your current license tier. Upgrade to
+            Professional or Enterprise to enable audit event access.
           </p>
           <div className="flex flex-wrap justify-center gap-3 mt-4">
-            <a href="/ag-admin" className="text-xs text-sky-600 hover:underline">Dashboard →</a>
-            <a href="/ag-admin/sessions" className="text-xs text-sky-600 hover:underline">Sessions →</a>
-            <a href="/ag-admin/revocations" className="text-xs text-sky-600 hover:underline">Revocations →</a>
+            <a href="/ag-admin" className="text-xs text-sky-600 hover:underline">
+              Dashboard →
+            </a>
+            <a href="/ag-admin/sessions" className="text-xs text-sky-600 hover:underline">
+              Sessions →
+            </a>
+            <a href="/ag-admin/revocations" className="text-xs text-sky-600 hover:underline">
+              Revocations →
+            </a>
           </div>
         </div>
       )}
@@ -418,15 +428,21 @@ export default async function AuditPage({ searchParams }: PageProps) {
             {STREAM_OPTIONS.map((s) => {
               const active = stream === s;
               return (
-                <a key={s} href={streamUrl(s)} aria-current={active ? "page" : undefined}
+                <a
+                  key={s}
+                  href={streamUrl(s)}
+                  aria-current={active ? "page" : undefined}
                   className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
-                    active ? "bg-sky-700 text-white border-sky-700"
-                    : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
+                    active
+                      ? "bg-sky-700 text-white border-sky-700"
+                      : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
                   }`}
                 >
-                  {s === "all" ? "All streams"
-                    : s === "agentic_security" ? "ITDR / Agentic"
-                    : STREAM_LABELS[s] ?? s}
+                  {s === "all"
+                    ? "All streams"
+                    : s === "agentic_security"
+                      ? "ITDR / Agentic"
+                      : (STREAM_LABELS[s] ?? s)}
                 </a>
               );
             })}
@@ -436,10 +452,14 @@ export default async function AuditPage({ searchParams }: PageProps) {
               const active = severity === sv;
               const href = buildUrl({ severity: sv, page: 1 });
               return (
-                <a key={sv} href={href} aria-current={active ? "page" : undefined}
+                <a
+                  key={sv}
+                  href={href}
+                  aria-current={active ? "page" : undefined}
                   className={`text-xs px-2 py-1 rounded-lg border font-medium capitalize transition-colors ${
-                    active ? "bg-sky-700 text-white border-sky-700"
-                    : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
+                    active
+                      ? "bg-sky-700 text-white border-sky-700"
+                      : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
                   }`}
                 >
                   {sv === "all" ? "All" : sv}
@@ -459,10 +479,14 @@ export default async function AuditPage({ searchParams }: PageProps) {
               p.set("page", "1");
               const href = `/ag-admin/audit${p.toString() ? `?${p.toString()}` : ""}`;
               return (
-                <a key={n} href={href} aria-current={active ? "true" : undefined}
+                <a
+                  key={n}
+                  href={href}
+                  aria-current={active ? "true" : undefined}
                   className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-colors ${
-                    active ? "bg-sky-700 text-white border-sky-700"
-                    : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
+                    active
+                      ? "bg-sky-700 text-white border-sky-700"
+                      : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"
                   }`}
                 >
                   {n}
@@ -475,9 +499,13 @@ export default async function AuditPage({ searchParams }: PageProps) {
           <form method="GET" action="/ag-admin/audit" className="flex items-center gap-2 flex-wrap">
             {stream !== "all" && <input type="hidden" name="stream" value={stream} />}
             {severity !== "all" && <input type="hidden" name="severity" value={severity} />}
-            {pageSize !== DEFAULT_PAGE_SIZE && <input type="hidden" name="pageSize" value={String(pageSize)} />}
+            {pageSize !== DEFAULT_PAGE_SIZE && (
+              <input type="hidden" name="pageSize" value={String(pageSize)} />
+            )}
             <input type="hidden" name="page" value="1" />
-            <label htmlFor="ag-audit-event-type" className="text-xs text-stone-400 shrink-0">Event type:</label>
+            <label htmlFor="ag-audit-event-type" className="text-xs text-stone-400 shrink-0">
+              Event type:
+            </label>
             <select
               id="ag-audit-event-type"
               name="eventType"
@@ -583,7 +611,12 @@ export default async function AuditPage({ searchParams }: PageProps) {
                 </div>
                 <div className="divide-y divide-stone-100">
                   {events.map((e) => (
-                    <AuditEventRow key={e.id} event={e} operatorMap={operatorMap} sessionMap={sessionMap} />
+                    <AuditEventRow
+                      key={e.id}
+                      event={e}
+                      operatorMap={operatorMap}
+                      sessionMap={sessionMap}
+                    />
                   ))}
                 </div>
               </div>
@@ -595,21 +628,33 @@ export default async function AuditPage({ searchParams }: PageProps) {
                 </span>
                 <div className="flex items-center gap-1.5">
                   {hasPrev ? (
-                    <a href={buildUrl({ page: page - 1 })} aria-label="Previous page"
-                      className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors">
+                    <a
+                      href={buildUrl({ page: page - 1 })}
+                      aria-label="Previous page"
+                      className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors"
+                    >
                       ← Prev
                     </a>
                   ) : (
-                    <span className="px-3 py-1.5 rounded-lg border border-stone-100 bg-stone-50 text-stone-300 cursor-default">← Prev</span>
+                    <span className="px-3 py-1.5 rounded-lg border border-stone-100 bg-stone-50 text-stone-300 cursor-default">
+                      ← Prev
+                    </span>
                   )}
-                  <span className="px-3 py-1.5 font-medium text-sky-950">{page} / {totalPages}</span>
+                  <span className="px-3 py-1.5 font-medium text-sky-950">
+                    {page} / {totalPages}
+                  </span>
                   {hasNext ? (
-                    <a href={buildUrl({ page: page + 1 })} aria-label="Next page"
-                      className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors">
+                    <a
+                      href={buildUrl({ page: page + 1 })}
+                      aria-label="Next page"
+                      className="px-3 py-1.5 rounded-lg border border-stone-200 bg-white hover:bg-stone-50 transition-colors"
+                    >
                       Next →
                     </a>
                   ) : (
-                    <span className="px-3 py-1.5 rounded-lg border border-stone-100 bg-stone-50 text-stone-300 cursor-default">Next →</span>
+                    <span className="px-3 py-1.5 rounded-lg border border-stone-100 bg-stone-50 text-stone-300 cursor-default">
+                      Next →
+                    </span>
                   )}
                 </div>
               </div>
@@ -639,8 +684,8 @@ function ChainVerifyPanel({
         <div className="space-y-0.5">
           <p className="text-xs font-semibold text-stone-700">Audit chain verification</p>
           <p className="text-xs text-stone-400 leading-relaxed">
-            Verification has not been run for this view. Run to check the append-only
-            audit hash chain. This may take time on large logs.
+            Verification has not been run for this view. Run to check the append-only audit hash
+            chain. This may take time on large logs.
           </p>
         </div>
         <a
@@ -666,7 +711,12 @@ function ChainVerifyPanel({
             Chain verification unavailable — could not reach the AG management surface.
           </p>
         </div>
-        <a href={runVerifyUrl} className="shrink-0 text-xs text-sky-600 hover:underline font-medium">Run again</a>
+        <a
+          href={runVerifyUrl}
+          className="shrink-0 text-xs text-sky-600 hover:underline font-medium"
+        >
+          Run again
+        </a>
       </div>
     );
   }
@@ -678,7 +728,8 @@ function ChainVerifyPanel({
           Chain
         </span>
         <p className="text-xs text-stone-400 leading-relaxed">
-          Hash-chain verification requires Enterprise tier. Upgrade to verify append-only audit integrity.
+          Hash-chain verification requires Enterprise tier. Upgrade to verify append-only audit
+          integrity.
         </p>
       </div>
     );
@@ -694,10 +745,17 @@ function ChainVerifyPanel({
           <div className="space-y-0.5">
             <p className="text-xs font-semibold text-amber-800">Verification error</p>
             <p className="text-xs text-amber-700 leading-relaxed">{verifyResult.service_error}</p>
-            <p className="text-[11px] text-stone-400">{verifyResult.total_rows.toLocaleString()} events checked</p>
+            <p className="text-[11px] text-stone-400">
+              {verifyResult.total_rows.toLocaleString()} events checked
+            </p>
           </div>
         </div>
-        <a href={runVerifyUrl} className="shrink-0 text-xs text-sky-600 hover:underline font-medium">Run again</a>
+        <a
+          href={runVerifyUrl}
+          className="shrink-0 text-xs text-sky-600 hover:underline font-medium"
+        >
+          Run again
+        </a>
       </div>
     );
   }
@@ -714,17 +772,28 @@ function ChainVerifyPanel({
             <p className="text-xs text-red-700 leading-relaxed">
               AG detected a break in the append-only audit hash chain.
               {verifyResult.tampered_at != null && (
-                <span> First divergence at chain position <span className="font-mono">{verifyResult.tampered_at}</span>.</span>
+                <span>
+                  {" "}
+                  First divergence at chain position{" "}
+                  <span className="font-mono">{verifyResult.tampered_at}</span>.
+                </span>
               )}
             </p>
             <p className="text-[11px] text-stone-500 leading-relaxed">
               In local development this can occur after test database resets, seeded fixture audit
               rows, or partial E2E test data. In production, investigate immediately.
             </p>
-            <p className="text-[11px] text-stone-400">{verifyResult.total_rows.toLocaleString()} events checked</p>
+            <p className="text-[11px] text-stone-400">
+              {verifyResult.total_rows.toLocaleString()} events checked
+            </p>
           </div>
         </div>
-        <a href={runVerifyUrl} className="shrink-0 text-xs text-sky-600 hover:underline font-medium">Run again</a>
+        <a
+          href={runVerifyUrl}
+          className="shrink-0 text-xs text-sky-600 hover:underline font-medium"
+        >
+          Run again
+        </a>
       </div>
     );
   }
@@ -738,11 +807,14 @@ function ChainVerifyPanel({
         <div className="space-y-0.5">
           <p className="text-xs font-semibold text-emerald-800">Append-only chain verified</p>
           <p className="text-[11px] text-stone-400">
-            {verifyResult.total_rows.toLocaleString()} event{verifyResult.total_rows !== 1 ? "s" : ""} verified — no chain break detected.
+            {verifyResult.total_rows.toLocaleString()} event
+            {verifyResult.total_rows !== 1 ? "s" : ""} verified — no chain break detected.
           </p>
         </div>
       </div>
-      <a href={runVerifyUrl} className="shrink-0 text-xs text-sky-600 hover:underline font-medium">Run again</a>
+      <a href={runVerifyUrl} className="shrink-0 text-xs text-sky-600 hover:underline font-medium">
+        Run again
+      </a>
     </div>
   );
 }
@@ -776,7 +848,7 @@ function AuditEventRow({
   // Operator display: prefer display_name, then email, then short UUID fallback.
   const opDisplay = e.ag_user_id ? operatorMap.get(e.ag_user_id) : undefined;
   const opPrimary = opDisplay
-    ? (opDisplay.display_name || opDisplay.email)
+    ? opDisplay.display_name || opDisplay.email
     : e.ag_user_id
       ? `${e.ag_user_id.slice(0, 8)}…`
       : null;
@@ -791,7 +863,9 @@ function AuditEventRow({
       <div className="space-y-1 w-44 shrink-0">
         <p className="text-xs font-semibold text-sky-950 leading-snug break-words">{label}</p>
         <div className="flex flex-wrap gap-1">
-          <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${severityCls}`}>
+          <span
+            className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${severityCls}`}
+          >
             {e.event_severity}
           </span>
           {e.event_stream && (
@@ -807,13 +881,19 @@ function AuditEventRow({
         {e.agent_session_id && (
           <div className="space-y-0.5">
             <p className="text-stone-500 flex items-center gap-1.5 flex-wrap">
-              <span className="text-stone-400 text-[10px] uppercase tracking-wide shrink-0">Session</span>
-              <a href={`/ag-admin/sessions/${e.agent_session_id}`}
-                className="font-mono text-sky-600 hover:underline text-[11px]">
+              <span className="text-stone-400 text-[10px] uppercase tracking-wide shrink-0">
+                Session
+              </span>
+              <a
+                href={`/ag-admin/sessions/${e.agent_session_id}`}
+                className="font-mono text-sky-600 hover:underline text-[11px]"
+              >
                 {e.agent_session_id.slice(0, 12)}…
               </a>
               {sessStatus && (
-                <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${SESSION_STATUS_MINI_STYLES[sessStatus]}`}>
+                <span
+                  className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${SESSION_STATUS_MINI_STYLES[sessStatus]}`}
+                >
                   {sessStatus}
                 </span>
               )}
@@ -833,16 +913,18 @@ function AuditEventRow({
         {opPrimary && (
           <div className="space-y-0">
             <p className="text-stone-600">
-              <span className="text-stone-400 text-[10px] uppercase tracking-wide mr-1">Operator</span>
+              <span className="text-stone-400 text-[10px] uppercase tracking-wide mr-1">
+                Operator
+              </span>
               <span className={opDisplay ? "" : "font-mono text-stone-400"}>{opPrimary}</span>
             </p>
-            {opSecondary && (
-              <p className="text-[11px] text-stone-400">{opSecondary}</p>
-            )}
+            {opSecondary && <p className="text-[11px] text-stone-400">{opSecondary}</p>}
           </div>
         )}
         {e.risk_level && (
-          <span className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${RISK_STYLES[e.risk_level] ?? "bg-stone-100 text-stone-500"}`}>
+          <span
+            className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded ${RISK_STYLES[e.risk_level] ?? "bg-stone-100 text-stone-500"}`}
+          >
             Risk: {e.risk_level}
           </span>
         )}
@@ -880,10 +962,18 @@ function UnavailableState() {
         Could not reach the AG management surface. Check that identuum-ag is running.
       </p>
       <div className="flex flex-wrap justify-center gap-3 mt-4">
-        <a href="/ag-admin" className="text-xs text-sky-600 hover:underline">Dashboard →</a>
-        <a href="/ag-admin/agents" className="text-xs text-sky-600 hover:underline">Agent Registry →</a>
-        <a href="/ag-admin/sessions" className="text-xs text-sky-600 hover:underline">Sessions →</a>
-        <a href="/ag-admin/revocations" className="text-xs text-sky-600 hover:underline">Revocations →</a>
+        <a href="/ag-admin" className="text-xs text-sky-600 hover:underline">
+          Dashboard →
+        </a>
+        <a href="/ag-admin/agents" className="text-xs text-sky-600 hover:underline">
+          Agent Registry →
+        </a>
+        <a href="/ag-admin/sessions" className="text-xs text-sky-600 hover:underline">
+          Sessions →
+        </a>
+        <a href="/ag-admin/revocations" className="text-xs text-sky-600 hover:underline">
+          Revocations →
+        </a>
       </div>
     </div>
   );
@@ -892,8 +982,10 @@ function UnavailableState() {
 function formatDate(iso: string): string {
   try {
     return new Date(iso).toLocaleString("en-US", {
-      month: "short", day: "numeric",
-      hour: "2-digit", minute: "2-digit",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   } catch {
     return iso.slice(0, 16);
