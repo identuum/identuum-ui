@@ -13,12 +13,47 @@ AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 
 .PHONY: verify dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
-.PHONY: verify-live-upgrade-backup
+.PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-ce-auth
 
 verify:
 	pnpm exec biome check . --reporter=json --max-diagnostics=none
 	pnpm exec tsc --noEmit
 	pnpm exec vitest run
+
+## verify-ui-oss-contract: Playwright spec that validates the OSS
+## scaffold runtime contract (e2e/oss-contract.spec.ts).
+##
+## Run this target against an OSS `--gin-serve` runtime — typically
+## the local `identuum-idp-oss` container on 127.0.0.1:7113 brought up
+## via `identuum-idp-oss/Makefile`'s dev-up target. The spec asserts
+## the four positive scaffold endpoints (/health,
+## /.well-known/openid-configuration, /.well-known/jwks.json) and the
+## two negative pins (/authorize NOT 200, /token NOT 200). It does
+## NOT require .env.playwright.local credentials.
+##
+## Override IDENTUUM_IDP_BASE_URL to point at a non-default IDP host.
+verify-ui-oss-contract:
+	IDENTUUM_IDP_BASE_URL="$${IDENTUUM_IDP_BASE_URL:-http://localhost:7113}" \
+		npx playwright test e2e/oss-contract.spec.ts --reporter=list
+
+## verify-ui-ce-auth: Playwright specs that require a CE / full-auth
+## IDP runtime (login, MFA, sessions, /authorize, /token, admin UI,
+## setup/upgrade wizards, license).
+##
+## Run this target against a CE appliance runtime — NOT against the
+## OSS `--gin-serve` scaffold, which has no /authorize or /token.
+## Authenticated specs self-skip when IDENTUUM_TEST_SITE_ADMIN_PASSWORD
+## (and friends) are unset; .env.playwright.local supplies the
+## credentials in normal operator workflows.
+##
+## The CE auth target deliberately EXCLUDES e2e/oss-contract.spec.ts
+## (covered by verify-ui-oss-contract) and the opt-in live upgrade
+## backup spec (covered by verify-live-upgrade-backup).
+verify-ui-ce-auth:
+	npx playwright test e2e/ \
+		--ignore-snapshots \
+		--reporter=list \
+		--grep-invert "OSS scaffold contract"
 
 ## verify-live-upgrade-backup: opt-in live-backend Playwright
 ## regression for the OSS-to-CE /upgrade wizard backup flow.

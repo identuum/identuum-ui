@@ -385,3 +385,65 @@ For the source-of-truth wire contract this spec exercises, see
 retention & pruning (complete — 2026-06-17)" and the prior live
 smoke entry. For the platform-level ledger see
 [[wiki/platform/idp-appliance-install-ux]] §4.
+
+---
+
+## OSS vs CE runtime contract for Playwright specs
+
+The IDP backend on `127.0.0.1:7113` can be one of two distinct
+runtimes, and the two are NOT interchangeable for these specs:
+
+- **OSS scaffold (`identuum-idp-oss`, `--gin-serve` mode)** — exposes
+  only `GET /system/info`, `/health`, `/metrics`,
+  `/.well-known/openid-configuration`, `/.well-known/jwks.json`. No
+  auth, no `/authorize`, no `/token`, no login form, no MFA, no
+  sessions, no admin UI, no setup/upgrade wizards. Operator-run
+  commands are `--bootstrap` and `--recover-site-admin`. There is
+  **no `--setup` flag** in the OSS binary; setup is performed via
+  `--bootstrap` against a target DSN.
+- **CE appliance (`identuum-idp-ce`, `--serve` mode)** — the full
+  product: setup wizard, license, login, MFA, sessions, admin
+  license page, OSS-to-CE upgrade wizard, backup automation,
+  org-admin/site-admin/AG UI. Operator-run setup is `--setup`
+  (`--plain` for headless), and `--recover-admin` is the supported
+  non-destructive admin reset. The CE binary at `/app/identuum-idp`
+  inside the container.
+
+### Which spec needs which runtime
+
+| Spec | Required runtime | Notes |
+|------|------------------|-------|
+| `oss-contract.spec.ts` | OSS scaffold (`identuum-idp-oss`) | Positive + negative pins on the OSS contract; passes against CE too because CE is a superset. |
+| `health-and-redirects.spec.ts` | Either | Touches only `/health` and UI route shapes. |
+| `platform-status.spec.ts` | Either | Touches `/api/runtime` and `/platform-status`; works on both. |
+| `login.spec.ts` | **CE only** | Drives full email → password → TOTP login. |
+| `account-settings.spec.ts` | **CE only** | Requires authenticated `site_admin` session. |
+| `passkey-flow.spec.ts` | **CE only** | CDP virtual authenticator drives WebAuthn ceremony. |
+| `dashboard.spec.ts` | **CE only** | Authenticated `org_user` /dashboard surface. |
+| `claim.spec.ts` | **CE only** | Org-admin invitation/claim flow. |
+| `setup-wizard.spec.ts` | **CE only** | First-run setup wizard against `identuum-idp-ce` data volume. |
+| `upgrade-backup.spec.ts` | mocked (no real backend) | Pure browser-level fetch interception; backend can be down. |
+| `upgrade-backup-live.spec.ts` | **CE only** (throwaway) | Brought up by `verify-live-upgrade-backup`. |
+| `org-admin*.spec.ts` | **CE only** | Authenticated `org_admin`. |
+| `site-admin-*.spec.ts` | **CE only** | Authenticated `site_admin` against full admin UI. |
+
+The source-invariant pin at
+`src/__tests__/oss-ce-runtime-target-source-invariants.test.ts`
+enforces that every spec listed above is documented as requiring
+the right runtime; future drift will fail a fast vitest assertion
+rather than a slow Playwright timeout against the wrong backend.
+
+### Convenience make targets
+
+| Command | Use case |
+|---------|----------|
+| `make verify-ui-oss-contract` | Run only `e2e/oss-contract.spec.ts` against `IDENTUUM_IDP_BASE_URL` (default `http://localhost:7113`). Safe against an OSS `--gin-serve` runtime; does NOT require credentials. |
+| `make verify-ui-ce-auth` | Run every other Playwright spec (excludes `oss-contract.spec.ts`). Requires a CE appliance on the IDP backend. Authenticated specs self-skip if `IDENTUUM_TEST_SITE_ADMIN_PASSWORD` and friends are unset. |
+| `make verify-live-upgrade-backup` | Stand up a throwaway CE backend on ports 7129/7130, run `upgrade-backup-live.spec.ts`, always tear down. |
+
+Pointing `verify-ui-ce-auth` at an OSS scaffold runtime is a
+documented anti-pattern — auth-required specs will fail at the
+TOTP/login step because OSS has no `/authorize` or `/token`. The
+"Invalid credentials" failure mode observed in earlier post-commit
+verification slices (C4 / C3 / C6) is the symptom of exactly this
+mismatch.
