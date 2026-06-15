@@ -56,6 +56,22 @@ const DYNAMIC_ONLY_SKIP_MSG =
 
 let sharedCtx: BrowserContext | null = null;
 
+function getSharedContext(): BrowserContext {
+  if (!sharedCtx) {
+    throw new Error("shared context not initialized");
+  }
+  return sharedCtx;
+}
+
+function requireValue<T>(value: T | null | undefined, message: string): NonNullable<T> {
+  expect(value, message).not.toBeNull();
+  expect(value, message).not.toBeUndefined();
+  if (value === null || value === undefined) {
+    throw new Error(message);
+  }
+  return value;
+}
+
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(180_000); // 31s TOTP cooldown + ~70s TOTP retry headroom
   if (skipOrgAdminTests) return;
@@ -81,22 +97,21 @@ test.describe("/org-admin/users/[id] — Recent activity card", () => {
       test.skip(true, DYNAMIC_ONLY_SKIP_MSG);
     }
 
-    const fixtureUserId = loadOrgAdminFixtureUserId();
-    expect(
-      fixtureUserId,
+    const fixtureUserId = requireValue(
+      loadOrgAdminFixtureUserId(),
       "dynamic-fixture mode must produce a fixture file the accessor can read"
-    ).not.toBeNull();
+    );
     // Narrow UUID-shape sanity (the accessor already enforced this;
     // re-pinning so the test fails loudly if a future regression
     // weakens the accessor).
     expect(fixtureUserId).toMatch(/^[0-9a-fA-F-]{32,36}$/);
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       // Navigate directly to the fixture admin's own user-detail page.
       // The /org-admin layout guard already validated the role; this
       // page is reachable to the same org_admin viewing themselves.
-      await page.goto(`/org-admin/users/${fixtureUserId!}`);
+      await page.goto(`/org-admin/users/${fixtureUserId}`);
       await page.waitForLoadState("networkidle");
 
       expect(await page.title()).not.toMatch(/500|internal error|application error/i);
@@ -145,7 +160,7 @@ test.describe("/org-admin/users/[id] — Recent activity card", () => {
       // output — we only assert structural properties.
       const href = (await targetLink.getAttribute("href")) ?? "";
       expect(href).toMatch(/^\/org-admin\/audit\?/);
-      expect(href).toContain(`subject_id=${encodeURIComponent(fixtureUserId!)}`);
+      expect(href).toContain(`subject_id=${encodeURIComponent(fixtureUserId)}`);
       // The per-row link MUST carry event_type. The helper appends
       // it whenever the row's event_type is non-empty (always true
       // for real audit events).
@@ -167,7 +182,7 @@ test.describe("/org-admin/users/[id] — Recent activity card", () => {
       // URL contract: subject_id and event_type both present.
       const finalURL = page.url();
       expect(finalURL).toContain("/org-admin/audit");
-      expect(finalURL).toContain(`subject_id=${encodeURIComponent(fixtureUserId!)}`);
+      expect(finalURL).toContain(`subject_id=${encodeURIComponent(fixtureUserId)}`);
       expect(finalURL).toContain(`event_type=${encodeURIComponent(clickedEventType)}`);
 
       // "Subject filter active:" notice is visible — confirms the
@@ -178,6 +193,92 @@ test.describe("/org-admin/users/[id] — Recent activity card", () => {
       // The "Clear subject filter" affordance is visible so the
       // operator can break out of the filter.
       await expect(page.getByRole("link", { name: /^Clear subject filter$/ })).toBeVisible();
+    } finally {
+      await page.close();
+    }
+  });
+});
+
+// ── Users-completion batch (2026-05-30) — safe-state affordance checks ──────
+//
+// The org-admin Users completion batch adds three new surfaces:
+//   - Bulk invite drawer on /org-admin/users (collapsed by default)
+//   - Approve registration button on /org-admin/users/[id] (only for
+//     pending_approval users — the fixture admin is not in that state so
+//     the button should be absent on their own detail page)
+//   - Assigned-roles card on /org-admin/users/[id]
+//
+// These tests assert presence/absence ONLY — they never click the bulk
+// submit button, never assign or remove roles, never approve anyone, and
+// never type into the textarea. They are safe to run in any environment.
+
+test.describe("/org-admin/users — bulk invite affordance (safe-state)", () => {
+  test("the Bulk invite button is rendered on /org-admin/users", async () => {
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
+    if (!sharedCtx) throw new Error("shared context not initialized");
+    const page = await sharedCtx.newPage();
+    try {
+      await page.goto("/org-admin/users");
+      await expect(page.getByRole("button", { name: /^Bulk invite$/ })).toBeVisible();
+      // The Invite-user button is still rendered alongside Bulk invite.
+      // The "+" glyph in front of the label is rendered inside an
+      // aria-hidden="true" span; Playwright excludes that from the
+      // accessible name, so the matcher uses just the label text.
+      await expect(page.getByRole("button", { name: /^Invite user$/ })).toBeVisible();
+    } finally {
+      await page.close();
+    }
+  });
+
+  test("the bulk drawer expands/collapses without submitting", async () => {
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
+    if (!sharedCtx) throw new Error("shared context not initialized");
+    const page = await sharedCtx.newPage();
+    try {
+      await page.goto("/org-admin/users");
+      await page.getByRole("button", { name: /^Bulk invite$/ }).click();
+      // The drawer surfaces the textarea, the Close button, and the Send invites button.
+      await expect(page.getByLabel(/Entries/)).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Send invites$/ })).toBeVisible();
+      // Click Close — do NOT submit.
+      await page.getByRole("button", { name: /^Close$/ }).click();
+      await expect(page.getByLabel(/Entries/)).toBeHidden();
+    } finally {
+      await page.close();
+    }
+  });
+});
+
+test.describe("/org-admin/users/[id] — assigned-roles card + approve affordance (safe-state)", () => {
+  test("[dynamic mode only] the Assigned roles card is rendered on the fixture admin's own detail page", async () => {
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
+    if (process.env.IDENTUUM_E2E_USE_DYNAMIC_FIXTURE !== "true") {
+      test.skip(true, DYNAMIC_ONLY_SKIP_MSG);
+    }
+    const fixtureUserId = await loadOrgAdminFixtureUserId();
+    if (!fixtureUserId) {
+      test.skip(true, "Dynamic-fixture user id not available");
+    }
+    if (!sharedCtx) throw new Error("shared context not initialized");
+    const page = await sharedCtx.newPage();
+    try {
+      await page.goto(`/org-admin/users/${fixtureUserId}`);
+      // The Assigned-roles card title — rendered as a styled <p>, not a
+      // semantic heading, to match the surrounding card layout. Match it
+      // by exact text to avoid colliding with the sidebar or any future
+      // heading on the page.
+      await expect(page.getByText(/^Assigned roles$/, { exact: true })).toBeVisible();
+      // The Approve registration button must NOT be visible — the fixture
+      // org_admin is active (not banned/pending approval). This guards
+      // against an over-eager render that would surface the approve
+      // affordance on the wrong predicate.
+      await expect(page.getByRole("button", { name: /^Approve registration$/ })).toHaveCount(0);
     } finally {
       await page.close();
     }

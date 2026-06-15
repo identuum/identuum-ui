@@ -11,8 +11,22 @@ import "server-only";
 
 import { cookies } from "next/headers";
 import { classifyDomainVerifyErrorKind } from "./domain-verification-errors";
+import { type IDPStatusClassification, type IDPStatusKind, classifyIDPStatus } from "./idp-status";
 import { idpBaseUrl, loadRuntimeConfig } from "./runtime-config";
 import type {
+  CreateOrgClientOptions,
+  CreatedOrgClient,
+  GetOrgProtocolSettingsResult,
+  OrgAPIResourceItem,
+  OrgAPIResourceScope,
+  OrgClientItem,
+  OrgClientListResult,
+  OrgDetail,
+  OrgListItem,
+  OrgListResult,
+  OrgProtocolSettings,
+  OrgServiceAccountItem,
+  OrgUserItem,
   OrganizationDomainChallenge,
   OrganizationDomainChallengeResponse,
   OrganizationDomainDeleteResponse,
@@ -20,14 +34,6 @@ import type {
   OrganizationDomainListResponse,
   OrganizationDomainResponse,
   OrganizationDomainSetPrimaryResponse,
-  OrgDetail,
-  OrgListItem,
-  OrgListResult,
-  OrgUserItem,
-  CreateOrgClientOptions,
-  CreatedOrgClient,
-  OrgClientItem,
-  OrgClientListResult,
   UpdateOrgClientOptions,
   UserProfile,
   UserRole,
@@ -68,6 +74,28 @@ async function cookieHeader(): Promise<string> {
     .getAll()
     .map((c) => `${c.name}=${c.value}`)
     .join("; ");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+async function safeErrorBody(res: Response): Promise<unknown> {
+  return res.json().catch(() => ({}));
+}
+
+async function classifyAdminReadFailure(res: Response): Promise<{
+  status: number;
+  forbidden: boolean;
+  featureUnavailable: boolean;
+}> {
+  const body = res.status === 402 || res.status === 403 ? await safeErrorBody(res) : undefined;
+  const classified = classifyIDPStatus(res.status, body);
+  return {
+    status: res.status,
+    forbidden: classified.kind === "forbidden",
+    featureUnavailable: classified.kind === "feature_absent" || classified.kind === "not_licensed",
+  };
 }
 
 /**
@@ -776,6 +804,7 @@ export async function listOrgUsers(): Promise<OrgUserItem[] | null> {
         last_login_at: typeof u.last_login_at === "string" ? u.last_login_at : null,
         invitation_pending: Boolean(u.invitation_pending),
         invitation_email_bound: Boolean(u.invitation_email_bound),
+        banned: Boolean(u.banned),
       })
     );
   } catch {
@@ -864,6 +893,7 @@ export async function getOrgUserById(id: string): Promise<OrgUserItem | null> {
       last_login_at: typeof u.last_login_at === "string" ? u.last_login_at : null,
       invitation_pending: Boolean(u.invitation_pending),
       invitation_email_bound: Boolean(u.invitation_email_bound),
+      banned: Boolean(u.banned),
     };
   } catch {
     return null;
@@ -1009,11 +1039,13 @@ export async function listOwnSessions(): Promise<ListSessionsResult> {
     if (res.status === 403) return { ok: false, status: 403, forbidden: true };
     if (!res.ok) return { ok: false, status: res.status, forbidden: false };
 
-    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
-    const data: any = await res.json();
-    const raw = Array.isArray(data.sessions) ? data.sessions : [];
+    const data: unknown = await res.json();
+    const body = isRecord(data) ? data : {};
+    const raw: Record<string, unknown>[] = Array.isArray(body.sessions)
+      ? body.sessions.filter(isRecord)
+      : [];
 
-    const sessions: SessionItem[] = raw.map((s: any) => ({
+    const sessions: SessionItem[] = raw.map((s) => ({
       id: String(s.id ?? ""),
       created_at: String(s.created_at ?? ""),
       expires_at: String(s.expires_at ?? ""),
@@ -1072,7 +1104,7 @@ export async function revokeOwnSession(sessionId: string): Promise<RevokeSession
  * Safe subset of an audit event for UI display.
  * Excludes: metadata (may contain sensitive keys), raw UUIDs, user_agent (verbose),
  * request_id, correlation_id, agent_session_id.
- * Backend: GET /api/v1/audit — Professional+ tier, site_admin/org_admin only.
+ * Backend: GET /api/v1/audit — Enterprise/CE commercial capability, site_admin/org_admin only.
  */
 export interface AuditEventItem {
   created_at: string;
@@ -1097,7 +1129,8 @@ export type ListAuditEventsResult =
 /**
  * Lists audit events for the authenticated admin.
  * site_admin sees all events; org_admin sees only their org's events (enforced at service layer).
- * Returns featureUnavailable=true when the Professional+ license gate blocks the endpoint.
+ * Returns featureUnavailable=true when the Enterprise/CE license gate or absent OSS endpoint
+ * blocks the surface.
  *
  * Filter params are forwarded verbatim to the backend after server-side sanitization in the
  * calling page. No client-side filtering is performed.
@@ -1141,31 +1174,18 @@ export async function listAuditEvents(opts?: {
       cache: "no-store",
     });
 
-    if (res.status === 403) {
-      let featureUnavailable = false;
-      try {
-        // biome-ignore lint/suspicious/noExplicitAny: raw API response before typing
-        const body: any = await res.json();
-        if (
-          typeof body?.message === "string" &&
-          body.message.toLowerCase().includes("license tier")
-        ) {
-          featureUnavailable = true;
-        }
-      } catch {
-        // ignore parse error
-      }
-      return { ok: false, status: 403, featureUnavailable, forbidden: !featureUnavailable };
+    if (!res.ok) {
+      const failure = await classifyAdminReadFailure(res);
+      return { ok: false, ...failure };
     }
 
-    if (!res.ok)
-      return { ok: false, status: res.status, featureUnavailable: false, forbidden: false };
+    const data: unknown = await res.json();
+    const body = isRecord(data) ? data : {};
+    const raw: Record<string, unknown>[] = Array.isArray(body.events)
+      ? body.events.filter(isRecord)
+      : [];
 
-    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
-    const data: any = await res.json();
-    const raw = Array.isArray(data.events) ? data.events : [];
-
-    const events: AuditEventItem[] = raw.map((e: any) => ({
+    const events: AuditEventItem[] = raw.map((e) => ({
       created_at: String(e.created_at ?? ""),
       event_type: String(e.event_type ?? ""),
       summary: e.summary ? String(e.summary) : null,
@@ -1182,9 +1202,9 @@ export async function listAuditEvents(opts?: {
     return {
       ok: true,
       events,
-      total_count: typeof data.total_count === "number" ? data.total_count : 0,
-      page: typeof data.page === "number" ? data.page : page,
-      page_size: typeof data.page_size === "number" ? data.page_size : pageSize,
+      total_count: typeof body.total_count === "number" ? body.total_count : 0,
+      page: typeof body.page === "number" ? body.page : page,
+      page_size: typeof body.page_size === "number" ? body.page_size : pageSize,
     };
   } catch {
     return { ok: false, status: 0, featureUnavailable: false, forbidden: false };
@@ -1206,7 +1226,7 @@ export interface AuditEventTypeGroupFromAPI {
 /**
  * Fetches the grouped list of known audit event types from the backend.
  * Backend: GET /api/v1/audit/event-types
- * Requires Professional+ license (inherits AppendOnlyAudit gate from audit group).
+ * Requires Enterprise/CE commercial capability (inherits AppendOnlyAudit gate from audit group).
  * Returns null on any failure; callers should fall back to the static list.
  */
 export async function listAuditEventTypes(): Promise<AuditEventTypeGroupFromAPI[] | null> {
@@ -1219,18 +1239,22 @@ export async function listAuditEventTypes(): Promise<AuditEventTypeGroupFromAPI[
       cache: "no-store",
     });
     if (!res.ok) return null;
-    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
-    const data: any = await res.json();
-    if (!Array.isArray(data.groups)) return null;
-    return data.groups.map((g: any) => ({
-      label: String(g.label ?? ""),
-      types: Array.isArray(g.types)
-        ? g.types.map((t: any) => ({
-            value: String(t.value ?? ""),
-            label: String(t.label ?? ""),
-          }))
-        : [],
-    }));
+    const data: unknown = await res.json();
+    const body = isRecord(data) ? data : {};
+    if (!Array.isArray(body.groups)) return null;
+    const groups: Record<string, unknown>[] = body.groups.filter(isRecord);
+    return groups.map((g) => {
+      const types: Record<string, unknown>[] = Array.isArray(g.types)
+        ? g.types.filter(isRecord)
+        : [];
+      return {
+        label: String(g.label ?? ""),
+        types: types.map((t) => ({
+          value: String(t.value ?? ""),
+          label: String(t.label ?? ""),
+        })),
+      };
+    });
   } catch {
     return null;
   }
@@ -1415,9 +1439,7 @@ function sanitizeDomainInfo(o: unknown): OrganizationDomainInfo {
     verified: Boolean(r.verified),
     verified_at: typeof r.verified_at === "string" ? r.verified_at : null,
     verification_token_expires_at:
-      typeof r.verification_token_expires_at === "string"
-        ? r.verification_token_expires_at
-        : null,
+      typeof r.verification_token_expires_at === "string" ? r.verification_token_expires_at : null,
     verification_attempts: Number(r.verification_attempts ?? 0),
     created_at: String(r.created_at ?? ""),
     updated_at: String(r.updated_at ?? ""),
@@ -1493,8 +1515,7 @@ export async function addOrganizationDomain(
   domain: string
 ): Promise<AddOrganizationDomainResult> {
   const cfg = loadRuntimeConfig();
-  if (!cfg || !cfg.idp.enabled)
-    return { ok: false, status: 503, conflict: false, invalid: false };
+  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, conflict: false, invalid: false };
 
   // Canonicalize: trim + lowercase. Matches backend NormalizeDomain.
   const body: { domain: string } = { domain: domain.toLowerCase().trim() };
@@ -1513,10 +1534,8 @@ export async function addOrganizationDomain(
       }
     );
 
-    if (res.status === 400)
-      return { ok: false, status: 400, conflict: false, invalid: true };
-    if (res.status === 409)
-      return { ok: false, status: 409, conflict: true, invalid: false };
+    if (res.status === 400) return { ok: false, status: 400, conflict: false, invalid: true };
+    if (res.status === 409) return { ok: false, status: 409, conflict: true, invalid: false };
     if (!res.ok) return { ok: false, status: res.status, conflict: false, invalid: false };
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
@@ -1661,8 +1680,7 @@ export async function deleteOrganizationDomain(
   domainID: string
 ): Promise<DeleteOrganizationDomainResult> {
   const cfg = loadRuntimeConfig();
-  if (!cfg || !cfg.idp.enabled)
-    return { ok: false, status: 503, notFound: false, primary: false };
+  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, notFound: false, primary: false };
 
   try {
     const res = await fetch(
@@ -1674,12 +1692,9 @@ export async function deleteOrganizationDomain(
       }
     );
 
-    if (res.status === 404)
-      return { ok: false, status: 404, notFound: true, primary: false };
-    if (res.status === 409)
-      return { ok: false, status: 409, notFound: false, primary: true };
-    if (!res.ok)
-      return { ok: false, status: res.status, notFound: false, primary: false };
+    if (res.status === 404) return { ok: false, status: 404, notFound: true, primary: false };
+    if (res.status === 409) return { ok: false, status: 409, notFound: false, primary: true };
+    if (!res.ok) return { ok: false, status: res.status, notFound: false, primary: false };
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json();
@@ -1718,8 +1733,7 @@ export async function setPrimaryOrganizationDomain(
       }
     );
 
-    if (res.status === 404)
-      return { ok: false, status: 404, notFound: true, notVerified: false };
+    if (res.status === 404) return { ok: false, status: 404, notFound: true, notVerified: false };
     if (res.status === 400 || res.status === 409)
       return {
         ok: false,
@@ -1727,8 +1741,7 @@ export async function setPrimaryOrganizationDomain(
         notFound: false,
         notVerified: true,
       };
-    if (!res.ok)
-      return { ok: false, status: res.status, notFound: false, notVerified: false };
+    if (!res.ok) return { ok: false, status: res.status, notFound: false, notVerified: false };
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json();
@@ -1824,9 +1837,7 @@ export async function listOwnOrganizationClients(opts?: {
           : [],
         scope: typeof c.scope === "string" ? c.scope : "",
         token_endpoint_auth_method:
-          typeof c.token_endpoint_auth_method === "string"
-            ? c.token_endpoint_auth_method
-            : "",
+          typeof c.token_endpoint_auth_method === "string" ? c.token_endpoint_auth_method : "",
         jwks_uri: typeof c.jwks_uri === "string" ? c.jwks_uri : "",
         token_endpoint_auth_signing_alg:
           typeof c.token_endpoint_auth_signing_alg === "string"
@@ -1937,9 +1948,7 @@ export async function getOrganizationClientById(
           : [],
         scope: typeof c.scope === "string" ? c.scope : "",
         token_endpoint_auth_method:
-          typeof c.token_endpoint_auth_method === "string"
-            ? c.token_endpoint_auth_method
-            : "",
+          typeof c.token_endpoint_auth_method === "string" ? c.token_endpoint_auth_method : "",
         jwks_uri: typeof c.jwks_uri === "string" ? c.jwks_uri : "",
         token_endpoint_auth_signing_alg:
           typeof c.token_endpoint_auth_signing_alg === "string"
@@ -2073,9 +2082,7 @@ export async function createOrganizationClient(
           : [],
         scope: typeof d.scope === "string" ? d.scope : "",
         token_endpoint_auth_method:
-          typeof d.token_endpoint_auth_method === "string"
-            ? d.token_endpoint_auth_method
-            : "",
+          typeof d.token_endpoint_auth_method === "string" ? d.token_endpoint_auth_method : "",
         organization_id: typeof d.organization_id === "string" ? d.organization_id : null,
       },
     };
@@ -2254,9 +2261,7 @@ export async function updateOrganizationClient(
           : [],
         scope: typeof c.scope === "string" ? c.scope : "",
         token_endpoint_auth_method:
-          typeof c.token_endpoint_auth_method === "string"
-            ? c.token_endpoint_auth_method
-            : "",
+          typeof c.token_endpoint_auth_method === "string" ? c.token_endpoint_auth_method : "",
         jwks_uri: typeof c.jwks_uri === "string" ? c.jwks_uri : "",
         token_endpoint_auth_signing_alg:
           typeof c.token_endpoint_auth_signing_alg === "string"
@@ -2314,9 +2319,7 @@ export type DeleteOrgClientResult =
       message: string;
     };
 
-export async function deleteOrganizationClient(
-  id: string
-): Promise<DeleteOrgClientResult> {
+export async function deleteOrganizationClient(id: string): Promise<DeleteOrgClientResult> {
   const cfg = loadRuntimeConfig();
   if (!cfg || !cfg.idp.enabled) {
     return {
@@ -2540,5 +2543,2972 @@ export async function rotateOrganizationClientSecret(
       publicClient: false,
       message: "Network error. Please try again.",
     };
+  }
+}
+
+// ── Site-admin observability — read-only helpers (slice identuum-20260530-site-admin-observability-pages) ──
+//
+// All six helpers below project EXPLICITLY to safe non-secret fields.
+// Each backend endpoint was verified during the slice's discovery
+// phase to return zero private key material / no inline JWKS private
+// fields / no bcrypt hashes / no JWTs / no refresh tokens / no
+// database URLs / no Redis URLs / no env var values / no credentials
+// of any kind. The wire helpers nevertheless project explicitly so a
+// future regression that started populating a sensitive field server-
+// side cannot leak through the UI by accident.
+
+// ── Signing keys (GET /api/v1/keys) ────────────────────────────────────────
+
+/**
+ * Operator-safe projection of one signing-key row.
+ *
+ * The IDP backend's `/api/v1/keys` response includes only the
+ * documented public-material fields below. This type pins the
+ * UI-visible field set; the helper drops any other key the response
+ * might carry. PRIVATE key bytes, PEM, seed, and inline JWKS-private
+ * components (`d`, `p`, `q`, `dp`, `dq`, `qi`, `k`) are NEVER read
+ * or surfaced by the projection.
+ */
+export interface SigningKeyItem {
+  kid: string;
+  algorithm: string;
+  state: string;
+  created_at: string;
+  activated_at: string | null;
+  rotated_at: string | null;
+  expires_at: string | null;
+  public_key: string;
+}
+
+export type ListSigningKeysResult =
+  | { ok: true; keys: SigningKeyItem[]; count: number }
+  | { ok: false; status: number; forbidden: boolean };
+
+export async function listSigningKeys(): Promise<ListSigningKeysResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, forbidden: false };
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/keys`, {
+      method: "GET",
+      headers: { Cookie: await cookieHeader() },
+      cache: "no-store",
+    });
+    if (res.status === 403) return { ok: false, status: 403, forbidden: true };
+    if (!res.ok) return { ok: false, status: res.status, forbidden: false };
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+    const d: any = await res.json();
+    const rawKeys = Array.isArray(d?.keys) ? d.keys : [];
+    const keys: SigningKeyItem[] = rawKeys.map((k: Record<string, unknown>) => ({
+      kid: typeof k.kid === "string" ? k.kid : "",
+      algorithm: typeof k.algorithm === "string" ? k.algorithm : "",
+      state: typeof k.state === "string" ? k.state : "",
+      created_at: typeof k.created_at === "string" ? k.created_at : "",
+      activated_at: typeof k.activated_at === "string" ? k.activated_at : null,
+      rotated_at: typeof k.rotated_at === "string" ? k.rotated_at : null,
+      expires_at: typeof k.expires_at === "string" ? k.expires_at : null,
+      public_key: typeof k.public_key === "string" ? k.public_key : "",
+    }));
+    return { ok: true, keys, count: typeof d?.count === "number" ? d.count : keys.length };
+  } catch {
+    return { ok: false, status: 0, forbidden: false };
+  }
+}
+
+// ── Anomaly (GET /api/v1/anomaly/events + /api/v1/anomaly/stats) ──────────
+
+export interface AnomalyEventItem {
+  id: string;
+  organization_id: string;
+  score: number;
+  detection_method: string;
+  created_at: string;
+}
+
+export type ListAnomalyEventsResult =
+  | { ok: true; events: AnomalyEventItem[] }
+  | { ok: false; status: number; forbidden: boolean; featureUnavailable: boolean };
+
+export async function listAnomalyEvents(): Promise<ListAnomalyEventsResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled)
+    return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/anomaly/events`, {
+      method: "GET",
+      headers: { Cookie: await cookieHeader() },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const failure = await classifyAdminReadFailure(res);
+      return { ok: false, ...failure };
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+    const d: any = await res.json();
+    const rawList = Array.isArray(d?.data) ? d.data : [];
+    // Project ONLY the documented safe fields. The backend's
+    // `metadata` map MAY contain detection-method-specific fields the
+    // UI does not need; we drop it from the projection so a future
+    // server-side regression that started embedding sensitive metadata
+    // cannot leak through. The UI's compact rows render only id +
+    // score + method + timestamp.
+    const events: AnomalyEventItem[] = rawList.map((a: Record<string, unknown>) => ({
+      id: typeof a.id === "string" ? a.id : "",
+      organization_id: typeof a.organization_id === "string" ? a.organization_id : "",
+      score: typeof a.score === "number" ? a.score : 0,
+      detection_method: typeof a.detection_method === "string" ? a.detection_method : "",
+      created_at: typeof a.created_at === "string" ? a.created_at : "",
+    }));
+    return { ok: true, events };
+  } catch {
+    return { ok: false, status: 0, forbidden: false, featureUnavailable: false };
+  }
+}
+
+export interface AnomalyStats {
+  total_anomalies: number;
+  recent_24h: number;
+  high_risk_24h: number;
+}
+
+export type GetAnomalyStatsResult =
+  | { ok: true; stats: AnomalyStats }
+  | { ok: false; status: number; forbidden: boolean; featureUnavailable: boolean };
+
+export async function getAnomalyStats(): Promise<GetAnomalyStatsResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled)
+    return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/anomaly/stats`, {
+      method: "GET",
+      headers: { Cookie: await cookieHeader() },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const failure = await classifyAdminReadFailure(res);
+      return { ok: false, ...failure };
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+    const d: any = await res.json();
+    const data = d?.data ?? {};
+    return {
+      ok: true,
+      stats: {
+        total_anomalies: typeof data.total_anomalies === "number" ? data.total_anomalies : 0,
+        recent_24h: typeof data.recent_24h === "number" ? data.recent_24h : 0,
+        high_risk_24h: typeof data.high_risk_24h === "number" ? data.high_risk_24h : 0,
+      },
+    };
+  } catch {
+    return { ok: false, status: 0, forbidden: false, featureUnavailable: false };
+  }
+}
+
+// ── System sessions (GET /api/v1/system/sessions) ──────────────────────────
+
+export interface AdminSessionItem {
+  id: string;
+  created_at: string;
+  expires_at: string;
+  last_used_at: string | null;
+  is_active: boolean;
+  is_current: boolean;
+}
+
+export type ListAdminSessionsResult =
+  | { ok: true; sessions: AdminSessionItem[]; total_count: number }
+  | { ok: false; status: number; forbidden: boolean };
+
+export async function listAdminSessions(): Promise<ListAdminSessionsResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, forbidden: false };
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/system/sessions`, {
+      method: "GET",
+      headers: { Cookie: await cookieHeader() },
+      cache: "no-store",
+    });
+    if (res.status === 403) return { ok: false, status: 403, forbidden: true };
+    if (!res.ok) return { ok: false, status: res.status, forbidden: false };
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+    const d: any = await res.json();
+    const rawList = Array.isArray(d?.sessions) ? d.sessions : [];
+    // DELIBERATELY do NOT read d.token / d.cookie / any session-
+    // material field. The backend already masks the token to "****"
+    // for the admin context but this projection ensures even that
+    // masked value never reaches the UI.
+    const sessions: AdminSessionItem[] = rawList.map((s: Record<string, unknown>) => ({
+      id: typeof s.id === "string" ? s.id : "",
+      created_at: typeof s.created_at === "string" ? s.created_at : "",
+      expires_at: typeof s.expires_at === "string" ? s.expires_at : "",
+      last_used_at: typeof s.last_used_at === "string" ? s.last_used_at : null,
+      is_active: Boolean(s.is_active),
+      is_current: Boolean(s.is_current),
+    }));
+    return {
+      ok: true,
+      sessions,
+      total_count: typeof d?.total_count === "number" ? d.total_count : sessions.length,
+    };
+  } catch {
+    return { ok: false, status: 0, forbidden: false };
+  }
+}
+
+// ── Audit chain verify (GET /api/v1/system/audit/chain/verify) ─────────────
+
+export interface AuditChainShardSummary {
+  organization_id: string;
+  status: string;
+  rows_verified: number;
+  head_signature_status: string;
+}
+
+export interface AuditChainVerifyReport {
+  generated_at: string;
+  shard_count: number;
+  ok_count: number;
+  diverged_count: number;
+  empty_count: number;
+  signed_count: number;
+  unsigned_count: number;
+  signature_invalid_count: number;
+  uncheckable_count: number;
+  shards: AuditChainShardSummary[];
+}
+
+export type VerifyAuditChainResult =
+  | { ok: true; report: AuditChainVerifyReport }
+  | { ok: false; status: number; forbidden: boolean; featureUnavailable: boolean };
+
+export async function verifyAuditChain(): Promise<VerifyAuditChainResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled)
+    return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
+  try {
+    // GET, no body — the IDP handler is read-only (no feedback loop,
+    // does not write the verification result back to audit). Calling
+    // it triggers a BFS walk over the audit chain for each tenant
+    // org; the response carries hash/signature DIAGNOSTICS only
+    // (status counts + per-shard head signature status).
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/system/audit/chain/verify`, {
+      method: "GET",
+      headers: { Cookie: await cookieHeader() },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const failure = await classifyAdminReadFailure(res);
+      return { ok: false, ...failure };
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+    const d: any = await res.json();
+    const rawShards = Array.isArray(d?.shards) ? d.shards : [];
+    // Project ONLY the count + status fields. The backend's per-shard
+    // record carries head_hash / head_signature hex strings; those
+    // are diagnostics for SOC2 chain-integrity work but the UI does
+    // NOT render them — they could be confused for credentials by
+    // an operator scanning the page. We surface only the summary
+    // counts + per-shard pass/fail status.
+    const shards: AuditChainShardSummary[] = rawShards.map((s: Record<string, unknown>) => ({
+      organization_id: typeof s.organization_id === "string" ? s.organization_id : "",
+      status: typeof s.status === "string" ? s.status : "",
+      rows_verified: typeof s.rows_verified === "number" ? s.rows_verified : 0,
+      head_signature_status:
+        typeof s.head_signature_status === "string" ? s.head_signature_status : "",
+    }));
+    return {
+      ok: true,
+      report: {
+        generated_at: typeof d?.generated_at === "string" ? d.generated_at : "",
+        shard_count: typeof d?.shard_count === "number" ? d.shard_count : 0,
+        ok_count: typeof d?.ok_count === "number" ? d.ok_count : 0,
+        diverged_count: typeof d?.diverged_count === "number" ? d.diverged_count : 0,
+        empty_count: typeof d?.empty_count === "number" ? d.empty_count : 0,
+        signed_count: typeof d?.signed_count === "number" ? d.signed_count : 0,
+        unsigned_count: typeof d?.unsigned_count === "number" ? d.unsigned_count : 0,
+        signature_invalid_count:
+          typeof d?.signature_invalid_count === "number" ? d.signature_invalid_count : 0,
+        uncheckable_count: typeof d?.uncheckable_count === "number" ? d.uncheckable_count : 0,
+        shards,
+      },
+    };
+  } catch {
+    return { ok: false, status: 0, forbidden: false, featureUnavailable: false };
+  }
+}
+
+// ── System info (GET /api/v1/health/details) ───────────────────────────────
+
+export interface SystemInfo {
+  status: string;
+  version: string;
+  database_status: string;
+  audit_system_status: string;
+  audit_queue_depth: number;
+  redis_status: string | null;
+}
+
+export type GetSystemInfoResult =
+  | { ok: true; info: SystemInfo }
+  | { ok: false; status: number; forbidden: boolean };
+
+export async function getSystemInfo(): Promise<GetSystemInfoResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, forbidden: false };
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/health/details`, {
+      method: "GET",
+      headers: { Cookie: await cookieHeader() },
+      cache: "no-store",
+    });
+    if (res.status === 403) return { ok: false, status: 403, forbidden: true };
+    if (!res.ok) return { ok: false, status: res.status, forbidden: false };
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+    const d: any = await res.json();
+    // Project ONLY the documented safe fields. The backend response
+    // includes pool-connection counters under `database.connections`
+    // — we DELIBERATELY drop those from the UI projection. The IDP
+    // response NEVER includes database URLs / Redis URLs / env var
+    // values / license private fields by construction (verified
+    // during the slice's discovery phase against handler_health.go),
+    // but the projection is explicit defence-in-depth.
+    const db = (d?.database ?? {}) as Record<string, unknown>;
+    const audit = (d?.audit_system ?? {}) as Record<string, unknown>;
+    const redis = (d?.redis ?? null) as Record<string, unknown> | null;
+    return {
+      ok: true,
+      info: {
+        status: typeof d?.status === "string" ? d.status : "",
+        version: typeof d?.version === "string" ? d.version : "",
+        database_status: typeof db.status === "string" ? db.status : "",
+        audit_system_status: typeof audit.status === "string" ? audit.status : "",
+        audit_queue_depth: typeof audit.queue_depth === "number" ? audit.queue_depth : 0,
+        redis_status: redis && typeof redis.status === "string" ? redis.status : null,
+      },
+    };
+  } catch {
+    return { ok: false, status: 0, forbidden: false };
+  }
+}
+
+// ── Reports landing page metadata (no wire fetch — pure metadata) ──────────
+//
+// The reports landing page renders deep links to four report families
+// (user-access, failed-auth, privilege-changes, audit-log) in their
+// available export formats. The /api/v1/reports/* endpoints return
+// JSON / CSV / PDF directly; the UI does NOT eagerly fetch any of
+// these on page load — clicking a link triggers the operator's
+// browser to download or open the file. The OPERATOR is responsible
+// for any data egress; the IDP emits a `data_accessed` audit event
+// per §5.9 SOC2 CC6.1 on the JSON endpoints.
+
+export interface ReportLink {
+  /** Operator-visible label. */
+  label: string;
+  /** Wire path (relative to the IDP origin proxied through /api/idp). */
+  path: string;
+  /** Wire MIME, used to pick an icon / handle file vs JSON view. */
+  format: "json" | "csv" | "pdf";
+}
+
+export interface ReportFamily {
+  /** Stable identifier for the family. */
+  key: "user_access" | "failed_auth" | "privilege_changes" | "audit_log";
+  /** Operator-visible family name. */
+  name: string;
+  /** Short non-technical description of the report's scope. */
+  description: string;
+  /** Available exports for this family. */
+  links: ReportLink[];
+}
+
+export const SITE_ADMIN_REPORT_FAMILIES: ReportFamily[] = [
+  {
+    key: "user_access",
+    name: "User access",
+    description: "Per-user login activity, failed attempts, and risk scoring across the tenancy.",
+    links: [
+      { label: "JSON", path: "/api/v1/reports/access/users", format: "json" },
+      { label: "CSV", path: "/api/v1/reports/access/users.csv", format: "csv" },
+      { label: "PDF", path: "/api/v1/reports/access/users.pdf", format: "pdf" },
+    ],
+  },
+  {
+    key: "failed_auth",
+    name: "Failed authentication",
+    description:
+      "Failed login attempts with timestamp, email, IP, user agent, and rejection reason.",
+    links: [
+      { label: "JSON", path: "/api/v1/reports/auth/failed", format: "json" },
+      { label: "CSV", path: "/api/v1/reports/auth/failed.csv", format: "csv" },
+      { label: "PDF", path: "/api/v1/reports/auth/failed.pdf", format: "pdf" },
+    ],
+  },
+  {
+    key: "privilege_changes",
+    name: "Privilege changes",
+    description: "Role change audit trail with subject, actor, old/new role, and reason.",
+    links: [
+      { label: "JSON", path: "/api/v1/reports/privileges/changes", format: "json" },
+      { label: "CSV", path: "/api/v1/reports/privileges/changes.csv", format: "csv" },
+      { label: "PDF", path: "/api/v1/reports/privileges/changes.pdf", format: "pdf" },
+    ],
+  },
+  {
+    key: "audit_log",
+    name: "Audit log",
+    description:
+      "Full audit log PDF export. JSON access is available via the dedicated /site-admin/audit page.",
+    links: [{ label: "PDF", path: "/api/v1/reports/audit/events.pdf", format: "pdf" }],
+  },
+];
+
+// ── Org-admin Settings read-only tabs (slice identuum-20260530-org-admin-settings-readonly-tabs) ──
+//
+// Four list helpers backing the new read-only sections on
+// /org-admin/settings: Identity providers / Webhooks / Roles / Scope
+// templates. The IDP backend already scrubs sensitive material at the
+// mapper layer (IdentityProviderInfo's ProviderConfig drops
+// ClientSecretEncrypted + BindPasswordEncrypted; the webhook list
+// mapper redacts the signing secret to ""). The UI helpers below add
+// explicit field projection as defence-in-depth so a future mapper
+// regression cannot leak through.
+
+// ── Identity providers (GET /api/v1/organizations/:id/identity-providers) ──
+
+/**
+ * Operator-safe projection of one configured organization identity
+ * provider. The wire helper reads ONLY these fields from the IDP
+ * response; the backend's `config` block — which historically has
+ * carried client_id / issuer_url / scopes etc. but NEVER the
+ * encrypted client_secret or bind_password (those live on the domain
+ * struct and are dropped by the mapper) — is EXPLICITLY dropped at
+ * the helper boundary. The UI surface displays only the operator-
+ * recognizable identity fields.
+ */
+export interface OrgIdentityProviderItem {
+  id: string;
+  name: string;
+  slug: string;
+  type: string;
+  priority: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ListOrganizationIdentityProvidersResult =
+  | { ok: true; identity_providers: OrgIdentityProviderItem[]; count: number }
+  | {
+      ok: false;
+      status: number;
+      forbidden: boolean;
+      featureUnavailable: boolean;
+    };
+
+export async function listOrganizationIdentityProviders(
+  orgID: string
+): Promise<ListOrganizationIdentityProvidersResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
+  }
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/identity-providers`,
+      { method: "GET", headers: { Cookie: await cookieHeader() }, cache: "no-store" }
+    );
+    if (!res.ok) {
+      const failure = await classifyAdminReadFailure(res);
+      return { ok: false, ...failure };
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+    const d: any = await res.json();
+    const rawList = Array.isArray(d?.identity_providers) ? d.identity_providers : [];
+    const identity_providers: OrgIdentityProviderItem[] = rawList.map(
+      (p: Record<string, unknown>) => ({
+        id: typeof p.id === "string" ? p.id : "",
+        name: typeof p.name === "string" ? p.name : "",
+        slug: typeof p.slug === "string" ? p.slug : "",
+        type: typeof p.type === "string" ? p.type : "",
+        priority: typeof p.priority === "number" ? p.priority : 0,
+        active: Boolean(p.active),
+        created_at: typeof p.created_at === "string" ? p.created_at : "",
+        updated_at: typeof p.updated_at === "string" ? p.updated_at : "",
+      })
+    );
+    return {
+      ok: true,
+      identity_providers,
+      count: typeof d?.count === "number" ? d.count : identity_providers.length,
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      forbidden: false,
+      featureUnavailable: false,
+    };
+  }
+}
+
+// ── Webhooks (GET /api/v1/organizations/:id/webhooks) ─────────────────────
+
+/**
+ * Operator-safe projection of one configured organization webhook.
+ * The backend's `secret` field is redacted to "" by the
+ * MapWebhookEndpointsRedacted mapper; the UI helper additionally
+ * NEVER reads d.secret / d.authorization / d.headers so a future
+ * mapper regression that started populating the field cannot leak
+ * through. The webhook URL IS surfaced verbatim — the operator
+ * configured it and needs to see it for verification — but the page
+ * may choose to display only the URL host for very long URLs that
+ * could carry secret query params; the helper itself returns the
+ * full URL for the operator-typed UI to make that choice.
+ */
+export interface OrgWebhookItem {
+  id: string;
+  url: string;
+  event_filters: string[];
+  enabled: boolean;
+  created_at: string;
+}
+
+export type ListOrganizationWebhooksResult =
+  | { ok: true; items: OrgWebhookItem[]; total_count: number }
+  | {
+      ok: false;
+      status: number;
+      forbidden: boolean;
+      featureUnavailable: boolean;
+    };
+
+export async function listOrganizationWebhooks(
+  orgID: string
+): Promise<ListOrganizationWebhooksResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
+  }
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/webhooks`,
+      { method: "GET", headers: { Cookie: await cookieHeader() }, cache: "no-store" }
+    );
+    if (!res.ok) {
+      const failure = await classifyAdminReadFailure(res);
+      return { ok: false, ...failure };
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+    const d: any = await res.json();
+    const rawList = Array.isArray(d?.items) ? d.items : [];
+    const items: OrgWebhookItem[] = rawList.map((w: Record<string, unknown>) => ({
+      id: typeof w.id === "string" ? w.id : "",
+      url: typeof w.url === "string" ? w.url : "",
+      event_filters: Array.isArray(w.event_filters)
+        ? w.event_filters.map((s: unknown) => String(s))
+        : [],
+      enabled: Boolean(w.enabled),
+      created_at: typeof w.created_at === "string" ? w.created_at : "",
+    }));
+    return {
+      ok: true,
+      items,
+      total_count: typeof d?.total_count === "number" ? d.total_count : items.length,
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      forbidden: false,
+      featureUnavailable: false,
+    };
+  }
+}
+
+// ── Org roles (GET /api/v1/organizations/:id/roles) ───────────────────────
+
+export interface OrgRoleItem {
+  id: string;
+  name: string;
+  description: string;
+  scopes: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export type ListOrgRolesResult =
+  | { ok: true; roles: OrgRoleItem[] }
+  | { ok: false; status: number; forbidden: boolean };
+
+export async function listOrgRoles(orgID: string): Promise<ListOrgRolesResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, forbidden: false };
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/roles`,
+      { method: "GET", headers: { Cookie: await cookieHeader() }, cache: "no-store" }
+    );
+    if (res.status === 403) return { ok: false, status: 403, forbidden: true };
+    if (!res.ok) return { ok: false, status: res.status, forbidden: false };
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+    const d: any = await res.json();
+    const rawList = Array.isArray(d?.roles) ? d.roles : [];
+    const roles: OrgRoleItem[] = rawList.map((r: Record<string, unknown>) => ({
+      id: typeof r.id === "string" ? r.id : "",
+      name: typeof r.name === "string" ? r.name : "",
+      description: typeof r.description === "string" ? r.description : "",
+      scopes: Array.isArray(r.scopes) ? r.scopes.map((s: unknown) => String(s)) : [],
+      created_at: typeof r.created_at === "string" ? r.created_at : "",
+      updated_at: typeof r.updated_at === "string" ? r.updated_at : "",
+    }));
+    return { ok: true, roles };
+  } catch {
+    return { ok: false, status: 0, forbidden: false };
+  }
+}
+
+// ── Scope templates (GET /api/v1/scope-templates) ─────────────────────────
+
+export interface ScopeTemplateItem {
+  id: string;
+  name: string;
+  description: string;
+  scopes: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export type ListScopeTemplatesResult =
+  | { ok: true; templates: ScopeTemplateItem[] }
+  | {
+      ok: false;
+      status: number;
+      forbidden: boolean;
+      featureUnavailable: boolean;
+    };
+
+export async function listScopeTemplates(): Promise<ListScopeTemplatesResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
+  }
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/scope-templates`, {
+      method: "GET",
+      headers: { Cookie: await cookieHeader() },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const failure = await classifyAdminReadFailure(res);
+      return { ok: false, ...failure };
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+    const d: any = await res.json();
+    // The endpoint returns a RAW array (no wrapping envelope).
+    const rawList = Array.isArray(d) ? d : [];
+    const templates: ScopeTemplateItem[] = rawList.map((t: Record<string, unknown>) => ({
+      id: typeof t.id === "string" ? t.id : "",
+      name: typeof t.name === "string" ? t.name : "",
+      description: typeof t.description === "string" ? t.description : "",
+      scopes: Array.isArray(t.scopes) ? t.scopes.map((s: unknown) => String(s)) : [],
+      created_at: typeof t.created_at === "string" ? t.created_at : "",
+      updated_at: typeof t.updated_at === "string" ? t.updated_at : "",
+    }));
+    return { ok: true, templates };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      forbidden: false,
+      featureUnavailable: false,
+    };
+  }
+}
+
+// ── Bulk user create (POST /api/v1/users/bulk) ───────────────────────────────
+//
+// Backend contract (gograph-verified):
+//   - Request:  {"users":[{"email","name"}]}   (1 ≤ len ≤ 50; both fields required per row)
+//   - Response: 202 Accepted with JobAcceptedResponse:
+//                 {"job_id","status_url","status":"queued"}
+//   - Authorization: org_admin role (explicit role check, not just scope).
+//   - Role of created users is hardcoded to org_user.
+//   - The bulk executor returns activation_token per row — RAW tokens, not URLs.
+//     The UI never lets a caller see those tokens directly; getBulkJobStatus
+//     immediately re-projects each token into a server-built setup_url and
+//     discards the raw token.
+
+export interface BulkUserEntry {
+  email: string;
+  name: string;
+}
+
+export type BulkCreateUsersResult =
+  | { ok: true; jobId: string }
+  | { ok: false; status: number; message: string };
+
+export async function bulkCreateUsers(entries: BulkUserEntry[]): Promise<BulkCreateUsersResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return { ok: false, status: 503, message: "IdP is not configured." };
+  }
+  if (entries.length === 0) {
+    return { ok: false, status: 400, message: "Provide at least one entry." };
+  }
+  if (entries.length > 50) {
+    return { ok: false, status: 400, message: "Maximum 50 entries per batch." };
+  }
+  const sanitized = entries.map((e) => ({
+    email: e.email.toLowerCase().trim(),
+    name: e.name.trim(),
+  }));
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/users/bulk`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: await cookieHeader(),
+      },
+      body: JSON.stringify({ users: sanitized }),
+      cache: "no-store",
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const data: any = await res.json().catch(() => ({}));
+    if ((res.status === 202 || res.ok) && typeof data?.job_id === "string") {
+      return { ok: true, jobId: data.job_id };
+    }
+    const message =
+      typeof data?.message === "string" && data.message.length > 0
+        ? data.message
+        : "Could not enqueue the bulk invite job.";
+    return { ok: false, status: res.status, message };
+  } catch {
+    return { ok: false, status: 0, message: "Network error. Try again." };
+  }
+}
+
+// ── Get bulk job status (GET /api/v1/jobs/:id) ───────────────────────────────
+//
+// Backend contract (gograph-verified):
+//   - Response: JobStatusResponse {
+//       id, type, status: queued|running|completed|failed,
+//       created_at, started_at?, completed_at?, result?: json.RawMessage
+//     }
+//   - For job.type === "bulk_user_create", the result is BulkUserCreateResult:
+//       {results:[{email,name,success,error_message?,activation_token?}],
+//        created, failed, total}
+//   - Tenant-scoped: cross-org lookups return 404 (oracle protection).
+//   - Activation tokens in the result are SENSITIVE; this helper redacts the
+//     raw token immediately and projects setup_url only.
+
+export interface BulkJobResultItem {
+  email: string;
+  name: string;
+  success: boolean;
+  error_message: string | null;
+  /**
+   * Operator-facing one-time setup URL constructed server-side from the raw
+   * activation_token and cfg.ui_origin. Null when the backend returned no
+   * token (e.g. row failed) OR when ui_origin is not configured. The raw
+   * activation_token is NEVER exposed to the caller.
+   */
+  setup_url: string | null;
+}
+
+export interface BulkJobResult {
+  results: BulkJobResultItem[];
+  created: number;
+  failed: number;
+  total: number;
+}
+
+export interface BulkJobStatus {
+  id: string;
+  type: string;
+  status: string;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  result: BulkJobResult | null;
+}
+
+export type GetBulkJobStatusResult =
+  | { ok: true; job: BulkJobStatus; warning: string | null }
+  | { ok: false; status: number; message: string };
+
+function trimTrailingSlash(s: string): string {
+  return s.endsWith("/") ? s.slice(0, -1) : s;
+}
+
+function buildSetupURL(uiOrigin: string | undefined, token: string): string | null {
+  if (!uiOrigin || uiOrigin.length === 0) return null;
+  if (!token || token.length === 0) return null;
+  return `${trimTrailingSlash(uiOrigin)}/setup?token=${encodeURIComponent(token)}`;
+}
+
+export async function getBulkJobStatus(jobId: string): Promise<GetBulkJobStatusResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return { ok: false, status: 503, message: "IdP is not configured." };
+  }
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/jobs/${encodeURIComponent(jobId)}`, {
+      method: "GET",
+      headers: { Cookie: await cookieHeader() },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+      const errData: any = await res.json().catch(() => ({}));
+      const message =
+        typeof errData?.message === "string" && errData.message.length > 0
+          ? errData.message
+          : "Could not load job status.";
+      return { ok: false, status: res.status, message };
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const data: any = await res.json();
+    const type = String(data?.type ?? "");
+    let result: BulkJobResult | null = null;
+    let warning: string | null = null;
+    if (type === "bulk_user_create" && data?.result && typeof data.result === "object") {
+      // biome-ignore lint/suspicious/noExplicitAny: raw executor result shape
+      const r: any = data.result;
+      const rawList = Array.isArray(r.results) ? r.results : [];
+      const projected: BulkJobResultItem[] = rawList.map(
+        // biome-ignore lint/suspicious/noExplicitAny: raw result item shape
+        (it: any): BulkJobResultItem => {
+          // SECURITY: read activation_token only inside this immediate scope,
+          // immediately project it into setup_url, then drop the binding.
+          const rawToken = typeof it.activation_token === "string" ? it.activation_token : "";
+          const setupURL = rawToken ? buildSetupURL(cfg.ui_origin, rawToken) : null;
+          return {
+            email: typeof it.email === "string" ? it.email : "",
+            name: typeof it.name === "string" ? it.name : "",
+            success: Boolean(it.success),
+            error_message:
+              typeof it.error_message === "string" && it.error_message.length > 0
+                ? it.error_message
+                : null,
+            setup_url: setupURL,
+          };
+        }
+      );
+      const anyTokenPresent = rawList.some(
+        // biome-ignore lint/suspicious/noExplicitAny: raw result item shape
+        (it: any) => typeof it.activation_token === "string" && it.activation_token.length > 0
+      );
+      if (anyTokenPresent && (!cfg.ui_origin || cfg.ui_origin.length === 0)) {
+        warning =
+          "Setup URLs could not be constructed because ui_origin is not configured in the UI runtime. Configure ui_origin to surface one-time setup links.";
+      }
+      result = {
+        results: projected,
+        created: typeof r.created === "number" ? r.created : 0,
+        failed: typeof r.failed === "number" ? r.failed : 0,
+        total: typeof r.total === "number" ? r.total : 0,
+      };
+    }
+    return {
+      ok: true,
+      job: {
+        id: String(data?.id ?? ""),
+        type,
+        status: String(data?.status ?? ""),
+        created_at: typeof data?.created_at === "string" ? data.created_at : "",
+        started_at: typeof data?.started_at === "string" ? data.started_at : null,
+        completed_at: typeof data?.completed_at === "string" ? data.completed_at : null,
+        result,
+      },
+      warning,
+    };
+  } catch {
+    return { ok: false, status: 0, message: "Network error. Try again." };
+  }
+}
+
+// ── Approve pending registration (POST /api/v1/users/:id/approve) ────────────
+//
+// Backend contract (gograph-verified):
+//   - Empty request body.
+//   - Service guard: only users with banned=true && role=org_user are
+//     approvable. Mismatches return ErrInvalidRequest → 400.
+//   - Authorization: org_admin (own org) or site_admin in orgs with zero
+//     active org_admins. Cross-org or wrong-role → 403.
+//   - Response: UserResponse {success, message, user, activation_url?}
+//     activation_url is set only in air-gapped deployments. Treated as a
+//     one-time copy-once secret on the UI.
+
+export type ApproveRegistrationResult =
+  | { ok: true; activationUrl: string | null }
+  | { ok: false; status: number; message: string };
+
+export async function approveUserRegistration(userId: string): Promise<ApproveRegistrationResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return { ok: false, status: 503, message: "IdP is not configured." };
+  }
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/approve`,
+      {
+        method: "POST",
+        headers: { Cookie: await cookieHeader() },
+        cache: "no-store",
+      }
+    );
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const data: any = await res.json().catch(() => ({}));
+    if (res.ok && data?.success) {
+      const url =
+        typeof data?.activation_url === "string" && data.activation_url.length > 0
+          ? data.activation_url
+          : null;
+      return { ok: true, activationUrl: url };
+    }
+    const message =
+      typeof data?.message === "string" && data.message.length > 0
+        ? data.message
+        : "Could not approve registration.";
+    return { ok: false, status: res.status, message };
+  } catch {
+    return { ok: false, status: 0, message: "Network error. Try again." };
+  }
+}
+
+// ── List roles assigned to a user (GET /api/v1/users/:id/roles) ──────────────
+//
+// Backend contract (gograph-verified):
+//   - Response: {"roles":[OrgRoleResponse]}
+//   - OrgRoleResponse fields: id, org_id, name, description, scopes[],
+//     created_at, updated_at.
+//   - UI projection drops org_id (not needed for org-admin view).
+
+export type ListUserRolesResult =
+  | { ok: true; roles: OrgRoleItem[] }
+  | { ok: false; status: number; forbidden: boolean };
+
+export async function listUserRoles(userId: string): Promise<ListUserRolesResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, forbidden: false };
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/roles`, {
+      method: "GET",
+      headers: { Cookie: await cookieHeader() },
+      cache: "no-store",
+    });
+    if (res.status === 403) return { ok: false, status: 403, forbidden: true };
+    if (!res.ok) return { ok: false, status: res.status, forbidden: false };
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const d: any = await res.json();
+    const rawList = Array.isArray(d?.roles) ? d.roles : [];
+    const roles: OrgRoleItem[] = rawList.map((r: Record<string, unknown>) => ({
+      id: typeof r.id === "string" ? r.id : "",
+      name: typeof r.name === "string" ? r.name : "",
+      description: typeof r.description === "string" ? r.description : "",
+      scopes: Array.isArray(r.scopes) ? r.scopes.map((s: unknown) => String(s)) : [],
+      created_at: typeof r.created_at === "string" ? r.created_at : "",
+      updated_at: typeof r.updated_at === "string" ? r.updated_at : "",
+    }));
+    return { ok: true, roles };
+  } catch {
+    return { ok: false, status: 0, forbidden: false };
+  }
+}
+
+// ── Assign role to user (POST /api/v1/users/:id/roles) ───────────────────────
+//
+// Backend contract (gograph-verified):
+//   - Request: {"role_id":"<uuid>"}
+//   - Response: 204 No Content.
+//   - Idempotent at the repository layer via ON CONFLICT (user_id, role_id)
+//     DO NOTHING — re-assigning an already-assigned role silently succeeds.
+//   - Same-org guard: targetUser.OrganizationID must match role.OrgID, else 403.
+//   - Side effect: all of the target user's sessions are revoked.
+
+export type AssignUserRoleResult = { ok: true } | { ok: false; status: number; message: string };
+
+export async function assignUserRole(
+  userId: string,
+  roleId: string
+): Promise<AssignUserRoleResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return { ok: false, status: 503, message: "IdP is not configured." };
+  }
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/roles`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: await cookieHeader(),
+      },
+      body: JSON.stringify({ role_id: roleId }),
+      cache: "no-store",
+    });
+    if (res.status === 204 || res.ok) return { ok: true };
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const data: any = await res.json().catch(() => ({}));
+    const message =
+      typeof data?.message === "string" && data.message.length > 0
+        ? data.message
+        : "Could not assign the role.";
+    return { ok: false, status: res.status, message };
+  } catch {
+    return { ok: false, status: 0, message: "Network error. Try again." };
+  }
+}
+
+// ── Remove role from user (DELETE /api/v1/users/:id/roles/:role_id) ──────────
+//
+// Backend contract (gograph-verified):
+//   - Response: 204 No Content.
+//   - Removing a non-existent binding silently succeeds (DELETE with no match
+//     returns no error from the repository).
+//   - Same-org guard: mismatched org returns 403.
+//   - Side effect: all of the target user's sessions are revoked.
+
+export type RemoveUserRoleResult = { ok: true } | { ok: false; status: number; message: string };
+
+export async function removeUserRole(
+  userId: string,
+  roleId: string
+): Promise<RemoveUserRoleResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return { ok: false, status: 503, message: "IdP is not configured." };
+  }
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/roles/${encodeURIComponent(roleId)}`,
+      {
+        method: "DELETE",
+        headers: { Cookie: await cookieHeader() },
+        cache: "no-store",
+      }
+    );
+    if (res.status === 204 || res.ok) return { ok: true };
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const data: any = await res.json().catch(() => ({}));
+    const message =
+      typeof data?.message === "string" && data.message.length > 0
+        ? data.message
+        : "Could not remove the role.";
+    return { ok: false, status: res.status, message };
+  } catch {
+    return { ok: false, status: 0, message: "Network error. Try again." };
+  }
+}
+
+// ── Org-admin API Resources (CRUD on /api/v1/api-resources) ──────────────────
+//
+// Backend contract (gograph-verified):
+//   - Group base path: /api/v1/api-resources, gated by the
+//     AuthorizationServer license feature (mw.RequireFeature).
+//   - All routes require an org_admin (or site_admin) session and the
+//     OAuth scope orgs:read (reads) or orgs:update (writes).
+//   - APIResourceResponse contains ONLY safe fields:
+//       id, organization_id, name, audience, active, token_ttl_secs,
+//       scopes[{id,name,description}], created_at, updated_at
+//     The domain object's `resource_secret_hash` is NEVER on the wire.
+//   - Create returns a one-time plaintext `secret` at the top-level
+//     envelope { resource, secret } — surface ONCE, never persist.
+//   - Update is partial-replace; audience is IMMUTABLE (no field in the
+//     request struct).
+//   - List ignores any page/page_size query params (handler hardcodes
+//     page=1, page_size=100).
+//   - Delete returns 204 No Content.
+//   - Audit events are emitted with subject_type=organization (not
+//     api_resource). Resource id + name appear only in metadata. The
+//     UI does NOT render a Recent activity card on this surface in
+//     this slice; a backend audit-subject change would be required to
+//     mirror the OAuth client resource-subject pattern.
+
+// ── Safe input/output shapes ────────────────────────────────────────────────
+
+export interface CreateAPIResourceScopeInput {
+  name: string;
+  description: string;
+}
+
+export interface CreateAPIResourceOptions {
+  name: string;
+  audience: string;
+  token_ttl_secs?: number;
+  scopes?: CreateAPIResourceScopeInput[];
+}
+
+export interface UpdateAPIResourceOptions {
+  name?: string;
+  active?: boolean;
+  token_ttl_secs?: number;
+  scopes?: CreateAPIResourceScopeInput[];
+}
+
+/**
+ * Safe wire mapping of the IDP's APIResourceResponse. Sanitises every
+ * field explicitly so a future backend struct expansion that added a
+ * sensitive field (e.g. resource_secret_hash) would NOT silently leak
+ * through to React props.
+ */
+function projectAPIResource(
+  // biome-ignore lint/suspicious/noExplicitAny: raw API response item
+  r: any
+): OrgAPIResourceItem {
+  // SECURITY: explicit allowlist. Do NOT spread `...r` into the result.
+  const rawScopes = Array.isArray(r?.scopes) ? r.scopes : [];
+  const scopes: OrgAPIResourceScope[] = rawScopes.map(
+    // biome-ignore lint/suspicious/noExplicitAny: raw API scope item
+    (s: any): OrgAPIResourceScope => ({
+      id: typeof s?.id === "string" ? s.id : "",
+      name: typeof s?.name === "string" ? s.name : "",
+      description: typeof s?.description === "string" ? s.description : "",
+    })
+  );
+  return {
+    id: typeof r?.id === "string" ? r.id : "",
+    organization_id: typeof r?.organization_id === "string" ? r.organization_id : "",
+    name: typeof r?.name === "string" ? r.name : "",
+    audience: typeof r?.audience === "string" ? r.audience : "",
+    active: Boolean(r?.active),
+    token_ttl_secs: typeof r?.token_ttl_secs === "number" ? r.token_ttl_secs : 0,
+    scopes,
+    created_at: typeof r?.created_at === "string" ? r.created_at : "",
+    updated_at: typeof r?.updated_at === "string" ? r.updated_at : "",
+  };
+}
+
+// ── List API resources ──────────────────────────────────────────────────────
+
+export type ListAPIResourcesResult =
+  | { ok: true; resources: OrgAPIResourceItem[] }
+  | { ok: false; status: number; forbidden: boolean; featureUnavailable: boolean };
+
+export async function listApiResources(): Promise<ListAPIResourcesResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled)
+    return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/api-resources`, {
+      method: "GET",
+      headers: { Cookie: await cookieHeader() },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const failure = await classifyAdminReadFailure(res);
+      return { ok: false, ...failure };
+    }
+    // The IDP handler returns the raw array (no wrapping envelope).
+    const data = await res.json();
+    const rawList = Array.isArray(data) ? data : [];
+    return { ok: true, resources: rawList.map(projectAPIResource) };
+  } catch {
+    return { ok: false, status: 0, forbidden: false, featureUnavailable: false };
+  }
+}
+
+// ── Get a single API resource ───────────────────────────────────────────────
+
+export type GetAPIResourceResult =
+  | { ok: true; resource: OrgAPIResourceItem }
+  | {
+      ok: false;
+      status: number;
+      notFound: boolean;
+      forbidden: boolean;
+      invalid: boolean;
+      featureUnavailable: boolean;
+    };
+
+export async function getApiResource(id: string): Promise<GetAPIResourceResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled)
+    return {
+      ok: false,
+      status: 503,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      featureUnavailable: false,
+    };
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`, {
+      method: "GET",
+      headers: { Cookie: await cookieHeader() },
+      cache: "no-store",
+    });
+    if (res.status === 400)
+      return {
+        ok: false,
+        status: 400,
+        notFound: false,
+        forbidden: false,
+        invalid: true,
+        featureUnavailable: false,
+      };
+    if (res.status === 402)
+      return {
+        ok: false,
+        status: 402,
+        notFound: false,
+        forbidden: false,
+        invalid: false,
+        featureUnavailable: true,
+      };
+    if (res.status === 403)
+      return {
+        ok: false,
+        status: 403,
+        notFound: false,
+        forbidden: true,
+        invalid: false,
+        featureUnavailable: false,
+      };
+    if (res.status === 404)
+      return {
+        ok: false,
+        status: 404,
+        notFound: true,
+        forbidden: false,
+        invalid: false,
+        featureUnavailable: false,
+      };
+    if (!res.ok)
+      return {
+        ok: false,
+        status: res.status,
+        notFound: false,
+        forbidden: false,
+        invalid: false,
+        featureUnavailable: false,
+      };
+    const data = await res.json();
+    return { ok: true, resource: projectAPIResource(data) };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      featureUnavailable: false,
+    };
+  }
+}
+
+// ── Create API resource (returns one-time plaintext secret) ─────────────────
+
+export interface CreatedAPIResource extends OrgAPIResourceItem {
+  /**
+   * SINGLE-SHOT plaintext secret returned by the IDP exactly once on
+   * create. The wire helper keeps the field so the calling server
+   * action can surface it in the copy-once success panel; subsequent
+   * fetches never re-issue it.
+   */
+  secret: string;
+}
+
+export type CreateAPIResourceResult =
+  | { ok: true; data: CreatedAPIResource }
+  | {
+      ok: false;
+      status: number;
+      conflict: boolean;
+      invalid: boolean;
+      forbidden: boolean;
+      featureUnavailable: boolean;
+      message: string;
+    };
+
+export async function createApiResource(
+  opts: CreateAPIResourceOptions
+): Promise<CreateAPIResourceResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled)
+    return {
+      ok: false,
+      status: 503,
+      conflict: false,
+      invalid: false,
+      forbidden: false,
+      featureUnavailable: false,
+      message: "IdP is not configured.",
+    };
+  // Explicit allowlist body — no organization_id, no audience-after-create
+  // surprises, no secret echoes.
+  // biome-ignore lint/suspicious/noExplicitAny: typed body literal
+  const body: Record<string, any> = {
+    name: opts.name,
+    audience: opts.audience,
+  };
+  if (typeof opts.token_ttl_secs === "number") body.token_ttl_secs = opts.token_ttl_secs;
+  if (Array.isArray(opts.scopes) && opts.scopes.length > 0)
+    body.scopes = opts.scopes.map((s) => ({ name: s.name, description: s.description }));
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/api-resources`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: await cookieHeader(),
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const data: any = await res.json().catch(() => ({}));
+    if (res.status === 201 || res.ok) {
+      const projected = projectAPIResource(data?.resource);
+      // SECURITY: take the one-time secret straight from the envelope. The
+      // raw `data.secret` is read once here and is gone after this call
+      // returns to the server action.
+      const secret = typeof data?.secret === "string" ? data.secret : "";
+      return { ok: true, data: { ...projected, secret } };
+    }
+    const message =
+      typeof data?.message === "string" && data.message.length > 0
+        ? data.message
+        : "Could not create the API resource.";
+    if (res.status === 402)
+      return {
+        ok: false,
+        status: 402,
+        conflict: false,
+        invalid: false,
+        forbidden: false,
+        featureUnavailable: true,
+        message,
+      };
+    if (res.status === 409)
+      return {
+        ok: false,
+        status: 409,
+        conflict: true,
+        invalid: false,
+        forbidden: false,
+        featureUnavailable: false,
+        message,
+      };
+    if (res.status === 403)
+      return {
+        ok: false,
+        status: 403,
+        conflict: false,
+        invalid: false,
+        forbidden: true,
+        featureUnavailable: false,
+        message,
+      };
+    if (res.status === 400 || res.status === 422)
+      return {
+        ok: false,
+        status: res.status,
+        conflict: false,
+        invalid: true,
+        forbidden: false,
+        featureUnavailable: false,
+        message,
+      };
+    return {
+      ok: false,
+      status: res.status,
+      conflict: false,
+      invalid: false,
+      forbidden: false,
+      featureUnavailable: false,
+      message,
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      conflict: false,
+      invalid: false,
+      forbidden: false,
+      featureUnavailable: false,
+      message: "Network error. Please try again.",
+    };
+  }
+}
+
+// ── Update API resource (partial — audience is IMMUTABLE) ───────────────────
+
+export type UpdateAPIResourceResult =
+  | { ok: true; resource: OrgAPIResourceItem }
+  | {
+      ok: false;
+      status: number;
+      notFound: boolean;
+      forbidden: boolean;
+      invalid: boolean;
+      featureUnavailable: boolean;
+      message: string;
+    };
+
+export async function updateApiResource(
+  id: string,
+  opts: UpdateAPIResourceOptions
+): Promise<UpdateAPIResourceResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled)
+    return {
+      ok: false,
+      status: 503,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      featureUnavailable: false,
+      message: "IdP is not configured.",
+    };
+  // biome-ignore lint/suspicious/noExplicitAny: typed body literal
+  const body: Record<string, any> = {};
+  if (typeof opts.name === "string") body.name = opts.name;
+  if (typeof opts.active === "boolean") body.active = opts.active;
+  if (typeof opts.token_ttl_secs === "number") body.token_ttl_secs = opts.token_ttl_secs;
+  if (Array.isArray(opts.scopes))
+    body.scopes = opts.scopes.map((s) => ({ name: s.name, description: s.description }));
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: await cookieHeader(),
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const data: any = await res.json().catch(() => ({}));
+    if (res.ok) {
+      return { ok: true, resource: projectAPIResource(data) };
+    }
+    const message =
+      typeof data?.message === "string" && data.message.length > 0
+        ? data.message
+        : "Could not update the API resource.";
+    if (res.status === 402)
+      return {
+        ok: false,
+        status: 402,
+        notFound: false,
+        forbidden: false,
+        invalid: false,
+        featureUnavailable: true,
+        message,
+      };
+    if (res.status === 403)
+      return {
+        ok: false,
+        status: 403,
+        notFound: false,
+        forbidden: true,
+        invalid: false,
+        featureUnavailable: false,
+        message,
+      };
+    if (res.status === 404)
+      return {
+        ok: false,
+        status: 404,
+        notFound: true,
+        forbidden: false,
+        invalid: false,
+        featureUnavailable: false,
+        message,
+      };
+    if (res.status === 400 || res.status === 422)
+      return {
+        ok: false,
+        status: res.status,
+        notFound: false,
+        forbidden: false,
+        invalid: true,
+        featureUnavailable: false,
+        message,
+      };
+    return {
+      ok: false,
+      status: res.status,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      featureUnavailable: false,
+      message,
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      featureUnavailable: false,
+      message: "Network error. Please try again.",
+    };
+  }
+}
+
+// ── Rotate API resource secret (POST :id/secret/regenerate) ─────────────────
+//
+// Backend contract (gograph-verified):
+//   - Route: POST /api/v1/api-resources/:id/secret/regenerate
+//   - Middleware: HybridAuth → DenyConsentPurposeSession →
+//     RequireFeature(AuthorizationServer) → RequireScopesAny(orgs:update)
+//   - Service guards: tenant scope on org_admin (cross-org → 403),
+//     guardSiteAdminTenantAPIResource for site_admin actors.
+//   - Request: no body, no Content-Type — empty POST.
+//   - Response on success: RegenerateAPIResourceSecretResponse{ID, Secret}
+//     — a {id, secret} envelope where Secret is the ONE-TIME plaintext
+//     (32 bytes generated via crypto.GenerateRandomString, SHA-256
+//     hashed for storage). The old hash is replaced atomically; any
+//     future authentication using the old secret will fail. EXISTING
+//     access tokens issued for this audience continue to validate at
+//     the resource server until they expire because token verification
+//     uses the IDP's signing keys, not the resource secret.
+//   - Side effects: AuditAPIResourceSecretRotated event (org-subject);
+//     api_auth cache key for the old hash is deleted.
+//   - Error mapping: 400 invalid UUID; 402 missing AuthorizationServer
+//     license; 403 forbidden / cross-org; 404 not found.
+
+export type RotateAPIResourceSecretResult =
+  | { ok: true; data: { id: string; secret: string } }
+  | {
+      ok: false;
+      status: number;
+      notFound: boolean;
+      forbidden: boolean;
+      invalid: boolean;
+      featureUnavailable: boolean;
+      message: string;
+    };
+
+export async function rotateApiResourceSecret(id: string): Promise<RotateAPIResourceSecretResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return {
+      ok: false,
+      status: 503,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      featureUnavailable: false,
+      message: "IdP is not configured.",
+    };
+  }
+  try {
+    // No `body:`, no `Content-Type` header — empty POST. Tenant scope
+    // is server-enforced from the actor's session cookie. The request
+    // CANNOT carry organization_id, resource_secret, secret_hash, or
+    // any other field by construction.
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}/secret/regenerate`,
+      {
+        method: "POST",
+        headers: { Cookie: await cookieHeader() },
+        cache: "no-store",
+      }
+    );
+    if (res.status === 400)
+      return {
+        ok: false,
+        status: 400,
+        notFound: false,
+        forbidden: false,
+        invalid: true,
+        featureUnavailable: false,
+        message: "The API resource secret could not be rotated with the supplied id.",
+      };
+    if (res.status === 402)
+      return {
+        ok: false,
+        status: 402,
+        notFound: false,
+        forbidden: false,
+        invalid: false,
+        featureUnavailable: true,
+        message: "The API resource endpoint is not available from this IDP backend.",
+      };
+    if (res.status === 403)
+      return {
+        ok: false,
+        status: 403,
+        notFound: false,
+        forbidden: true,
+        invalid: false,
+        featureUnavailable: false,
+        message: "You do not have permission to rotate this API resource's secret.",
+      };
+    if (res.status === 404)
+      return {
+        ok: false,
+        status: 404,
+        notFound: true,
+        forbidden: false,
+        invalid: false,
+        featureUnavailable: false,
+        message: "The API resource was not found.",
+      };
+    if (!res.ok)
+      return {
+        ok: false,
+        status: res.status,
+        notFound: false,
+        forbidden: false,
+        invalid: false,
+        featureUnavailable: false,
+        message: "Could not rotate the API resource secret. Please try again.",
+      };
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const d: any = await res.json();
+    // Explicit projection — the backend RegenerateAPIResourceSecretResponse
+    // carries ONLY {id, secret}. Any other key returned by a future
+    // backend regression is dropped on the floor here.
+    return {
+      ok: true,
+      data: {
+        id: typeof d?.id === "string" ? d.id : "",
+        secret: typeof d?.secret === "string" ? d.secret : "",
+      },
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      featureUnavailable: false,
+      message: "Network error. Please try again.",
+    };
+  }
+}
+
+// ── Delete API resource (204) ───────────────────────────────────────────────
+
+export type DeleteAPIResourceResult =
+  | { ok: true }
+  | {
+      ok: false;
+      status: number;
+      notFound: boolean;
+      forbidden: boolean;
+      invalid: boolean;
+      featureUnavailable: boolean;
+      message: string;
+    };
+
+export async function deleteApiResource(id: string): Promise<DeleteAPIResourceResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled)
+    return {
+      ok: false,
+      status: 503,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      featureUnavailable: false,
+      message: "IdP is not configured.",
+    };
+  try {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { Cookie: await cookieHeader() },
+      cache: "no-store",
+    });
+    if (res.status === 204 || res.ok) return { ok: true };
+    if (res.status === 400)
+      return {
+        ok: false,
+        status: 400,
+        notFound: false,
+        forbidden: false,
+        invalid: true,
+        featureUnavailable: false,
+        message: "The API resource could not be deleted with the supplied id.",
+      };
+    if (res.status === 402)
+      return {
+        ok: false,
+        status: 402,
+        notFound: false,
+        forbidden: false,
+        invalid: false,
+        featureUnavailable: true,
+        message: "The API resource endpoint is not available from this IDP backend.",
+      };
+    if (res.status === 403)
+      return {
+        ok: false,
+        status: 403,
+        notFound: false,
+        forbidden: true,
+        invalid: false,
+        featureUnavailable: false,
+        message: "You do not have permission to delete this API resource.",
+      };
+    if (res.status === 404)
+      return {
+        ok: false,
+        status: 404,
+        notFound: true,
+        forbidden: false,
+        invalid: false,
+        featureUnavailable: false,
+        message: "The API resource was not found. It may have been removed already.",
+      };
+    return {
+      ok: false,
+      status: res.status,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      featureUnavailable: false,
+      message: "Could not delete API resource. Please try again.",
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      featureUnavailable: false,
+      message: "Network error. Please try again.",
+    };
+  }
+}
+
+// ── Org-admin Service Accounts (CRUD on /api/v1/organizations/:id/service-accounts) ──
+//
+// Backend contract (gograph-verified):
+//   - Three routes exposed by identuum-idp:
+//       GET    /api/v1/organizations/:id/service-accounts          (list, m2m:read)
+//       POST   /api/v1/organizations/:id/service-accounts          (create, m2m:create)
+//       DELETE /api/v1/organizations/:id/service-accounts/:sa_id   (soft delete, m2m:delete)
+//   - There is NO get-by-id route. The detail page reuses the list
+//     response and filters client-side.
+//   - There is NO update / disable / enable / credential issuance /
+//     credential rotation route on identuum-idp. The UI surface
+//     exposes only the three operations above.
+//   - The IDP DTO `types.ServiceAccount` is intentionally narrow — it
+//     carries id / organization_id / name / description / role /
+//     created_at / updated_at and NOTHING ELSE. NO credential, NO
+//     secret, NO hash, NO private-key field appears on any service-
+//     account route response (the mapper drops Active / ExpiresAt /
+//     OwnerUserID / OriginPeerID / OriginSPIFFEID from the DB row).
+//   - Authorization: only org_admin acting on their own organization
+//     can list/create/delete. site_admin is HARD 403 by service guard.
+
+// ── Safe wire shapes ───────────────────────────────────────────────────────
+
+export interface CreateServiceAccountOptions {
+  name: string;
+  description?: string;
+  /** "org_user" | "org_admin" — falls back to "org_admin" server-side when empty. */
+  role?: string;
+  /** Optional ISO-8601 timestamp; backend caps per org's ServiceAccountExpiryDays policy. */
+  expires_at?: string;
+}
+
+/**
+ * Safe wire mapping of the IDP's types.ServiceAccount. Explicit
+ * allowlist — never spreads `...r` so a future backend struct
+ * expansion that added a sensitive field (e.g. credential / token /
+ * private_key) would NOT silently leak through to React props.
+ */
+function projectServiceAccount(
+  // biome-ignore lint/suspicious/noExplicitAny: raw API response item
+  r: any
+): OrgServiceAccountItem {
+  return {
+    id: typeof r?.id === "string" ? r.id : "",
+    organization_id: typeof r?.organization_id === "string" ? r.organization_id : "",
+    name: typeof r?.name === "string" ? r.name : "",
+    description: typeof r?.description === "string" ? r.description : "",
+    role: typeof r?.role === "string" ? r.role : "",
+    // Slice identuum-20260530-service-account-active-dto-backend
+    // wires the field onto the wire DTO; slice
+    // identuum-20260530-service-account-disable-enable-ui-reload-
+    // validation proves the persistent Active/Disabled badge round-
+    // trips through a Playwright reload. The defensive fallback to
+    // `true` is preserved purely as a version-skew safety net (e.g.
+    // a newer UI talking to an older IDP container during a rolling
+    // deploy); the happy path always reads the boolean directly.
+    active: typeof r?.active === "boolean" ? r.active : true,
+    created_at: typeof r?.created_at === "string" ? r.created_at : "",
+    updated_at: typeof r?.updated_at === "string" ? r.updated_at : "",
+  };
+}
+
+// ── List service accounts ──────────────────────────────────────────────────
+
+export type ListServiceAccountsResult =
+  | { ok: true; serviceAccounts: OrgServiceAccountItem[] }
+  | { ok: false; status: number; forbidden: boolean; featureUnavailable: boolean };
+
+export async function listServiceAccounts(orgID: string): Promise<ListServiceAccountsResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled)
+    return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/service-accounts`,
+      { method: "GET", headers: { Cookie: await cookieHeader() }, cache: "no-store" }
+    );
+    if (!res.ok) {
+      const failure = await classifyAdminReadFailure(res);
+      return { ok: false, ...failure };
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const d: any = await res.json();
+    const rawList = Array.isArray(d?.service_accounts) ? d.service_accounts : [];
+    return { ok: true, serviceAccounts: rawList.map(projectServiceAccount) };
+  } catch {
+    return { ok: false, status: 0, forbidden: false, featureUnavailable: false };
+  }
+}
+
+// ── Create service account (NEVER returns a credential) ───────────────────
+
+export type CreateServiceAccountResult =
+  | { ok: true; serviceAccount: OrgServiceAccountItem }
+  | {
+      ok: false;
+      status: number;
+      conflict: boolean;
+      invalid: boolean;
+      forbidden: boolean;
+      message: string;
+    };
+
+export async function createServiceAccount(
+  orgID: string,
+  opts: CreateServiceAccountOptions
+): Promise<CreateServiceAccountResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return {
+      ok: false,
+      status: 503,
+      conflict: false,
+      invalid: false,
+      forbidden: false,
+      message: "IdP is not configured.",
+    };
+  }
+  // biome-ignore lint/suspicious/noExplicitAny: typed body literal
+  const body: Record<string, any> = { name: opts.name };
+  if (typeof opts.description === "string") body.description = opts.description;
+  if (typeof opts.role === "string") body.role = opts.role;
+  if (typeof opts.expires_at === "string" && opts.expires_at.length > 0) {
+    body.expires_at = opts.expires_at;
+  }
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/service-accounts`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: await cookieHeader(),
+        },
+        body: JSON.stringify(body),
+        cache: "no-store",
+      }
+    );
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const data: any = await res.json().catch(() => ({}));
+    if (res.status === 201 || res.ok) {
+      return { ok: true, serviceAccount: projectServiceAccount(data) };
+    }
+    const message =
+      typeof data?.message === "string" && data.message.length > 0
+        ? data.message
+        : "Could not create the service account.";
+    if (res.status === 409)
+      return {
+        ok: false,
+        status: 409,
+        conflict: true,
+        invalid: false,
+        forbidden: false,
+        message,
+      };
+    if (res.status === 403)
+      return {
+        ok: false,
+        status: 403,
+        conflict: false,
+        invalid: false,
+        forbidden: true,
+        message,
+      };
+    if (res.status === 400 || res.status === 422)
+      return {
+        ok: false,
+        status: res.status,
+        conflict: false,
+        invalid: true,
+        forbidden: false,
+        message,
+      };
+    return {
+      ok: false,
+      status: res.status,
+      conflict: false,
+      invalid: false,
+      forbidden: false,
+      message,
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      conflict: false,
+      invalid: false,
+      forbidden: false,
+      message: "Network error. Please try again.",
+    };
+  }
+}
+
+// ── Delete service account (soft delete, 204 No Content) ──────────────────
+
+export type DeleteServiceAccountResult =
+  | { ok: true }
+  | {
+      ok: false;
+      status: number;
+      notFound: boolean;
+      forbidden: boolean;
+      invalid: boolean;
+      message: string;
+    };
+
+export async function deleteServiceAccount(
+  orgID: string,
+  saID: string
+): Promise<DeleteServiceAccountResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return {
+      ok: false,
+      status: 503,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      message: "IdP is not configured.",
+    };
+  }
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/service-accounts/${encodeURIComponent(saID)}`,
+      {
+        method: "DELETE",
+        headers: { Cookie: await cookieHeader() },
+        cache: "no-store",
+      }
+    );
+    if (res.status === 204 || res.ok) return { ok: true };
+    if (res.status === 400)
+      return {
+        ok: false,
+        status: 400,
+        notFound: false,
+        forbidden: false,
+        invalid: true,
+        message: "The service account could not be deleted with the supplied id.",
+      };
+    if (res.status === 403)
+      return {
+        ok: false,
+        status: 403,
+        notFound: false,
+        forbidden: true,
+        invalid: false,
+        message: "You do not have permission to delete this service account.",
+      };
+    if (res.status === 404)
+      return {
+        ok: false,
+        status: 404,
+        notFound: true,
+        forbidden: false,
+        invalid: false,
+        message: "The service account was not found. It may have been removed already.",
+      };
+    return {
+      ok: false,
+      status: res.status,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      message: "Could not delete service account. Please try again.",
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      message: "Network error. Please try again.",
+    };
+  }
+}
+
+// ── Link a Service Account to an OAuth client (POST :id/service-accounts/:sa_id/oauth-clients/:oauth_client_id/link) ──
+//
+// Backend contract (gograph-verified in the matching backend slice
+// identuum-20260530-service-account-oauth-client-link-backend):
+//   - Route: POST /api/v1/organizations/:id/service-accounts/:sa_id/oauth-clients/:oauth_client_id/link
+//   - Middleware: HybridAuth + DenyConsentPurposeSession + RequireScopesAny(m2m:create)
+//   - Triple-layered authorization: handler-level role check (org_admin
+//     only) + URL-org match (claims.OrganizationID == :id) + service-
+//     layer same-org guards on both halves (M2MService.GetServiceAccount
+//     and ClientService.GetClient).
+//   - Empty POST body.
+//   - Response: 200 OK with the LinkServiceAccountResponse shape — six
+//     safe identifiers only (success, message, organization_id,
+//     service_account_id, oauth_client_uuid, oauth_client_identifier).
+//     NO client_secret / client_secret_hash / service-account credential
+//     / private-key / token / cookie / session-id is part of the
+//     contract.
+//   - No new credential is issued. The mutation is a single column
+//     update on oauth_clients.service_account_id; existing
+//     client_secret_hash is untouched.
+
+export interface LinkedServiceAccountToOAuthClient {
+  organization_id: string;
+  service_account_id: string;
+  oauth_client_uuid: string;
+  oauth_client_identifier: string;
+}
+
+export type LinkServiceAccountToOAuthClientResult =
+  | { ok: true; data: LinkedServiceAccountToOAuthClient }
+  | {
+      ok: false;
+      status: number;
+      notFound: boolean;
+      forbidden: boolean;
+      invalid: boolean;
+      message: string;
+    };
+
+export async function linkServiceAccountToOAuthClient(
+  orgID: string,
+  serviceAccountID: string,
+  oauthClientID: string
+): Promise<LinkServiceAccountToOAuthClientResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return {
+      ok: false,
+      status: 503,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      message: "IdP is not configured.",
+    };
+  }
+  try {
+    // Empty POST — no body, no Content-Type header. Path params carry
+    // all three resource ids. Tenant scope is server-enforced from the
+    // session cookie and re-validated at the service layer on both
+    // halves.
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}` +
+        `/service-accounts/${encodeURIComponent(serviceAccountID)}` +
+        `/oauth-clients/${encodeURIComponent(oauthClientID)}/link`,
+      {
+        method: "POST",
+        headers: { Cookie: await cookieHeader() },
+        cache: "no-store",
+      }
+    );
+    if (res.status === 400)
+      return {
+        ok: false,
+        status: 400,
+        notFound: false,
+        forbidden: false,
+        invalid: true,
+        message: "The link request was rejected — check the supplied identifiers.",
+      };
+    if (res.status === 403)
+      return {
+        ok: false,
+        status: 403,
+        notFound: false,
+        forbidden: true,
+        invalid: false,
+        message: "You do not have permission to link this service account.",
+      };
+    if (res.status === 404)
+      return {
+        ok: false,
+        status: 404,
+        notFound: true,
+        forbidden: false,
+        invalid: false,
+        message: "Service account or OAuth client not found.",
+      };
+    if (!res.ok)
+      return {
+        ok: false,
+        status: res.status,
+        notFound: false,
+        forbidden: false,
+        invalid: false,
+        message: "Could not link the service account. Please try again.",
+      };
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const d: any = await res.json().catch(() => ({}));
+    // Explicit projection — the backend LinkServiceAccountResponse
+    // carries ONLY four operational identifiers (organization_id,
+    // service_account_id, oauth_client_uuid, oauth_client_identifier).
+    // Any other key a future backend regression returned would be
+    // dropped on the floor here.
+    return {
+      ok: true,
+      data: {
+        organization_id: typeof d?.organization_id === "string" ? d.organization_id : "",
+        service_account_id: typeof d?.service_account_id === "string" ? d.service_account_id : "",
+        oauth_client_uuid: typeof d?.oauth_client_uuid === "string" ? d.oauth_client_uuid : "",
+        oauth_client_identifier:
+          typeof d?.oauth_client_identifier === "string" ? d.oauth_client_identifier : "",
+      },
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      message: "Network error. Please try again.",
+    };
+  }
+}
+
+// ── unlinkServiceAccountFromOAuthClient (slice identuum-20260530-service-account-oauth-client-unlink-ui) ──
+//
+// Wire helper for the org-admin "Unlink OAuth client" action on the SA
+// detail page. Calls the IDP backend route added in the prior backend
+// slice:
+//   DELETE /api/v1/organizations/:id/service-accounts/:sa_id/oauth-clients/:oauth_client_id/link
+//
+// Contract:
+//   - Path params carry all three resource ids (encodeURIComponent on each).
+//   - NO request body, NO Content-Type header.
+//   - Authentication via the forwarded session cookie. Authorization is
+//     enforced server-side (org_admin role + URL :id == claims.OrganizationID
+//     + M2MService.GetServiceAccount + ClientService.GetClient + a
+//     same-org cross-check + ClientService.UnlinkServiceAccount's
+//     link-state invariant).
+//   - Response status mapping:
+//       200 → ok with safe identifiers projection.
+//       400 → invalid (malformed UUID path segments).
+//       403 → forbidden (role / URL-org / cross-org rejection).
+//       404 → notFound (missing OAuth client).
+//       409 → notLinked (client is not currently linked to the requested SA;
+//             same sentinel for "linked to a different SA" — backend does
+//             not disclose which SA the client is actually linked to).
+//   - Explicit projection of the 6 documented safe fields from the
+//     backend UnlinkServiceAccountResponse:
+//       success, message, organization_id, service_account_id,
+//       previously_linked_oauth_client_uuid,
+//       previously_linked_oauth_client_identifier.
+//     No client_secret / client_secret_hash / service-account credential
+//     / private-key / token / cookie / session-id field is part of the
+//     contract or this projection.
+//   - No new credential is issued. The mutation sets
+//     oauth_clients.service_account_id to NULL; existing
+//     client_secret_hash is untouched.
+
+export interface UnlinkedServiceAccountFromOAuthClient {
+  organization_id: string;
+  service_account_id: string;
+  previously_linked_oauth_client_uuid: string;
+  previously_linked_oauth_client_identifier: string;
+}
+
+export type UnlinkServiceAccountFromOAuthClientResult =
+  | { ok: true; data: UnlinkedServiceAccountFromOAuthClient }
+  | {
+      ok: false;
+      status: number;
+      notFound: boolean;
+      forbidden: boolean;
+      invalid: boolean;
+      notLinked: boolean;
+      message: string;
+    };
+
+export async function unlinkServiceAccountFromOAuthClient(
+  orgID: string,
+  serviceAccountID: string,
+  oauthClientID: string
+): Promise<UnlinkServiceAccountFromOAuthClientResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return {
+      ok: false,
+      status: 503,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      notLinked: false,
+      message: "IdP is not configured.",
+    };
+  }
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}` +
+        `/service-accounts/${encodeURIComponent(serviceAccountID)}` +
+        `/oauth-clients/${encodeURIComponent(oauthClientID)}/link`,
+      {
+        method: "DELETE",
+        headers: { Cookie: await cookieHeader() },
+        cache: "no-store",
+      }
+    );
+    if (res.status === 400)
+      return {
+        ok: false,
+        status: 400,
+        notFound: false,
+        forbidden: false,
+        invalid: true,
+        notLinked: false,
+        message: "The unlink request was rejected — check the supplied identifiers.",
+      };
+    if (res.status === 403)
+      return {
+        ok: false,
+        status: 403,
+        notFound: false,
+        forbidden: true,
+        invalid: false,
+        notLinked: false,
+        message: "You do not have permission to unlink this service account.",
+      };
+    if (res.status === 404)
+      return {
+        ok: false,
+        status: 404,
+        notFound: true,
+        forbidden: false,
+        invalid: false,
+        notLinked: false,
+        message: "Service account or OAuth client not found.",
+      };
+    if (res.status === 409)
+      return {
+        ok: false,
+        status: 409,
+        notFound: false,
+        forbidden: false,
+        invalid: false,
+        notLinked: true,
+        message:
+          "OAuth client is not currently linked to this service account. Reload the page and try again.",
+      };
+    if (!res.ok)
+      return {
+        ok: false,
+        status: res.status,
+        notFound: false,
+        forbidden: false,
+        invalid: false,
+        notLinked: false,
+        message: "Could not unlink the service account. Please try again.",
+      };
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const d: any = await res.json().catch(() => ({}));
+    // Explicit projection of the four operational identifiers documented
+    // on the backend UnlinkServiceAccountResponse. Any other key a
+    // future backend regression returned would be dropped on the floor.
+    return {
+      ok: true,
+      data: {
+        organization_id: typeof d?.organization_id === "string" ? d.organization_id : "",
+        service_account_id: typeof d?.service_account_id === "string" ? d.service_account_id : "",
+        previously_linked_oauth_client_uuid:
+          typeof d?.previously_linked_oauth_client_uuid === "string"
+            ? d.previously_linked_oauth_client_uuid
+            : "",
+        previously_linked_oauth_client_identifier:
+          typeof d?.previously_linked_oauth_client_identifier === "string"
+            ? d.previously_linked_oauth_client_identifier
+            : "",
+      },
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      notFound: false,
+      forbidden: false,
+      invalid: false,
+      notLinked: false,
+      message: "Network error. Please try again.",
+    };
+  }
+}
+
+// ── listServiceAccountOAuthClients (slice identuum-20260530-service-account-linked-clients-read-model-ui) ──
+//
+// Wire helper for the org-admin "linked OAuth clients" read on the SA
+// detail page. Calls the IDP backend route added by the prior backend
+// slice:
+//   GET /api/v1/organizations/:id/service-accounts/:sa_id/oauth-clients
+//
+// Backend response shape (verbatim from
+// identuum-idp/internal/handlers/handler_service_account_oauth_clients.go):
+//   {
+//     "success": true,
+//     "oauth_clients": [
+//       { "id", "client_id", "name", "is_public", "active",
+//         "created_at", "updated_at" }
+//     ]
+//   }
+//
+// Contract:
+//   - GET; NO request body, NO Content-Type header.
+//   - Authentication via the forwarded session cookie. Authorization is
+//     enforced server-side (org_admin role + URL :id ==
+//     claims.OrganizationID + M2MService.GetServiceAccount + the repo
+//     SQL filter on organization_id + deleted_at IS NULL).
+//   - 200 → ok with explicit 7-field projection per row; empty array
+//     when nothing is linked; multiple rows when the backend's
+//     LIMIT-2 invariant detection has surfaced a data-integrity issue.
+//     The helper preserves whatever the backend returned (operator
+//     visibility) rather than silently filtering.
+//   - 400 → invalid (malformed UUID path segments).
+//   - 403 → forbidden (role / URL-org / cross-org / missing-SA via
+//     existence-oracle masking).
+//   - Other non-2xx → generic safe error.
+//   - NEVER exposes client_secret / client_secret_hash / service-
+//     account credential / private key / signing key / token / cookie /
+//     session-id (none of those fields exist in the backend DTO; the
+//     allowlist projection is an additional belt-and-suspenders guard
+//     against a future backend regression).
+
+export interface LinkedOAuthClientForServiceAccount {
+  id: string;
+  client_id: string;
+  name: string;
+  is_public: boolean;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ListServiceAccountOAuthClientsResult =
+  | { ok: true; oauth_clients: LinkedOAuthClientForServiceAccount[] }
+  | {
+      ok: false;
+      status: number;
+      forbidden: boolean;
+      notFound: boolean;
+      invalid: boolean;
+      message: string;
+    };
+
+export async function listServiceAccountOAuthClients(
+  orgID: string,
+  serviceAccountID: string
+): Promise<ListServiceAccountOAuthClientsResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return {
+      ok: false,
+      status: 503,
+      forbidden: false,
+      notFound: false,
+      invalid: false,
+      message: "IdP is not configured.",
+    };
+  }
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}` +
+        `/service-accounts/${encodeURIComponent(serviceAccountID)}/oauth-clients`,
+      {
+        method: "GET",
+        headers: { Cookie: await cookieHeader() },
+        cache: "no-store",
+      }
+    );
+    if (res.status === 400)
+      return {
+        ok: false,
+        status: 400,
+        forbidden: false,
+        notFound: false,
+        invalid: true,
+        message: "The linked-OAuth-clients request was rejected — check the supplied identifiers.",
+      };
+    if (res.status === 403)
+      return {
+        ok: false,
+        status: 403,
+        forbidden: true,
+        notFound: false,
+        invalid: false,
+        message: "You do not have permission to view this service account's OAuth clients.",
+      };
+    if (res.status === 404)
+      return {
+        ok: false,
+        status: 404,
+        forbidden: false,
+        notFound: true,
+        invalid: false,
+        message: "Service account not found.",
+      };
+    if (!res.ok)
+      return {
+        ok: false,
+        status: res.status,
+        forbidden: false,
+        notFound: false,
+        invalid: false,
+        message: "Could not load linked OAuth clients. Please try again.",
+      };
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const d: any = await res.json().catch(() => ({}));
+    const rawList = Array.isArray(d?.oauth_clients) ? d.oauth_clients : [];
+    // Explicit 7-field allowlist projection. Any extra key a future
+    // backend regression returned would be dropped on the floor.
+    const projected: LinkedOAuthClientForServiceAccount[] = rawList.map(
+      // biome-ignore lint/suspicious/noExplicitAny: raw row before projection
+      (r: any) => ({
+        id: typeof r?.id === "string" ? r.id : "",
+        client_id: typeof r?.client_id === "string" ? r.client_id : "",
+        name: typeof r?.name === "string" ? r.name : "",
+        is_public: typeof r?.is_public === "boolean" ? r.is_public : false,
+        active: typeof r?.active === "boolean" ? r.active : false,
+        created_at: typeof r?.created_at === "string" ? r.created_at : "",
+        updated_at: typeof r?.updated_at === "string" ? r.updated_at : "",
+      })
+    );
+    return { ok: true, oauth_clients: projected };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      forbidden: false,
+      notFound: false,
+      invalid: false,
+      message: "Network error. Please try again.",
+    };
+  }
+}
+
+// ── disable / enable service account (slice identuum-20260530-service-account-disable-enable-ui) ──
+//
+// Wire helpers for the org-admin SA lifecycle UI. Call the IDP backend
+// routes added by the prior backend slice:
+//   POST /api/v1/organizations/:id/service-accounts/:sa_id/disable
+//   POST /api/v1/organizations/:id/service-accounts/:sa_id/enable
+//
+// Contract:
+//   - Path params carry both resource ids (encodeURIComponent on each).
+//   - NO request body, NO Content-Type header.
+//   - Authentication via the forwarded session cookie. Authorization is
+//     enforced server-side (org_admin role + URL :id ==
+//     claims.OrganizationID + M2MService.GetServiceAccount tenant guard
+//     + existence-oracle masking).
+//   - 200 → ok with the 8-field ServiceAccountLifecycleResponse
+//     projection (success, message, organization_id, service_account_id,
+//     service_account_name, role, previous_active, active).
+//   - 400 → invalid (malformed UUID path segments).
+//   - 403 → forbidden (role / URL-org / cross-org / missing SA).
+//   - NEVER exposes client_secret / client_secret_hash / service-
+//     account credential / private-key / signing-key / token / cookie /
+//     session-id (the backend DTO doesn't carry any of those; the
+//     explicit allowlist projection is a defence-in-depth guard
+//     against a future backend regression).
+//   - NO new credential is issued or rotated by either route — the
+//     mutation is a single-column boolean flip on
+//     service_accounts.active.
+
+export interface ServiceAccountLifecycleResult {
+  success: boolean;
+  message: string;
+  organization_id: string;
+  service_account_id: string;
+  service_account_name: string;
+  role: string;
+  previous_active: boolean;
+  active: boolean;
+}
+
+export type DisableEnableServiceAccountResult =
+  | { ok: true; data: ServiceAccountLifecycleResult }
+  | {
+      ok: false;
+      status: number;
+      forbidden: boolean;
+      notFound: boolean;
+      invalid: boolean;
+      message: string;
+    };
+
+async function callServiceAccountLifecycle(
+  orgID: string,
+  serviceAccountID: string,
+  segment: "disable" | "enable"
+): Promise<DisableEnableServiceAccountResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return {
+      ok: false,
+      status: 503,
+      forbidden: false,
+      notFound: false,
+      invalid: false,
+      message: "IdP is not configured.",
+    };
+  }
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}` +
+        `/service-accounts/${encodeURIComponent(serviceAccountID)}/${segment}`,
+      {
+        method: "POST",
+        headers: { Cookie: await cookieHeader() },
+        cache: "no-store",
+      }
+    );
+    if (res.status === 400)
+      return {
+        ok: false,
+        status: 400,
+        forbidden: false,
+        notFound: false,
+        invalid: true,
+        message:
+          segment === "disable"
+            ? "The disable request was rejected — check the supplied identifiers."
+            : "The enable request was rejected — check the supplied identifiers.",
+      };
+    if (res.status === 403)
+      return {
+        ok: false,
+        status: 403,
+        forbidden: true,
+        notFound: false,
+        invalid: false,
+        message:
+          segment === "disable"
+            ? "You do not have permission to disable this service account."
+            : "You do not have permission to enable this service account.",
+      };
+    if (res.status === 404)
+      return {
+        ok: false,
+        status: 404,
+        forbidden: false,
+        notFound: true,
+        invalid: false,
+        message: "Service account not found.",
+      };
+    if (!res.ok)
+      return {
+        ok: false,
+        status: res.status,
+        forbidden: false,
+        notFound: false,
+        invalid: false,
+        message:
+          segment === "disable"
+            ? "Could not disable the service account. Please try again."
+            : "Could not enable the service account. Please try again.",
+      };
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const d: any = await res.json().catch(() => ({}));
+    // Explicit 8-field allowlist projection. Any extra key a future
+    // backend regression returned would be dropped on the floor.
+    return {
+      ok: true,
+      data: {
+        success: typeof d?.success === "boolean" ? d.success : true,
+        message: typeof d?.message === "string" ? d.message : "",
+        organization_id: typeof d?.organization_id === "string" ? d.organization_id : "",
+        service_account_id: typeof d?.service_account_id === "string" ? d.service_account_id : "",
+        service_account_name:
+          typeof d?.service_account_name === "string" ? d.service_account_name : "",
+        role: typeof d?.role === "string" ? d.role : "",
+        previous_active: typeof d?.previous_active === "boolean" ? d.previous_active : false,
+        active: typeof d?.active === "boolean" ? d.active : false,
+      },
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      forbidden: false,
+      notFound: false,
+      invalid: false,
+      message: "Network error. Please try again.",
+    };
+  }
+}
+
+export async function disableServiceAccount(
+  orgID: string,
+  serviceAccountID: string
+): Promise<DisableEnableServiceAccountResult> {
+  return callServiceAccountLifecycle(orgID, serviceAccountID, "disable");
+}
+
+export async function enableServiceAccount(
+  orgID: string,
+  serviceAccountID: string
+): Promise<DisableEnableServiceAccountResult> {
+  return callServiceAccountLifecycle(orgID, serviceAccountID, "enable");
+}
+
+// ── updateServiceAccount (slice identuum-20260530-service-account-edit-ui) ──
+//
+// Wire helper for the org-admin "Edit details" action on the SA
+// detail page. Calls the IDP backend route added by the prior backend
+// slice:
+//   PATCH /api/v1/organizations/:id/service-accounts/:sa_id
+//
+// Contract:
+//   - Path params carry both resource ids (encodeURIComponent on each).
+//   - Body: JSON with EXACTLY 3 fields: name, description, role.
+//   - Authentication via the forwarded session cookie. Authorization
+//     is enforced server-side (org_admin role + URL :id ==
+//     claims.OrganizationID + M2MService.GetServiceAccount tenant
+//     guard + existence-oracle masking).
+//   - 200 → ok with the safe 8-field MapServiceAccount projection
+//     (id, organization_id, name, description, role, active,
+//     created_at, updated_at).
+//   - 400 → invalid (malformed UUID path segments / blank name /
+//     invalid role).
+//   - 403 → forbidden (role / URL-org / cross-org / missing SA).
+//   - 404 → notFound.
+//   - 409 → conflict (duplicate name — slice identuum-20260530-
+//     service-account-name-conflict-backend). Surfaced as
+//     {conflict: true} so the action can map to a name-field error.
+//   - NEVER exposes client_secret / client_secret_hash / service-
+//     account credential / secret_hash / private_key / signing_key /
+//     access_token / refresh_token / authorization_code / Bearer /
+//     Set-Cookie / session_id (the backend DTO doesn't carry any of
+//     those; the explicit allowlist projection is a defence-in-depth
+//     guard against a future backend regression).
+
+export interface UpdateServiceAccountInput {
+  name: string;
+  description: string;
+  role: string;
+}
+
+export type UpdateServiceAccountResult =
+  | { ok: true; data: OrgServiceAccountItem }
+  | {
+      ok: false;
+      status: number;
+      forbidden: boolean;
+      notFound: boolean;
+      invalid: boolean;
+      conflict: boolean;
+      message: string;
+    };
+
+export async function updateServiceAccount(
+  orgID: string,
+  serviceAccountID: string,
+  input: UpdateServiceAccountInput
+): Promise<UpdateServiceAccountResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return {
+      ok: false,
+      status: 503,
+      forbidden: false,
+      notFound: false,
+      invalid: false,
+      conflict: false,
+      message: "IdP is not configured.",
+    };
+  }
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/service-accounts/${encodeURIComponent(serviceAccountID)}`,
+      {
+        method: "PATCH",
+        headers: {
+          Cookie: await cookieHeader(),
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+        body: JSON.stringify({
+          name: input.name,
+          description: input.description,
+          role: input.role,
+        }),
+      }
+    );
+    if (res.status === 400)
+      return {
+        ok: false,
+        status: 400,
+        forbidden: false,
+        notFound: false,
+        invalid: true,
+        conflict: false,
+        message: "The edit request was rejected — check the supplied values.",
+      };
+    if (res.status === 403)
+      return {
+        ok: false,
+        status: 403,
+        forbidden: true,
+        notFound: false,
+        invalid: false,
+        conflict: false,
+        message: "You do not have permission to edit this service account.",
+      };
+    if (res.status === 404)
+      return {
+        ok: false,
+        status: 404,
+        forbidden: false,
+        notFound: true,
+        invalid: false,
+        conflict: false,
+        message: "Service account not found.",
+      };
+    if (res.status === 409)
+      return {
+        ok: false,
+        status: 409,
+        forbidden: false,
+        notFound: false,
+        invalid: false,
+        conflict: true,
+        message: "Service account name already exists.",
+      };
+    if (!res.ok)
+      return {
+        ok: false,
+        status: res.status,
+        forbidden: false,
+        notFound: false,
+        invalid: false,
+        conflict: false,
+        message: "Could not update the service account. Please try again.",
+      };
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const d: any = await res.json().catch(() => ({}));
+    // Explicit 8-field projection — same shape as projectServiceAccount
+    // so the action's success state mirrors what list/get returns.
+    return {
+      ok: true,
+      data: {
+        id: typeof d?.id === "string" ? d.id : "",
+        organization_id: typeof d?.organization_id === "string" ? d.organization_id : "",
+        name: typeof d?.name === "string" ? d.name : "",
+        description: typeof d?.description === "string" ? d.description : "",
+        role: typeof d?.role === "string" ? d.role : "",
+        active: typeof d?.active === "boolean" ? d.active : true,
+        created_at: typeof d?.created_at === "string" ? d.created_at : "",
+        updated_at: typeof d?.updated_at === "string" ? d.updated_at : "",
+      },
+    };
+  } catch {
+    return {
+      ok: false,
+      status: 0,
+      forbidden: false,
+      notFound: false,
+      invalid: false,
+      conflict: false,
+      message: "Network error. Please try again.",
+    };
+  }
+}
+
+// ── Organization protocol settings (site_admin only) ─────────────────────────
+//
+// Backed by two routes added in the IDP org-protocol-settings slice:
+//
+//   GET  /api/v1/organizations/:id/protocol-settings
+//   PUT  /api/v1/organizations/:id/protocol-settings
+//
+// Both routes are site_admin-only. The GET returns the effective state
+// (system defaults when no explicit row exists) plus a `source` field that
+// tells the UI whether an operator has explicitly configured the org.
+//
+// SECURITY:
+//   - No DCR tokens, IATs, RATs, client_secret values, or signing material
+//     ever appear in these responses — only two booleans and metadata.
+//   - The sanitiser projects only the five documented fields; any
+//     unexpected backend field is silently dropped.
+
+function sanitizeOrgProtocolSettings(raw: unknown): OrgProtocolSettings {
+  // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+  const r = (raw ?? {}) as any;
+  const rawSource = String(r.source ?? "default");
+  return {
+    organization_id: String(r.organization_id ?? ""),
+    dynamic_client_registration_enabled: Boolean(r.dynamic_client_registration_enabled),
+    scim_enabled: Boolean(r.scim_enabled),
+    source: rawSource === "explicit" ? "explicit" : "default",
+    created_at: typeof r.created_at === "string" && r.created_at ? r.created_at : null,
+    updated_at: typeof r.updated_at === "string" && r.updated_at ? r.updated_at : null,
+  };
+}
+
+/**
+ * Fetches the per-organization DCR + SCIM enable/disable settings.
+ *
+ * Backend: GET /api/v1/organizations/:id/protocol-settings
+ *          (site_admin for any org; same-org org_admin with orgs:settings:update scope).
+ *
+ * Returns a discriminated GetOrgProtocolSettingsResult so callers can render
+ * per-reason copy instead of a single generic notice:
+ *   ok=true  — settings fetched.
+ *   ok=false — reason: not_authenticated (401) | forbidden (403) |
+ *              not_found (404/501) | unavailable (IDP off / 503 / network) | unknown.
+ *
+ * This function never throws — all errors become a typed failure result.
+ */
+export async function getOrgProtocolSettings(orgId: string): Promise<GetOrgProtocolSettingsResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) return { ok: false, reason: "unavailable", status: 0 };
+
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgId)}/protocol-settings`,
+      {
+        method: "GET",
+        headers: { Cookie: await cookieHeader() },
+        cache: "no-store",
+      }
+    );
+    if (res.status === 401) return { ok: false, reason: "not_authenticated", status: 401 };
+    if (!res.ok) {
+      const body = res.status === 402 || res.status === 403 ? await safeErrorBody(res) : undefined;
+      const classified = classifyIDPStatus(res.status, body);
+      if (classified.kind === "forbidden")
+        return { ok: false, reason: "forbidden", status: res.status };
+      if (classified.kind === "not_licensed")
+        return { ok: false, reason: "not_licensed", status: res.status };
+      if (classified.kind === "feature_absent")
+        return { ok: false, reason: "not_found", status: res.status };
+      if (classified.kind === "unavailable")
+        return { ok: false, reason: "unavailable", status: res.status };
+      return { ok: false, reason: "unknown", status: res.status };
+    }
+
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const data: any = await res.json();
+    return { ok: true, settings: sanitizeOrgProtocolSettings(data) };
+  } catch {
+    return { ok: false, reason: "unavailable", status: 0 };
+  }
+}
+
+export type UpdateOrgProtocolSettingsResult =
+  | { ok: true; settings: OrgProtocolSettings }
+  | {
+      ok: false;
+      status: number;
+      reason: Exclude<IDPStatusKind, "available"> | "not_authenticated";
+      notFound: boolean;
+      forbidden: boolean;
+      unavailable: boolean;
+      notLicensed: boolean;
+    };
+
+type IDPFailureClassification = Omit<IDPStatusClassification, "kind"> & {
+  kind: Exclude<IDPStatusKind, "available">;
+};
+
+function toIDPFailureClassification(classified: IDPStatusClassification): IDPFailureClassification {
+  switch (classified.kind) {
+    case "unavailable":
+    case "feature_absent":
+    case "forbidden":
+    case "not_licensed":
+    case "unknown":
+      return { kind: classified.kind, status: classified.status };
+    case "available":
+      return { kind: "unknown", status: classified.status };
+  }
+}
+
+function protocolSettingsFailure(
+  classified: IDPFailureClassification | { kind: "not_authenticated"; status: number }
+): UpdateOrgProtocolSettingsResult {
+  return {
+    ok: false,
+    status: classified.status,
+    reason: classified.kind === "feature_absent" ? "feature_absent" : classified.kind,
+    notFound: classified.kind === "feature_absent",
+    forbidden: classified.kind === "forbidden",
+    unavailable: classified.kind === "unavailable",
+    notLicensed: classified.kind === "not_licensed",
+  };
+}
+
+/**
+ * Updates the per-organization DCR + SCIM enable/disable settings.
+ *
+ * Backend: PUT /api/v1/organizations/:id/protocol-settings (site_admin only).
+ * Both booleans are REQUIRED — the backend rejects partial payloads (400).
+ *
+ * Returns the updated settings on success. On failure, returns a
+ * discriminated error so server actions can surface appropriate copy.
+ */
+export async function updateOrgProtocolSettings(
+  orgId: string,
+  opts: {
+    dynamic_client_registration_enabled: boolean;
+    scim_enabled: boolean;
+  }
+): Promise<UpdateOrgProtocolSettingsResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled)
+    return protocolSettingsFailure({ kind: "unavailable", status: 503 });
+
+  try {
+    const res = await fetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgId)}/protocol-settings`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: await cookieHeader(),
+        },
+        body: JSON.stringify({
+          dynamic_client_registration_enabled: opts.dynamic_client_registration_enabled,
+          scim_enabled: opts.scim_enabled,
+        }),
+        cache: "no-store",
+      }
+    );
+
+    if (res.status === 401)
+      return protocolSettingsFailure({ kind: "not_authenticated", status: 401 });
+    if (!res.ok) {
+      const body = res.status === 402 || res.status === 403 ? await safeErrorBody(res) : undefined;
+      const classified = classifyIDPStatus(res.status, body);
+      return protocolSettingsFailure(toIDPFailureClassification(classified));
+    }
+
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const data: any = await res.json();
+    return { ok: true, settings: sanitizeOrgProtocolSettings(data) };
+  } catch {
+    return protocolSettingsFailure({ kind: "unavailable", status: 0 });
   }
 }

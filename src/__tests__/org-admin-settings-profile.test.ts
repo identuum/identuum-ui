@@ -178,9 +178,7 @@ describe("Profile-form copy + field metadata — boundary + credential negative 
 
 describe("Profile form source — wiring + no inline literal residue", () => {
   function stripComments(src: string): string {
-    return src
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/^\s*\/\/.*$/gm, "");
+    return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   }
 
   const FORM_SRC = readFileSync(
@@ -210,18 +208,16 @@ describe("Profile form source — wiring + no inline literal residue", () => {
     expect(NO_COMMENTS).not.toMatch(/Domain changes affect OIDC discovery and SSO/);
   });
 
-  it("org-profile-form.tsx renders the success banner only on `state.phase === \"success\"`", () => {
+  it('org-profile-form.tsx renders the success banner only on `state.phase === "success"`', () => {
     // The bounded error envelope: render the green banner exclusively
     // when the server action returned success.
     expect(FORM_SRC).toMatch(/state\.phase\s*===\s*["']success["'][\s\S]*?successBanner/);
   });
 
-  it("org-profile-form.tsx renders the error banner only on `state.phase === \"error\"` and only when state.error is truthy", () => {
+  it('org-profile-form.tsx renders the error banner only on `state.phase === "error"` and only when state.error is truthy', () => {
     // The bounded error envelope: never render the red banner for the
     // empty-error case (which is reserved for fieldErrors-only flows).
-    expect(FORM_SRC).toMatch(
-      /state\.phase\s*===\s*["']error["']\s*&&\s*state\.error\s*&&/
-    );
+    expect(FORM_SRC).toMatch(/state\.phase\s*===\s*["']error["']\s*&&\s*state\.error\s*&&/);
     // The error body is whatever the server returned verbatim — render
     // through {state.error}, not a hard-coded copy block.
     expect(FORM_SRC).toMatch(/\{\s*state\.error\s*\}/);
@@ -254,9 +250,7 @@ describe("Profile form source — wiring + no inline literal residue", () => {
     // visible text is the Primary domain label. The Organization-name
     // <label> (which DOES have `htmlFor` linking to the org-name input)
     // is the only legitimate <label> in the form.
-    expect(NO_COMMENTS).not.toMatch(
-      /<label[^>]*>\s*\{\s*ORG_ADMIN_PROFILE_FORM_COPY\.domainLabel/
-    );
+    expect(NO_COMMENTS).not.toMatch(/<label[^>]*>\s*\{\s*ORG_ADMIN_PROFILE_FORM_COPY\.domainLabel/);
     // No <dt>/<dd> pairing — those would associate dt as a label for dd.
     expect(NO_COMMENTS).not.toMatch(/<dt\b/);
     expect(NO_COMMENTS).not.toMatch(/<dd\b/);

@@ -40,10 +40,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useActionState, useState } from "react";
-import {
-  type DeleteApplicationState,
-  deleteApplicationAction,
-} from "../actions";
+import { type DeleteApplicationState, deleteApplicationAction } from "../actions";
 
 const initialState: DeleteApplicationState = { phase: "idle" };
 
@@ -56,12 +53,7 @@ export interface DangerZoneProps {
 export function DangerZone({ clientId, clientName, clientID }: DangerZoneProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const boundAction = deleteApplicationAction.bind(
-    null,
-    clientId,
-    clientName,
-    clientID
-  );
+  const boundAction = deleteApplicationAction.bind(null, clientId, clientName, clientID);
   const [state, action, pending] = useActionState(boundAction, initialState);
 
   return (
@@ -70,17 +62,13 @@ export function DangerZone({ clientId, clientName, clientID }: DangerZoneProps) 
       className="bg-white border border-red-100 rounded-[1.5rem] shadow-sm overflow-hidden"
     >
       <div className="px-6 py-4 border-b border-red-100 bg-red-50">
-        <h2
-          id="danger-zone-heading"
-          className="text-sm font-semibold text-red-700"
-        >
+        <h2 id="danger-zone-heading" className="text-sm font-semibold text-red-700">
           Danger zone
         </h2>
         <p className="text-xs text-red-700 mt-0.5 leading-relaxed">
-          Deleting this application is permanent. Existing tokens issued for
-          this client will continue to validate until they expire, but no new
-          tokens can be issued and any OAuth client_id reuse will be rejected
-          until a fresh client is created.
+          Deleting this application is permanent. Existing tokens issued for this client will
+          continue to validate until they expire, but no new tokens can be issued and any OAuth
+          client_id reuse will be rejected until a fresh client is created.
         </p>
       </div>
 
@@ -104,8 +92,8 @@ function ExpandPanel({ onExpand }: { onExpand: () => void }) {
   return (
     <div className="px-6 py-5 flex flex-col gap-3">
       <p className="text-xs text-stone-600 leading-relaxed">
-        This action cannot be undone. To proceed you will be asked to type the
-        application name or client ID exactly.
+        This action cannot be undone. To proceed you will be asked to type the application name or
+        client ID exactly.
       </p>
       <div>
         <button
@@ -148,8 +136,8 @@ function DeleteConfirmForm({
       <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs text-red-700 leading-relaxed">
         <p>
           To confirm, type the application name{" "}
-          <span className="font-mono font-semibold">{clientName}</span> or its
-          client ID <span className="font-mono font-semibold">{clientID}</span>.
+          <span className="font-mono font-semibold">{clientName}</span> or its client ID{" "}
+          <span className="font-mono font-semibold">{clientID}</span>.
         </p>
       </div>
 
@@ -163,10 +151,7 @@ function DeleteConfirmForm({
       )}
 
       <div className="space-y-1">
-        <label
-          htmlFor="delete-app-confirm"
-          className="block text-sm font-medium text-sky-950"
-        >
+        <label htmlFor="delete-app-confirm" className="block text-sm font-medium text-sky-950">
           Type to confirm <span className="text-red-500">*</span>
         </label>
         <input
@@ -182,9 +167,7 @@ function DeleteConfirmForm({
           disabled={pending}
           className="w-full font-mono rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100 disabled:opacity-50"
         />
-        {fieldErrors.confirm && (
-          <p className="text-xs text-red-500">{fieldErrors.confirm}</p>
-        )}
+        {fieldErrors.confirm && <p className="text-xs text-red-500">{fieldErrors.confirm}</p>}
       </div>
 
       <div className="flex items-center gap-3 pt-1">

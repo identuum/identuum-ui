@@ -20,6 +20,7 @@ import { OrgAdminNav } from "@/components/org-admin/org-admin-nav";
 import { AccountMenu } from "@/components/shared/account-menu";
 import { roleToPath } from "@/lib/role-routing";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
+import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { getServerSession } from "@/lib/server-session";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
@@ -75,6 +76,8 @@ export default async function OrgAdminLayout({ children }: { children: React.Rea
   }
 
   const userEmail = session.user?.email ?? null;
+  const runtimeState = await getServerRuntimeState();
+  const idpCapabilities = runtimeState?.components.idp.capabilities ?? null;
 
   // Auth and role confirmed. Render the shell.
   return (
@@ -96,7 +99,7 @@ export default async function OrgAdminLayout({ children }: { children: React.Rea
 
         {/* Navigation — OrgAdminNav is a client component that uses
             usePathname() to determine which item is active. */}
-        <OrgAdminNav />
+        <OrgAdminNav capabilities={idpCapabilities} />
 
         {/* Logout */}
         <div className="px-3 py-4 border-t border-sky-900/60">

@@ -31,7 +31,12 @@
  *     the top so the operator can navigate out without using the
  *     browser back button.
  */
+import {
+  type AuthorizationServerPageBoundary,
+  getAuthorizationServerPageBoundary,
+} from "@/lib/capability-affordances";
 import { getOrganizationClientById } from "@/lib/idp-admin-client";
+import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { Metadata } from "next";
 import { EditApplicationForm } from "./edit-application-form";
 
@@ -52,6 +57,20 @@ export default async function OrgAdminApplicationEditPage({
     return (
       <ShellWithBack id={id}>
         <NotFoundPanel />
+      </ShellWithBack>
+    );
+  }
+
+  const runtimeState = await getServerRuntimeState();
+  const capabilityBoundary = getAuthorizationServerPageBoundary({
+    capabilities: runtimeState?.components.idp.capabilities,
+    surface: "oauth_clients",
+  });
+
+  if (capabilityBoundary) {
+    return (
+      <ShellWithBack id={id}>
+        <CapabilityUnavailablePanel copy={capabilityBoundary} />
       </ShellWithBack>
     );
   }
@@ -120,12 +139,10 @@ function ShellWithBack({ id, children }: { id: string; children: React.ReactNode
 function Header({ name }: { name: string }) {
   return (
     <div>
-      <h1 className="text-2xl font-extrabold tracking-tight text-sky-950 truncate">
-        Edit {name}
-      </h1>
+      <h1 className="text-2xl font-extrabold tracking-tight text-sky-950 truncate">Edit {name}</h1>
       <p className="text-sm text-stone-500 mt-0.5">
-        Update the operator-safe configuration for this OAuth client. Secret rotation
-        and Public/Confidential type changes are not available from this page.
+        Update the operator-safe configuration for this OAuth client. Secret rotation and
+        Public/Confidential type changes are not available from this page.
       </p>
     </div>
   );
@@ -136,8 +153,8 @@ function NotFoundPanel() {
     <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm px-6 py-10 text-center">
       <p className="text-sm font-semibold text-sky-950">Application not found</p>
       <p className="text-xs text-stone-500 mt-1 max-w-md mx-auto leading-relaxed">
-        The application you tried to edit does not exist or has been removed. Use the
-        back link above to return to the application details.
+        The application you tried to edit does not exist or has been removed. Use the back link
+        above to return to the application details.
       </p>
     </div>
   );
@@ -148,9 +165,18 @@ function ForbiddenPanel() {
     <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm px-6 py-10 text-center">
       <p className="text-sm font-semibold text-sky-950">Access denied</p>
       <p className="text-xs text-stone-500 mt-1 max-w-md mx-auto leading-relaxed">
-        You do not have permission to edit this application. Only applications
-        registered in your organization can be edited here.
+        You do not have permission to edit this application. Only applications registered in your
+        organization can be edited here.
       </p>
+    </div>
+  );
+}
+
+function CapabilityUnavailablePanel({ copy }: { copy: AuthorizationServerPageBoundary }) {
+  return (
+    <div className="bg-white border border-amber-200 rounded-[1.5rem] shadow-sm px-6 py-6">
+      <p className="text-sm font-semibold text-amber-800">{copy.title}</p>
+      <p className="text-xs text-stone-500 mt-1 leading-relaxed">{copy.body}</p>
     </div>
   );
 }
@@ -160,8 +186,8 @@ function ErrorPanel() {
     <div className="bg-white border border-red-100 rounded-[1.5rem] shadow-sm px-6 py-6">
       <p className="text-sm font-semibold text-red-700">Could not load application</p>
       <p className="text-xs text-stone-500 mt-1 leading-relaxed">
-        Reload the page or try again later. Contact your platform administrator if the
-        problem persists.
+        Reload the page or try again later. Contact your platform administrator if the problem
+        persists.
       </p>
     </div>
   );

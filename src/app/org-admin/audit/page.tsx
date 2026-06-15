@@ -1,3 +1,8 @@
+import { AuditFilterPanel } from "@/components/shared/audit-filter-panel";
+import type { AuditFilterValues } from "@/components/shared/audit-filter-panel";
+import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
+import { AuditIPAddressCell } from "@/components/shared/audit-ip-address-cell";
+import { FeatureBoundaryPanel } from "@/components/shared/feature-boundary-panel";
 /**
  * Audit log viewer — org_admin only (read-only).
  *
@@ -5,7 +10,7 @@
  * This page does NOT repeat the guard.
  *
  * Backend: GET /api/v1/audit
- *   - Requires Professional+ license tier (AppendOnlyAudit feature).
+ *   - Requires Enterprise/CE commercial capability (AppendOnlyAudit feature).
  *   - org_admin sees only events scoped to their own organization (enforced at service layer).
  *   - Filters and pagination are URL-backed via ?event_type, ?subject_type,
  *     ?window, ?start_date, ?end_date, ?sort, ?page.
@@ -15,12 +20,8 @@
  *   - org_admin scoping is server-enforced — filters do not broaden visibility.
  *   - All filter params are validated server-side before forwarding to backend.
  */
-import { listAuditEvents, listAuditEventTypes } from "@/lib/idp-admin-client";
+import { listAuditEventTypes, listAuditEvents } from "@/lib/idp-admin-client";
 import type { AuditEventItem } from "@/lib/idp-admin-client";
-import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
-import { AuditIPAddressCell } from "@/components/shared/audit-ip-address-cell";
-import { AuditFilterPanel } from "@/components/shared/audit-filter-panel";
-import type { AuditFilterValues } from "@/components/shared/audit-filter-panel";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Audit Log — Identuum" };
@@ -370,13 +371,10 @@ function PaginationLink({
 
 function FeatureUnavailablePanel() {
   return (
-    <div className="bg-white border border-stone-200 rounded-[1.5rem] px-6 py-8 shadow-sm">
-      <p className="text-sm font-semibold text-stone-700">Audit log requires Professional tier</p>
-      <p className="text-xs text-stone-400 mt-1 leading-relaxed">
-        The audit log feature is available on Professional and Enterprise license tiers. Contact
-        your site administrator to upgrade the license.
-      </p>
-    </div>
+    <FeatureBoundaryPanel
+      title="Audit log requires Enterprise/CE"
+      body="Organization audit events are a commercial IDP capability. In IDP OSS, direct access shows this boundary instead of treating the page as a supported Starter feature."
+    />
   );
 }
 

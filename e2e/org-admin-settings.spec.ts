@@ -54,6 +54,22 @@ const SKIP_MSG =
 
 let sharedCtx: BrowserContext | null = null;
 
+function getSharedContext(): BrowserContext {
+  if (!sharedCtx) {
+    throw new Error("shared context not initialized");
+  }
+  return sharedCtx;
+}
+
+function requireValue<T>(value: T | null | undefined, message: string): NonNullable<T> {
+  expect(value, message).not.toBeNull();
+  expect(value, message).not.toBeUndefined();
+  if (value === null || value === undefined) {
+    throw new Error(message);
+  }
+  return value;
+}
+
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(180_000); // 31s TOTP cooldown + ~70s TOTP retry headroom
   if (skipOrgAdminTests) return;
@@ -76,7 +92,7 @@ test.describe("/org-admin/settings — main settings surface", () => {
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
@@ -84,9 +100,7 @@ test.describe("/org-admin/settings — main settings surface", () => {
       expect(await page.title()).not.toMatch(/500|internal error|application error/i);
 
       // Page heading
-      await expect(
-        page.getByRole("heading", { name: "Organization settings" })
-      ).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Organization settings" })).toBeVisible();
 
       // Four card titles — the two implemented forms, the new Invite policy
       // read-only card, and the Domains placeholder.
@@ -94,6 +108,40 @@ test.describe("/org-admin/settings — main settings surface", () => {
       await expect(page.getByText("Security policy", { exact: true })).toBeVisible();
       await expect(page.getByText("Invite policy", { exact: true })).toBeVisible();
       await expect(page.getByText("Domains", { exact: true })).toBeVisible();
+
+      // Four NEW read-only headings landed by slice
+      // identuum-20260530-org-admin-settings-readonly-tabs. Each
+      // section's <h2> is the load-bearing anchor.
+      await expect(page.getByRole("heading", { name: "Identity providers" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Webhooks" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Roles" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Scope templates" })).toBeVisible();
+
+      // Defence-in-depth — no secret-shaped substring anywhere in
+      // the rendered body. The captured body text is NEVER printed
+      // in test output; assertion messages name only the matching
+      // pattern.
+      const bodyText = (await page.locator("body").textContent()) ?? "";
+      const BANNED: RegExp[] = [
+        /\bclient_secret\b/i,
+        /\bclient_secret_encrypted\b/i,
+        /\bbind_password\b/i,
+        /\bsecret_hash\b/i,
+        /\bprivate_key\b/i,
+        /\bsigning_cert\b/i,
+        /\baccess_token\b/i,
+        /\brefresh_token\b/i,
+        /\bauthorization_code\b/i,
+        /Bearer\s+[A-Za-z0-9._-]{8,}/,
+        /\bsigning_key\b/i,
+        /\bpassword_hash\b/i,
+        /otpauth:\/\//i,
+        /\bmfa_secret\b/i,
+        /\bSet-Cookie\b/i,
+      ];
+      for (const pat of BANNED) {
+        expect(bodyText.match(pat), `settings body matched forbidden pattern ${pat}`).toBeNull();
+      }
     } finally {
       await page.close();
     }
@@ -108,7 +156,7 @@ test.describe("/org-admin/settings — Organization profile form", () => {
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
@@ -120,9 +168,7 @@ test.describe("/org-admin/settings — Organization profile form", () => {
       expect(await nameInput.isDisabled()).toBe(false);
 
       // Save profile button is visible — but this spec does NOT click it.
-      await expect(
-        page.getByRole("button", { name: /save profile/i })
-      ).toBeVisible();
+      await expect(page.getByRole("button", { name: /save profile/i })).toBeVisible();
 
       // Primary domain section renders as a read-only <p>, not as <input>.
       // `getByLabel("Primary domain")` would only match an input control;
@@ -132,13 +178,9 @@ test.describe("/org-admin/settings — Organization profile form", () => {
 
       // The OIDC-discovery helper copy block, when present, identifies the
       // read-only justification rendered with the domain.
-      const helpCount = await page
-        .getByText("Domain changes affect", { exact: false })
-        .count();
+      const helpCount = await page.getByText("Domain changes affect", { exact: false }).count();
       if (helpCount > 0) {
-        await expect(
-          page.getByText("Domain changes affect", { exact: false })
-        ).toBeVisible();
+        await expect(page.getByText("Domain changes affect", { exact: false })).toBeVisible();
       }
     } finally {
       await page.close();
@@ -154,7 +196,7 @@ test.describe("/org-admin/settings — MFA policy form", () => {
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
@@ -170,9 +212,7 @@ test.describe("/org-admin/settings — MFA policy form", () => {
       expect(optChecked || reqChecked).toBe(true);
       expect(optChecked && reqChecked).toBe(false);
 
-      await expect(
-        page.getByRole("button", { name: /save policy/i })
-      ).toBeVisible();
+      await expect(page.getByRole("button", { name: /save policy/i })).toBeVisible();
     } finally {
       await page.close();
     }
@@ -187,7 +227,7 @@ test.describe("/org-admin/settings — Invite policy card", () => {
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
@@ -199,9 +239,7 @@ test.describe("/org-admin/settings — Invite policy card", () => {
       // Use the input's `value` attribute to disambiguate — the
       // accessible names of the three radios all include long descriptions
       // and "Public self-registration" is a prefix of two distinct modes.
-      const inviteOnlyRadio = page.locator(
-        'input[name="invite_policy_mode"][value="invite-only"]'
-      );
+      const inviteOnlyRadio = page.locator('input[name="invite_policy_mode"][value="invite-only"]');
       const publicWithApprovalRadio = page.locator(
         'input[name="invite_policy_mode"][value="public-with-approval"]'
       );
@@ -227,9 +265,7 @@ test.describe("/org-admin/settings — Invite policy card", () => {
 
       // "Save invite policy" button is visible (this spec does NOT click it
       // unless the dynamic-mode test below opts in).
-      await expect(
-        page.getByRole("button", { name: /save invite policy/i })
-      ).toBeVisible();
+      await expect(page.getByRole("button", { name: /save invite policy/i })).toBeVisible();
 
       // "Open Users page →" link points at /org-admin/users (internal,
       // relative). Catches a regression that pointed it at /site-admin/* or
@@ -272,7 +308,7 @@ test.describe("/org-admin/settings — Invite policy card", () => {
       );
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
@@ -280,9 +316,7 @@ test.describe("/org-admin/settings — Invite policy card", () => {
       // The dynamic-fixture org is created with mode "invite-only".
       // Disambiguate the three radios by the input's `value` attribute
       // (matches the form's `name="invite_policy_mode"` input pair).
-      const inviteOnlyRadio = page.locator(
-        'input[name="invite_policy_mode"][value="invite-only"]'
-      );
+      const inviteOnlyRadio = page.locator('input[name="invite_policy_mode"][value="invite-only"]');
       const publicImmediateRadio = page.locator(
         'input[name="invite_policy_mode"][value="public-immediate"]'
       );
@@ -307,7 +341,10 @@ test.describe("/org-admin/settings — Invite policy card", () => {
 
       // Cross-check: no error banner is visible.
       expect(
-        await page.locator("div.bg-red-50").filter({ hasText: /Failed/i }).count()
+        await page
+          .locator("div.bg-red-50")
+          .filter({ hasText: /Failed/i })
+          .count()
       ).toBe(0);
 
       // Reload the page and verify the new mode is now the initial selection
@@ -331,7 +368,7 @@ test.describe("/org-admin/settings — Domains card", () => {
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
@@ -343,9 +380,7 @@ test.describe("/org-admin/settings — Domains card", () => {
       const addInput = page.getByLabel("Add a domain");
       await expect(addInput).toBeVisible();
       expect(await addInput.isDisabled()).toBe(false);
-      await expect(
-        page.getByRole("button", { name: /add domain/i })
-      ).toBeVisible();
+      await expect(page.getByRole("button", { name: /add domain/i })).toBeVisible();
 
       // No Coming-soon badge anywhere on the page.
       expect(await page.getByText("Coming soon", { exact: true }).count()).toBe(0);
@@ -375,7 +410,7 @@ test.describe("/org-admin/settings — Domains card", () => {
       );
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
@@ -393,9 +428,7 @@ test.describe("/org-admin/settings — Domains card", () => {
       // The DNS-TXT instructions banner appears. We assert the per-field
       // labels are present and that the copy says the value is shown
       // once. We DO NOT print the record_value to test output.
-      await expect(
-        page.getByText("Record name", { exact: true })
-      ).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Record name", { exact: true })).toBeVisible({ timeout: 10_000 });
       await expect(page.getByText("Record type", { exact: true })).toBeVisible();
       await expect(page.getByText("Record value", { exact: true })).toBeVisible();
       await expect(page.getByText("Expires at", { exact: true })).toBeVisible();
@@ -448,7 +481,7 @@ test.describe("/org-admin/settings — Domains card", () => {
       );
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
@@ -466,18 +499,14 @@ test.describe("/org-admin/settings — Domains card", () => {
       // Wait for the DNS-TXT instructions banner so we know the add
       // succeeded and the row is pending. We do NOT read the
       // record_value substring out of the DOM.
-      await expect(
-        page.getByText("Record name", { exact: true })
-      ).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Record name", { exact: true })).toBeVisible({ timeout: 10_000 });
 
       // Capture the record_value the page is currently displaying so
       // we can assert later that it never reappears inside the verify
       // failure banner. The locator is anchored on the Record value
       // <dt> + adjacent <dd>; we only use this value for a negative
       // assertion. It is NEVER printed, NEVER logged, NEVER stored.
-      const recordValueDD = page.locator(
-        'dt:has-text("Record value") + dd'
-      );
+      const recordValueDD = page.locator('dt:has-text("Record value") + dd');
       const displayedRecordValue = ((await recordValueDD.textContent()) ?? "").trim();
       // Sanity: the value is non-empty (so a regression that started
       // sending an empty token would surface — and so the substring
@@ -501,12 +530,10 @@ test.describe("/org-admin/settings — Domains card", () => {
       // The `.test` TLD almost always lands on lookup-failed or
       // record-not-found; we accept any of the four to keep the
       // assertion robust to resolver behaviour.
-      const errorAlert = page
-        .locator('div[role="alert"]')
-        .filter({
-          hasText:
-            /(DNS TXT record was not found yet|DNS TXT record was found, but it does not match the expected value|Identuum could not complete the DNS lookup|Could not verify domain\. Please try again)/,
-        });
+      const errorAlert = page.locator('div[role="alert"]').filter({
+        hasText:
+          /(DNS TXT record was not found yet|DNS TXT record was found, but it does not match the expected value|Identuum could not complete the DNS lookup|Could not verify domain\. Please try again)/,
+      });
       await expect(errorAlert).toBeVisible({ timeout: 10_000 });
 
       // SLICE-2 NEGATIVE INVARIANT: the verify error alert must NOT
@@ -567,7 +594,7 @@ test.describe("/org-admin/settings — Domains card", () => {
       );
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
@@ -586,9 +613,7 @@ test.describe("/org-admin/settings — Domains card", () => {
       // We do NOT read the record_value out of the DOM here — the
       // slice-2 verify-failure test owns that locator and the
       // slice-5 remove flow has no reason to touch the challenge.
-      await expect(
-        page.getByText("Record name", { exact: true })
-      ).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("Record name", { exact: true })).toBeVisible({ timeout: 10_000 });
 
       // The new pending row is in the list with a Pending badge.
       const row = page.locator("li", { hasText: syntheticDomain });
@@ -623,7 +648,10 @@ test.describe("/org-admin/settings — Domains card", () => {
         .filter({ has: page.getByText("Primary", { exact: true }) });
       await expect(primaryRows).toHaveCount(1);
       expect(
-        await primaryRows.first().getByRole("button", { name: /^Remove$/ }).count()
+        await primaryRows
+          .first()
+          .getByRole("button", { name: /^Remove$/ })
+          .count()
       ).toBe(0);
 
       // The page remains usable.
@@ -669,17 +697,16 @@ test.describe("/org-admin/settings — Primary domain row", () => {
     // The accessor returns the non-secret reserved e2e-<runID>.test
     // pattern — already printed in the IDP CLI banner and on the
     // Organization profile card — so capturing it here is safe.
-    const fixtureDomain = loadOrgAdminFixtureOrgDomain();
-    expect(
-      fixtureDomain,
+    const fixtureDomain = requireValue(
+      loadOrgAdminFixtureOrgDomain(),
       "dynamic-fixture mode must produce a fixture file the accessor can read"
-    ).not.toBeNull();
+    );
     // Defence-in-depth: the slice-6 IDP work uses the reserved e2e
     // pattern; pin the suffix without printing the runID specifically
     // into the assertion message.
     expect(fixtureDomain).toMatch(/^e2e-[0-9a-f]{12}\.test$/);
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
@@ -705,7 +732,7 @@ test.describe("/org-admin/settings — Primary domain row", () => {
       // future visual change (e.g. monospace wrapper) doesn't break
       // the match.
       const rowText = ((await primaryRow.textContent()) ?? "").trim();
-      expect(rowText).toContain(fixtureDomain!);
+      expect(rowText).toContain(fixtureDomain);
 
       // No operator control is offered on the primary row — slice-1
       // invariant restated at the rendered-DOM layer. The DomainsCard
@@ -729,7 +756,7 @@ test.describe("/org-admin/settings — placeholder regression sentries", () => {
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
@@ -737,13 +764,11 @@ test.describe("/org-admin/settings — placeholder regression sentries", () => {
       // Slice 1 of the org-admin Domains UI replaced the Domains
       // placeholder with the real DomainsCard. The "Coming soon" badge
       // is no longer rendered on this page.
-      const comingSoonCount = await page
-        .getByText("Coming soon", { exact: true })
-        .count();
+      const comingSoonCount = await page.getByText("Coming soon", { exact: true }).count();
       expect(comingSoonCount).toBe(0);
 
       // No card-level wrapper contains both "Domains" and "Coming soon".
-      const cardRoots = page.locator(`div.rounded-\\[1\\.5rem\\]`);
+      const cardRoots = page.locator("div.rounded-\\[1\\.5rem\\]");
       const domainsCardWithComingSoon = cardRoots
         .filter({ hasText: "Domains" })
         .filter({ hasText: "Coming soon" });
@@ -768,7 +793,7 @@ test.describe("/org-admin/settings — page-body negative invariants", () => {
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
@@ -796,10 +821,7 @@ test.describe("/org-admin/settings — page-body negative invariants", () => {
         /\bsecret\s+key\b/i,
       ];
       for (const pat of credentialTerms) {
-        expect(
-          bodyText.match(pat),
-          `page body matched credential pattern ${pat}`
-        ).toBeNull();
+        expect(bodyText.match(pat), `page body matched credential pattern ${pat}`).toBeNull();
       }
 
       // Authority-boundary blocklist. None of these should appear in the
@@ -817,20 +839,14 @@ test.describe("/org-admin/settings — page-body negative invariants", () => {
         /delete organization/i,
       ];
       for (const pat of authorityTerms) {
-        expect(
-          bodyText.match(pat),
-          `page body matched authority pattern ${pat}`
-        ).toBeNull();
+        expect(bodyText.match(pat), `page body matched authority pattern ${pat}`).toBeNull();
       }
 
       // Real-fixture identifier sentry. Catches a regression that
       // hard-coded a customer / company identifier into operator copy.
       const realFixtureTerms: RegExp[] = [/\baudi\b/i, /admin@audi/i, /\bAudi\b/];
       for (const pat of realFixtureTerms) {
-        expect(
-          bodyText.match(pat),
-          `page body matched real-fixture pattern ${pat}`
-        ).toBeNull();
+        expect(bodyText.match(pat), `page body matched real-fixture pattern ${pat}`).toBeNull();
       }
     } finally {
       await page.close();

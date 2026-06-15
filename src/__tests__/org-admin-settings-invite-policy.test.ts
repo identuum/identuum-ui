@@ -341,7 +341,7 @@ describe("All invite-policy operator-facing copy — boundary + credential negat
     ORG_ADMIN_INVITE_POLICY_CARD_COPY.directInviteHint,
     ORG_ADMIN_INVITE_POLICY_CARD_COPY.directInviteHref,
     ORG_ADMIN_INVITE_POLICY_CARD_COPY.directInviteLinkLabel,
-    ...(Object.values(ORG_ADMIN_INVITE_POLICY_MODE_COPY).flatMap((c) => [c.label, c.description])),
+    ...Object.values(ORG_ADMIN_INVITE_POLICY_MODE_COPY).flatMap((c) => [c.label, c.description]),
   ];
 
   const MISLEADING_PHRASES = [
@@ -405,9 +405,7 @@ describe("All invite-policy operator-facing copy — boundary + credential negat
 
 describe("Page + InvitePolicyForm source — wiring and negative invariants", () => {
   function stripComments(src: string): string {
-    return src
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/^\s*\/\/.*$/gm, "");
+    return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   }
 
   const PAGE_SRC = readFileSync(
@@ -442,9 +440,7 @@ describe("Page + InvitePolicyForm source — wiring and negative invariants", ()
     expect(FORM_SRC).toMatch(/deriveOrgAdminInvitePolicyMode/);
     expect(FORM_SRC).toMatch(/isValidInvitePolicyFlags/);
     expect(FORM_SRC).toMatch(/updateInvitePolicyAction/);
-    expect(FORM_SRC).toMatch(
-      /from\s+["']@\/app\/org-admin\/settings\/settings-helpers["']/
-    );
+    expect(FORM_SRC).toMatch(/from\s+["']@\/app\/org-admin\/settings\/settings-helpers["']/);
     expect(FORM_SRC).toMatch(/from\s+["']@\/app\/org-admin\/settings\/actions["']/);
   });
 
@@ -481,21 +477,15 @@ describe("Page + InvitePolicyForm source — wiring and negative invariants", ()
     // safety property that prevents a malicious client from submitting
     // the invalid (false, true) combination.
     expect(ACTIONS_SRC).toMatch(/VALID_INVITE_POLICY_MODES/);
-    expect(ACTIONS_SRC).toMatch(
-      /allow_public_registration\s*=\s*mode\s*!==\s*["']invite-only["']/
-    );
+    expect(ACTIONS_SRC).toMatch(/allow_public_registration\s*=\s*mode\s*!==\s*["']invite-only["']/);
     expect(ACTIONS_SRC).toMatch(
       /require_registration_approval\s*=\s*mode\s*===\s*["']public-with-approval["']/
     );
     // Negative: the action MUST NOT read either boolean directly from
     // FormData. A regression that did `formData.get("allow_public_registration")`
     // would bypass the mode-only safety contract.
-    expect(ACTIONS_SRC).not.toMatch(
-      /formData\.get\(\s*["']allow_public_registration["']\s*\)/
-    );
-    expect(ACTIONS_SRC).not.toMatch(
-      /formData\.get\(\s*["']require_registration_approval["']\s*\)/
-    );
+    expect(ACTIONS_SRC).not.toMatch(/formData\.get\(\s*["']allow_public_registration["']\s*\)/);
+    expect(ACTIONS_SRC).not.toMatch(/formData\.get\(\s*["']require_registration_approval["']\s*\)/);
   });
 
   it("settings-helpers.ts invite-policy section contains no credential-material literals (post-comment-strip)", () => {

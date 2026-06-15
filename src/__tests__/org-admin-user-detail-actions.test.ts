@@ -30,8 +30,8 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   ORG_ADMIN_USER_ACTION_META,
-  SOLE_ACTIVE_ADMIN_COPY,
   type OrgAdminUserActionInput,
+  SOLE_ACTIVE_ADMIN_COPY,
   computeOrgUserStatus,
   deriveOrgAdminUserActions,
   getOrgAdminUserActionLabel,
@@ -50,6 +50,7 @@ function user(overrides: Partial<OrgAdminUserActionInput> = {}): OrgAdminUserAct
     email: "member@example.com",
     invitation_pending: false,
     invitation_email_bound: true,
+    banned: false,
     ...overrides,
   };
 }
@@ -135,7 +136,10 @@ describe("deriveOrgAdminUserActions — deleted users", () => {
     for (const role of ["org_user", "org_admin", "site_admin"] as const) {
       for (const active of [true, false]) {
         for (const mfa_enabled of [true, false]) {
-          const r = deriveOrgAdminUserActions(user({ role, deleted: true, active, mfa_enabled }), 5);
+          const r = deriveOrgAdminUserActions(
+            user({ role, deleted: true, active, mfa_enabled }),
+            5
+          );
           expect(r.status).toBe("deleted");
           expect(r.actions).toEqual([]);
           expect(r.soleActiveAdmin).toBe(false);
@@ -157,10 +161,7 @@ describe("deriveOrgAdminUserActions — site_admin authority boundary", () => {
     // cannot manage system users.
     for (const active of [true, false]) {
       for (const mfa_enabled of [true, false]) {
-        const r = deriveOrgAdminUserActions(
-          user({ role: "site_admin", active, mfa_enabled }),
-          5
-        );
+        const r = deriveOrgAdminUserActions(user({ role: "site_admin", active, mfa_enabled }), 5);
         expect(r.actions).toEqual([]);
         expect(r.soleActiveAdmin).toBe(false);
       }
@@ -328,9 +329,15 @@ describe("ORG_ADMIN_USER_ACTION_META + getOrgAdminUserActionLabel", () => {
     expect(getOrgAdminUserActionLabel("reset-mfa")).toBe("MFA enrollment");
   });
 
-  it("the metadata table has exactly the four known actions (allowlist key shape)", () => {
+  it("the metadata table has exactly the five known actions (allowlist key shape)", () => {
     const keys = Object.keys(ORG_ADMIN_USER_ACTION_META).sort();
-    expect(keys).toEqual(["disable", "enable", "regenerate-invite", "reset-mfa"]);
+    expect(keys).toEqual([
+      "approve-registration",
+      "disable",
+      "enable",
+      "regenerate-invite",
+      "reset-mfa",
+    ]);
   });
 });
 
@@ -339,9 +346,15 @@ describe("ORG_ADMIN_USER_ACTION_META + getOrgAdminUserActionLabel", () => {
 describe("deriveOrgAdminUserActions — global allowlist + negative invariants", () => {
   // Brute-force across every meaningful input combination and assert
   // the result never includes any action identifier outside the
-  // four-element allowlist. Adding a new action would require a
+  // five-element allowlist. Adding a new action would require a
   // matching enum entry in the helper, AND a test update here.
-  const KNOWN_ACTIONS = new Set(["disable", "enable", "regenerate-invite", "reset-mfa"]);
+  const KNOWN_ACTIONS = new Set([
+    "approve-registration",
+    "disable",
+    "enable",
+    "regenerate-invite",
+    "reset-mfa",
+  ]);
 
   // Forbidden action identifiers that would signal a tenant-internal
   // or cross-org surface leaked into the helper. These map to UI
@@ -540,9 +553,7 @@ describe("SOLE_ACTIVE_ADMIN_COPY — exact guard copy pin", () => {
     // a restriction, not as a tip. A regression that softened this to
     // "You may want to assign another admin first" would imply the
     // disable action is available with extra caution, which is wrong.
-    expect(SOLE_ACTIVE_ADMIN_COPY.title).toBe(
-      "Cannot disable the last active organization admin"
-    );
+    expect(SOLE_ACTIVE_ADMIN_COPY.title).toBe("Cannot disable the last active organization admin");
     expect(SOLE_ACTIVE_ADMIN_COPY.title).toMatch(/^Cannot/);
   });
 
@@ -645,7 +656,9 @@ describe("SOLE_ACTIVE_ADMIN_COPY — page renders the constants (source pin)", (
   );
 
   it("page.tsx imports SOLE_ACTIVE_ADMIN_COPY from the helper module", () => {
-    expect(PAGE_SRC).toMatch(/import\s*\{[\s\S]*?SOLE_ACTIVE_ADMIN_COPY[\s\S]*?\}\s*from\s+["']\.\/user-detail-actions["']/);
+    expect(PAGE_SRC).toMatch(
+      /import\s*\{[\s\S]*?SOLE_ACTIVE_ADMIN_COPY[\s\S]*?\}\s*from\s+["']\.\/user-detail-actions["']/
+    );
   });
 
   it("page.tsx references each SOLE_ACTIVE_ADMIN_COPY field exactly once each", () => {
@@ -689,6 +702,7 @@ describe("deriveOrgAdminUserActions — sole-admin returns actions=[disable] (gu
         email: "admin@example.com",
         invitation_pending: false,
         invitation_email_bound: true,
+        banned: false,
       },
       1
     );
@@ -718,6 +732,131 @@ describe("Helper module — file existence pins", () => {
 
   it("src/app/org-admin/users/[id]/page.tsx exists", () => {
     const p = resolve(__dirname, "..", "app", "org-admin", "users", "[id]", "page.tsx");
+    expect(() => readFileSync(p, "utf-8")).not.toThrow();
+  });
+});
+
+// ── Org-admin Users completion batch (2026-05-30) ────────────────────────────
+//
+// Pins covering the new pending_approval status, the approve-registration
+// action surface, and the new copy constants for the Approve button and the
+// Assigned-roles card. The behavioural pins exercise the exact predicate the
+// IDP service enforces — banned=true && role=org_user — so a regression that
+// e.g. flipped to checking only `banned` would surface here before the
+// Playwright run.
+
+describe("computeOrgUserStatus — pending_approval (banned+org_user)", () => {
+  it("returns 'pending_approval' when banned=true and role=org_user", () => {
+    expect(computeOrgUserStatus(user({ banned: true }))).toBe("pending_approval");
+  });
+
+  it("does NOT return 'pending_approval' when banned=true but role=org_admin", () => {
+    // The IDP guard is role-bound; org_admin banned rows are not approval-pending.
+    expect(computeOrgUserStatus(user({ banned: true, role: "org_admin" }))).not.toBe(
+      "pending_approval"
+    );
+  });
+
+  it("does NOT return 'pending_approval' when banned=true but role=site_admin", () => {
+    expect(computeOrgUserStatus(user({ banned: true, role: "site_admin" }))).not.toBe(
+      "pending_approval"
+    );
+  });
+
+  it("invitation_pending takes precedence over banned (still pending, not pending_approval)", () => {
+    // An invited user who somehow also has banned set should NOT surface the
+    // approval affordance — the invitation flow is the active state machine.
+    expect(computeOrgUserStatus(user({ banned: true, invitation_pending: true }))).toBe("pending");
+  });
+
+  it("deleted takes precedence over banned (still deleted, not pending_approval)", () => {
+    expect(computeOrgUserStatus(user({ banned: true, deleted: true }))).toBe("deleted");
+  });
+});
+
+describe("deriveOrgAdminUserActions — approve-registration surface", () => {
+  it("pending_approval users surface ONLY approve-registration", () => {
+    const r = deriveOrgAdminUserActions(user({ banned: true }), 1);
+    expect(r.status).toBe("pending_approval");
+    expect(r.actions).toEqual(["approve-registration"]);
+    expect(r.soleActiveAdmin).toBe(false);
+  });
+
+  it("approve-registration never appears for non-pending_approval users", () => {
+    const cases = [
+      user(), // active org_user
+      user({ active: false }), // disabled org_user
+      user({ invitation_pending: true }), // invitation pending
+      user({ deleted: true }), // deleted
+      user({ role: "site_admin" }), // site_admin
+    ];
+    for (const c of cases) {
+      const r = deriveOrgAdminUserActions(c, 1);
+      expect(r.actions).not.toContain("approve-registration");
+    }
+  });
+});
+
+describe("Helper module — new copy constants", () => {
+  it("ORG_ADMIN_USER_ACTION_META exposes the approve-registration entry", () => {
+    expect(ORG_ADMIN_USER_ACTION_META["approve-registration"].sectionLabel).toBe(
+      "Approve registration"
+    );
+    expect(getOrgAdminUserActionLabel("approve-registration")).toBe("Approve registration");
+  });
+});
+
+describe("Helper module — file source pins for the new components", () => {
+  it("APPROVE_REGISTRATION_COPY source pins the operator-facing strings", () => {
+    const p = resolve(
+      __dirname,
+      "..",
+      "app",
+      "org-admin",
+      "users",
+      "[id]",
+      "user-detail-actions.ts"
+    );
+    const SRC = readFileSync(p, "utf-8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    expect(SRC).toMatch(/APPROVE_REGISTRATION_COPY\s*=\s*\{[\s\S]*?\}\s*as\s*const/);
+    expect(SRC).toMatch(/sectionHeading:\s*"Approve registration"/);
+    expect(SRC).toMatch(/buttonLabel:\s*"Approve registration"/);
+    expect(SRC).toMatch(/successMessage:\s*"Registration approved\./);
+  });
+
+  it("USER_ROLES_CARD_COPY source pins the operator-facing strings", () => {
+    const p = resolve(
+      __dirname,
+      "..",
+      "app",
+      "org-admin",
+      "users",
+      "[id]",
+      "user-detail-actions.ts"
+    );
+    const SRC = readFileSync(p, "utf-8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    expect(SRC).toMatch(/USER_ROLES_CARD_COPY\s*=\s*\{[\s\S]*?\}\s*as\s*const/);
+    expect(SRC).toMatch(/title:\s*"Assigned roles"/);
+    expect(SRC).toMatch(/assignHeading:\s*"Assign role"/);
+    expect(SRC).toMatch(/removeButtonLabel:\s*"Remove"/);
+  });
+
+  it("ApproveButton component exists", () => {
+    const p = resolve(__dirname, "..", "app", "org-admin", "users", "[id]", "approve-button.tsx");
+    expect(() => readFileSync(p, "utf-8")).not.toThrow();
+  });
+
+  it("UserRolesCard component exists", () => {
+    const p = resolve(__dirname, "..", "app", "org-admin", "users", "[id]", "user-roles-card.tsx");
+    expect(() => readFileSync(p, "utf-8")).not.toThrow();
+  });
+
+  it("BulkInviteSection component exists", () => {
+    const p = resolve(__dirname, "..", "app", "org-admin", "users", "bulk-invite-section.tsx");
     expect(() => readFileSync(p, "utf-8")).not.toThrow();
   });
 });

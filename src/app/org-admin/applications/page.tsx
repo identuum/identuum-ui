@@ -28,7 +28,12 @@
  *     URIs, allowed audiences, scope, JWKS URI). No token, no
  *     credential.
  */
+import {
+  type AuthorizationServerPageBoundary,
+  getAuthorizationServerPageBoundary,
+} from "@/lib/capability-affordances";
 import { listOwnOrganizationClients } from "@/lib/idp-admin-client";
+import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { OrgClientItem } from "@/lib/types";
 import type { Metadata } from "next";
 
@@ -41,7 +46,12 @@ export default async function OrgAdminApplicationsPage({
 }: {
   searchParams?: Promise<{ deleted?: string }>;
 }) {
-  const result = await listOwnOrganizationClients();
+  const runtimeState = await getServerRuntimeState();
+  const capabilityBoundary = getAuthorizationServerPageBoundary({
+    capabilities: runtimeState?.components.idp.capabilities,
+    surface: "oauth_clients",
+  });
+  const result = capabilityBoundary ? null : await listOwnOrganizationClients();
   const params = (await searchParams) ?? {};
   // The `deleted` query string carries ONLY the operator-chosen
   // application display name surfaced by the delete server action's
@@ -50,9 +60,7 @@ export default async function OrgAdminApplicationsPage({
   // just consume it as a plain string and never echo it back into a
   // form value or storage primitive.
   const deletedName =
-    typeof params.deleted === "string" && params.deleted.length > 0
-      ? params.deleted
-      : null;
+    typeof params.deleted === "string" && params.deleted.length > 0 ? params.deleted : null;
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -73,21 +81,19 @@ export default async function OrgAdminApplicationsPage({
 
       {deletedName && <DeletedNotice name={deletedName} />}
 
-      {!result.ok && <ErrorPanel />}
+      {capabilityBoundary && <CapabilityUnavailablePanel copy={capabilityBoundary} />}
+      {result && !result.ok && <ErrorPanel />}
 
-      {result.ok && result.data.clients.length === 0 && <EmptyPanel />}
+      {result?.ok && result.data.clients.length === 0 && <EmptyPanel />}
 
-      {result.ok && result.data.clients.length > 0 && (
+      {result?.ok && result.data.clients.length > 0 && (
         <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-stone-100">
             <p className="text-sm font-semibold text-sky-950">
-              {result.data.total === 1
-                ? "1 application"
-                : `${result.data.total} applications`}
+              {result.data.total === 1 ? "1 application" : `${result.data.total} applications`}
             </p>
             <p className="text-xs text-stone-400 mt-0.5">
-              These are the OAuth clients other systems use to obtain tokens for your
-              organization.
+              These are the OAuth clients other systems use to obtain tokens for your organization.
             </p>
           </div>
           <ul className="divide-y divide-stone-100">
@@ -188,9 +194,7 @@ function Badge({ tone, label }: { tone: "sky" | "amber" | "stone"; label: string
         ? "text-amber-800 bg-amber-100"
         : "text-stone-600 bg-stone-100";
   return (
-    <span
-      className={`text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded ${cls}`}
-    >
+    <span className={`text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded ${cls}`}>
       {label}
     </span>
   );
@@ -198,13 +202,12 @@ function Badge({ tone, label }: { tone: "sky" | "amber" | "stone"; label: string
 
 function DeletedNotice({ name }: { name: string }) {
   return (
-    <div
-      role="status"
+    <output
       aria-live="polite"
-      className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+      className="block rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
     >
       Deleted {name}.
-    </div>
+    </output>
   );
 }
 
@@ -213,9 +216,18 @@ function EmptyPanel() {
     <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm px-6 py-10 text-center">
       <p className="text-sm font-semibold text-sky-950">No applications yet</p>
       <p className="text-xs text-stone-500 mt-1 max-w-md mx-auto leading-relaxed">
-        Your organization hasn{"'"}t registered any OAuth clients. Application registration
-        is not yet available from this page; contact your platform administrator to add one.
+        Your organization hasn{"'"}t registered any OAuth clients. Application registration is not
+        yet available from this page; contact your platform administrator to add one.
       </p>
+    </div>
+  );
+}
+
+function CapabilityUnavailablePanel({ copy }: { copy: AuthorizationServerPageBoundary }) {
+  return (
+    <div className="bg-white border border-amber-200 rounded-[1.5rem] shadow-sm px-6 py-6">
+      <p className="text-sm font-semibold text-amber-800">{copy.title}</p>
+      <p className="text-xs text-stone-500 mt-1 leading-relaxed">{copy.body}</p>
     </div>
   );
 }
@@ -225,8 +237,8 @@ function ErrorPanel() {
     <div className="bg-white border border-red-100 rounded-[1.5rem] shadow-sm px-6 py-6">
       <p className="text-sm font-semibold text-red-700">Could not load applications</p>
       <p className="text-xs text-stone-500 mt-1 leading-relaxed">
-        Reload the page or try again later. Contact your platform administrator if the
-        problem persists.
+        Reload the page or try again later. Contact your platform administrator if the problem
+        persists.
       </p>
     </div>
   );

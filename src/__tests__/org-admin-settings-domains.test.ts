@@ -101,10 +101,7 @@ describe("ORG_ADMIN_DOMAINS_CARD_COPY — operator copy pins", () => {
 // invariant in every sanitizer code path.
 
 describe("idp-admin-client.ts — Org-admin Domains source contract", () => {
-  const CLIENT_SRC = readFileSync(
-    resolve(__dirname, "..", "lib", "idp-admin-client.ts"),
-    "utf-8"
-  );
+  const CLIENT_SRC = readFileSync(resolve(__dirname, "..", "lib", "idp-admin-client.ts"), "utf-8");
 
   it("declares the five Domains methods with the documented names", () => {
     expect(CLIENT_SRC).toMatch(/export async function listOrganizationDomains\b/);
@@ -160,10 +157,7 @@ describe("idp-admin-client.ts — Org-admin Domains source contract", () => {
     // mention the field (as a documented exclusion) don't trip the
     // assertion. A regression that copied the hash through code paths
     // would still surface here.
-    const noComments = CLIENT_SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(
-      /^\s*\/\/.*$/gm,
-      ""
-    );
+    const noComments = CLIENT_SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     expect(noComments).not.toMatch(/verification_token_hash/);
     expect(noComments).not.toMatch(/token_hash/);
   });
@@ -240,9 +234,8 @@ describe("domains-actions.ts — server-action contract", () => {
     expect(ACTIONS_SRC).toMatch(
       /phase:\s*"success"[\s\S]*?record_name:[\s\S]*?record_value:[\s\S]*?expires_at:/
     );
-    const addBlock = ACTIONS_SRC.split(
-      "export async function addOrganizationDomainAction"
-    )[1] ?? "";
+    const addBlock =
+      ACTIONS_SRC.split("export async function addOrganizationDomainAction")[1] ?? "";
     const untilNext = addBlock.split("// ──")[0] ?? "";
     expect(untilNext).not.toMatch(/\btoken\s*:/);
   });
@@ -275,9 +268,7 @@ describe("DomainsCard — source contract", () => {
     expect(CARD_SRC).toMatch(
       /<label\s+htmlFor="org-admin-add-domain"[\s\S]*?>\s*\{\s*ORG_ADMIN_DOMAINS_CARD_COPY\.addLabel\s*\}/
     );
-    expect(CARD_SRC).toMatch(
-      /<input[\s\S]*?id="org-admin-add-domain"[\s\S]*?name="domain"/
-    );
+    expect(CARD_SRC).toMatch(/<input[\s\S]*?id="org-admin-add-domain"[\s\S]*?name="domain"/);
   });
 
   it("the Remove control is gated by !d.is_primary (primary domain has NO Remove affordance)", () => {
@@ -291,9 +282,7 @@ describe("DomainsCard — source contract", () => {
   });
 
   it("the Verify control is gated by !d.verified (verified rows do NOT show Verify)", () => {
-    expect(CARD_SRC).toMatch(
-      /\{!d\.verified && \(\s*<form[\s\S]*?verifyButton/
-    );
+    expect(CARD_SRC).toMatch(/\{!d\.verified && \(\s*<form[\s\S]*?verifyButton/);
   });
 
   it("the Set primary control is gated by d.verified && !d.is_primary", () => {
@@ -483,10 +472,7 @@ describe("verifyOrganizationDomainAction — safe error mapping (slice 2)", () =
 // parsing of the human-facing IDP message text.
 
 describe("idp-admin-client.verifyOrganizationDomain — helper integration (slice 4)", () => {
-  const CLIENT_SRC = readFileSync(
-    resolve(__dirname, "..", "lib", "idp-admin-client.ts"),
-    "utf-8"
-  );
+  const CLIENT_SRC = readFileSync(resolve(__dirname, "..", "lib", "idp-admin-client.ts"), "utf-8");
 
   // Helper: slice the verify body out of the source so the negative
   // substring assertions cannot accidentally match an unrelated
@@ -495,9 +481,9 @@ describe("idp-admin-client.verifyOrganizationDomain — helper integration (slic
     const start = CLIENT_SRC.indexOf("export async function verifyOrganizationDomain");
     expect(start).toBeGreaterThanOrEqual(0);
     const tail = CLIENT_SRC.slice(start);
-    const nextExport = tail.slice("export async function verifyOrganizationDomain".length).indexOf(
-      "\nexport "
-    );
+    const nextExport = tail
+      .slice("export async function verifyOrganizationDomain".length)
+      .indexOf("\nexport ");
     return nextExport >= 0
       ? tail.slice(0, "export async function verifyOrganizationDomain".length + nextExport)
       : tail;
@@ -548,9 +534,7 @@ describe("idp-admin-client.verifyOrganizationDomain — helper integration (slic
   it("the generic branch sets no discriminator (safe-fallback)", () => {
     // Find the switch over classification.kind and isolate the
     // generic arm. It must not set any of the three discriminators.
-    const switchBlock = verifyBlock.match(
-      /switch\s*\(\s*classification\.kind\s*\)[\s\S]*?\}\s*\}/
-    );
+    const switchBlock = verifyBlock.match(/switch\s*\(\s*classification\.kind\s*\)[\s\S]*?\}\s*\}/);
     expect(switchBlock).not.toBeNull();
     const block = switchBlock?.[0] ?? "";
     const genericIdx = block.indexOf('case "generic"');
@@ -695,7 +679,9 @@ describe("ORG_ADMIN_DOMAINS_CARD_COPY — remove-failure copy bundle (slice 5)",
     // Load-bearing actionable copy: the operator must understand the
     // next step (promote another verified domain to primary first).
     expect(ORG_ADMIN_DOMAINS_CARD_COPY.removeErrorPrimaryConflict).toMatch(/primary/i);
-    expect(ORG_ADMIN_DOMAINS_CARD_COPY.removeErrorPrimaryConflict).toMatch(/set\s+(another\s+)?verified/i);
+    expect(ORG_ADMIN_DOMAINS_CARD_COPY.removeErrorPrimaryConflict).toMatch(
+      /set\s+(another\s+)?verified/i
+    );
   });
 
   it("removeErrorNotFound is the safe missing-row string", () => {
@@ -871,7 +857,17 @@ describe("/org-admin/settings page wiring — DomainsCard replaces placeholder",
   });
 
   it("derives orgID server-side via org?.id (NEVER from a URL param or form data)", () => {
-    expect(PAGE_SRC).toMatch(/org\?\.id\s*\?\s*await\s+listOrganizationDomains/);
+    // Slice identuum-20260530-org-admin-settings-readonly-tabs
+    // refactored the per-card await into a single Promise.all that
+    // also fetches IdPs/Webhooks/Roles/Scope-Templates. The orgID
+    // continues to be derived from the session-derived `org?.id` and
+    // never from a URL param. Accept either the prior shape OR the
+    // current `const orgID = org?.id ?? ""` + `listOrganizationDomains(orgID)` shape.
+    const oldShape = /org\?\.id\s*\?\s*await\s+listOrganizationDomains/.test(PAGE_SRC);
+    const newShape =
+      /const\s+orgID\s*=\s*org\?\.id\s*\?\?\s*""/.test(PAGE_SRC) &&
+      /listOrganizationDomains\(orgID\)/.test(PAGE_SRC);
+    expect(oldShape || newShape).toBe(true);
     expect(PAGE_SRC).not.toMatch(/searchParams/);
   });
 });

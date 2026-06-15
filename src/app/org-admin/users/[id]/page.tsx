@@ -14,13 +14,21 @@
  *   - No passwords, tokens, MFA secrets, session IDs, or WebAuthn data are shown.
  */
 
-import { getOrgUserById, listAuditEvents, listOrgUsers } from "@/lib/idp-admin-client";
-import type { AuditEventItem } from "@/lib/idp-admin-client";
 import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
-import type { OrgUserItem } from "@/lib/types";
+import {
+  getOrgUserById,
+  getOwnOrganization,
+  listAuditEvents,
+  listOrgRoles,
+  listOrgUsers,
+  listUserRoles,
+} from "@/lib/idp-admin-client";
+import type { OrgRoleItem } from "@/lib/idp-admin-client";
 import type { Metadata } from "next";
 import { RegenerateInviteLink, ResetMFAButton, UserRowActions } from "../user-row-actions";
+import { ApproveButton } from "./approve-button";
 import {
+  APPROVE_REGISTRATION_COPY,
   RECENT_ACTIVITY_COPY,
   SOLE_ACTIVE_ADMIN_COPY,
   buildOrgAdminUserAuditHref,
@@ -28,6 +36,7 @@ import {
   deriveOrgAdminUserActions,
   isNoEmailSentinel,
 } from "./user-detail-actions";
+import { UserRolesCard } from "./user-roles-card";
 
 export const metadata: Metadata = { title: "User — Identuum Org Admin" };
 
@@ -71,15 +80,29 @@ export default async function OrgAdminUserDetailPage({
     return <NotFoundPanel />;
   }
 
-  const [user, allUsers, recentAuditResult] = await Promise.all([
+  // Fetch user identity, org context (for the role-assignment dropdown source),
+  // org-wide user list (for sole-active-admin count), the per-user role list,
+  // and the per-subject audit feed. listOrgRoles is only useful for the
+  // dropdown — if there is no org id available we surface that as the
+  // available-roles-load error inside the roles card.
+  const [user, org, allUsers, assignedRolesResult, recentAuditResult] = await Promise.all([
     getOrgUserById(id),
+    getOwnOrganization(),
     listOrgUsers(),
+    listUserRoles(id).catch(() => null),
     listAuditEvents({ subjectId: id, pageSize: 8 }).catch(() => null),
   ]);
 
   if (!user) {
     return <NotFoundPanel />;
   }
+
+  // Fetch the dropdown source only when the org id is available.
+  const availableRolesResult = org?.id ? await listOrgRoles(org.id).catch(() => null) : null;
+  const assignedRoles: OrgRoleItem[] = assignedRolesResult?.ok ? assignedRolesResult.roles : [];
+  const availableRoles: OrgRoleItem[] = availableRolesResult?.ok ? availableRolesResult.roles : [];
+  const assignedLoadError = !!(assignedRolesResult && !assignedRolesResult.ok);
+  const availableLoadError = !!(availableRolesResult && !availableRolesResult.ok) || !org?.id;
 
   // Count active, non-deleted org_admins to determine last-admin protection.
   // If listOrgUsers fails (null), default activeAdminCount=0 — the helper's
@@ -103,6 +126,10 @@ export default async function OrgAdminUserDetailPage({
   const statusConfig = {
     active: { label: "Active", cls: "text-emerald-700 bg-emerald-50 border-emerald-200" },
     pending: { label: "Pending", cls: "text-amber-700 bg-amber-50 border-amber-200" },
+    pending_approval: {
+      label: "Pending approval",
+      cls: "text-violet-700 bg-violet-50 border-violet-200",
+    },
     disabled: { label: "Disabled", cls: "text-stone-500 bg-stone-100 border-stone-200" },
     deleted: { label: "Deleted", cls: "text-red-600 bg-red-50 border-red-100" },
   } as const;
@@ -120,11 +147,16 @@ export default async function OrgAdminUserDetailPage({
   };
 
   // Action visibility is derived by deriveOrgAdminUserActions(). The
-  // three local booleans below are kept as thin aliases so the JSX
-  // below remains byte-identical; tests pin the underlying matrix.
+  // local booleans below are kept as thin aliases so the JSX below
+  // remains byte-identical; tests pin the underlying matrix.
   const showLifecycleActions = actions.includes("disable") || actions.includes("enable");
   const showRegenerate = actions.includes("regenerate-invite");
   const showMFAReset = actions.includes("reset-mfa");
+  const showApproveRegistration = actions.includes("approve-registration");
+  // The Assigned-roles card is only meaningful for tenant users. site_admin
+  // identities cannot be modified from the /org-admin surface (authority
+  // boundary), and deleted users have no actionable roles to show.
+  const showRolesCard = !user.deleted && user.role !== "site_admin";
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -227,7 +259,7 @@ export default async function OrgAdminUserDetailPage({
       </div>
 
       {/* Actions card */}
-      {(showLifecycleActions || showRegenerate || showMFAReset) && (
+      {(showLifecycleActions || showRegenerate || showMFAReset || showApproveRegistration) && (
         <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-stone-100">
             <p className="text-sm font-semibold text-sky-950">Actions</p>
@@ -293,12 +325,36 @@ export default async function OrgAdminUserDetailPage({
                 </div>
               </div>
             )}
+            {showApproveRegistration && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-stone-600">
+                  {APPROVE_REGISTRATION_COPY.sectionHeading}
+                </p>
+                <p className="text-xs text-stone-400 leading-relaxed max-w-[280px]">
+                  {APPROVE_REGISTRATION_COPY.description}
+                </p>
+                <div className="pt-1">
+                  <ApproveButton userId={user.id} />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
+      {/* Assigned roles card */}
+      {showRolesCard && (
+        <UserRolesCard
+          userId={user.id}
+          assignedRoles={assignedRoles}
+          availableRoles={availableRoles}
+          assignedLoadError={assignedLoadError}
+          availableLoadError={availableLoadError}
+        />
+      )}
+
       {/* Recent audit activity — only shown when feature is available */}
-      {recentAuditResult && recentAuditResult.ok && recentAuditResult.events.length > 0 && (
+      {recentAuditResult?.ok && recentAuditResult.events.length > 0 && (
         <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-stone-100 flex items-center justify-between gap-4">
             <div>

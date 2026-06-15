@@ -143,9 +143,7 @@ export async function createApplicationAction(
     }
   }
 
-  const postLogoutURIs = splitLines(
-    formData.get("post_logout_redirect_uris") as string | null
-  );
+  const postLogoutURIs = splitLines(formData.get("post_logout_redirect_uris") as string | null);
   // Post-logout URIs are optional but, when present, must be safe.
   for (const uri of postLogoutURIs) {
     if (!isSafeRedirectURI(uri)) {
@@ -194,8 +192,7 @@ export async function createApplicationAction(
   if (result.conflict) {
     return {
       phase: "error",
-      error:
-        "A client with this configuration already exists in your organization.",
+      error: "A client with this configuration already exists in your organization.",
     };
   }
   if (result.invalid) {
@@ -306,9 +303,7 @@ export async function updateApplicationAction(
     }
   }
 
-  const postLogoutURIs = splitLines(
-    formData.get("post_logout_redirect_uris") as string | null
-  );
+  const postLogoutURIs = splitLines(formData.get("post_logout_redirect_uris") as string | null);
   for (const uri of postLogoutURIs) {
     if (!isSafeRedirectURI(uri)) {
       return {
@@ -462,9 +457,7 @@ export async function deleteApplicationAction(
     // paint. The query-string value is URI-encoded; no client_secret /
     // tokens / hashes ever cross this boundary — only the operator-
     // chosen display name.
-    redirect(
-      `/org-admin/applications?deleted=${encodeURIComponent(expectedName)}`
-    );
+    redirect(`/org-admin/applications?deleted=${encodeURIComponent(expectedName)}`);
   }
 
   if (result.forbidden) {
@@ -479,9 +472,7 @@ export async function deleteApplicationAction(
     // the stale detail page does not linger.
     revalidatePath("/org-admin/applications");
     revalidatePath(`/org-admin/applications/${clientId}`);
-    redirect(
-      `/org-admin/applications?deleted=${encodeURIComponent(expectedName)}`
-    );
+    redirect(`/org-admin/applications?deleted=${encodeURIComponent(expectedName)}`);
   }
   if (result.invalid) {
     return {

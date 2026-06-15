@@ -25,7 +25,7 @@
  */
 
 import { readFileSync, statSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 
 /**
  * Canonical marker the IDP CLI writes into every fixture file. Must match
@@ -97,9 +97,7 @@ export function loadOrgAdminFixture(): OrgAdminFixtureCredentials | null {
   try {
     parsed = JSON.parse(raw);
   } catch (err) {
-    throw new Error(
-      `e2e fixture: file at ${path} is not valid JSON (${(err as Error).message})`
-    );
+    throw new Error(`e2e fixture: file at ${path} is not valid JSON (${(err as Error).message})`);
   }
   return validateFixture(parsed, path);
 }
@@ -114,9 +112,7 @@ export function validateFixture(input: unknown, path: string): OrgAdminFixtureCr
     throw new Error(`e2e fixture at ${path}: top-level must be an object`);
   }
   if (input.fixture_marker !== E2E_FIXTURE_MARKER) {
-    throw new Error(
-      `e2e fixture at ${path}: fixture_marker must equal "${E2E_FIXTURE_MARKER}"`
-    );
+    throw new Error(`e2e fixture at ${path}: fixture_marker must equal "${E2E_FIXTURE_MARKER}"`);
   }
   if (input.schema_version !== E2E_FIXTURE_SCHEMA_VERSION) {
     throw new Error(
@@ -136,19 +132,13 @@ export function validateFixture(input: unknown, path: string): OrgAdminFixtureCr
   const expectedOrgSlug = `e2e-fixture-${runID}`;
   const expectedOrgDomain = `e2e-${runID}.test`;
   if (org.name !== expectedOrgName) {
-    throw new Error(
-      `e2e fixture at ${path}: organization.name must equal reserved e2e prefix`
-    );
+    throw new Error(`e2e fixture at ${path}: organization.name must equal reserved e2e prefix`);
   }
   if (org.slug !== expectedOrgSlug) {
-    throw new Error(
-      `e2e fixture at ${path}: organization.slug must equal reserved e2e prefix`
-    );
+    throw new Error(`e2e fixture at ${path}: organization.slug must equal reserved e2e prefix`);
   }
   if (org.domain !== expectedOrgDomain) {
-    throw new Error(
-      `e2e fixture at ${path}: organization.domain must equal reserved e2e prefix`
-    );
+    throw new Error(`e2e fixture at ${path}: organization.domain must equal reserved e2e prefix`);
   }
 
   const admin = (input as { org_admin?: unknown }).org_admin;
@@ -157,9 +147,7 @@ export function validateFixture(input: unknown, path: string): OrgAdminFixtureCr
   }
   const expectedAdminEmail = `admin@e2e-${runID}.test`;
   if (admin.email !== expectedAdminEmail) {
-    throw new Error(
-      `e2e fixture at ${path}: org_admin.email must equal reserved e2e prefix`
-    );
+    throw new Error(`e2e fixture at ${path}: org_admin.email must equal reserved e2e prefix`);
   }
   if (typeof admin.password !== "string" || admin.password.length === 0) {
     throw new Error(`e2e fixture at ${path}: org_admin.password missing or empty`);
@@ -331,6 +319,87 @@ export function loadOrgAdminFixtureSampleClient(): OrgAdminFixtureSampleClient |
 }
 
 /**
+ * Non-secret subset of the seeded CONFIDENTIAL OAuth client written by
+ * the IDP fixture CLI alongside the public sample client. The fields
+ * mirror exactly the four fields `cli.FixtureConfidentialSampleClientBlock`
+ * writes into the JSON envelope: `id`, `client_id`, `name`, `is_public`.
+ * NEVER expose `client_secret`, `client_secret_hash`, `private_key`,
+ * inline `jwks`, signing material, `access_token`, `refresh_token`, or
+ * any other credential-shaped field — the IDP fixture envelope does
+ * not write them, and a regression that started doing so would
+ * surface in the IDP-side Go test
+ * TestFixtureConfidentialSampleClientBlock_NeverIncludesSecretMaterial.
+ */
+export interface OrgAdminFixtureConfidentialSampleClient {
+  id: string;
+  clientId: string;
+  name: string;
+  isPublic: boolean;
+}
+
+/**
+ * Returns the disposable CONFIDENTIAL OAuth client the IDP fixture
+ * CLI seeded alongside the fixture organization, when the dynamic
+ * fixture file is present and valid. Returns null when the file is
+ * absent (durable-env mode) OR when the envelope was written by a
+ * pre-confidential-client IDP build (the field is optional on the
+ * envelope by design, so older fixtures still round-trip cleanly
+ * through validateFixture).
+ *
+ * SECURITY:
+ *   - Returns ONLY non-secret identifiers: id (opaque UUID, used as
+ *     the route path segment for /org-admin/applications/[id]),
+ *     client_id (operator-visible OAuth2 client_id), name (operator-
+ *     visible display name), is_public (always false for this
+ *     seeded client). NO client_secret, NO client_secret_hash, NO
+ *     private_key, NO inline jwks, NO signing material, NO token-
+ *     shaped field crosses this function boundary.
+ *   - Re-uses validateFixture so every safety invariant runs (marker,
+ *     schema version, reserved e2e-<runID> prefixes); a malformed
+ *     file still throws.
+ *   - The id is validated against a narrow UUID-shape regex; a non-
+ *     UUID id is dropped fail-closed so it cannot be silently
+ *     surfaced into a test URL.
+ *   - The client_id is validated against the reserved
+ *     `e2e-fixture-<runID>-confidential-app` pattern — anything else
+ *     means the envelope was written for a different run and is
+ *     fail-closed dropped.
+ *   - The name is validated against the reserved
+ *     `E2E Confidential Application <runID>` pattern.
+ *   - is_public is validated to be the boolean literal `false` — if a
+ *     future regression flips the seeded client to public, the
+ *     loader returns null and the confidential Playwright test
+ *     self-skips loudly rather than silently exercising the wrong
+ *     branch.
+ *   - No console.* anywhere.
+ */
+export function loadOrgAdminFixtureConfidentialSampleClient(): OrgAdminFixtureConfidentialSampleClient | null {
+  const path = resolveFixturePath();
+  try {
+    statSync(path);
+  } catch {
+    return null;
+  }
+  const raw = readFileSync(path, "utf-8");
+  const parsed = JSON.parse(raw) as unknown;
+  validateFixture(parsed, path);
+  const runID = (parsed as { run_id?: unknown }).run_id;
+  if (typeof runID !== "string") return null;
+  const block = (parsed as { confidential_sample_client?: unknown }).confidential_sample_client;
+  if (!isObject(block)) return null;
+  const { id, client_id, name, is_public } = block as Record<string, unknown>;
+  if (typeof id !== "string" || !/^[0-9a-fA-F-]{32,36}$/.test(id)) return null;
+  if (typeof client_id !== "string" || client_id !== `e2e-fixture-${runID}-confidential-app`) {
+    return null;
+  }
+  if (typeof name !== "string" || name !== `E2E Confidential Application ${runID}`) {
+    return null;
+  }
+  if (is_public !== false) return null;
+  return { id, clientId: client_id, name, isPublic: is_public };
+}
+
+/**
  * Convenience for orchestration helpers wanting to ensure the directory
  * exists with restrictive mode before the IDP CLI writes into it.
  * Returns the absolute path of the directory (regardless of pre-existing
@@ -338,4 +407,96 @@ export function loadOrgAdminFixtureSampleClient(): OrgAdminFixtureSampleClient |
  */
 export function fixtureDirectory(): string {
   return dirname(resolveFixturePath());
+}
+
+/**
+ * Non-secret subset of the seeded API resource written by the IDP
+ * fixture CLI alongside the org + admin + sample OAuth clients. Mirrors
+ * exactly the five fields cli.FixtureAPIResourceBlock writes into the
+ * JSON envelope: id, audience, name, active, token_ttl_secs. NEVER
+ * expose resource_secret, resource_secret_hash, private_key, inline
+ * jwks, signing material, access_token, refresh_token, or any other
+ * credential-shaped field — the IDP fixture envelope does not write
+ * them, and a regression that started doing so would surface in the
+ * IDP-side Go test TestFixtureAPIResourceBlock_NeverIncludesSecretMaterial.
+ */
+export interface OrgAdminFixtureApiResource {
+  id: string;
+  audience: string;
+  name: string;
+  active: boolean;
+  tokenTTLSecs: number;
+}
+
+/**
+ * Returns the disposable API resource the IDP fixture CLI seeded
+ * alongside the fixture organization, when the dynamic fixture file is
+ * present and valid. Returns null when the file is absent (durable-env
+ * mode) OR when the envelope was written by a pre-api-resource IDP
+ * build (the field is optional on the envelope by design, so older
+ * fixtures still round-trip cleanly through validateFixture).
+ *
+ * SECURITY:
+ *   - Returns ONLY non-secret identifiers: id (opaque UUID used as the
+ *     route path segment for /org-admin/api-resources/[id]), audience
+ *     (operator-visible OAuth aud claim), name (operator-visible
+ *     display name), active (always true for this seeded resource),
+ *     token_ttl_secs (numeric token TTL). NO resource_secret,
+ *     resource_secret_hash, private_key, jwks, signing material, or
+ *     token-shaped field crosses this function boundary.
+ *   - Re-uses validateFixture so every safety invariant runs (marker,
+ *     schema version, reserved e2e-<runID> prefixes); a malformed file
+ *     still throws.
+ *   - The id is validated against a narrow UUID-shape regex; a non-
+ *     UUID id is dropped fail-closed.
+ *   - The audience is validated against the reserved
+ *     `https://api.e2e-<runID>.test` pattern — anything else means the
+ *     envelope was written for a different run and is fail-closed
+ *     dropped.
+ *   - The name is validated against the reserved `E2E Sample API
+ *     <runID>` pattern.
+ *   - active is validated to be the boolean literal `true` — if a
+ *     future regression flipped the seeded resource to inactive, the
+ *     loader returns null and the populated Playwright test self-skips
+ *     loudly rather than silently exercising the wrong branch.
+ *   - token_ttl_secs is validated to be a positive integer in the
+ *     IDP-accepted range [60, 86400].
+ *   - No console.* anywhere.
+ */
+export function loadOrgAdminFixtureApiResource(): OrgAdminFixtureApiResource | null {
+  const path = resolveFixturePath();
+  try {
+    statSync(path);
+  } catch {
+    return null;
+  }
+  const raw = readFileSync(path, "utf-8");
+  const parsed = JSON.parse(raw) as unknown;
+  validateFixture(parsed, path);
+  const runID = (parsed as { run_id?: unknown }).run_id;
+  if (typeof runID !== "string") return null;
+  const block = (parsed as { api_resource?: unknown }).api_resource;
+  if (!isObject(block)) return null;
+  const { id, audience, name, active, token_ttl_secs } = block as Record<string, unknown>;
+  if (typeof id !== "string" || !/^[0-9a-fA-F-]{32,36}$/.test(id)) return null;
+  if (typeof audience !== "string" || audience !== `https://api.e2e-${runID}.test`) {
+    return null;
+  }
+  if (typeof name !== "string" || name !== `E2E Sample API ${runID}`) return null;
+  if (active !== true) return null;
+  if (
+    typeof token_ttl_secs !== "number" ||
+    !Number.isInteger(token_ttl_secs) ||
+    token_ttl_secs < 60 ||
+    token_ttl_secs > 86400
+  ) {
+    return null;
+  }
+  return {
+    id,
+    audience,
+    name,
+    active,
+    tokenTTLSecs: token_ttl_secs,
+  };
 }

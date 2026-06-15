@@ -49,10 +49,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useActionState, useState } from "react";
-import {
-  type RotateApplicationSecretState,
-  rotateApplicationSecretAction,
-} from "../actions";
+import { type RotateApplicationSecretState, rotateApplicationSecretAction } from "../actions";
 
 const initialState: RotateApplicationSecretState = { phase: "idle" };
 
@@ -79,8 +76,8 @@ export function SecuritySection({
           Security
         </h2>
         <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">
-          Sensitive credential operations for this OAuth client. Secret rotation is
-          available for confidential clients only.
+          Sensitive credential operations for this OAuth client. Secret rotation is available for
+          confidential clients only.
         </p>
       </div>
       {isPublic ? (
@@ -100,9 +97,8 @@ function PublicClientNotice() {
   return (
     <div className="px-6 py-5">
       <p className="text-xs text-stone-600 leading-relaxed">
-        Public clients do not have a client secret to rotate. Public-client flows
-        (PKCE, mobile, single-page apps) authenticate to the token endpoint without
-        a static secret.
+        Public clients do not have a client secret to rotate. Public-client flows (PKCE, mobile,
+        single-page apps) authenticate to the token endpoint without a static secret.
       </p>
     </div>
   );
@@ -119,12 +115,7 @@ function ConfidentialRotateSurface({
 }) {
   const [expanded, setExpanded] = useState(false);
 
-  const boundAction = rotateApplicationSecretAction.bind(
-    null,
-    clientId,
-    clientName,
-    clientID
-  );
+  const boundAction = rotateApplicationSecretAction.bind(null, clientId, clientName, clientID);
   const [state, action, pending] = useActionState(boundAction, initialState);
 
   if (state.phase === "success") {
@@ -149,9 +140,8 @@ function ExpandPanel({ onExpand }: { onExpand: () => void }) {
   return (
     <div className="px-6 py-5 flex flex-col gap-3">
       <p className="text-xs text-stone-600 leading-relaxed">
-        Rotating the client secret invalidates the existing credential for future
-        token requests. To proceed you will be asked to type the application name or
-        client ID exactly.
+        Rotating the client secret invalidates the existing credential for future token requests. To
+        proceed you will be asked to type the application name or client ID exactly.
       </p>
       <div>
         <button
@@ -194,8 +184,8 @@ function RotateConfirmForm({
       <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800 leading-relaxed">
         <p>
           To confirm, type the application name{" "}
-          <span className="font-mono font-semibold">{clientName}</span> or its client
-          ID <span className="font-mono font-semibold">{clientID}</span>.
+          <span className="font-mono font-semibold">{clientName}</span> or its client ID{" "}
+          <span className="font-mono font-semibold">{clientID}</span>.
         </p>
       </div>
 
@@ -209,10 +199,7 @@ function RotateConfirmForm({
       )}
 
       <div className="space-y-1">
-        <label
-          htmlFor="rotate-app-confirm"
-          className="block text-sm font-medium text-sky-950"
-        >
+        <label htmlFor="rotate-app-confirm" className="block text-sm font-medium text-sky-950">
           Type to confirm <span className="text-red-500">*</span>
         </label>
         <input
@@ -228,18 +215,11 @@ function RotateConfirmForm({
           disabled={pending}
           className="w-full font-mono rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100 disabled:opacity-50"
         />
-        {fieldErrors.confirm && (
-          <p className="text-xs text-red-500">{fieldErrors.confirm}</p>
-        )}
+        {fieldErrors.confirm && <p className="text-xs text-red-500">{fieldErrors.confirm}</p>}
       </div>
 
       <div className="flex items-center gap-3 pt-1">
-        <Button
-          type="submit"
-          loading={pending}
-          size="md"
-          disabled={submitDisabled}
-        >
+        <Button type="submit" loading={pending} size="md" disabled={submitDisabled}>
           {pending ? "Rotating…" : "Rotate client secret"}
         </Button>
         <button
@@ -262,16 +242,13 @@ function SuccessPanel({
 }) {
   return (
     <div className="px-6 py-5 space-y-5">
-      <div
-        role="status"
-        className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
-      >
+      <output className="block rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
         <p className="font-semibold">{rotated.name} client secret has been rotated.</p>
         <p className="text-xs text-amber-700 mt-2 leading-relaxed">
-          Copy this secret now. It will not be shown again. If you lose it you can
-          rotate the secret again — there is no way to retrieve the value later.
+          Copy this secret now. It will not be shown again. If you lose it you can rotate the secret
+          again — there is no way to retrieve the value later.
         </p>
-      </div>
+      </output>
 
       <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-stone-100">
@@ -287,8 +264,8 @@ function SuccessPanel({
 
       <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600 leading-relaxed">
         <p>
-          Existing access tokens issued before rotation continue to validate until
-          they expire. Future token requests using the old secret will fail.
+          Existing access tokens issued before rotation continue to validate until they expire.
+          Future token requests using the old secret will fail.
         </p>
       </div>
     </div>

@@ -14,7 +14,10 @@
  * banner explaining that choosing any mode below will repair the row.
  */
 
-import Link from "next/link";
+import {
+  type UpdateInvitePolicyState,
+  updateInvitePolicyAction,
+} from "@/app/org-admin/settings/actions";
 import {
   ORG_ADMIN_INVITE_POLICY_CARD_COPY,
   ORG_ADMIN_INVITE_POLICY_FORM_COPY,
@@ -24,11 +27,8 @@ import {
   deriveOrgAdminInvitePolicyMode,
   isValidInvitePolicyFlags,
 } from "@/app/org-admin/settings/settings-helpers";
-import {
-  type UpdateInvitePolicyState,
-  updateInvitePolicyAction,
-} from "@/app/org-admin/settings/actions";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 
 interface InvitePolicyFormProps {
@@ -79,7 +79,10 @@ export function InvitePolicyForm({ policy }: InvitePolicyFormProps) {
   const isSaveDisabled = isPending || selected === null || isUnchanged;
 
   return (
-    <form action={action} className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
+    <form
+      action={action}
+      className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden"
+    >
       <div className="px-6 py-4 border-b border-stone-100">
         <p className="text-sm font-semibold text-sky-950">
           {ORG_ADMIN_INVITE_POLICY_CARD_COPY.cardTitle}

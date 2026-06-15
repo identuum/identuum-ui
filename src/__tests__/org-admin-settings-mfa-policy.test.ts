@@ -244,9 +244,7 @@ describe("All operator-facing copy — boundary + credential negative invariants
 
 describe("Page source — wiring + no inline literal residue", () => {
   function stripComments(src: string): string {
-    return src
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/^\s*\/\/.*$/gm, "");
+    return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   }
 
   const PAGE_SRC = readFileSync(

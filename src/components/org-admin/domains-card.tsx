@@ -32,9 +32,7 @@ import {
   setPrimaryOrganizationDomainAction,
   verifyOrganizationDomainAction,
 } from "@/app/org-admin/settings/domains-actions";
-import {
-  ORG_ADMIN_DOMAINS_CARD_COPY,
-} from "@/app/org-admin/settings/settings-helpers";
+import { ORG_ADMIN_DOMAINS_CARD_COPY } from "@/app/org-admin/settings/settings-helpers";
 import { Button } from "@/components/ui/button";
 import type { OrganizationDomainInfo } from "@/lib/types";
 import { useActionState } from "react";
@@ -78,9 +76,7 @@ export function DomainsCard({ domains, loadError }: DomainsCardProps) {
         <p className="text-sm font-semibold text-sky-950">
           {ORG_ADMIN_DOMAINS_CARD_COPY.cardTitle}
         </p>
-        <p className="text-xs text-stone-400 mt-0.5">
-          {ORG_ADMIN_DOMAINS_CARD_COPY.cardSubtitle}
-        </p>
+        <p className="text-xs text-stone-400 mt-0.5">{ORG_ADMIN_DOMAINS_CARD_COPY.cardSubtitle}</p>
       </div>
 
       <div className="px-6 py-5 space-y-5">
@@ -98,15 +94,9 @@ export function DomainsCard({ domains, loadError }: DomainsCardProps) {
             it, or expose a "copy again later" affordance — copy now or
             re-add the domain. */}
         {addState.phase === "success" && (
-          <div
-            role="status"
-            className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
-          >
+          <output className="block rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
             <p className="font-semibold">
-              {ORG_ADMIN_DOMAINS_CARD_COPY.challengeIntro.replace(
-                "{domain}",
-                addState.domain
-              )}
+              {ORG_ADMIN_DOMAINS_CARD_COPY.challengeIntro.replace("{domain}", addState.domain)}
             </p>
             <p className="mt-1 text-xs text-emerald-900">
               {ORG_ADMIN_DOMAINS_CARD_COPY.challengeShownOnce}
@@ -129,7 +119,7 @@ export function DomainsCard({ domains, loadError }: DomainsCardProps) {
               </dt>
               <dd className="font-mono">{addState.challenge.expires_at}</dd>
             </dl>
-          </div>
+          </output>
         )}
 
         {addState.phase === "error" && (
@@ -142,15 +132,9 @@ export function DomainsCard({ domains, loadError }: DomainsCardProps) {
         )}
 
         {verifyState.phase === "success" && (
-          <div
-            role="status"
-            className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
-          >
-            {ORG_ADMIN_DOMAINS_CARD_COPY.verifySuccess.replace(
-              "{domain}",
-              verifyState.domain
-            )}
-          </div>
+          <output className="block rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {ORG_ADMIN_DOMAINS_CARD_COPY.verifySuccess.replace("{domain}", verifyState.domain)}
+          </output>
         )}
         {verifyState.phase === "error" && (
           <div
@@ -162,15 +146,9 @@ export function DomainsCard({ domains, loadError }: DomainsCardProps) {
         )}
 
         {removeState.phase === "success" && (
-          <div
-            role="status"
-            className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
-          >
-            {ORG_ADMIN_DOMAINS_CARD_COPY.removeSuccess.replace(
-              "{domain}",
-              removeState.domain
-            )}
-          </div>
+          <output className="block rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {ORG_ADMIN_DOMAINS_CARD_COPY.removeSuccess.replace("{domain}", removeState.domain)}
+          </output>
         )}
         {removeState.phase === "error" && (
           <div
@@ -182,15 +160,9 @@ export function DomainsCard({ domains, loadError }: DomainsCardProps) {
         )}
 
         {primaryState.phase === "success" && (
-          <div
-            role="status"
-            className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
-          >
-            {ORG_ADMIN_DOMAINS_CARD_COPY.primarySuccess.replace(
-              "{domain}",
-              primaryState.domain
-            )}
-          </div>
+          <output className="block rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            {ORG_ADMIN_DOMAINS_CARD_COPY.primarySuccess.replace("{domain}", primaryState.domain)}
+          </output>
         )}
         {primaryState.phase === "error" && (
           <div
@@ -251,12 +223,7 @@ export function DomainsCard({ domains, loadError }: DomainsCardProps) {
                     <form action={verifyAction}>
                       <input type="hidden" name="domain_id" value={d.id} />
                       <input type="hidden" name="domain" value={d.domain} />
-                      <Button
-                        type="submit"
-                        loading={verifyPending}
-                        size="sm"
-                        variant="secondary"
-                      >
+                      <Button type="submit" loading={verifyPending} size="sm" variant="secondary">
                         {ORG_ADMIN_DOMAINS_CARD_COPY.verifyButton}
                       </Button>
                     </form>
@@ -266,12 +233,7 @@ export function DomainsCard({ domains, loadError }: DomainsCardProps) {
                     <form action={primaryAction}>
                       <input type="hidden" name="domain_id" value={d.id} />
                       <input type="hidden" name="domain" value={d.domain} />
-                      <Button
-                        type="submit"
-                        loading={primaryPending}
-                        size="sm"
-                        variant="secondary"
-                      >
+                      <Button type="submit" loading={primaryPending} size="sm" variant="secondary">
                         {ORG_ADMIN_DOMAINS_CARD_COPY.setPrimaryButton}
                       </Button>
                     </form>
@@ -281,12 +243,7 @@ export function DomainsCard({ domains, loadError }: DomainsCardProps) {
                     <form action={removeAction}>
                       <input type="hidden" name="domain_id" value={d.id} />
                       <input type="hidden" name="domain" value={d.domain} />
-                      <Button
-                        type="submit"
-                        loading={removePending}
-                        size="sm"
-                        variant="danger"
-                      >
+                      <Button type="submit" loading={removePending} size="sm" variant="danger">
                         {ORG_ADMIN_DOMAINS_CARD_COPY.removeButton}
                       </Button>
                     </form>
@@ -302,9 +259,7 @@ export function DomainsCard({ domains, loadError }: DomainsCardProps) {
           <label htmlFor="org-admin-add-domain" className="text-sm font-medium text-sky-950">
             {ORG_ADMIN_DOMAINS_CARD_COPY.addLabel}
           </label>
-          <p className="text-xs text-stone-500 -mt-2">
-            {ORG_ADMIN_DOMAINS_CARD_COPY.addHelp}
-          </p>
+          <p className="text-xs text-stone-500 -mt-2">{ORG_ADMIN_DOMAINS_CARD_COPY.addHelp}</p>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
               id="org-admin-add-domain"

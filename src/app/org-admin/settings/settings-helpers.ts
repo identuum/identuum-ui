@@ -122,8 +122,7 @@ export const ORG_ADMIN_DOMAINS_CARD_COPY = {
   cardSubtitle:
     "Verify the domains your organization owns. Verified domains gate self-registration to people whose email matches one of them.",
   /** Empty-list copy. */
-  emptyState:
-    "No domains yet. Add one below to enable self-registration for that email domain.",
+  emptyState: "No domains yet. Add one below to enable self-registration for that email domain.",
   /** Section above the add-domain input. */
   addLabel: "Add a domain",
   addHelp:
@@ -226,8 +225,7 @@ export const ORG_ADMIN_PROFILE_FORM_COPY = {
   /** Visible label above the read-only Primary domain field. */
   domainLabel: "Primary domain",
   /** Helper copy explaining why the domain field is read-only. */
-  domainHelp:
-    "Domain changes affect OIDC discovery and SSO — contact your platform administrator.",
+  domainHelp: "Domain changes affect OIDC discovery and SSO — contact your platform administrator.",
 } as const;
 
 /**
@@ -277,10 +275,7 @@ export const ORG_ADMIN_PROFILE_NAME_FIELD: OrgAdminProfileNameField = {
  * available via `/org-admin/users` regardless of the mode (the mode controls
  * the SELF-registration path, not the admin-driven invitation path).
  */
-export type OrgAdminInvitePolicyMode =
-  | "invite-only"
-  | "public-with-approval"
-  | "public-immediate";
+export type OrgAdminInvitePolicyMode = "invite-only" | "public-with-approval" | "public-immediate";
 
 export interface OrgAdminInvitePolicyInput {
   allow_public_registration: boolean;

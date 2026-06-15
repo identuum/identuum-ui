@@ -38,14 +38,25 @@
 
 import type { OrgUserItem } from "@/lib/types";
 
-export type OrgAdminUserStatus = "active" | "pending" | "disabled" | "deleted";
+export type OrgAdminUserStatus = "active" | "pending" | "pending_approval" | "disabled" | "deleted";
 
-export type OrgAdminUserAction = "disable" | "enable" | "regenerate-invite" | "reset-mfa";
+export type OrgAdminUserAction =
+  | "disable"
+  | "enable"
+  | "regenerate-invite"
+  | "reset-mfa"
+  | "approve-registration";
 
 /**
  * Minimal subset of `OrgUserItem` needed to compute action visibility.
  * Kept locally so the helper is decoupled from `src/lib/types.ts` (which
  * carries unrelated in-flight changes).
+ *
+ * The `banned` flag mirrors the IDP UserInfo.Banned wire field. The IDP's
+ * (*UserService).ApproveRegistration guard is exactly `banned && role ===
+ * "org_user"` — the UI must surface the Approve affordance on the same
+ * predicate. (Verified via gograph_source: ApproveRegistration sets banned
+ * to false on success.)
  */
 export interface OrgAdminUserActionInput {
   role: OrgUserItem["role"];
@@ -56,6 +67,7 @@ export interface OrgAdminUserActionInput {
   email: string;
   invitation_pending: boolean;
   invitation_email_bound: boolean;
+  banned: boolean;
 }
 
 /**
@@ -75,13 +87,18 @@ export function isNoEmailSentinel(email: string): boolean {
  *   1. `deleted=true` → `deleted` (terminal — no action affordances).
  *   2. `invitation_pending=true` → `pending`.
  *   3. No-email sentinel + not verified → `pending` (manual-invite case).
- *   4. `active=false` → `disabled`.
- *   5. Otherwise → `active`.
+ *   4. `banned=true` && role==="org_user" → `pending_approval`
+ *      (the IDP creates self-registered users banned=true; only ApproveRegistration
+ *      clears it. Surfacing this as its own status keeps Approve as a distinct
+ *      affordance instead of being conflated with admin-Disabled accounts.)
+ *   5. `active=false` → `disabled`.
+ *   6. Otherwise → `active`.
  */
 export function computeOrgUserStatus(u: OrgAdminUserActionInput): OrgAdminUserStatus {
   if (u.deleted) return "deleted";
   if (u.invitation_pending) return "pending";
   if (isNoEmailSentinel(u.email) && !u.email_verified) return "pending";
+  if (u.banned && u.role === "org_user") return "pending_approval";
   if (!u.active) return "disabled";
   return "active";
 }
@@ -153,6 +170,14 @@ export function deriveOrgAdminUserActions(
     return { status, actions, soleActiveAdmin: false };
   }
 
+  // Pending registration approval: approve-registration only. The IDP rejects
+  // the lifecycle Disable/Enable on banned users with ErrInvalidRequest, so we
+  // suppress those affordances and surface the single Approve action.
+  if (status === "pending_approval") {
+    actions.push("approve-registration");
+    return { status, actions, soleActiveAdmin: false };
+  }
+
   // Lifecycle pair — mutually exclusive based on `active`. When the
   // target is the sole active org_admin, the caller renders an
   // explanatory copy block instead of the disable button. The action
@@ -186,6 +211,7 @@ export const ORG_ADMIN_USER_ACTION_META: Record<OrgAdminUserAction, OrgAdminUser
   enable: { sectionLabel: "Restore access" },
   "regenerate-invite": { sectionLabel: "Setup link" },
   "reset-mfa": { sectionLabel: "MFA enrollment" },
+  "approve-registration": { sectionLabel: "Approve registration" },
 };
 
 export function getOrgAdminUserActionLabel(action: OrgAdminUserAction): string {
@@ -284,4 +310,53 @@ export const SOLE_ACTIVE_ADMIN_COPY = {
    * (one active admin at all times).
    */
   body: "Assign another administrator before suspending this account. This organization must always have at least one active admin.",
+} as const;
+
+// ── Approve registration copy ────────────────────────────────────────────────
+//
+// Rendered on the user detail page when status === "pending_approval". The
+// affordance maps to POST /api/v1/users/:id/approve, which the IDP guards
+// on `banned=true && role=org_user`.
+export const APPROVE_REGISTRATION_COPY = {
+  /** Section heading rendered above the Approve button. */
+  sectionHeading: "Approve registration",
+  /** Description shown beneath the heading. */
+  description:
+    "This user has registered and is waiting for an administrator to approve their access.",
+  /** Button label. */
+  buttonLabel: "Approve registration",
+  /** Confirmation message after a successful approve. */
+  successMessage: "Registration approved. The user can now sign in.",
+} as const;
+
+// ── Assigned-roles card copy ─────────────────────────────────────────────────
+//
+// Rendered on the user detail page below the Actions card. The card surfaces
+// the user's currently assigned org roles (GET /api/v1/users/:id/roles) and
+// lets the operator assign or remove an existing role. Role creation lives
+// on /org-admin/settings and is intentionally out of scope here.
+export const USER_ROLES_CARD_COPY = {
+  /** Card title. */
+  title: "Assigned roles",
+  /** Card subtitle. */
+  subtitle: "Roles granted to this user in your organization.",
+  /** Rendered when the user has no roles assigned. */
+  emptyState: "No roles assigned.",
+  /** Heading above the assign-role <select>. */
+  assignHeading: "Assign role",
+  /** Label for the submit button on the assign form. */
+  assignButtonLabel: "Assign",
+  /** Placeholder shown in the role <select> before a choice is made. */
+  selectPlaceholder: "Select a role",
+  /** Label for the per-row Remove button. */
+  removeButtonLabel: "Remove",
+  /** Fallback description when a role has no description set. */
+  placeholderDescription: "No description.",
+  /** Message rendered when the available-roles list cannot be loaded. */
+  availableRolesLoadError:
+    "Could not load the organization roles. Try again from the Settings page.",
+  /** Message rendered when the assigned-roles list cannot be loaded. */
+  assignedRolesLoadError: "Could not load the assigned roles. Reload the page to try again.",
+  /** Message rendered when all org roles have already been assigned. */
+  noAvailableRoles: "All organization roles are already assigned.",
 } as const;

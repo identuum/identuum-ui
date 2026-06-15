@@ -29,10 +29,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useActionState } from "react";
-import {
-  type UpdateApplicationState,
-  updateApplicationAction,
-} from "../../actions";
+import { type UpdateApplicationState, updateApplicationAction } from "../../actions";
 
 const initialState: UpdateApplicationState = { phase: "idle" };
 
@@ -55,17 +52,9 @@ export function EditApplicationForm(props: EditApplicationFormProps) {
   return (
     <div className="space-y-6 max-w-2xl">
       {state.phase === "success" ? (
-        <SuccessPanel
-          updated={state.updated}
-          clientId={props.clientId}
-        />
+        <SuccessPanel updated={state.updated} clientId={props.clientId} />
       ) : (
-        <Form
-          props={props}
-          state={state}
-          action={action}
-          pending={pending}
-        />
+        <Form props={props} state={state} action={action} pending={pending} />
       )}
     </div>
   );
@@ -112,9 +101,8 @@ function Form({
           )}
         </p>
         <p className="mt-1 text-stone-500 leading-relaxed">
-          Client ID and Type cannot be changed from this form. To switch
-          between Public and Confidential, create a replacement
-          application — secret rotation is not yet available.
+          Client ID and Type cannot be changed from this form. To switch between Public and
+          Confidential, create a replacement application — secret rotation is not yet available.
         </p>
       </div>
 
@@ -168,8 +156,7 @@ function Form({
           Post-logout redirect URIs
         </label>
         <p className="text-xs text-stone-500">
-          Optional. One URI per line. Validated the same way as redirect URIs. Leave
-          blank to clear.
+          Optional. One URI per line. Validated the same way as redirect URIs. Leave blank to clear.
         </p>
         <textarea
           id="edit-app-post-logout-redirects"
@@ -210,8 +197,8 @@ function Form({
           Default scope
         </label>
         <p className="text-xs text-stone-500">
-          Optional. Space-separated (e.g.{" "}
-          <span className="font-mono">openid profile email</span>). Leave blank to clear.
+          Optional. Space-separated (e.g. <span className="font-mono">openid profile email</span>).
+          Leave blank to clear.
         </p>
         <input
           id="edit-app-scope"
@@ -249,15 +236,12 @@ function SuccessPanel({
 }) {
   return (
     <div className="space-y-5">
-      <div
-        role="status"
-        className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
-      >
+      <output className="block rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
         <p className="font-semibold">{updated.name} has been updated.</p>
         <p className="text-xs text-emerald-700 mt-0.5">
           Client ID <span className="font-mono">{updated.client_id}</span> is unchanged.
         </p>
-      </div>
+      </output>
 
       <div className="flex items-center gap-4">
         <a

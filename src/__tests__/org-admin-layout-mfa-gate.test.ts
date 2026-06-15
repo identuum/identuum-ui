@@ -63,6 +63,13 @@ vi.mock("../lib/server-session", () => ({
   getServerSession: () => mockGetServerSession(),
 }));
 
+vi.mock("../lib/server-runtime-state", () => ({
+  getServerRuntimeState: () =>
+    Promise.resolve({
+      components: { idp: { capabilities: {} } },
+    }),
+}));
+
 // Child components are not relevant to gate behavior. Replacing them
 // with cheap no-ops keeps the test isolated from their internals
 // (and from React rendering side-effects in the node environment).

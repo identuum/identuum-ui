@@ -98,9 +98,7 @@ export function OrgProfileForm({ currentName, domain }: OrgProfileFormProps) {
               {domain}
             </p>
           </div>
-          <p className="text-xs text-stone-400">
-            {ORG_ADMIN_PROFILE_FORM_COPY.domainHelp}
-          </p>
+          <p className="text-xs text-stone-400">{ORG_ADMIN_PROFILE_FORM_COPY.domainHelp}</p>
         </div>
       )}
 

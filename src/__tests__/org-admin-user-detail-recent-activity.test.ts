@@ -258,9 +258,7 @@ describe("Page source — wiring + metadata negative invariants", () => {
   // doc-blocks that legitimately reference boundary terms in code
   // comments do not trip the blocklist.
   function stripComments(src: string): string {
-    return src
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/^\s*\/\/.*$/gm, "");
+    return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   }
 
   function readSrc(rel: string): string {
@@ -404,9 +402,7 @@ describe("User-detail metadata — documented fields render, credential fields n
   it("no credential-bearing metadata label appears in the page source", () => {
     for (const forbidden of FORBIDDEN_METADATA_LABELS) {
       const pat = new RegExp(`label="${forbidden}"`);
-      expect(PAGE_SRC, `forbidden DetailRow label="${forbidden}" must not appear`).not.toMatch(
-        pat
-      );
+      expect(PAGE_SRC, `forbidden DetailRow label="${forbidden}" must not appear`).not.toMatch(pat);
     }
   });
 });
@@ -447,22 +443,16 @@ describe("Recent activity card — per-row clickable links", () => {
   });
 
   it("the accessible name includes the event_type so screen-reader users know where the click goes", () => {
-    expect(PAGE_SRC).toMatch(
-      /const\s+ariaLabel\s*=\s*`View audit event \$\{e\.event_type\}/
-    );
+    expect(PAGE_SRC).toMatch(/const\s+ariaLabel\s*=\s*`View audit event \$\{e\.event_type\}/);
   });
 
   it("the anchor exposes a visible keyboard-focus indicator (focus-visible:ring)", () => {
     // Find the rowHref anchor block specifically (the page also has
     // a "View all →" anchor; we only need to pin the per-row one).
-    const rowAnchorMatch = PAGE_SRC.match(
-      /href=\{\s*rowHref\s*\}[\s\S]*?className="([^"]+)"/
-    );
+    const rowAnchorMatch = PAGE_SRC.match(/href=\{\s*rowHref\s*\}[\s\S]*?className="([^"]+)"/);
     expect(rowAnchorMatch).not.toBeNull();
     const cls = rowAnchorMatch?.[1] ?? "";
-    expect(cls, "row anchor must carry a focus-visible ring class").toMatch(
-      /focus-visible:ring-2/
-    );
+    expect(cls, "row anchor must carry a focus-visible ring class").toMatch(/focus-visible:ring-2/);
   });
 
   it("compact rows render ONLY event_type / safe summary / actor display / formatted timestamp — no raw metadata", () => {

@@ -67,7 +67,10 @@ describe("ORG_ADMIN_OVERVIEW_CARDS — section grid", () => {
 
   it("every card has a non-empty operator description", () => {
     for (const card of ORG_ADMIN_OVERVIEW_CARDS) {
-      expect(card.description.length, `card "${card.title}" must have a description`).toBeGreaterThan(0);
+      expect(
+        card.description.length,
+        `card "${card.title}" must have a description`
+      ).toBeGreaterThan(0);
     }
   });
 
@@ -139,10 +142,7 @@ describe("ORG_ADMIN_OVERVIEW_CARDS — section grid", () => {
 // ── Page source contract ───────────────────────────────────────────────────
 
 describe("org-admin/page.tsx — Overview source contract", () => {
-  const PAGE_SRC = readFileSync(
-    resolve(__dirname, "..", "app", "org-admin", "page.tsx"),
-    "utf-8"
-  );
+  const PAGE_SRC = readFileSync(resolve(__dirname, "..", "app", "org-admin", "page.tsx"), "utf-8");
   // Strip comments before badge-count assertions so doc-blocks that
   // legitimately mention the badge strings (as documented behaviour
   // pointers) don't trip the assertions. Real renderable strings

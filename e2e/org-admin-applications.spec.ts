@@ -42,8 +42,11 @@
 
 import type { BrowserContext } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import {
+  loadOrgAdminFixtureConfidentialSampleClient,
+  loadOrgAdminFixtureSampleClient,
+} from "./helpers/fixture";
 import { loginAsOrgAdmin, skipOrgAdminTests } from "./helpers/login";
-import { loadOrgAdminFixtureSampleClient } from "./helpers/fixture";
 
 const SKIP_MSG =
   "Set IDENTUUM_TEST_ORG_ADMIN_EMAIL + _PASSWORD (durable) or " +
@@ -54,6 +57,9 @@ const DYNAMIC_ONLY_SKIP_MSG =
 
 const SAMPLE_CLIENT_MISSING_SKIP_MSG =
   "Fixture envelope is missing the sample_client block. Rebuild IDP after slice identuum-20260530-e2e-fixture-seed-sample-oauth-client to seed it.";
+
+const CONFIDENTIAL_CLIENT_MISSING_SKIP_MSG =
+  "Fixture envelope is missing the confidential_sample_client block. Rebuild IDP after slice identuum-20260530-e2e-fixture-seed-confidential-oauth-client to seed it.";
 
 // Page-body negative scan — none of these substrings may appear anywhere
 // in the rendered DOM. The list mirrors the slice spec's blocklist. The
@@ -78,6 +84,13 @@ const BODY_BANNED_PATTERNS: RegExp[] = [
 // ── Shared auth context ──────────────────────────────────────────────────────
 
 let sharedCtx: BrowserContext | null = null;
+
+function getSharedContext(): BrowserContext {
+  if (!sharedCtx) {
+    throw new Error("shared context not initialized");
+  }
+  return sharedCtx;
+}
 
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(180_000); // 31s TOTP cooldown + ~70s TOTP retry headroom
@@ -109,7 +122,7 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       return;
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/applications");
       await page.waitForLoadState("networkidle");
@@ -160,10 +173,7 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       // locally; assertion messages do not include the body.
       const bodyText = (await page.locator("body").textContent()) ?? "";
       for (const pat of BODY_BANNED_PATTERNS) {
-        expect(
-          bodyText.match(pat),
-          `list page body matched forbidden pattern ${pat}`
-        ).toBeNull();
+        expect(bodyText.match(pat), `list page body matched forbidden pattern ${pat}`).toBeNull();
       }
     } finally {
       await page.close();
@@ -183,7 +193,7 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       return;
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       // Start on the populated list, then click through via the
       // operator-facing affordance so we exercise the same path a
@@ -198,12 +208,8 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       await Promise.all([page.waitForLoadState("networkidle"), viewDetails.click()]);
 
       // URL reaches the deterministic sample client id.
-      expect(page.url()).toContain(
-        `/org-admin/applications/${encodeURIComponent(sample.id)}`
-      );
-      expect(await page.title()).not.toMatch(
-        /500|404|internal error|application error|not found/i
-      );
+      expect(page.url()).toContain(`/org-admin/applications/${encodeURIComponent(sample.id)}`);
+      expect(await page.title()).not.toMatch(/500|404|internal error|application error|not found/i);
 
       // Detail page heading is the sample client name.
       await expect(page.getByRole("heading", { name: sample.name })).toBeVisible();
@@ -219,9 +225,7 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       // redirect URI is operator-safe loopback (http://localhost:7114/callback)
       // — we assert presence of the label and the loopback value.
       await expect(page.getByText("Redirect URIs", { exact: true })).toBeVisible();
-      await expect(
-        page.getByText("http://localhost:7114/callback", { exact: true })
-      ).toBeVisible();
+      await expect(page.getByText("http://localhost:7114/callback", { exact: true })).toBeVisible();
       await expect(page.getByText("Default scope", { exact: true })).toBeVisible();
       await expect(page.getByText("openid profile email", { exact: true })).toBeVisible();
       // Client ID dt label is also present (separate from the mono
@@ -263,7 +267,7 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       test.skip(true, DYNAMIC_ONLY_SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin");
       await page.waitForLoadState("networkidle");
@@ -303,7 +307,7 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       test.skip(true, DYNAMIC_ONLY_SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/applications");
       await page.waitForLoadState("networkidle");
@@ -316,15 +320,11 @@ test.describe("/org-admin/applications — read-only foundation", () => {
 
       // Routed to /new — sanity checks.
       expect(page.url()).toContain("/org-admin/applications/new");
-      expect(await page.title()).not.toMatch(
-        /500|404|internal error|application error|not found/i
-      );
+      expect(await page.title()).not.toMatch(/500|404|internal error|application error|not found/i);
 
       // Page chrome — heading + subtitle that names the single-shot
       // contract ("shown only once").
-      await expect(
-        page.getByRole("heading", { name: "Create application" })
-      ).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Create application" })).toBeVisible();
       await expect(page.getByText(/shown only once/i)).toBeVisible();
 
       // Form fields — each is a labelled input/textarea. Use the
@@ -332,16 +332,10 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       // suffix) so the locators don't strict-mode-collide with each
       // other (e.g. "Redirect URIs *" vs "Post-logout redirect URIs"
       // would both match a substring "Redirect URIs").
-      await expect(
-        page.getByRole("textbox", { name: "Application name *" })
-      ).toBeVisible();
+      await expect(page.getByRole("textbox", { name: "Application name *" })).toBeVisible();
       await expect(page.getByRole("textbox", { name: "Redirect URIs *" })).toBeVisible();
-      await expect(
-        page.getByRole("textbox", { name: "Post-logout redirect URIs" })
-      ).toBeVisible();
-      await expect(
-        page.getByRole("textbox", { name: "Allowed audiences" })
-      ).toBeVisible();
+      await expect(page.getByRole("textbox", { name: "Post-logout redirect URIs" })).toBeVisible();
+      await expect(page.getByRole("textbox", { name: "Allowed audiences" })).toBeVisible();
       await expect(page.getByRole("textbox", { name: /^Default scope$/ })).toBeVisible();
       await expect(page.getByRole("checkbox", { name: /Public client/i })).toBeVisible();
 
@@ -399,11 +393,9 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       return;
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
-      await page.goto(
-        `/org-admin/applications/${encodeURIComponent(sample.id)}`
-      );
+      await page.goto(`/org-admin/applications/${encodeURIComponent(sample.id)}`);
       await page.waitForLoadState("networkidle");
 
       // Edit affordance reachable by accessible name.
@@ -418,17 +410,11 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       await Promise.all([page.waitForLoadState("networkidle"), editLink.click()]);
 
       // URL reaches the edit route.
-      expect(page.url()).toContain(
-        `/org-admin/applications/${encodeURIComponent(sample.id)}/edit`
-      );
-      expect(await page.title()).not.toMatch(
-        /500|404|internal error|application error|not found/i
-      );
+      expect(page.url()).toContain(`/org-admin/applications/${encodeURIComponent(sample.id)}/edit`);
+      expect(await page.title()).not.toMatch(/500|404|internal error|application error|not found/i);
 
       // Page chrome — heading mentions Edit + the client name.
-      await expect(
-        page.getByRole("heading", { name: `Edit ${sample.name}` })
-      ).toBeVisible();
+      await expect(page.getByRole("heading", { name: `Edit ${sample.name}` })).toBeVisible();
 
       // Read-only client_id badge + Public type are surfaced in the
       // info panel — the seeded sample client is public so the "Type:
@@ -451,9 +437,7 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       // The fixture-seeded client carries exactly one redirect URI —
       // the loopback "http://localhost:7114/callback" the IDP CLI
       // hard-codes. The textarea's initial value is that single URI.
-      expect(await redirectsInput.inputValue()).toBe(
-        "http://localhost:7114/callback"
-      );
+      expect(await redirectsInput.inputValue()).toBe("http://localhost:7114/callback");
 
       const postLogoutInput = page.getByRole("textbox", {
         name: "Post-logout redirect URIs",
@@ -473,7 +457,9 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       // The form MUST NOT expose an is_public toggle or any other
       // advanced field — those are out of scope for this slice.
       expect(await page.getByRole("checkbox", { name: /Public client/i }).count()).toBe(0);
-      expect(await page.getByRole("textbox", { name: /token.endpoint.auth.method/i }).count()).toBe(0);
+      expect(await page.getByRole("textbox", { name: /token.endpoint.auth.method/i }).count()).toBe(
+        0
+      );
       expect(await page.getByRole("textbox", { name: /^JWKS URI$/i }).count()).toBe(0);
       expect(await page.getByRole("textbox", { name: /^JWKS$/i }).count()).toBe(0);
 
@@ -535,7 +521,7 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       return;
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto(`/org-admin/applications/${encodeURIComponent(sample.id)}`);
       await page.waitForLoadState("networkidle");
@@ -603,12 +589,8 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       await cancelBtn.click();
       // After cancel, the ExpandPanel is back and the confirm input
       // is gone.
-      expect(
-        await page.getByRole("textbox", { name: /Type to confirm/i }).count()
-      ).toBe(0);
-      await expect(
-        page.getByRole("button", { name: /^Delete application$/ })
-      ).toBeVisible();
+      expect(await page.getByRole("textbox", { name: /Type to confirm/i }).count()).toBe(0);
+      await expect(page.getByRole("button", { name: /^Delete application$/ })).toBeVisible();
 
       // Body negative scan — same blocklist; no secret-shaped string
       // ever appears on the rendered DOM, even after the danger-zone
@@ -623,9 +605,7 @@ test.describe("/org-admin/applications — read-only foundation", () => {
 
       // Sanity: the seeded client is STILL the detail page's subject
       // — we never hit Delete, so the URL still points at it.
-      expect(page.url()).toContain(
-        `/org-admin/applications/${encodeURIComponent(sample.id)}`
-      );
+      expect(page.url()).toContain(`/org-admin/applications/${encodeURIComponent(sample.id)}`);
     } finally {
       await page.close();
     }
@@ -660,7 +640,7 @@ test.describe("/org-admin/applications — read-only foundation", () => {
     // visible.
     expect(sample.isPublic).toBe(true);
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto(`/org-admin/applications/${encodeURIComponent(sample.id)}`);
       await page.waitForLoadState("networkidle");
@@ -678,20 +658,16 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       // The "Rotate client secret" button MUST NOT be present on the
       // page at all — neither in the expanded form's submit role nor
       // in the unexpanded ExpandPanel button role.
-      expect(
-        await page.getByRole("button", { name: /^Rotate client secret$/ }).count()
-      ).toBe(0);
+      expect(await page.getByRole("button", { name: /^Rotate client secret$/ }).count()).toBe(0);
       // The type-to-confirm input MUST NOT be present.
-      expect(
-        await page.getByRole("textbox", { name: /Type to confirm/i }).count()
-      ).toBe(0);
+      expect(await page.getByRole("textbox", { name: /Type to confirm/i }).count()).toBe(0);
       // The success panel's copy-once / token-expiry phrases MUST NOT
       // be present on the public-branch render.
       expect(await page.getByText(/Copy this secret now/i).count()).toBe(0);
       expect(
-        await page.getByText(
-          /Existing access tokens issued before rotation continue to validate until/i
-        ).count()
+        await page
+          .getByText(/Existing access tokens issued before rotation continue to validate until/i)
+          .count()
       ).toBe(0);
 
       // Danger zone (delete surface) is still rendered — its heading
@@ -713,9 +689,257 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       // Sanity: URL still points at the seeded client — no navigation,
       // no rotation, no mutation. The fixture's CASCADE-purge global-
       // teardown remains the only cleanup path.
-      expect(page.url()).toContain(
-        `/org-admin/applications/${encodeURIComponent(sample.id)}`
-      );
+      expect(page.url()).toContain(`/org-admin/applications/${encodeURIComponent(sample.id)}`);
+    } finally {
+      await page.close();
+    }
+  });
+
+  test("[dynamic mode only] Confidential rotation: type-to-confirm → success panel → copy-once → caveat → navigate-away clears the secret", async () => {
+    // Mutating BUT scoped strictly to the disposable confidential
+    // fixture client: we rotate that client's secret via the Security
+    // section's RotateConfirmForm. The new secret is captured into a
+    // LOCAL variable inside this test scope and used only for in-test
+    // assertions; it is NEVER printed, never logged, never asserted-
+    // by-equality against any other string. After rotation we
+    // navigate to the list and back and assert the captured value is
+    // GONE from the rendered DOM — proving the React useActionState
+    // envelope was unmounted and the value is not persisted.
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
+    if (process.env.IDENTUUM_E2E_USE_DYNAMIC_FIXTURE !== "true") {
+      test.skip(true, DYNAMIC_ONLY_SKIP_MSG);
+    }
+    const confidential = loadOrgAdminFixtureConfidentialSampleClient();
+    if (!confidential) {
+      test.skip(true, CONFIDENTIAL_CLIENT_MISSING_SKIP_MSG);
+      return;
+    }
+    // The seeded confidential client is is_public=false by construction
+    // (the IDP fixture CLI hard-codes is_public=false on this seed). If
+    // a future regression flipped that, the loader would return null
+    // and we'd hit the skip above; this defence-in-depth assert makes
+    // the intent explicit.
+    expect(confidential.isPublic).toBe(false);
+
+    const page = await getSharedContext().newPage();
+    try {
+      // Step 1 — open the confidential client's detail page and assert
+      // the Security section is present and the public no-rotate
+      // notice is ABSENT.
+      await page.goto(`/org-admin/applications/${encodeURIComponent(confidential.id)}`);
+      await page.waitForLoadState("networkidle");
+
+      await expect(page.getByRole("heading", { name: "Security" })).toBeVisible();
+      expect(
+        await page.getByText(/Public clients do not have a client secret to rotate/i).count()
+      ).toBe(0);
+
+      // Step 2 — pre-rotation body negative scan; the page MUST NOT
+      // contain any forbidden literal labels at this point.
+      const preBodyText = (await page.locator("body").textContent()) ?? "";
+      for (const pat of BODY_BANNED_PATTERNS) {
+        expect(
+          preBodyText.match(pat),
+          `pre-rotation body matched forbidden pattern ${pat}`
+        ).toBeNull();
+      }
+
+      // Step 3 — click the ExpandPanel's "Rotate client secret" button
+      // (type="button"; no POST on first click — only flips React
+      // state).
+      const expandBtn = page.getByRole("button", {
+        name: /^Rotate client secret$/,
+      });
+      await expect(expandBtn).toBeVisible();
+      expect(await expandBtn.isDisabled()).toBe(false);
+      await expandBtn.click();
+
+      // Step 4 — confirmation form renders with the type-to-confirm
+      // input and the instruction copy showing the name AND client_id.
+      const confirmInput = page.getByRole("textbox", {
+        name: /Type to confirm/i,
+      });
+      await expect(confirmInput).toBeVisible();
+      await expect(page.getByText(confidential.name, { exact: true }).first()).toBeVisible();
+      await expect(page.getByText(confidential.clientId, { exact: true }).first()).toBeVisible();
+
+      // Step 5 — submit MUST be disabled before any match.
+      const submitBtn = page.getByRole("button", {
+        name: /^Rotate client secret$/,
+      });
+      await expect(submitBtn).toBeVisible();
+      expect(await submitBtn.isDisabled()).toBe(true);
+
+      // Typing a deliberately-wrong value keeps the submit disabled.
+      await confirmInput.fill("not-the-name");
+      expect(await submitBtn.isDisabled()).toBe(true);
+
+      // Typing the exact application name enables submit.
+      await confirmInput.fill(confidential.name);
+      expect(await submitBtn.isDisabled()).toBe(false);
+
+      // Step 6 — submit the rotation. Wait for the SuccessPanel to
+      // appear (the action revalidates list + detail caches and
+      // returns the success state; useActionState transitions to
+      // phase="success").
+      await Promise.all([page.waitForLoadState("networkidle"), submitBtn.click()]);
+
+      // SuccessPanel render — anchor on the unique heading copy.
+      await expect(page.getByText(/has been rotated/i).first()).toBeVisible();
+
+      // Step 7 — assert the verbatim copy-once warning and the
+      // verbatim token-expiry caveat. The caveat split across lines in
+      // the JSX renders as a single string in the DOM; use regexes
+      // that tolerate whitespace between the sub-phrases.
+      await expect(
+        page.getByText(/Copy this secret now\.\s+It will not be shown again\./i).first()
+      ).toBeVisible();
+      await expect(
+        page
+          .getByText(
+            /Existing access tokens issued before rotation continue to validate until\s+they expire\.\s+Future token requests using the old secret will fail\./i
+          )
+          .first()
+      ).toBeVisible();
+
+      // Step 8 — assert the client_id is visible (it's unchanged by
+      // rotation — only the secret rotates).
+      await expect(page.getByText(confidential.clientId, { exact: true }).first()).toBeVisible();
+
+      // Step 9 — extract the displayed client_secret text from the
+      // SuccessPanel. The `<dt>Client secret</dt>` sits next to the
+      // `<dd>` containing the value. The captured value is held in a
+      // LOCAL variable; the test never prints it.
+      const secretDD = page.locator('dt:has-text("Client secret") + dd');
+      await expect(secretDD).toBeVisible();
+      const capturedSecret = (await secretDD.textContent())?.trim() ?? "";
+      expect(capturedSecret.length).toBeGreaterThan(0);
+      // The IDP generates the secret via crypto.GenerateRandomString(32)
+      // → 32 random bytes hex-encoded → 64 lowercase-hex chars (same
+      // recipe as the production create-client path). Assert the
+      // SHAPE — the test never echoes the value.
+      expect(capturedSecret).toMatch(/^[0-9a-f]{64}$/);
+
+      // Step 10 — after-success body negative scan. The SuccessPanel
+      // DELIBERATELY contains a client_secret VALUE, so we cannot run
+      // the standard BODY_BANNED_PATTERNS scan as-is. Instead assert
+      // the same blocklist but exclude the literal value match from
+      // the `\bclient_secret\b` regex's hit — i.e. scan for forbidden
+      // LABELS / shapes rather than the secret-value substring.
+      const postBodyText = (await page.locator("body").textContent()) ?? "";
+      const POST_SUCCESS_BANNED: RegExp[] = [
+        /\bclient_secret_hash\b/i,
+        /\bsecret_hash\b/i,
+        /\bprivate_key\b/i,
+        /\baccess_token\b/i,
+        /\brefresh_token\b/i,
+        /\bauthorization_code\b/i,
+        /\bauth_code\b/i,
+        /Bearer\s+[A-Za-z0-9._-]{8,}/,
+        /\bsigning_key\b/i,
+        /\bpassword_hash\b/i,
+        /otpauth:\/\//i,
+        /\bmfa_secret\b/i,
+        /\bSet-Cookie\b/i,
+      ];
+      for (const pat of POST_SUCCESS_BANNED) {
+        expect(
+          postBodyText.match(pat),
+          `post-success body matched forbidden pattern ${pat}`
+        ).toBeNull();
+      }
+
+      // Step 11 — navigate away to /org-admin/applications, then back
+      // to the same detail page. The captured secret value MUST NOT
+      // appear in the body of either page — the React state envelope
+      // was unmounted on navigation, the value is gone, and no
+      // storage primitive holds it.
+      await Promise.all([
+        page.waitForLoadState("networkidle"),
+        page.goto("/org-admin/applications"),
+      ]);
+      const listBody = (await page.locator("body").textContent()) ?? "";
+      expect(
+        listBody.includes(capturedSecret),
+        "captured client_secret must not appear on the list page after navigation away"
+      ).toBe(false);
+
+      await Promise.all([
+        page.waitForLoadState("networkidle"),
+        page.goto(`/org-admin/applications/${encodeURIComponent(confidential.id)}`),
+      ]);
+      // The detail page still renders (Security section heading is
+      // the load-bearing anchor).
+      await expect(page.getByRole("heading", { name: "Security" })).toBeVisible();
+      // The captured secret is gone from the body.
+      const reloadedBody = (await page.locator("body").textContent()) ?? "";
+      expect(
+        reloadedBody.includes(capturedSecret),
+        "captured client_secret must not appear after navigating back to the detail page"
+      ).toBe(false);
+      // The SuccessPanel itself is gone — the page reverts to the
+      // standard expand-panel rendering with the "Rotate client
+      // secret" button visible again.
+      expect(await page.getByText(/has been rotated/i).count()).toBe(0);
+      expect(await page.getByText(/Copy this secret now/i).count()).toBe(0);
+      await expect(
+        page.getByRole("button", { name: /^Rotate client secret$/ }).first()
+      ).toBeVisible();
+
+      // Step 12 — Recent activity card now reflects the rotation
+      // event. The IDP backend slice
+      // identuum-20260530-client-audit-resource-subjects emits
+      // AuditClientSecretRotated with subject_type=oauth_client and
+      // subject_id=client.ID, so the application detail page's
+      // Recent activity card filters to this rotation event
+      // exclusively. The audit pipeline is asynchronous so we use
+      // Playwright's auto-retry on the toBeVisible assertion to
+      // tolerate a small lag.
+      await expect(page.getByRole("heading", { name: "Recent activity" })).toBeVisible();
+      // The mapped operator-facing label MUST be present.
+      await expect(page.getByText("Client secret rotated", { exact: true }).first()).toBeVisible({
+        timeout: 15_000,
+      });
+      // The View-all link href contains subject_id.
+      const viewAllLink = page.getByRole("link", { name: /^View all →$/ });
+      await expect(viewAllLink).toBeVisible();
+      const viewAllHref = await viewAllLink.getAttribute("href");
+      expect(viewAllHref).toContain("/org-admin/audit");
+      expect(viewAllHref).toContain(`subject_id=${encodeURIComponent(confidential.id)}`);
+
+      // Step 13 — click the rotation row to drill into the dedicated
+      // audit page; assert the URL carries BOTH subject_id and
+      // event_type=client_secret_rotated. The row's accessible name
+      // is "View audit event client_secret_rotated for this
+      // application".
+      const rotationRow = page.getByRole("link", {
+        name: "View audit event client_secret_rotated for this application",
+      });
+      await expect(rotationRow).toBeVisible();
+      await Promise.all([page.waitForLoadState("networkidle"), rotationRow.click()]);
+      expect(page.url()).toContain("/org-admin/audit");
+      expect(page.url()).toContain(`subject_id=${encodeURIComponent(confidential.id)}`);
+      expect(page.url()).toContain(`event_type=${encodeURIComponent("client_secret_rotated")}`);
+
+      // Step 14 — defence-in-depth: after navigating to the audit
+      // page the captured secret value MUST STILL be absent from the
+      // page body. The audit page might render the event's metadata
+      // (client_id / client_name / client_uuid / secret_rotated:true)
+      // but the plaintext secret was never written to any audit row
+      // and must not appear anywhere.
+      const auditBody = (await page.locator("body").textContent()) ?? "";
+      expect(
+        auditBody.includes(capturedSecret),
+        "captured client_secret must not appear on the audit page after drill-in"
+      ).toBe(false);
+
+      // Step 15 — final URL sanity: we are now on the audit page
+      // filtered to this client + rotation event. Only the disposable
+      // confidential fixture client's secret was rotated; no Delete,
+      // no list mutation, no other application was touched.
+      expect(page.url()).toContain("/org-admin/audit");
     } finally {
       await page.close();
     }

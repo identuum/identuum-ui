@@ -33,6 +33,13 @@ const SKIP_MSG =
 
 let sharedCtx: BrowserContext | null = null;
 
+function getSharedContext(): BrowserContext {
+  if (!sharedCtx) {
+    throw new Error("shared context not initialized");
+  }
+  return sharedCtx;
+}
+
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(180_000); // allow up to ~101s (31s cooldown + 70s TOTP retry)
   if (skipOrgAdminTests) return;
@@ -55,7 +62,7 @@ test.describe("/org-admin — authenticated route access", () => {
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin");
       await page.waitForLoadState("networkidle");
@@ -77,7 +84,7 @@ test.describe("/org-admin — authenticated route access", () => {
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/users");
       await page.waitForLoadState("networkidle");
@@ -107,7 +114,7 @@ test.describe("/org-admin — authenticated route access", () => {
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/users");
       await page.waitForLoadState("networkidle");
@@ -128,7 +135,7 @@ test.describe("/org-admin — authenticated route access", () => {
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/users");
       await page.waitForLoadState("networkidle");
@@ -158,7 +165,7 @@ test.describe("/org-admin — authenticated route access", () => {
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
@@ -207,7 +214,7 @@ test.describe("/org-admin — authenticated route access", () => {
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/org-admin/audit");
       await page.waitForLoadState("networkidle");
@@ -246,7 +253,7 @@ test.describe("/account/settings — authenticated from org_admin session", () =
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/account/settings");
       await page.waitForLoadState("networkidle");
@@ -277,7 +284,7 @@ test.describe("/site-admin/* — access denied for org_admin", () => {
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/site-admin/organizations");
       await page.waitForLoadState("networkidle");
@@ -294,7 +301,7 @@ test.describe("/site-admin/* — access denied for org_admin", () => {
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/site-admin/settings");
       await page.waitForLoadState("networkidle");
@@ -309,7 +316,7 @@ test.describe("/site-admin/* — access denied for org_admin", () => {
       test.skip(true, SKIP_MSG);
     }
 
-    const page = await sharedCtx!.newPage();
+    const page = await getSharedContext().newPage();
     try {
       await page.goto("/site-admin/audit");
       await page.waitForLoadState("networkidle");

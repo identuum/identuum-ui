@@ -27,10 +27,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useActionState } from "react";
-import {
-  type CreateApplicationState,
-  createApplicationAction,
-} from "../actions";
+import { type CreateApplicationState, createApplicationAction } from "../actions";
 
 const initialState: CreateApplicationState = { phase: "idle" };
 
@@ -87,9 +84,7 @@ function Form({
           disabled={pending}
           className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:opacity-50"
         />
-        {fieldErrors.name && (
-          <p className="text-xs text-red-500">{fieldErrors.name}</p>
-        )}
+        {fieldErrors.name && <p className="text-xs text-red-500">{fieldErrors.name}</p>}
       </div>
 
       <div className="space-y-1">
@@ -138,15 +133,10 @@ function Form({
       </div>
 
       <div className="space-y-1">
-        <label
-          htmlFor="app-allowed-audiences"
-          className="block text-sm font-medium text-sky-950"
-        >
+        <label htmlFor="app-allowed-audiences" className="block text-sm font-medium text-sky-950">
           Allowed audiences
         </label>
-        <p className="text-xs text-stone-500">
-          Optional. One audience identifier per line.
-        </p>
+        <p className="text-xs text-stone-500">Optional. One audience identifier per line.</p>
         <textarea
           id="app-allowed-audiences"
           name="allowed_audiences"
@@ -189,8 +179,8 @@ function Form({
         <label htmlFor="app-public" className="text-sm text-sky-950 leading-tight">
           Public client
           <span className="block text-xs text-stone-500 mt-0.5">
-            For single-page or mobile apps that cannot store a secret. Confidential
-            (server-side) clients get a one-time client secret on the next screen.
+            For single-page or mobile apps that cannot store a secret. Confidential (server-side)
+            clients get a one-time client secret on the next screen.
           </span>
         </label>
       </div>
@@ -210,25 +200,23 @@ function Form({
   );
 }
 
-function SuccessPanel({ created }: { created: NonNullable<Extract<CreateApplicationState, { phase: "success" }>>["created"] }) {
+function SuccessPanel({
+  created,
+}: { created: NonNullable<Extract<CreateApplicationState, { phase: "success" }>>["created"] }) {
   const hasSecret = created.client_secret.length > 0;
   return (
     <div className="space-y-5">
-      <div
-        role="status"
-        className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
-      >
+      <output className="block rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
         <p className="font-semibold">{created.name} has been created.</p>
-      </div>
+      </output>
 
       <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-stone-100">
           <p className="text-sm font-semibold text-sky-950">Application credentials</p>
           {hasSecret && (
             <p className="text-xs text-amber-700 mt-1 leading-relaxed">
-              Copy this secret now. It will not be shown again. If you lose it, create a
-              replacement application — secret rotation is not yet available from this
-              page.
+              Copy this secret now. It will not be shown again. If you lose it, create a replacement
+              application — secret rotation is not yet available from this page.
             </p>
           )}
           {!hasSecret && (

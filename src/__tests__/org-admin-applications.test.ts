@@ -198,6 +198,20 @@ describe("/org-admin/applications/page.tsx — read-only surface", () => {
     expect(SRC).toMatch(/Could not load applications/);
   });
 
+  it("uses oauth_clients capability facts for backend-not-exposed page copy without hiding links", () => {
+    expect(SRC).toContain("getServerRuntimeState");
+    expect(SRC).toContain("getAuthorizationServerPageBoundary");
+    expect(SRC).toContain('surface: "oauth_clients"');
+    expect(SRC).toContain(
+      "const result = capabilityBoundary ? null : await listOwnOrganizationClients();"
+    );
+    expect(SRC).toContain("<CapabilityUnavailablePanel copy={capabilityBoundary} />");
+    expect(SRC).toMatch(/href="\/org-admin\/applications\/new"[\s\S]*?Create application/);
+    expect(SRC).toMatch(
+      /href=\{\s*`\/org-admin\/applications\/\$\{encodeURIComponent\(client\.id\)\}`\s*\}/
+    );
+  });
+
   it("is server-rendered (no 'use client', no client-side auth check)", () => {
     expect(SRC).not.toMatch(/^"use client";/m);
     expect(SRC).not.toMatch(/getServerSession\(/);
@@ -268,7 +282,7 @@ describe("OrgAdminNav — Applications is now an active link", () => {
 
   it("NAV_LINKS includes a real /org-admin/applications entry", () => {
     expect(SRC).toMatch(
-      /\{\s*label:\s*"Applications",\s*href:\s*"\/org-admin\/applications"/
+      /label:\s*"Applications"[\s\S]*?href:\s*"\/org-admin\/applications"[\s\S]*?capability:\s*"oauth_clients"/
     );
   });
 });
@@ -410,7 +424,15 @@ describe("createApplicationAction — server-action contract", () => {
 
 describe("CreateApplicationForm — single-shot client_secret rendering", () => {
   const FORM_SRC = readFileSync(
-    resolve(__dirname, "..", "app", "org-admin", "applications", "new", "create-application-form.tsx"),
+    resolve(
+      __dirname,
+      "..",
+      "app",
+      "org-admin",
+      "applications",
+      "new",
+      "create-application-form.tsx"
+    ),
     "utf-8"
   );
   // Strip JSDoc + line comments before negative-substring scans so
@@ -472,9 +494,7 @@ describe("/org-admin/applications list page — Create application link + no sec
   );
 
   it("links to /org-admin/applications/new", () => {
-    expect(SRC).toMatch(
-      /href="\/org-admin\/applications\/new"[\s\S]*?Create application/
-    );
+    expect(SRC).toMatch(/href="\/org-admin\/applications\/new"[\s\S]*?Create application/);
   });
 
   it("list page never renders client_secret", () => {
@@ -505,6 +525,15 @@ describe("/org-admin/applications/new page — server-rendered shell", () => {
       /import\s*\{\s*CreateApplicationForm\s*\}\s*from\s+["']\.\/create-application-form["']/
     );
     expect(SRC).toMatch(/<CreateApplicationForm\s*\/>/);
+  });
+
+  it("uses oauth_clients capability facts for backend-not-exposed copy while preserving unknown fallback", () => {
+    expect(SRC).toContain("getServerRuntimeState");
+    expect(SRC).toContain("getAuthorizationServerPageBoundary");
+    expect(SRC).toContain('surface: "oauth_clients"');
+    expect(SRC).toContain("capabilityBoundary ? (");
+    expect(SRC).toContain("<CapabilityUnavailablePanel copy={capabilityBoundary} />");
+    expect(SRC).toContain("<CreateApplicationForm />");
   });
 
   it("page heading + subtitle mention the single-shot secret contract", () => {
@@ -598,10 +627,27 @@ describe("/org-admin/applications/[id]/page.tsx — read-only detail surface", (
   const SRC_NO_COMMENTS = SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
   it("calls getOrganizationClientById (the wire helper)", () => {
+    // The import statement may include adjacent helpers (the audit-card
+    // slice landed `listAuditEvents` alongside this one); accept either
+    // a single-identifier import OR a multi-identifier import that
+    // includes `getOrganizationClientById`.
     expect(SRC).toMatch(
-      /import\s*\{\s*getOrganizationClientById\s*\}\s*from\s+["']@\/lib\/idp-admin-client["']/
+      /import\s*\{[^}]*\bgetOrganizationClientById\b[^}]*\}\s*from\s+["']@\/lib\/idp-admin-client["']/
     );
-    expect(SRC).toMatch(/await\s+getOrganizationClientById\(\s*id\s*\)/);
+    // Accept either a bare `await getOrganizationClientById(id)` call
+    // OR the Promise.all-wrapped invocation landed by the audit-card
+    // slice (which awaits the Promise.all rather than the individual
+    // call).
+    expect(SRC).toMatch(/getOrganizationClientById\(\s*id\s*\)/);
+  });
+
+  it("uses oauth_clients capability facts before endpoint calls and keeps the back href", () => {
+    expect(SRC).toContain("getServerRuntimeState");
+    expect(SRC).toContain("getAuthorizationServerPageBoundary");
+    expect(SRC).toContain('surface: "oauth_clients"');
+    expect(SRC).toContain("if (capabilityBoundary)");
+    expect(SRC).toContain("<CapabilityUnavailablePanel copy={capabilityBoundary} />");
+    expect(SRC).toMatch(/href="\/org-admin\/applications"/);
   });
 
   it("is server-rendered (no 'use client', no client-side auth check)", () => {
@@ -975,6 +1021,15 @@ describe("/org-admin/applications/[id]/edit/page.tsx — edit page server-render
     expect(SRC).toMatch(/await\s+getOrganizationClientById\(\s*id\s*\)/);
   });
 
+  it("uses oauth_clients capability facts before prefill endpoint calls and keeps the back href", () => {
+    expect(SRC).toContain("getServerRuntimeState");
+    expect(SRC).toContain("getAuthorizationServerPageBoundary");
+    expect(SRC).toContain('surface: "oauth_clients"');
+    expect(SRC).toContain("if (capabilityBoundary)");
+    expect(SRC).toContain("<CapabilityUnavailablePanel copy={capabilityBoundary} />");
+    expect(SRC).toMatch(/href=\{`\/org-admin\/applications\/\$\{encodeURIComponent\(id\)\}`\}/);
+  });
+
   it("is server-rendered (no 'use client', no client-side auth check)", () => {
     expect(SRC).not.toMatch(/^"use client";/m);
     expect(SRC_NO_COMMENTS).not.toMatch(/getServerSession\(/);
@@ -1177,9 +1232,7 @@ describe("/org-admin/applications/[id]/page.tsx — Edit application affordance"
     // surface on the page); the DangerZone component is the only
     // place where the destructive action lives. We pin that
     // explicitly here.
-    expect(SRC).toMatch(
-      /import\s*\{\s*DangerZone\s*\}\s*from\s+["']\.\/danger-zone["']/
-    );
+    expect(SRC).toMatch(/import\s*\{\s*DangerZone\s*\}\s*from\s+["']\.\/danger-zone["']/);
     expect(SRC).toMatch(/<DangerZone[\s\S]*?clientId=\{result\.data\.id\}/);
   });
 });
@@ -1326,7 +1379,9 @@ describe("deleteApplicationAction — server-action contract", () => {
     // instead — every assertion individually anchors on tokens that
     // are unique to the success path.
     expect(body).toMatch(/if\s*\(result\.ok\)\s*\{/);
-    expect(body).toMatch(/if\s*\(result\.ok\)\s*\{[\s\S]*?revalidatePath\("\/org-admin\/applications"\)/);
+    expect(body).toMatch(
+      /if\s*\(result\.ok\)\s*\{[\s\S]*?revalidatePath\("\/org-admin\/applications"\)/
+    );
     expect(body).toMatch(
       /if\s*\(result\.ok\)\s*\{[\s\S]*?revalidatePath\(`\/org-admin\/applications\/\$\{clientId\}`\)/
     );
@@ -1370,15 +1425,7 @@ describe("deleteApplicationAction — server-action contract", () => {
 
 describe("/org-admin/applications/[id]/danger-zone.tsx — Danger zone client component", () => {
   const SRC = readFileSync(
-    resolve(
-      __dirname,
-      "..",
-      "app",
-      "org-admin",
-      "applications",
-      "[id]",
-      "danger-zone.tsx"
-    ),
+    resolve(__dirname, "..", "app", "org-admin", "applications", "[id]", "danger-zone.tsx"),
     "utf-8"
   );
   const SRC_NO_COMMENTS = SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -1477,9 +1524,7 @@ describe("/org-admin/applications/[id]/page.tsx — DangerZone mount + Edit affo
   );
 
   it("imports + mounts DangerZone with the safe-non-secret props", () => {
-    expect(SRC).toMatch(
-      /import\s*\{\s*DangerZone\s*\}\s*from\s+["']\.\/danger-zone["']/
-    );
+    expect(SRC).toMatch(/import\s*\{\s*DangerZone\s*\}\s*from\s+["']\.\/danger-zone["']/);
     expect(SRC).toMatch(/<DangerZone[\s\S]*?clientId=\{result\.data\.id\}/);
     expect(SRC).toMatch(/<DangerZone[\s\S]*?clientName=\{result\.data\.name\}/);
     expect(SRC).toMatch(/<DangerZone[\s\S]*?clientID=\{result\.data\.client_id\}/);
@@ -1507,9 +1552,9 @@ describe("/org-admin/applications/page.tsx — Deleted notice from ?deleted= que
     expect(SRC).toMatch(/Deleted \{name\}\./);
   });
 
-  it("DeletedNotice has aria-live=polite (announce to screen readers)", () => {
+  it("DeletedNotice uses semantic output with aria-live=polite", () => {
+    expect(SRC).toMatch(/<output/);
     expect(SRC).toMatch(/aria-live="polite"/);
-    expect(SRC).toMatch(/role="status"/);
   });
 });
 
@@ -1577,7 +1622,9 @@ describe("idp-admin-client.rotateOrganizationClientSecret — wire contract", ()
     const tail = SRC.slice(fnStart);
     const fnEnd = tail.indexOf("\nexport ", 1);
     const body = fnEnd >= 0 ? tail.slice(0, fnEnd) : tail;
-    expect(body).toMatch(/res\.status\s*===\s*400[\s\S]*?invalid:\s*true[\s\S]*?publicClient:\s*true/);
+    expect(body).toMatch(
+      /res\.status\s*===\s*400[\s\S]*?invalid:\s*true[\s\S]*?publicClient:\s*true/
+    );
     expect(body).toMatch(/res\.status\s*===\s*403[\s\S]*?forbidden:\s*true/);
     expect(body).toMatch(/res\.status\s*===\s*404[\s\S]*?notFound:\s*true/);
   });
@@ -1732,15 +1779,7 @@ describe("rotateApplicationSecretAction — server-action contract", () => {
 
 describe("/org-admin/applications/[id]/security-section.tsx — Security section client component", () => {
   const SRC = readFileSync(
-    resolve(
-      __dirname,
-      "..",
-      "app",
-      "org-admin",
-      "applications",
-      "[id]",
-      "security-section.tsx"
-    ),
+    resolve(__dirname, "..", "app", "org-admin", "applications", "[id]", "security-section.tsx"),
     "utf-8"
   );
   const SRC_NO_COMMENTS = SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -1815,8 +1854,7 @@ describe("/org-admin/applications/[id]/security-section.tsx — Security section
     // display; nothing else should. Allow up to 2 references (a
     // hasSecret-style guard plus the <dd> rendering) — a third
     // would mean the secret is leaking elsewhere.
-    const matches =
-      SRC_NO_COMMENTS.match(/rotated\.client_secret/g) ?? [];
+    const matches = SRC_NO_COMMENTS.match(/rotated\.client_secret/g) ?? [];
     expect(matches.length).toBeLessThanOrEqual(2);
     expect(matches.length).toBeGreaterThan(0);
   });
@@ -1866,9 +1904,7 @@ describe("/org-admin/applications/[id]/page.tsx — SecuritySection mount above 
   );
 
   it("imports + mounts SecuritySection with the safe-non-secret props (including isPublic)", () => {
-    expect(SRC).toMatch(
-      /import\s*\{\s*SecuritySection\s*\}\s*from\s+["']\.\/security-section["']/
-    );
+    expect(SRC).toMatch(/import\s*\{\s*SecuritySection\s*\}\s*from\s+["']\.\/security-section["']/);
     expect(SRC).toMatch(/<SecuritySection[\s\S]*?clientId=\{result\.data\.id\}/);
     expect(SRC).toMatch(/<SecuritySection[\s\S]*?clientName=\{result\.data\.name\}/);
     expect(SRC).toMatch(/<SecuritySection[\s\S]*?clientID=\{result\.data\.client_id\}/);
@@ -1884,11 +1920,297 @@ describe("/org-admin/applications/[id]/page.tsx — SecuritySection mount above 
   });
 
   it("DangerZone mount is preserved (delete flow unchanged)", () => {
-    expect(SRC).toMatch(
-      /import\s*\{\s*DangerZone\s*\}\s*from\s+["']\.\/danger-zone["']/
-    );
+    expect(SRC).toMatch(/import\s*\{\s*DangerZone\s*\}\s*from\s+["']\.\/danger-zone["']/);
     expect(SRC).toMatch(/<DangerZone[\s\S]*?clientId=\{result\.data\.id\}/);
     expect(SRC).toMatch(/<DangerZone[\s\S]*?clientName=\{result\.data\.name\}/);
     expect(SRC).toMatch(/<DangerZone[\s\S]*?clientID=\{result\.data\.client_id\}/);
+  });
+});
+
+// ── Recent activity card on /org-admin/applications/[id] ───────────────────
+//
+// The IDP backend slice identuum-20260530-client-audit-resource-subjects
+// made client audit events filterable by subject_id = client UUID
+// (subject_type = "oauth_client"). The application detail page now
+// surfaces a compact Recent activity card mounted between DetailCard
+// and SecuritySection. Compact rows render the safe operator-facing
+// label + the raw event_type + optional safe summary + actor + the
+// timestamp — NEVER ip_address / user_agent / raw metadata / JSON.stringify
+// / client_secret / secret_hash / private_key / token / cookie /
+// session-id fields.
+
+describe("application-detail-audit.ts — helper module", () => {
+  const SRC = readFileSync(
+    resolve(
+      __dirname,
+      "..",
+      "app",
+      "org-admin",
+      "applications",
+      "[id]",
+      "application-detail-audit.ts"
+    ),
+    "utf-8"
+  );
+
+  it("declares APPLICATION_RECENT_ACTIVITY_COPY with exact operator-facing strings", () => {
+    expect(SRC).toMatch(/export const APPLICATION_RECENT_ACTIVITY_COPY\s*=\s*\{/);
+    expect(SRC).toMatch(/title:\s*"Recent activity"/);
+    expect(SRC).toMatch(
+      /subtitle:\s*"Latest audit events where this application is the subject\."/
+    );
+    expect(SRC).toMatch(/viewAllLabel:\s*"View all →"/);
+    expect(SRC).toMatch(/emptyBody:\s*"No recent activity recorded for this application\."/);
+    expect(SRC).toMatch(/errorBody:\s*"Could not load recent activity/);
+  });
+
+  it("declares APPLICATION_AUDIT_EVENT_LABELS with the documented five-event allowlist", () => {
+    expect(SRC).toMatch(/client_created:\s*"Application created"/);
+    expect(SRC).toMatch(/client_updated:\s*"Application updated"/);
+    expect(SRC).toMatch(/client_secret_rotated:\s*"Client secret rotated"/);
+    expect(SRC).toMatch(/client_deleted:\s*"Application deleted"/);
+    expect(SRC).toMatch(/client_linked_service_account:\s*"Service account linked"/);
+  });
+
+  it("getApplicationAuditEventLabel returns a safe fallback for unknown / empty event types", () => {
+    expect(SRC).toMatch(/export function getApplicationAuditEventLabel\([^)]*\):\s*string/);
+    expect(SRC).toMatch(/return "Application activity";/);
+    expect(SRC).toMatch(/return known \?\? eventType;/);
+  });
+
+  it("buildOrgAdminApplicationAuditHref URI-encodes both segments and roots at /org-admin/audit", () => {
+    expect(SRC).toMatch(
+      /export function buildOrgAdminApplicationAuditHref\(\s*applicationID:\s*string,\s*eventType\?:\s*string\s*\):\s*string/
+    );
+    expect(SRC).toMatch(/\/org-admin\/audit\?subject_id=\$\{encodeURIComponent\(applicationID\)\}/);
+    expect(SRC).toMatch(/&event_type=\$\{encodeURIComponent\(eventType\)\}/);
+    // NEVER /site-admin/audit in EXECUTABLE source — strip JSDoc /
+    // line comments first so the helper's documentation explaining
+    // the contract does not produce a false positive.
+    const NO_COMMENTS = SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(NO_COMMENTS).not.toMatch(/\/site-admin\/audit/);
+  });
+
+  it("helper source has no console.* / no localStorage / no secret-shaped reference", () => {
+    const NO_COMMENTS = SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(NO_COMMENTS).not.toMatch(/console\.\w+/);
+    expect(NO_COMMENTS).not.toMatch(/localStorage/);
+    expect(NO_COMMENTS).not.toMatch(/sessionStorage/);
+    expect(NO_COMMENTS).not.toMatch(/document\.cookie/);
+    // The helper is purely a label map + href builder; it must not
+    // reference any secret-shaped identifier.
+    const BANNED: RegExp[] = [
+      /\bclient_secret\b/,
+      /\bsecret_hash\b/,
+      /\bprivate_key\b/,
+      /\baccess_token\b/,
+      /\brefresh_token\b/,
+      /\bauthorization_code\b/,
+      /\bauth_code\b/,
+      /\bsigning_key\b/,
+      /\bbearer\b/i,
+      /Set-Cookie/i,
+      /\bsession_id\b/,
+      /JSON\.stringify\(/,
+      /\.metadata\b/,
+      /\.ip_address\b/,
+      /\.user_agent\b/,
+    ];
+    for (const pat of BANNED) {
+      expect(NO_COMMENTS, `helper must not reference ${pat}`).not.toMatch(pat);
+    }
+  });
+});
+
+describe("application-detail-audit.ts — behavioural pins", () => {
+  it("getApplicationAuditEventLabel returns the documented label for known events", async () => {
+    const mod = await import("../app/org-admin/applications/[id]/application-detail-audit");
+    expect(mod.getApplicationAuditEventLabel("client_created")).toBe("Application created");
+    expect(mod.getApplicationAuditEventLabel("client_updated")).toBe("Application updated");
+    expect(mod.getApplicationAuditEventLabel("client_secret_rotated")).toBe(
+      "Client secret rotated"
+    );
+    expect(mod.getApplicationAuditEventLabel("client_deleted")).toBe("Application deleted");
+    expect(mod.getApplicationAuditEventLabel("client_linked_service_account")).toBe(
+      "Service account linked"
+    );
+  });
+
+  it("getApplicationAuditEventLabel falls back to the raw event_type for unknown values", async () => {
+    const mod = await import("../app/org-admin/applications/[id]/application-detail-audit");
+    expect(mod.getApplicationAuditEventLabel("unknown_event")).toBe("unknown_event");
+  });
+
+  it("getApplicationAuditEventLabel returns the safe fallback for empty/undefined", async () => {
+    const mod = await import("../app/org-admin/applications/[id]/application-detail-audit");
+    expect(mod.getApplicationAuditEventLabel("")).toBe("Application activity");
+    expect(mod.getApplicationAuditEventLabel(null)).toBe("Application activity");
+    expect(mod.getApplicationAuditEventLabel(undefined)).toBe("Application activity");
+  });
+
+  it("buildOrgAdminApplicationAuditHref produces the documented URLs", async () => {
+    const mod = await import("../app/org-admin/applications/[id]/application-detail-audit");
+    const id = "11111111-1111-1111-1111-111111111111";
+    expect(mod.buildOrgAdminApplicationAuditHref(id)).toBe(
+      `/org-admin/audit?subject_id=${encodeURIComponent(id)}`
+    );
+    expect(mod.buildOrgAdminApplicationAuditHref(id, "client_secret_rotated")).toBe(
+      `/org-admin/audit?subject_id=${encodeURIComponent(id)}&event_type=${encodeURIComponent("client_secret_rotated")}`
+    );
+  });
+
+  it("buildOrgAdminApplicationAuditHref URI-encodes special characters in both params", async () => {
+    const mod = await import("../app/org-admin/applications/[id]/application-detail-audit");
+    const id = "id with space & ?";
+    const eventType = "event/with/slashes";
+    const href = mod.buildOrgAdminApplicationAuditHref(id, eventType);
+    expect(href).toContain(encodeURIComponent(id));
+    expect(href).toContain(encodeURIComponent(eventType));
+    // No raw spaces / ampersands / question marks leaked through.
+    expect(href).not.toMatch(/[\s?&]id with space/);
+  });
+});
+
+describe("/org-admin/applications/[id]/page.tsx — Recent activity wiring", () => {
+  const SRC = readFileSync(
+    resolve(__dirname, "..", "app", "org-admin", "applications", "[id]", "page.tsx"),
+    "utf-8"
+  );
+  const SRC_NO_COMMENTS = SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  it("imports listAuditEvents + AuditEventItem from the wire client", () => {
+    expect(SRC).toMatch(
+      /import\s*\{[\s\S]*?listAuditEvents[\s\S]*?\}\s*from\s+["']@\/lib\/idp-admin-client["']/
+    );
+  });
+
+  it("imports the application-detail-audit helper module (label map + href builder + copy)", () => {
+    expect(SRC).toMatch(
+      /import\s*\{[\s\S]*?APPLICATION_RECENT_ACTIVITY_COPY[\s\S]*?buildOrgAdminApplicationAuditHref[\s\S]*?getApplicationAuditEventLabel[\s\S]*?\}\s*from\s+["']\.\/application-detail-audit["']/
+    );
+  });
+
+  it("calls listAuditEvents with subjectId = the route id, subjectType = oauth_client, pageSize 5 (or 8)", () => {
+    expect(SRC).toMatch(
+      /listAuditEvents\(\s*\{\s*\n\s*subjectId:\s*id,\s*\n\s*subjectType:\s*"oauth_client",\s*\n\s*pageSize:\s*(5|8)/
+    );
+  });
+
+  it("DOES NOT pass an organization id to listAuditEvents (org-admin tenant scoping flows through the audit row's actor_organization_id column server-side)", () => {
+    // Bounded check on the call site: the options object must not
+    // declare an `organizationId` / `organization_id` / `actorOrgId`
+    // / `orgId` field.
+    const callMatch = SRC.match(/listAuditEvents\(\s*\{[\s\S]*?\}\s*\)/);
+    expect(callMatch).not.toBeNull();
+    const callBlock = callMatch?.[0] ?? "";
+    expect(callBlock).not.toMatch(/organizationId/);
+    expect(callBlock).not.toMatch(/organization_id/);
+    expect(callBlock).not.toMatch(/actorOrgId/);
+    expect(callBlock).not.toMatch(/\borgId\b/);
+  });
+
+  it("mounts ApplicationRecentActivity AFTER DetailCard and BEFORE SecuritySection", () => {
+    const detailCardIdx = SRC.indexOf("<DetailCard");
+    const recentIdx = SRC.indexOf("<ApplicationRecentActivity");
+    const securityIdx = SRC.indexOf("<SecuritySection");
+    expect(detailCardIdx).toBeGreaterThan(0);
+    expect(recentIdx).toBeGreaterThan(0);
+    expect(securityIdx).toBeGreaterThan(0);
+    expect(detailCardIdx).toBeLessThan(recentIdx);
+    expect(recentIdx).toBeLessThan(securityIdx);
+  });
+
+  it("DangerZone remains AFTER SecuritySection (delete-flow preserved)", () => {
+    const securityIdx = SRC.indexOf("<SecuritySection");
+    const dangerIdx = SRC.indexOf("<DangerZone");
+    expect(securityIdx).toBeGreaterThan(0);
+    expect(dangerIdx).toBeGreaterThan(securityIdx);
+  });
+
+  it("ApplicationRecentActivity uses the documented copy via the helper, NEVER inline literal strings", () => {
+    expect(SRC).toMatch(/APPLICATION_RECENT_ACTIVITY_COPY\.title/);
+    expect(SRC).toMatch(/APPLICATION_RECENT_ACTIVITY_COPY\.subtitle/);
+    expect(SRC).toMatch(/APPLICATION_RECENT_ACTIVITY_COPY\.viewAllLabel/);
+    expect(SRC).toMatch(/APPLICATION_RECENT_ACTIVITY_COPY\.emptyBody/);
+    expect(SRC).toMatch(/APPLICATION_RECENT_ACTIVITY_COPY\.errorBody/);
+    // Belt-and-suspenders: the page source MUST NOT inline the
+    // literal copy strings (catches a refactor that re-typed them
+    // verbatim).
+    expect(SRC).not.toMatch(/"Recent activity"\s*;/);
+    expect(SRC).not.toMatch(/"Latest audit events where this application is the subject\."/);
+  });
+
+  it("View-all link uses buildOrgAdminApplicationAuditHref(applicationID) (no event_type)", () => {
+    expect(SRC).toMatch(/href=\{buildOrgAdminApplicationAuditHref\(applicationID\)\}/);
+  });
+
+  it("Per-row link uses buildOrgAdminApplicationAuditHref(applicationID, event.event_type)", () => {
+    expect(SRC).toMatch(/buildOrgAdminApplicationAuditHref\(applicationID,\s*event\.event_type\)/);
+  });
+
+  it("Per-row label is computed from getApplicationAuditEventLabel(event.event_type)", () => {
+    expect(SRC).toMatch(/getApplicationAuditEventLabel\(event\.event_type\)/);
+  });
+
+  it("Per-row accessible name explicitly names the destination", () => {
+    expect(SRC).toMatch(/`View audit event \$\{event\.event_type\} for this application`/);
+  });
+
+  it("Per-row link carries the focus-visible:ring-2 keyboard-focus indicator", () => {
+    const rowMatch = SRC.match(/href=\{rowHref\}[\s\S]*?className="([^"]+)"/);
+    expect(rowMatch).not.toBeNull();
+    const cls = rowMatch?.[1] ?? "";
+    expect(cls).toMatch(/focus-visible:ring-2/);
+  });
+
+  it("Compact row renders ONLY safe fields — NO ip_address / user_agent / raw metadata / JSON.stringify", () => {
+    // Scope the assertion to the ApplicationRecentActivityRow body
+    // so unrelated detail-page surfaces (which legitimately render
+    // operator-safe configuration) are not penalised.
+    const rowStart = SRC.indexOf("function ApplicationRecentActivityRow(");
+    expect(rowStart).toBeGreaterThan(0);
+    const rowEnd = SRC.indexOf("\nfunction ", rowStart + 1);
+    const rowBlock = rowEnd > 0 ? SRC.slice(rowStart, rowEnd) : SRC.slice(rowStart);
+    const BANNED: RegExp[] = [
+      /\bip_address\b/,
+      /\buser_agent\b/,
+      /\bclient_secret\b/,
+      /\bclient_secret_hash\b/,
+      /\bsecret_hash\b/,
+      /\bprivate_key\b/,
+      /\baccess_token\b/,
+      /\brefresh_token\b/,
+      /\bauthorization_code\b/,
+      /\bauth_code\b/,
+      /\bsigning_key\b/,
+      /\bBearer\b/,
+      /Set-Cookie/i,
+      /\bsession_id\b/,
+      /JSON\.stringify\(/,
+      /\.metadata\b/,
+      /\bjwks\b/,
+    ];
+    for (const pat of BANNED) {
+      expect(rowBlock, `compact row must not render ${pat}`).not.toMatch(pat);
+    }
+  });
+
+  it("The page does NOT import AuditIPAddressCell — that component lives only on the dedicated audit page", () => {
+    // Strip comments so the JSX-body doc-block (which legitimately
+    // names AuditIPAddressCell as a documented exclusion) doesn't
+    // trip the assertion. A real import statement would survive the
+    // strip.
+    expect(SRC_NO_COMMENTS).not.toMatch(/AuditIPAddressCell/);
+  });
+
+  it("The page source has NO console.* call", () => {
+    expect(SRC_NO_COMMENTS).not.toMatch(/console\.\w+/);
+  });
+
+  it("Edit application affordance from the prior slice is preserved", () => {
+    expect(SRC).toMatch(
+      /href=\{`\/org-admin\/applications\/\$\{encodeURIComponent\(client\.id\)\}\/edit`\}/
+    );
+    expect(SRC).toMatch(/aria-label=\{`Edit application \$\{client\.name\}`\}/);
   });
 });

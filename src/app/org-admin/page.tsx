@@ -55,11 +55,7 @@ export default async function OrgAdminPage() {
                 <ActiveCard title={card.title} description={card.description} />
               </a>
             ) : (
-              <PlaceholderCard
-                key={card.title}
-                title={card.title}
-                description={card.description}
-              />
+              <PlaceholderCard key={card.title} title={card.title} description={card.description} />
             )
           )}
         </div>

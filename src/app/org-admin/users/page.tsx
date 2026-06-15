@@ -16,12 +16,13 @@
 import { listOrgUsers } from "@/lib/idp-admin-client";
 import type { OrgUserItem } from "@/lib/types";
 import type { Metadata } from "next";
+import { BulkInviteSection } from "./bulk-invite-section";
 import { InviteUserSection } from "./invite-section";
 import { RegenerateInviteLink, UserRowActions } from "./user-row-actions";
 
 export const metadata: Metadata = { title: "Users — Identuum Org Admin" };
 
-type StatusFilter = "all" | "active" | "pending" | "disabled";
+type StatusFilter = "all" | "active" | "pending" | "pending_approval" | "disabled";
 
 /**
  * Defensive fallback: detect sentinel emails from older API responses that
@@ -31,12 +32,18 @@ function isNoEmailSentinel(email: string): boolean {
   return email.startsWith("noemail+") && email.endsWith("@no-email.internal");
 }
 
-function computeStatus(user: OrgUserItem): "active" | "pending" | "disabled" | "deleted" {
+function computeStatus(
+  user: OrgUserItem
+): "active" | "pending" | "pending_approval" | "disabled" | "deleted" {
   if (user.deleted) return "deleted";
   // Use the explicit backend field first.
   if (user.invitation_pending) return "pending";
   // Defensive fallback: sentinel email without the new field.
   if (isNoEmailSentinel(user.email) && !user.email_verified) return "pending";
+  // IDP creates self-registered users with banned=true; only ApproveRegistration
+  // flips it. The list-level computation mirrors deriveOrgAdminUserActions on
+  // the detail page so both surfaces stay in lockstep.
+  if (user.banned && user.role === "org_user") return "pending_approval";
   if (!user.active) return "disabled";
   return "active";
 }
@@ -48,7 +55,13 @@ export default async function OrgAdminUsersPage({
 }) {
   const params = await searchParams;
   const rawFilter = params.status ?? "all";
-  const filter: StatusFilter = ["all", "active", "pending", "disabled"].includes(rawFilter)
+  const filter: StatusFilter = [
+    "all",
+    "active",
+    "pending",
+    "pending_approval",
+    "disabled",
+  ].includes(rawFilter)
     ? (rawFilter as StatusFilter)
     : "all";
 
@@ -70,6 +83,7 @@ export default async function OrgAdminUsersPage({
         all: users.filter((u) => !u.deleted).length,
         active: users.filter((u) => computeStatus(u) === "active").length,
         pending: users.filter((u) => computeStatus(u) === "pending").length,
+        pending_approval: users.filter((u) => computeStatus(u) === "pending_approval").length,
         disabled: users.filter((u) => computeStatus(u) === "disabled").length,
       }
     : null;
@@ -81,7 +95,10 @@ export default async function OrgAdminUsersPage({
         <p className="text-sm text-stone-500 mt-0.5">Members of your organization.</p>
       </div>
 
-      <InviteUserSection />
+      <div className="flex items-start gap-2 flex-wrap">
+        <InviteUserSection />
+        <BulkInviteSection />
+      </div>
 
       {/* Filter tabs */}
       {totalByStatus && (
@@ -91,6 +108,11 @@ export default async function OrgAdminUsersPage({
               { key: "all", label: "All", count: totalByStatus.all },
               { key: "active", label: "Active", count: totalByStatus.active },
               { key: "pending", label: "Pending", count: totalByStatus.pending },
+              {
+                key: "pending_approval",
+                label: "Pending approval",
+                count: totalByStatus.pending_approval,
+              },
               { key: "disabled", label: "Disabled", count: totalByStatus.disabled },
             ] as const
           ).map(({ key, label, count }) => (
@@ -183,6 +205,7 @@ function UserRow({
   const statusBadge: Record<typeof status, { label: string; cls: string }> = {
     active: { label: "Active", cls: "text-emerald-700 bg-emerald-50" },
     pending: { label: "Pending", cls: "text-amber-700 bg-amber-50" },
+    pending_approval: { label: "Pending approval", cls: "text-violet-700 bg-violet-50" },
     disabled: { label: "Disabled", cls: "text-stone-500 bg-stone-100" },
     deleted: { label: "Deleted", cls: "text-red-500 bg-red-50" },
   };
@@ -216,9 +239,15 @@ function UserRow({
   const isSoleActiveAdmin = user.role === "org_admin" && user.active && activeAdminCount <= 1;
 
   // Show Disable/Enable only for fully active or admin-disabled users.
-  // Pending users (unclaimed invitations) are not yet functional accounts;
-  // skip lifecycle actions for them to avoid confusing the admin.
-  const showActions = !user.deleted && user.role !== "site_admin" && status !== "pending";
+  // Pending invitations and pending-approval registrations are not yet
+  // functional accounts; skip lifecycle actions for them to avoid confusing
+  // the admin. Pending-approval rows direct the operator to the detail page
+  // where the Approve affordance lives.
+  const showActions =
+    !user.deleted &&
+    user.role !== "site_admin" &&
+    status !== "pending" &&
+    status !== "pending_approval";
 
   // Display label: use backend-authoritative invitation fields,
   // fall back to sentinel email detection for older API responses.
@@ -336,6 +365,10 @@ function EmptyState({ filter }: { filter: StatusFilter }) {
     pending: {
       title: "No pending invitations",
       sub: "All invitations have been claimed or none have been sent.",
+    },
+    pending_approval: {
+      title: "No pending registrations",
+      sub: "No self-registered users are waiting for approval.",
     },
     disabled: {
       title: "No disabled users",
