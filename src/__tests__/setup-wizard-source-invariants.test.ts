@@ -98,6 +98,21 @@ describe("setup wizard imports the right client surface", () => {
     expect(pageSource).toMatch(/redirect\("\/login"\)/);
   });
 
+  it("wizard treats a failed CE license probe as block-submission, not as 'license OK' (2026-06-15 customer-smoke regression pin)", () => {
+    // The pre-fix `licenseAccepted` clause `licenseStatus === null` made
+    // a probe failure indistinguishable from a valid license for CE
+    // backends, letting setup complete against an unlicensed CE binary.
+    // The new shape requires `licenseStatus?.state === "license_valid"`
+    // for CE. Also pin the recovery-banner test-id so a future refactor
+    // cannot silently drop the operator-facing explanation.
+    expect(wizardSource).toMatch(/licenseProbeUnavailableForCE/);
+    expect(wizardSource).toMatch(
+      /licenseAccepted\s*=\s*\n?\s*!distributionIsCE \|\| licenseStatus\?\.state === "license_valid"/
+    );
+    expect(wizardSource).toMatch(/data-testid="setup-license-probe-unavailable"/);
+    expect(wizardSource).toMatch(/CE license status unavailable/);
+  });
+
   it("page consults the server-runtime composition for setup state (authoritative absolute-URL probe, ahead of the relative-URL proxy probe)", () => {
     // The relative-URL `getSetupStatus()` probe can fall through to
     // a probe-failure on environments where the bundled UI proxy is
@@ -108,6 +123,42 @@ describe("setup wizard imports the right client surface", () => {
     expect(pageSource).toMatch(
       /runtime\?\.components\.idp\.setupState\?\.state === "setup_complete"/
     );
+  });
+
+  it("page falls back to the runtime composition for `initial` when the relative-URL setup-status probe fails (Node native fetch cannot resolve relative URLs in SSR — 2026-06-15 customer-smoke pin)", () => {
+    // Without this fallback the wizard renders with initialStatus=null,
+    // distributionIsCE=false, and submit allowed — the customer-smoke
+    // would silently let setup complete against an unlicensed CE
+    // backend (which then boots oss_compat and fails at login). The
+    // runtime composition uses absolute IDP URLs and is reliable in
+    // Compose deployments where the bundled-UI proxy fails server-side.
+    expect(pageSource).toMatch(/idpRuntime/);
+    expect(pageSource).toMatch(/idpRuntime\?\.setupState/);
+    // Distribution is derived from the absolute /api/v1/component product
+    // identifier — IdpSetupStateView deliberately omits the distribution
+    // field, so the page MUST consult product to know it's CE.
+    expect(pageSource).toMatch(/idpRuntime\.product === "identuum-idp-ce" \? "ce" : "oss"/);
+    // initialLicenseStatus gate must consult the RESOLVED initial
+    // (not the relative-URL status) so the license body flows through
+    // to the wizard on the runtime-fallback path.
+    expect(pageSource).toMatch(/initial\?\.distribution === "ce"/);
+  });
+
+  it("page probes the IDP license endpoint via absolute URL when the SSR relative-URL probe fails (so the LicenseStep can render on stacks where the SSR proxy is broken — 2026-06-15 customer-smoke pin)", () => {
+    // Without the absolute-URL fallback the SSR-rendered wizard would
+    // surface only the 'CE license status unavailable' banner and the
+    // operator could never reach the LicenseStep to upload a license
+    // through the wizard at all. The fallback uses idp.internal_base_url
+    // from the runtime config (the same in-network DNS path the
+    // runtime composition uses) so it works even when same-origin
+    // proxy SSR resolution does not.
+    expect(pageSource).toMatch(/fetchLicenseStatusAbsolute/);
+    expect(pageSource).toMatch(/idpBaseUrl\(cfg\)/);
+    expect(pageSource).toMatch(/\/api\/setup\/license/);
+    // Hard fail-closed surface: the absolute helper itself must NEVER
+    // return on errors — it returns null so the wizard renders the
+    // recovery banner rather than acting on an unknown license state.
+    expect(pageSource).toMatch(/return null/);
   });
 
   it("page also redirects to /setup-required when the UI is not configured", () => {

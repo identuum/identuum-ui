@@ -89,8 +89,20 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
   const showLicenseStep =
     distributionIsCE && licenseStatus !== null && licenseStatus.state !== "license_valid";
 
-  const licenseAccepted =
-    !distributionIsCE || licenseStatus === null || licenseStatus.state === "license_valid";
+  // For a CE backend, a missing licenseStatus value (probe failed
+  // server-side — same relative-URL path used by the setup-status
+  // probe that 044aa0e patched) means we have NO evidence the CE
+  // binary has a valid license. Permitting setup completion in that
+  // state lets the appliance boot in `oss_compat` mode with
+  // `license_state=missing` and silently breaks the login surface
+  // afterwards (operator-confirmed 2026-06-15 customer-smoke:
+  // `mode=oss_compat license_state=missing par_reason=disabled_unlicensed`,
+  // wizard succeeded, login returned "Login failed. Try again.").
+  // Treat null as "probe failed" — block submission and surface a
+  // recovery banner. The OSS / older-backend fall-through case
+  // remains intact because `!distributionIsCE` short-circuits first.
+  const licenseProbeUnavailableForCE = distributionIsCE && licenseStatus === null;
+  const licenseAccepted = !distributionIsCE || licenseStatus?.state === "license_valid";
 
   async function handleVerifyCode(event: FormEvent) {
     event.preventDefault();
@@ -306,6 +318,38 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
           status={licenseStatus}
           onLicenseAccepted={setLicenseStatus}
         />
+      ) : null}
+
+      {/* Section 2.5b — CE license probe-unavailable recovery banner.
+          Shown when the IDP backend self-identifies as CE but the
+          server-side `getLicenseStatus()` probe failed (returned
+          unreachable / non-OK). Without this banner the wizard would
+          silently treat probe-failure as "no license check needed"
+          and let the operator complete setup against an unlicensed
+          CE binary, which then boots in oss_compat mode with the
+          login surface unmounted (operator-observed regression
+          2026-06-15). The org+admin form below disables submit via
+          licenseAccepted; this banner explains WHY. */}
+      {licenseProbeUnavailableForCE ? (
+        <section
+          aria-labelledby="setup-license-probe-failed"
+          className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3"
+          data-testid="setup-license-probe-unavailable"
+        >
+          <h2 id="setup-license-probe-failed" className="text-sm font-semibold text-amber-900">
+            CE license status unavailable
+          </h2>
+          <p className="mt-1 text-sm text-amber-900 leading-relaxed">
+            The CE backend reports its distribution as <code>ce</code>, but the wizard could not
+            reach the <code>/api/setup/license</code> endpoint to verify the license state. Setup
+            completion is blocked because an unlicensed CE appliance cannot mount its login surface.
+          </p>
+          <p className="mt-2 text-sm text-amber-900 leading-relaxed">
+            Verify the IDP container is healthy and reachable from the bundled UI, then reload this
+            page to retry. If the problem persists, confirm the operator-supplied CE license
+            envelope is staged before running the wizard again.
+          </p>
+        </section>
       ) : null}
 
       {/* Section 3 — organization + site administrator */}

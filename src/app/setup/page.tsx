@@ -1,10 +1,61 @@
-import { getLicenseStatus } from "@/lib/idp-license-client";
+import { type LicenseStatusBody, getLicenseStatus } from "@/lib/idp-license-client";
 import { getSetupStatus } from "@/lib/idp-setup-client";
-import { loadRuntimeConfig } from "@/lib/runtime-config";
+import { idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { SetupWizard } from "./setup-wizard";
+
+/**
+ * Server-only absolute-URL probe for `/api/setup/license`. Mirrors the
+ * relative-URL `getLicenseStatus()` projection but goes through the
+ * runtime config's `idp.internal_base_url`. Used as fallback in the
+ * SSR path because Node's native fetch cannot resolve relative URLs
+ * from Next.js server components in standalone production builds
+ * (observed during the 2026-06-15 CE customer-smoke). Returns null
+ * on any failure (timeout / non-200 / non-JSON / unknown shape) so
+ * the wizard falls back to the recovery banner the same way the
+ * relative probe failure does.
+ *
+ * No envelope material, no signing key, no operator credential reads
+ * — the IDP `/api/setup/license` endpoint deliberately returns a
+ * no-secrets status view (see internal/license/upload.go).
+ */
+async function fetchLicenseStatusAbsolute(baseUrl: string): Promise<LicenseStatusBody | null> {
+  const url = `${baseUrl.replace(/\/$/, "")}/api/setup/license`;
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const raw = (await res.json()) as Record<string, unknown>;
+    const state = raw.state;
+    if (
+      state !== "license_missing" &&
+      state !== "license_valid" &&
+      state !== "license_invalid" &&
+      state !== "license_expired"
+    ) {
+      return null;
+    }
+    return {
+      state,
+      distribution: typeof raw.distribution === "string" ? raw.distribution : "",
+      product: typeof raw.product === "string" ? raw.product : "",
+      tier: typeof raw.tier === "string" ? raw.tier : undefined,
+      licensee: typeof raw.licensee === "string" ? raw.licensee : undefined,
+      expiresAt: typeof raw.expires_at === "string" ? raw.expires_at : undefined,
+      licenseId: typeof raw.license_id === "string" ? raw.license_id : undefined,
+      licenseType: typeof raw.license_type === "string" ? raw.license_type : undefined,
+      nextAction: typeof raw.next_action === "string" ? raw.next_action : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "First-run setup — Identuum" };
@@ -63,10 +114,19 @@ export default async function SetupPage() {
     redirect("/login");
   }
 
-  // For both ok+setup_required AND probe-failure cases, render the
-  // wizard. The wizard client surface re-fetches status before its
-  // own submits, so an intermittent probe failure does not strand the
-  // operator.
+  // Build the wizard's initial status. Preference order:
+  //   1. The relative-URL setup-status probe when it succeeds —
+  //      cheapest, no extra plumbing.
+  //   2. The absolute-URL runtime composition probe as fallback —
+  //      Node's native fetch cannot resolve relative URLs in Next.js
+  //      server components running under standalone production builds
+  //      (observed during the 2026-06-15 CE customer-smoke: the
+  //      bundled-UI proxy returns 200 to curl/exec, but the SSR
+  //      fetcher fails with "Failed to parse URL"). Without this
+  //      fallback the wizard would silently render as OSS, blocking
+  //      the CE license step and letting setup complete against an
+  //      unlicensed CE backend.
+  const idpRuntime = runtime?.components.idp;
   const initial =
     status.kind === "ok"
       ? {
@@ -77,15 +137,39 @@ export default async function SetupPage() {
           firstSigningKeyExists: status.status.firstSigningKeyExists,
           distribution: status.status.distribution,
         }
-      : null;
+      : idpRuntime?.setupState
+        ? {
+            state: idpRuntime.setupState.state,
+            nextAction: idpRuntime.setupState.nextAction,
+            siteAdminExists: idpRuntime.setupState.siteAdminExists,
+            firstOrganizationExists: idpRuntime.setupState.firstOrganizationExists,
+            firstSigningKeyExists: idpRuntime.setupState.firstSigningKeyExists,
+            // Derive distribution from the product identifier on the
+            // absolute /api/v1/component probe — IdpSetupStateView
+            // deliberately omits the distribution field, so we infer it
+            // here from the sibling product field. Anything other than
+            // the explicit CE product id is treated as OSS.
+            distribution: idpRuntime.product === "identuum-idp-ce" ? "ce" : "oss",
+          }
+        : null;
 
-  // License probe result: only forward the body when the kind is
-  // "ok" AND the backend reports CE distribution. OSS deployments
-  // never need the CE license step.
-  const initialLicenseStatus =
-    licenseProbe.kind === "ok" && status.kind === "ok" && status.status.distribution === "ce"
-      ? licenseProbe.status
-      : null;
+  // License probe result: only forward the body when the resolved
+  // initial reports CE distribution. OSS deployments never need the
+  // CE license step. Preference order mirrors the setup-state path:
+  //   1. The relative-URL `getLicenseStatus()` probe when it succeeded.
+  //   2. The absolute-URL `fetchLicenseStatusAbsolute(idpBaseUrl)`
+  //      fallback. Without this fallback the LicenseStep would never
+  //      render on stacks where the SSR proxy fails — the wizard
+  //      would surface only the recovery banner and the operator
+  //      could never upload a license through the wizard at all.
+  let initialLicenseStatus: LicenseStatusBody | null = null;
+  if (initial?.distribution === "ce") {
+    if (licenseProbe.kind === "ok") {
+      initialLicenseStatus = licenseProbe.status;
+    } else {
+      initialLicenseStatus = await fetchLicenseStatusAbsolute(idpBaseUrl(cfg));
+    }
+  }
 
   return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center px-4 py-12 relative overflow-hidden">
