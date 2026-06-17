@@ -63,6 +63,13 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
   const [setupCode, setSetupCode] = useState("");
   const [codeState, setCodeState] = useState<CodeState>({ kind: "idle" });
 
+  // createTenantOrg defaults to FALSE (site-admin-only bootstrap). The
+  // operator opts in via the checkbox below; only then are the org
+  // name + domain fields shown and required. The IDP ignores the org
+  // fields entirely when create_tenant_org=false, so the wizard does
+  // not even need to wipe orgName/orgDomain when the operator toggles
+  // the checkbox off — they will be ignored on submit.
+  const [createTenantOrg, setCreateTenantOrg] = useState(false);
   const [orgName, setOrgName] = useState("");
   const [orgDomain, setOrgDomain] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
@@ -159,8 +166,13 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
 
     const input: CompleteSetupInput = {
       setupToken: setupCode.trim(),
-      organizationName: orgName.trim(),
-      organizationDomain: orgDomain.trim(),
+      createTenantOrg,
+      // When createTenantOrg is false the IDP ignores both fields; we
+      // still forward the trimmed values so a re-toggled "yes, create
+      // one" path picks up whatever the operator typed previously
+      // without forcing a re-entry.
+      organizationName: createTenantOrg ? orgName.trim() : "",
+      organizationDomain: createTenantOrg ? orgDomain.trim() : "",
       adminEmail: adminEmail.trim(),
       adminPassword,
     };
@@ -352,10 +364,10 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
         </section>
       ) : null}
 
-      {/* Section 3 — organization + site administrator */}
+      {/* Section 3 — site administrator + optional first tenant org */}
       <section aria-labelledby="setup-org" className="flex flex-col gap-3">
         <h2 id="setup-org" className="text-sm font-semibold uppercase tracking-wide text-stone-500">
-          Organization and site administrator
+          Site administrator
         </h2>
         <form
           onSubmit={handleComplete}
@@ -363,42 +375,76 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
           aria-disabled={!codeVerified || !licenseAccepted}
           noValidate
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label htmlFor="organization_name" className="text-sm text-sky-950">
-                Organization name
-              </label>
-              <input
-                id="organization_name"
-                name="organization_name"
-                type="text"
-                value={orgName}
-                onChange={(e) => setOrgName(e.target.value)}
-                disabled={!codeVerified || !licenseAccepted || submitState.kind === "submitting"}
-                required
-                className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-sky-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-70 disabled:cursor-not-allowed"
-                placeholder="Acme Corp"
-                data-testid="setup-org-name"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor="organization_domain" className="text-sm text-sky-950">
-                Organization domain
-              </label>
-              <input
-                id="organization_domain"
-                name="organization_domain"
-                type="text"
-                value={orgDomain}
-                onChange={(e) => setOrgDomain(e.target.value)}
-                disabled={!codeVerified || !licenseAccepted || submitState.kind === "submitting"}
-                required
-                className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-sky-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-70 disabled:cursor-not-allowed"
-                placeholder="acme.example"
-                data-testid="setup-org-domain"
-              />
-            </div>
+          {/* Optional first tenant organization toggle. Default: off
+              (site-admin-only bootstrap). When on, the org name +
+              domain fields below become required; when off, the IDP
+              ignores them and no tenant org is created. The hidden
+              System Organization sentinel is seeded by the IDP at
+              boot independently of this choice. */}
+          <div className="flex items-start gap-2 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5">
+            <input
+              id="create_tenant_org"
+              name="create_tenant_org"
+              type="checkbox"
+              checked={createTenantOrg}
+              onChange={(e) => setCreateTenantOrg(e.target.checked)}
+              disabled={!codeVerified || !licenseAccepted || submitState.kind === "submitting"}
+              className="mt-1 h-4 w-4 rounded border-stone-300 text-sky-600 focus:ring-sky-300"
+              data-testid="setup-create-tenant-org"
+            />
+            <label htmlFor="create_tenant_org" className="text-sm text-sky-950 leading-relaxed">
+              <span className="font-semibold">
+                Also create a first tenant organization (optional).
+              </span>{" "}
+              <span className="text-stone-600">
+                Leave unchecked for a site-admin-only bootstrap; you can create tenant organizations
+                from the admin surface after sign-in. Check to provide the first tenant's name and
+                domain below.
+              </span>
+            </label>
           </div>
+
+          {createTenantOrg ? (
+            <div
+              className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+              data-testid="setup-tenant-org-fields"
+            >
+              <div className="flex flex-col gap-1">
+                <label htmlFor="organization_name" className="text-sm text-sky-950">
+                  Organization name
+                </label>
+                <input
+                  id="organization_name"
+                  name="organization_name"
+                  type="text"
+                  value={orgName}
+                  onChange={(e) => setOrgName(e.target.value)}
+                  disabled={!codeVerified || !licenseAccepted || submitState.kind === "submitting"}
+                  required
+                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-sky-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-70 disabled:cursor-not-allowed"
+                  placeholder="Acme Corp"
+                  data-testid="setup-org-name"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="organization_domain" className="text-sm text-sky-950">
+                  Organization domain
+                </label>
+                <input
+                  id="organization_domain"
+                  name="organization_domain"
+                  type="text"
+                  value={orgDomain}
+                  onChange={(e) => setOrgDomain(e.target.value)}
+                  disabled={!codeVerified || !licenseAccepted || submitState.kind === "submitting"}
+                  required
+                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-sky-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-70 disabled:cursor-not-allowed"
+                  placeholder="acme.example"
+                  data-testid="setup-org-domain"
+                />
+              </div>
+            </div>
+          ) : null}
 
           <div className="flex flex-col gap-1">
             <label htmlFor="admin_email" className="text-sm text-sky-950">
@@ -467,8 +513,10 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
               !licenseAccepted ||
               submitState.kind === "submitting" ||
               submitState.kind === "ok" ||
-              !orgName.trim() ||
-              !orgDomain.trim() ||
+              // Tenant org fields gated on the createTenantOrg
+              // toggle. When the checkbox is off the inputs are not
+              // rendered at all and must not block submit.
+              (createTenantOrg && (!orgName.trim() || !orgDomain.trim())) ||
               !adminEmail.trim() ||
               adminPassword.length < MIN_PASSWORD_LENGTH ||
               !passwordsMatch

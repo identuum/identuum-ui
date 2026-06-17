@@ -195,4 +195,32 @@ describe("setup wizard form has the expected inputs", () => {
   it("does not autocomplete the setup code field", () => {
     expect(wizardSource).toMatch(/id="setup_token"[\s\S]*?autoComplete="off"/);
   });
+
+  it("optional first-tenant-org toggle defaults to OFF and gates the org fields (site-admin-only bootstrap)", () => {
+    // The createTenantOrg toggle is the load-bearing pin for the
+    // site-admin-only setup mode. Two source assertions guarantee:
+    //   1. The state hook initialises to FALSE (the default).
+    //   2. The org name + domain fields are RENDERED inside a
+    //      conditional that consults createTenantOrg.
+    expect(wizardSource).toMatch(/useState\(false\).*\n.*const \[orgName/);
+    expect(wizardSource).toMatch(
+      /createTenantOrg\s*\?\s*\(\s*<div[^>]*data-testid="setup-tenant-org-fields"/
+    );
+    // The submit button must not require the org fields when the
+    // toggle is off — the disabled-expression must guard the org
+    // checks behind createTenantOrg.
+    expect(wizardSource).toMatch(
+      /createTenantOrg\s*&&\s*\(!orgName\.trim\(\)\s*\|\|\s*!orgDomain\.trim\(\)\)/
+    );
+    // The submit-time payload must forward createTenantOrg as a
+    // boolean and clear the org fields when the operator opted out
+    // (defence-in-depth — the IDP ignores them when the flag is
+    // false, but a clean payload is honest about intent).
+    expect(wizardSource).toMatch(/createTenantOrg,\n\s*\/\//);
+    expect(wizardSource).toMatch(/createTenantOrg\s*\?\s*orgName\.trim\(\)\s*:\s*""/);
+    expect(wizardSource).toMatch(/createTenantOrg\s*\?\s*orgDomain\.trim\(\)\s*:\s*""/);
+    // Pinned test id so a future refactor cannot silently drop the
+    // checkbox without flagging the regression in source-invariants.
+    expect(wizardSource).toMatch(/data-testid="setup-create-tenant-org"/);
+  });
 });

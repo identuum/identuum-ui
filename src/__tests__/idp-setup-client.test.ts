@@ -156,6 +156,7 @@ describe("verifySetupToken", () => {
 describe("completeSetup", () => {
   const validInput = {
     setupToken: "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRST",
+    createTenantOrg: true,
     organizationName: "Acme Corp",
     organizationDomain: "acme.example",
     adminEmail: "owner@acme.example",
@@ -232,5 +233,58 @@ describe("completeSetup", () => {
     const body = JSON.parse(init.body as string);
     expect(body.admin_password).toBe(validInput.adminPassword);
     expect(body.setup_token).toBe(validInput.setupToken);
+  });
+
+  it("forwards create_tenant_org=true in the body when the operator opts in", async () => {
+    const spy = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        state: "setup_complete",
+        create_tenant_org: true,
+        organization_id: "11111111-1111-7111-1111-111111111111",
+        organization_name: "Acme Corp",
+        admin_email: "owner@acme.example",
+      })
+    );
+    vi.stubGlobal("fetch", spy);
+    const got = await completeSetup({ ...validInput, createTenantOrg: true });
+    expect(got.kind).toBe("ok");
+    if (got.kind !== "ok") return;
+    expect(got.result.createTenantOrg).toBe(true);
+    expect(got.result.organizationId).toBe("11111111-1111-7111-1111-111111111111");
+    const init = spy.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(init.body as string);
+    expect(body.create_tenant_org).toBe(true);
+    expect(body.organization_name).toBe("Acme Corp");
+  });
+
+  it("forwards create_tenant_org=false and clears the org fields when the operator opts out (site-admin-only path)", async () => {
+    const spy = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        state: "setup_complete",
+        create_tenant_org: false,
+        // Backend omits the tenant-org fields when create_tenant_org=false.
+        admin_email: "site-admin@example.test",
+      })
+    );
+    vi.stubGlobal("fetch", spy);
+    const got = await completeSetup({
+      ...validInput,
+      createTenantOrg: false,
+      organizationName: "",
+      organizationDomain: "",
+      adminEmail: "site-admin@example.test",
+    });
+    expect(got.kind).toBe("ok");
+    if (got.kind !== "ok") return;
+    expect(got.result.createTenantOrg).toBe(false);
+    expect(got.result.organizationId).toBe("");
+    expect(got.result.organizationName).toBe("");
+    const init = spy.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(init.body as string);
+    expect(body.create_tenant_org).toBe(false);
+    // The wizard ALWAYS forwards the fields (the IDP ignores them
+    // when the flag is false), but the test fixture cleared them.
+    expect(body.organization_name).toBe("");
+    expect(body.organization_domain).toBe("");
   });
 });

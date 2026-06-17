@@ -51,6 +51,18 @@ export type VerifySetupTokenResult =
 
 export interface CompleteSetupInput {
   setupToken: string;
+  /**
+   * createTenantOrg controls whether the wizard creates a first
+   * customer/tenant organization during setup. Default is FALSE
+   * (site-admin-only bootstrap). When false the `organizationName`
+   * and `organizationDomain` fields are ignored by the IDP, so the
+   * caller MAY leave them as empty strings.
+   *
+   * The hidden System Organization sentinel row exists independently
+   * of this choice — it is infrastructure data seeded by the IDP at
+   * boot and is never surfaced by /api/v1/organizations.
+   */
+  createTenantOrg: boolean;
   organizationName: string;
   organizationDomain: string;
   adminEmail: string;
@@ -59,6 +71,18 @@ export interface CompleteSetupInput {
 
 export interface CompleteSetupBody {
   state: "setup_complete";
+  /**
+   * createTenantOrg echoes the request flag back so the UI's success
+   * screen can render an honest "no tenant org yet" hint when the
+   * operator opted into site-admin-only bootstrap.
+   */
+  createTenantOrg: boolean;
+  /**
+   * Tenant org fields are empty strings when `createTenantOrg=false`.
+   * The IDP emits them as JSON-omitempty; the projection here
+   * defaults to "" so callers can `.organizationId.length > 0`-check
+   * without a separate union type.
+   */
   organizationId: string;
   organizationName: string;
   adminEmail: string;
@@ -141,6 +165,11 @@ export async function completeSetup(input: CompleteSetupInput): Promise<Complete
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         setup_token: input.setupToken,
+        create_tenant_org: input.createTenantOrg,
+        // The IDP ignores organization_name / organization_domain when
+        // create_tenant_org is false, so we forward whatever the form
+        // captured rather than wiping it. The site-admin-only path
+        // typically sends them as empty strings.
         organization_name: input.organizationName,
         organization_domain: input.organizationDomain,
         admin_email: input.adminEmail,
@@ -189,6 +218,7 @@ export async function completeSetup(input: CompleteSetupInput): Promise<Complete
     kind: "ok",
     result: {
       state: "setup_complete",
+      createTenantOrg: body.create_tenant_org === true,
       organizationId: typeof body.organization_id === "string" ? body.organization_id : "",
       organizationName: typeof body.organization_name === "string" ? body.organization_name : "",
       adminEmail: typeof body.admin_email === "string" ? body.admin_email : "",
