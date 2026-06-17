@@ -17,9 +17,26 @@ export const metadata: Metadata = { title: "Settings — Identuum Admin" };
 
 // ── Server-side health check ──────────────────────────────────────────────────
 
-async function checkHealth(url: string): Promise<boolean | null> {
+// Backend liveness path. identuum-idp-ce uses the Kubernetes-convention
+// `/healthz` (registered in cmd/identuum-idp/serve.go and the symmetric
+// upgrade_serve.go); the same path is also wired into the UI container's own
+// Dockerfile HEALTHCHECK. identuum-ag still publishes `/health` today; this
+// helper preserves AG's behaviour until a paired AG-side audit confirms the
+// Kubernetes convention is universal there too. Same per-domain branch as
+// src/app/api/status/route.ts::healthPath — kept in sync deliberately so a
+// future refactor that consolidates onto /api/status does not silently regress
+// the IDP probe back to `/health`. Pinned by src/__tests__/settings-system-
+// status-health-paths.test.ts.
+type HealthDomain = "idp" | "ag";
+
+function healthPath(domain: HealthDomain): string {
+  if (domain === "idp") return "/healthz";
+  return "/health";
+}
+
+async function checkHealth(url: string, domain: HealthDomain): Promise<boolean | null> {
   try {
-    const res = await fetch(`${url.replace(/\/$/, "")}/health`, {
+    const res = await fetch(`${url.replace(/\/$/, "")}${healthPath(domain)}`, {
       cache: "no-store",
       signal: AbortSignal.timeout(4000),
     });
@@ -47,8 +64,8 @@ async function loadSystemStatus(): Promise<ServiceStatus[]> {
   }
 
   const [idpHealthy, agHealthy] = await Promise.all([
-    cfg.idp.enabled ? checkHealth(idpBaseUrl(cfg)) : Promise.resolve(null),
-    cfg.ag.enabled ? checkHealth(agBaseUrl(cfg)) : Promise.resolve(null),
+    cfg.idp.enabled ? checkHealth(idpBaseUrl(cfg), "idp") : Promise.resolve(null),
+    cfg.ag.enabled ? checkHealth(agBaseUrl(cfg), "ag") : Promise.resolve(null),
   ]);
 
   return [
