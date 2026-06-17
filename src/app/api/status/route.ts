@@ -6,13 +6,28 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+// healthPath returns the liveness path each backend mounts. identuum-idp-ce
+// uses the Kubernetes-convention `/healthz` (registered in
+// cmd/identuum-idp/serve.go and the symmetric upgrade_serve.go); the same
+// path is also wired into the UI container's own Dockerfile HEALTHCHECK.
+// identuum-ag still publishes `/health` today; this helper preserves that
+// AG-side behaviour until a paired AG-side audit confirms the Kubernetes
+// convention is universal on the AG binary too. Pinned by
+// src/__tests__/api-status-health-paths.test.ts so a future refactor
+// cannot silently regress the IDP probe back to `/health` and surface a
+// false "identuum-idp unreachable" on the logged-in site-admin overview.
+function healthPath(domain: BackendDomain): string {
+  if (domain === "idp") return "/healthz";
+  return "/health";
+}
+
 async function checkHealth(
   url: string,
   domain: BackendDomain
 ): Promise<{ healthy: boolean; product: string }> {
   const fallback = domain === "idp" ? "identuum-idp" : "identuum-ag";
   try {
-    const res = await fetch(`${url.replace(/\/$/, "")}/health`, {
+    const res = await fetch(`${url.replace(/\/$/, "")}${healthPath(domain)}`, {
       signal: AbortSignal.timeout(4000),
     });
     if (!res.ok) {
