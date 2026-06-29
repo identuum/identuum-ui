@@ -24,7 +24,7 @@
  *   - This is NOT an auth/E2E test. It does NOT exercise login, MFA,
  *     sessions, /authorize success, /token issuance, the admin UI, or
  *     any CE-only surface.
- *   - It does NOT require .env.playwright.local credentials.
+ *   - It does NOT require .env.playwright.idp-oss.local credentials.
  *   - It does NOT require a CE appliance runtime.
  *
  * Runtime selection:

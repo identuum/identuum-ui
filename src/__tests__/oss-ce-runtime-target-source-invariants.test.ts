@@ -110,10 +110,10 @@ describe("OSS-vs-CE Playwright runtime contract — CE-required specs", () => {
 
 describe("OSS-vs-CE Playwright runtime contract — OSS-compatible specs", () => {
   for (const spec of OSS_SCAFFOLD_COMPATIBLE_SPECS) {
-    it(`${spec} must NOT require .env.playwright.local credentials`, () => {
+    it(`${spec} must NOT require .env.playwright.idp-oss.local credentials`, () => {
       const src = read(spec);
       // OSS-scaffold-compatible specs must not reference any of the
-      // credential env vars Playwright loads from .env.playwright.local
+      // credential env vars Playwright loads from .env.playwright.idp-oss.local
       // — they would force the spec to fail against the OSS scaffold
       // which has no credentials at all.
       const forbidden = [

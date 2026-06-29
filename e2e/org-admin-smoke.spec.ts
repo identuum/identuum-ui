@@ -16,7 +16,7 @@
  * transient Docker DNS failures under combined-suite load.
  *
  * Skipped unless IDENTUUM_TEST_ORG_ADMIN_EMAIL and
- * IDENTUUM_TEST_ORG_ADMIN_PASSWORD are set (auto-loaded from .env.playwright.local).
+ * IDENTUUM_TEST_ORG_ADMIN_PASSWORD are set (auto-loaded from .env.playwright.idp-oss.local).
  *
  * Requires: full Compose stack (IdP at localhost:7113, UI at localhost:7104).
  * Run with --workers=1 to avoid TOTP replay failures.

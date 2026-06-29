@@ -29,7 +29,7 @@ verify:
 ## the four positive scaffold endpoints (/health,
 ## /.well-known/openid-configuration, /.well-known/jwks.json) and the
 ## two negative pins (/authorize NOT 200, /token NOT 200). It does
-## NOT require .env.playwright.local credentials.
+## NOT require .env.playwright.idp-oss.local credentials.
 ##
 ## Override IDENTUUM_IDP_BASE_URL to point at a non-default IDP host.
 verify-ui-oss-contract:
@@ -43,7 +43,7 @@ verify-ui-oss-contract:
 ## Run this target against a CE appliance runtime — NOT against the
 ## OSS `--gin-serve` scaffold, which has no /authorize or /token.
 ## Authenticated specs self-skip when IDENTUUM_TEST_SITE_ADMIN_PASSWORD
-## (and friends) are unset; .env.playwright.local supplies the
+## (and friends) are unset; .env.playwright.idp-oss.local supplies the
 ## credentials in normal operator workflows.
 ##
 ## The CE auth target deliberately EXCLUDES e2e/oss-contract.spec.ts
@@ -70,15 +70,15 @@ verify-ui-ce-auth:
 ## /api/v1/component + invariant #12) runs unconditionally when the
 ## stack is reachable. Group 2 (1 authenticated UI render assertion
 ## on /site-admin/settings) gates on the operator's gitignored
-## .env.playwright.customer-smoke.local carrying customer-smoke
+## .env.playwright.idp-ce.local carrying customer-smoke
 ## site_admin credentials; the spec auto-loads the overlay file via
 ## the IDENTUUM_E2E_CE_CUSTOMER_SMOKE=1 flag that the pnpm script
 ## sets, and the overlay's keys win over the dev-stack file by
 ## default for this command.
 ##
 ## Operator workflow (one-time setup):
-##   cp .env.playwright.customer-smoke.local.example \
-##      .env.playwright.customer-smoke.local
+##   cp .env.playwright.idp-ce.local.example \
+##      .env.playwright.idp-ce.local
 ##   # Edit the new file with credentials matching the customer-smoke
 ##   # site_admin row chosen at the M1 setup wizard. The file is
 ##   # gitignored via .env*.local. NEVER commit. NEVER paste.
@@ -116,7 +116,7 @@ verify-ui-ce-customer-smoke:
 ## Prereqs:
 ##   1. `cd ../identuum-idp-ce && make customer-smoke-up` first.
 ##   2. M1 setup wizard + M2 license envelope upload completed.
-##   3. .env.playwright.customer-smoke.local present with
+##   3. .env.playwright.idp-ce.local present with
 ##      IDENTUUM_E2E_TEST_EMAIL + IDENTUUM_E2E_TEST_PASSWORD set to
 ##      the customer-smoke site_admin credentials. The file is
 ##      gitignored via .env*.local. NEVER commit. NEVER paste.
@@ -126,8 +126,8 @@ verify-ui-ce-customer-smoke:
 ##
 ## Expected: 5 passed on Chromium against the customer-smoke stack.
 ## Most likely failure modes: missing runtime (customer-smoke not up
-## → ERR_CONNECTION_REFUSED), missing credentials (.env.playwright.
-## customer-smoke.local absent → auth helper SKIP), or RP ID /
+## → ERR_CONNECTION_REFUSED), missing credentials
+## (.env.playwright.idp-ce.local absent → auth helper SKIP), or RP ID /
 ## origin mismatch (IDP issuer ≠ UI origin hostname).
 verify-ui-ce-customer-smoke-passkey:
 	pnpm e2e:ce-customer-smoke-passkey
@@ -250,6 +250,18 @@ verify-live-upgrade-backup:
 ## dev-up: start the local UI stack.
 dev-up:
 	$(COMPOSE_CMD) -f $(COMPOSE_FILE) up -d
+
+## oss-smoke-up: bring up the OSS customer-smoke UI container (host 127.0.0.1:7114
+## -> container 7104) pointing at the OSS IDP backend on 127.0.0.1:7113, via the
+## `oss-smoke` compose profile. The bare standalone identuum-ui on 7104 (started by
+## `make dev-up`) and the CE UI on 7124 are left untouched. This is the managed
+## target the OSS passkey smoke runs against — no manually started UI process.
+oss-smoke-up:
+	$(COMPOSE_CMD) -f $(COMPOSE_FILE) --profile oss-smoke up -d identuum-ui-oss-smoke
+
+## oss-smoke-down: stop and remove the OSS customer-smoke UI container only.
+oss-smoke-down:
+	$(COMPOSE_CMD) -f $(COMPOSE_FILE) --profile oss-smoke rm -f -s identuum-ui-oss-smoke
 
 ## dev-rebuild: rebuild and force-recreate the local UI service.
 dev-rebuild:

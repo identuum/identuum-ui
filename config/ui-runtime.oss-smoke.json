@@ -1,0 +1,13 @@
+{
+  "configured": true,
+  "ui_origin": "http://localhost:7114",
+  "idp": {
+    "enabled": true,
+    "public_base_url": "http://localhost:7113",
+    "internal_base_url": "http://host.docker.internal:7113"
+  },
+  "ag": {
+    "enabled": false,
+    "public_base_url": ""
+  }
+}

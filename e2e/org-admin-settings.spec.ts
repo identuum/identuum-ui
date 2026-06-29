@@ -14,7 +14,7 @@
  *     cross-org-authority / fixture-identifier strings.
  *
  * Mode:
- *   - Designed for both durable (.env.playwright.local) and dynamic
+ *   - Designed for both durable (.env.playwright.idp-oss.local) and dynamic
  *     (IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true) modes. login.ts resolves the
  *     credentials in either path; this spec doesn't care which.
  *   - Skips when no credentials are present, matching the project convention.

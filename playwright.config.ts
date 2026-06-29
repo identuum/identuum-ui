@@ -3,11 +3,11 @@ import { resolve } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 
 // ── Local env autoload ────────────────────────────────────────────────────────
-// Reads .env.playwright.local (gitignored) before tests run.
+// Reads .env.playwright.idp-oss.local (gitignored) before tests run.
 // Shell-provided env vars always take precedence — existing values are not overwritten.
 // Silently skipped in CI or when the file is absent.
 //
-// The customer-smoke overlay (`.env.playwright.customer-smoke.local`) is
+// The customer-smoke overlay (`.env.playwright.idp-ce.local`) is
 // loaded AFTER the canonical file when the `IDENTUUM_E2E_CE_CUSTOMER_SMOKE`
 // env var is set (which the `pnpm e2e:ce-customer-smoke` script does).
 // This keeps customer-smoke site_admin credentials in a separate
@@ -40,31 +40,50 @@ function loadEnvFile(filename: string, override: boolean): void {
   }
 }
 
+// ── Credential-overlay contract (strict, no fallback) ─────────────────────────
+// Each customer-smoke runtime reads its credentials from EXACTLY ONE overlay
+// file, with no fallback to any other env file:
+//   - OSS customer-smoke → ONLY .env.playwright.idp-oss.local
+//   - CE  customer-smoke → ONLY .env.playwright.idp-ce.local
+//   - normal dev runs    → .env.playwright.idp-oss.local (unchanged behaviour)
+// A missing required credential variable in the SELECTED overlay fails fast HERE
+// (config evaluation, before any webServer/browser boot) with a message naming
+// the missing variable and its required file — the value itself is never read,
+// logged, or interpolated.
+const OSS_CRED_FILE = ".env.playwright.idp-oss.local";
+const CE_CRED_FILE = ".env.playwright.idp-ce.local";
+const REQUIRED_SITE_ADMIN_KEYS = [
+  "IDENTUUM_TEST_SITE_ADMIN_EMAIL",
+  "IDENTUUM_TEST_SITE_ADMIN_PASSWORD",
+  "IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET",
+];
+
+function requireCredentialsOrFail(file: string, keys: string[]): void {
+  const missing = keys.filter((k) => {
+    const v = process.env[k];
+    return v === undefined || v.trim() === "";
+  });
+  if (missing.length > 0) {
+    // Variable NAMES only — no credential value is read, printed, or interpolated.
+    throw new Error(
+      `[credential-contract] missing required credential variable(s): ${missing.join(", ")}. ` +
+        `These MUST be defined in ${file} (no fallback to any other env file). ` +
+        "Set them in that file and re-run. No credential value is printed."
+    );
+  }
+}
+
 if (process.env.IDENTUUM_E2E_CE_CUSTOMER_SMOKE === "1") {
-  // Customer-smoke mode: the overlay loads FIRST and wins for keys it
-  // defines, so the operator does NOT need to set any extra precedence
-  // flag. The canonical dev-stack file still loads after and fills in
-  // any keys the overlay does not define. This is the inverse of the
-  // normal-dev-mode default below — normal Playwright runs continue to
-  // see the dev-stack credentials win, so the existing authed specs
-  // (site-admin-observability, site-admin-organizations, etc.) are
-  // unchanged.
-  loadEnvFile(".env.playwright.customer-smoke.local", false);
-  loadEnvFile(".env.playwright.local", false);
+  // CE customer-smoke: ONLY the CE overlay — never falls back to the dev-stack file.
+  loadEnvFile(CE_CRED_FILE, false);
+  requireCredentialsOrFail(CE_CRED_FILE, REQUIRED_SITE_ADMIN_KEYS);
 } else if (process.env.IDENTUUM_E2E_OSS_CUSTOMER_SMOKE === "1") {
-  // OSS customer-smoke mode (mirror of the CE block above): targets the
-  // identuum-idp-oss dev runtime on 127.0.0.1:7113 + the UI dev server
-  // on 127.0.0.1:7114. Loads `.env.playwright.oss.local` FIRST so OSS
-  // site_admin credentials (different first-run-wizard output than the
-  // CE customer-smoke stack) take precedence for keys it defines; the
-  // canonical dev-stack file still loads after and fills in any keys
-  // the OSS overlay does not carry. Used by the `pnpm
-  // e2e:oss-customer-smoke-passkey` script to close the IDP OSS passkey
-  // parity gap left after the IDP OSS verification-floor closure.
-  loadEnvFile(".env.playwright.oss.local", false);
-  loadEnvFile(".env.playwright.local", false);
+  // OSS customer-smoke: ONLY the dev-stack overlay — never falls back to the
+  // CE overlay (the former `.env.playwright.oss.local` + dual-load is removed).
+  loadEnvFile(OSS_CRED_FILE, false);
+  requireCredentialsOrFail(OSS_CRED_FILE, REQUIRED_SITE_ADMIN_KEYS);
 } else {
-  loadEnvFile(".env.playwright.local", false);
+  loadEnvFile(OSS_CRED_FILE, false);
 }
 
 /**
@@ -88,8 +107,8 @@ if (process.env.IDENTUUM_E2E_CE_CUSTOMER_SMOKE === "1") {
  *   clear message. Safe-state tests (/claim, /verify-email) tolerate an
  *   unreachable IdP. The login test requires the full Compose stack.
  *
- * Authenticated test credentials (.env.playwright.local — gitignored, never commit):
- *   Credentials are loaded automatically from .env.playwright.local if present.
+ * Authenticated test credentials (.env.playwright.idp-oss.local — gitignored, never commit):
+ *   Credentials are loaded automatically from .env.playwright.idp-oss.local if present.
  *   Site-admin vars (canonical):   IDENTUUM_TEST_SITE_ADMIN_EMAIL / _PASSWORD / _TOTP_SECRET
  *   Org-admin vars:                IDENTUUM_TEST_ORG_ADMIN_EMAIL / _PASSWORD / _TOTP_SECRET
  *   Legacy IDENTUUM_TEST_EMAIL / _PASSWORD / _TOTP_SECRET are no longer read.

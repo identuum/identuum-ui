@@ -18,7 +18,7 @@ bypass MFA.
 ## Recommended path for non-destructive org-admin Playwright
 
 **For routine local runs of the non-destructive org-admin specs, prefer
-dynamic mode. It does not require any `.env.playwright.local` setup.**
+dynamic mode. It does not require any `.env.playwright.idp-oss.local` setup.**
 
 ```sh
 cd /Users/odemir/Development/2025-11/identuum/identuum-ui
@@ -32,7 +32,7 @@ Full setup walkthrough in **Section 9**.
 
 Use durable mode (Sections 1–8) only when you specifically need a
 long-lived org_admin row whose password + TOTP secret live in
-`.env.playwright.local`. Use neither for `e2e/site-admin-admin-recovery.spec.ts` —
+`.env.playwright.idp-oss.local`. Use neither for `e2e/site-admin-admin-recovery.spec.ts` —
 that spec is destructive and intentionally isolated; see Section 9k.
 
 ---
@@ -48,7 +48,7 @@ export const skipOrgAdminTests = !ORG_ADMIN_EMAIL || !ORG_ADMIN_PASSWORD;
 
 If **either** `IDENTUUM_TEST_ORG_ADMIN_EMAIL` or
 `IDENTUUM_TEST_ORG_ADMIN_PASSWORD` is missing from
-`.env.playwright.local`, every org_admin test silently self-skips and the
+`.env.playwright.idp-oss.local`, every org_admin test silently self-skips and the
 suite reports green via skips — exactly the false-positive this runbook
 prevents.
 
@@ -123,7 +123,7 @@ boolean predicates above are sufficient for a fixture health check.
 ### 2c. Env-key presence (no values)
 
 ```sh
-grep -E "^IDENTUUM_TEST_ORG_ADMIN_[A-Z_]+=" .env.playwright.local \
+grep -E "^IDENTUUM_TEST_ORG_ADMIN_[A-Z_]+=" .env.playwright.idp-oss.local \
   | sed 's/=.*$/=<redacted>/'
 ```
 
@@ -160,7 +160,7 @@ store.
 ### 3a. Operator already has the password
 
 If the original password was stored in 1Password / a system keychain /
-any local secret store, just paste it into `.env.playwright.local` (see
+any local secret store, just paste it into `.env.playwright.idp-oss.local` (see
 section 5) and skip to section 4.
 
 ### 3b. Rotate the password as site_admin (supported REST endpoint)
@@ -191,7 +191,7 @@ section 5) and skip to section 4.
 
 > **Do not paste the new password into this conversation, into any
 > public-facing markdown, or into a committed test fixture.** It belongs
-> only in your local secret store and in `.env.playwright.local` (which
+> only in your local secret store and in `.env.playwright.idp-oss.local` (which
 > is gitignored by `.env*.local`).
 
 ---
@@ -259,7 +259,7 @@ Prefer (4b) — restoring enrollment — over (4c).
 
 ## 5. Update local env values (variable names only)
 
-Edit `.env.playwright.local` so it contains, at minimum:
+Edit `.env.playwright.idp-oss.local` so it contains, at minimum:
 
 ```
 IDENTUUM_TEST_ORG_ADMIN_EMAIL=<fixture org_admin email>
@@ -326,7 +326,7 @@ restored.
 ## 9. Dynamic mode — disposable fixture via the IDP CLI (automatic)
 
 Sections 1–8 describe **durable mode**: a long-lived org_admin row whose
-password + TOTP secret live in `.env.playwright.local`. Dynamic mode is a
+password + TOTP secret live in `.env.playwright.idp-oss.local`. Dynamic mode is a
 different choice: create a fresh disposable org + org_admin pair just for
 the test run, then hard-purge it afterward. Use dynamic mode when the
 fixture identity should not survive a `git pull` or a teammate's local
@@ -446,7 +446,7 @@ the exact fix step:
 If a preflight check fails, no IDP CLI invocation happens. No
 organization is created. No DB row is touched. The fix is always either
 `make local-restart` from `identuum-idp` or correcting the bind-mount
-source path; never editing `.env.playwright.local`.
+source path; never editing `.env.playwright.idp-oss.local`.
 
 ### 9f. Cleanup commands
 
@@ -480,7 +480,7 @@ into a chat / commit / screenshot. The file is mode `0600` for a reason.
 ### 9g. Durable env-vars mode (fallback)
 
 Sections 1–8 above describe durable mode, which uses three env vars in
-`.env.playwright.local`:
+`.env.playwright.idp-oss.local`:
 
 ```
 IDENTUUM_TEST_ORG_ADMIN_EMAIL=<a long-lived org_admin email>
@@ -557,8 +557,8 @@ To run it you must set ALL of:
 
 ```
 IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true
-IDENTUUM_TEST_SITE_ADMIN_PASSWORD=<set in .env.playwright.local>
-IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET=<set in .env.playwright.local>
+IDENTUUM_TEST_SITE_ADMIN_PASSWORD=<set in .env.playwright.idp-oss.local>
+IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET=<set in .env.playwright.idp-oss.local>
 IDENTUUM_TEST_ORG_ID=<concrete fixture org UUID, NOT the all-zero placeholder>
 IDENTUUM_TEST_ORG_ADMIN_EMAIL=<concrete fixture org_admin email, NOT admin@example.org>
 ```

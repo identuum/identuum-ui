@@ -12,7 +12,7 @@ npx playwright test
 
 **For non-destructive org-admin Playwright tests, prefer dynamic fixture
 mode.** It provisions a disposable org + org_admin pair before the run
-and hard-purges it after. No `.env.playwright.local` edits are required
+and hard-purges it after. No `.env.playwright.idp-oss.local` edits are required
 for the org_admin slot; the IDP CLI generates a fresh password + TOTP
 secret per run and writes them to a gitignored local file the login
 helper consumes automatically.
@@ -86,11 +86,11 @@ fixture file appears to be orphaned.
 
 Durable env mode is the fallback path for org_admin authentication and
 the only supported path for `site_admin` authentication. It uses
-long-lived credentials kept in `.env.playwright.local`.
+long-lived credentials kept in `.env.playwright.idp-oss.local`.
 
-### 1. Create `.env.playwright.local`
+### 1. Create `.env.playwright.idp-oss.local`
 
-Create `/Users/odemir/Development/2025-11/identuum/identuum-ui/.env.playwright.local`
+Create `/Users/odemir/Development/2025-11/identuum/identuum-ui/.env.playwright.idp-oss.local`
 (or the equivalent path relative to `identuum-ui/`).
 
 **This file is gitignored by `.env*.local` — never commit it.**
@@ -127,7 +127,7 @@ The org_admin account must be created manually once (see **Fixture accounts** be
 
 ### 2. Load the env file
 
-`playwright.config.ts` loads `.env.playwright.local` automatically before tests run.
+`playwright.config.ts` loads `.env.playwright.idp-oss.local` automatically before tests run.
 Shell-provided env vars always take precedence over the file.
 
 No manual `source` is needed.
@@ -158,7 +158,7 @@ credentials at any time by re-running the setup helper with `--force`.
 ### org_admin
 
 `IDENTUUM_TEST_ORG_ADMIN_*` targets a dedicated org_admin account in a test organization.
-This account must be created once and its credentials stored in `.env.playwright.local`.
+This account must be created once and its credentials stored in `.env.playwright.idp-oss.local`.
 
 The account was set up using the site_admin API to create a test organization and generate
 an invitation, which was then claimed to establish the account.
@@ -276,8 +276,8 @@ To run it you must set ALL of:
 
 ```
 IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true
-IDENTUUM_TEST_SITE_ADMIN_PASSWORD=<set in .env.playwright.local>
-IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET=<set in .env.playwright.local>
+IDENTUUM_TEST_SITE_ADMIN_PASSWORD=<set in .env.playwright.idp-oss.local>
+IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET=<set in .env.playwright.idp-oss.local>
 IDENTUUM_TEST_ORG_ID=<concrete fixture org UUID, NOT the all-zero placeholder>
 IDENTUUM_TEST_ORG_ADMIN_EMAIL=<concrete fixture org_admin email, NOT admin@example.org>
 ```

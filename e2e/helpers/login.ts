@@ -589,7 +589,7 @@ async function completeTOTPWithRetry(
       throw new Error(
         "TOTP verification code REJECTED by the IDP after two fresh-code attempts in different 30-second windows. " +
           "The Playwright TOTP generator (RFC 6238 / SHA-1 / 6-digit / 30s, e2e/helpers/totp.ts) is correct and the password was accepted (the MFA step rendered), " +
-          "so the most likely cause is that the configured TOTP secret (e.g. IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET in identuum-ui/.env.playwright.customer-smoke.local) does NOT match the TOTP secret currently enrolled on the target account. " +
+          "so the most likely cause is that the configured TOTP secret (e.g. IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET in identuum-ui/.env.playwright.idp-ce.local) does NOT match the TOTP secret currently enrolled on the target account. " +
           "Remediate per identuum-idp-ce/docs/CE_CUSTOMER_SMOKE_RUNBOOK.md: re-enroll the authenticator at /account/settings?tab=mfa and capture the NEW base32 secret, OR reset MFA via /admin/users/{id}/mfa/reset, then update the overlay file. " +
           "NO credential, secret, code, cookie, or env value is read or printed by this diagnostic."
       );

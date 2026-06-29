@@ -58,6 +58,38 @@ services:
       - identuum-idp-local
       - identuum-ag-net
 
+  # OSS customer-smoke UI — a SECOND UI instance published on host
+  # 127.0.0.1:7114 (container port 7104) that points at the OSS IDP backend on
+  # 127.0.0.1:7113. This is the managed target for
+  # `make verify-ui-oss-customer-smoke-passkey` (it replaces the previous
+  # unmanaged host `next dev` on 7114). Gated behind the `oss-smoke` compose
+  # profile so the default `make dev-up` does NOT start it — the bare standalone
+  # identuum-ui on 7104 and the CE UI on 7124 are left untouched. Brought up via
+  # `make oss-smoke-up`. Reuses the identuum-ui:local image built by the
+  # identuum-ui service and reaches the host-published OSS backend via
+  # host.docker.internal:7113 (see config/ui-runtime.oss-smoke.json).
+  identuum-ui-oss-smoke:
+    image: identuum-ui:local
+    container_name: identuum-idp-oss-ui
+    restart: unless-stopped
+    profiles:
+      - oss-smoke
+    depends_on:
+      - identuum-ui
+    ports:
+      - "127.0.0.1:7114:7104"
+    volumes:
+      # Dedicated runtime config: ui_origin=http://localhost:7114 (WebAuthn /
+      # browser origin) and idp.internal_base_url=http://host.docker.internal:7113
+      # (container → host-published OSS backend).
+      - ../config/ui-runtime.oss-smoke.json:/app/config/ui-runtime.json:ro
+    extra_hosts:
+      # Resolve the host loopback from inside the container so the proxy can reach
+      # the OSS IDP backend published on the host's 127.0.0.1:7113.
+      - "host.docker.internal:host-gateway"
+    networks:
+      - identuum-idp-local
+
 networks:
   # External networks are NOT created by this compose; they must already
   # exist (`docker compose -f identuum-idp/deployment/docker-compose.local.yml up -d`

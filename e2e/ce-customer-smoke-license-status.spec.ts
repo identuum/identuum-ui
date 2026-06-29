@@ -227,7 +227,7 @@ test.describe("CE customer-smoke M2 — UI license card (env-gated, requires aut
       `\n[ce-customer-smoke spec] Group 2 effective targets:\n  UI  baseURL : ${E2E_UI_BASE_URL}\n  IDP backend : ${IDP_BASE_URL}\n  (the global-setup banner above reflects the LOCAL ui-runtime.json file and does NOT control where the customer-smoke UI container fetches from)\n`
     );
 
-    // Placeholder guard. The .env.playwright.customer-smoke.local.example
+    // Placeholder guard. The .env.playwright.idp-ce.local.example
     // template ships REPLACE_ME_* placeholder values. If the operator
     // copied the template but forgot to fill it in, the canonical site_admin
     // env vars will be present (so `skipAuthTests` is false) BUT carry
@@ -250,7 +250,7 @@ test.describe("CE customer-smoke M2 — UI license card (env-gated, requires aut
     }
     if (placeholderVars.length > 0) {
       throw new Error(
-        `[ce-customer-smoke spec] The following env vars still carry REPLACE_ME placeholder values: ${placeholderVars.join(", ")}. Edit identuum-ui/.env.playwright.customer-smoke.local with the credentials you chose at the customer-smoke M1 setup wizard. The template at .env.playwright.customer-smoke.local.example documents each field. NO VALUE IS PRINTED BY THIS DIAGNOSTIC.`
+        `[ce-customer-smoke spec] The following env vars still carry REPLACE_ME placeholder values: ${placeholderVars.join(", ")}. Edit identuum-ui/.env.playwright.idp-ce.local with the credentials you chose at the customer-smoke M1 setup wizard. The template at .env.playwright.idp-ce.local.example documents each field. NO VALUE IS PRINTED BY THIS DIAGNOSTIC.`
       );
     }
 

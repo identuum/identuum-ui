@@ -10,7 +10,7 @@
 # Scope intent. The first identuum-ui CI workflow is deliberately
 # narrow: no Playwright, no `next build`, no live IDP/AG runtime, no
 # Docker, no secrets. Authenticated specs (login, MFA, sessions,
-# admin UI, setup/upgrade wizards) require `.env.playwright.local`
+# admin UI, setup/upgrade wizards) require `.env.playwright.idp-oss.local`
 # credentials which are NOT present in CI. The OSS scaffold spec
 # (`e2e/oss-contract.spec.ts`) is safe without credentials but it
 # requires a live identuum-idp-oss container — out of scope for a

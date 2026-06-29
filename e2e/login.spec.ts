@@ -18,7 +18,7 @@
  * The Playwright runner reuses the existing server automatically; see playwright.config.ts.
  *
  * Before first run: pnpm e2e:install
- * Run: pnpm e2e (credentials auto-loaded from .env.playwright.local)
+ * Run: pnpm e2e (credentials auto-loaded from .env.playwright.idp-oss.local)
  */
 
 import { expect, test } from "@playwright/test";

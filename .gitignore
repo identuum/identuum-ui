@@ -45,5 +45,4 @@ CLAUDE.md
 # contributor checkouts. Never publish. Mirrors the OSS-side rule in
 # identuum-idp-oss/.gitignore.
 .mcp.json
-.env.playwright.customer-smoke.local.example
 src/.tsgraph
