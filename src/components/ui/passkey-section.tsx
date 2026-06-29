@@ -52,7 +52,14 @@ export function PasskeySection() {
   const isSupported =
     typeof window !== "undefined" && typeof window.PublicKeyCredential !== "undefined";
 
-  async function refresh() {
+  // refresh reloads the credential list. By default it resets phase to
+  // "idle" so the initial mount transitions out of the "loading" state.
+  // Callers that have ALREADY set a terminal phase ("success" / "error")
+  // and need that phase to remain observable across the credential
+  // re-fetch pass `preservePhase: true` so the finally clause does not
+  // overwrite their phase. The post-success setTimeout in
+  // handleAddPasskey is what eventually returns the banner to idle.
+  async function refresh(opts?: { preservePhase?: boolean }) {
     try {
       const res = await fetch(IDP_PATHS.webauthnCredentials, {
         credentials: "include",
@@ -61,12 +68,23 @@ export function PasskeySection() {
       if (res.ok) {
         // biome-ignore lint/suspicious/noExplicitAny: raw API response before typing
         const data: any = await res.json();
-        setCredentials(Array.isArray(data) ? data : []);
+        // The OSS handler returns a bare JSON array; the CE handler
+        // returns an envelope `{ "credentials": [...] }`. Accept both
+        // shapes so this component renders correctly against either
+        // backend without coupling the UI to one wire-level decision.
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.credentials)
+            ? data.credentials
+            : [];
+        setCredentials(list);
       }
     } catch {
       // Non-fatal — show empty list.
     } finally {
-      setPhase("idle");
+      if (!opts?.preservePhase) {
+        setPhase("idle");
+      }
     }
   }
 
@@ -167,7 +185,11 @@ export function PasskeySection() {
       setNickname("");
       setIsAdding(false);
       setPhase("success");
-      await refresh();
+      // preservePhase keeps the "success" banner visible across the
+      // credential-list re-fetch so Playwright (and human operators)
+      // can observe it. The setTimeout below owns the eventual return
+      // to "idle".
+      await refresh({ preservePhase: true });
       setTimeout(() => setPhase("idle"), 3000);
     } catch (err) {
       setError(classifyPasskeyEnrollmentError(err));

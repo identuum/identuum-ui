@@ -39,3 +39,11 @@ e2e/.auth/
 
 # local agent instructions
 CLAUDE.md
+
+# Local-only MCP / AI tooling configuration (e.g. gograph MCP server
+# binding). Per-developer; may carry tokens or local paths in future
+# contributor checkouts. Never publish. Mirrors the OSS-side rule in
+# identuum-idp-oss/.gitignore.
+.mcp.json
+.env.playwright.customer-smoke.local.example
+src/.tsgraph

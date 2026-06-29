@@ -1,3 +1,5 @@
+import type { AGCEOrgLinkAvailability } from "./ag-ce-org-linking-availability";
+
 // RuntimeConfig is the full server-side config read from ui-runtime.json.
 // internal_base_url fields are server-only and must never be returned to browsers.
 export interface RuntimeConfig {
@@ -852,6 +854,31 @@ export interface RuntimeState {
     idp: BackendComponentState;
     ag: BackendComponentState;
   };
+  /**
+   * AG CE-specific org-link availability verdict (2026-07-08).
+   * Composed server-side by `getServerRuntimeState` from BOTH the
+   * AG component capability map (already on `components.ag`) AND a
+   * live call to AG CE's `GET /api/v1/org-link/readiness` probe.
+   *
+   * Surfaced here so any UI consumer can read the verdict from a
+   * single composed state object instead of re-fetching the
+   * readiness probe per page. Pages MUST consume this field rather
+   * than calling `fetchAGOrgLinkReadiness` + `deriveAGCEOrgLinkAvailability`
+   * directly — that duplication was removed in the 2026-07-08
+   * runtime composition slice.
+   *
+   * `null` when AG is NOT enabled in the UI runtime config — there
+   * is no AG backend to probe, so there is no AG CE-side verdict
+   * to compute. Consumers MUST handle the null case (typically by
+   * skipping the availability render entirely).
+   *
+   * Optional on the type so older test fixtures that pre-date this
+   * field continue to compile; new production code paths always
+   * set it explicitly to a verdict object or `null`, never
+   * `undefined`. Readers must guard for `undefined` in addition
+   * to `null` when consuming pre-existing fixtures.
+   */
+  agCEOrgLinkAvailability?: AGCEOrgLinkAvailability | null;
 }
 
 // ── AG PolicyPacks org-level settings ───────────────────────────────────────

@@ -93,7 +93,7 @@ export const skipOrgAdminTests = !ORG_ADMIN_EMAIL || !ORG_ADMIN_PASSWORD;
 //
 // Do not store secrets or tokens here — only epoch-ms timestamps.
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 
 const COOLDOWN_FILE = "/tmp/identuum-totp-cooldown.json";
 
@@ -187,6 +187,27 @@ async function tryRestoreSession(ctx: BrowserContext, stateFile: string): Promis
     if (!state.cookies?.length) return false;
     // Type cast: cookies from storageState() are compatible with addCookies()
     await ctx.addCookies(state.cookies as Parameters<typeof ctx.addCookies>[0]);
+    // Validate the restored session is still LIVE before trusting the fast
+    // path. A saved session can be REVOKED server-side between runs — e.g. the
+    // passkey spec's T4 logout (POST /api/v1/logout) revokes the site_admin
+    // session, but the file written in that spec's beforeAll still holds the
+    // now-revoked cookie. Without this check the revoked cookie sails through
+    // and the next protected navigation bounces to /login (the Settings H1
+    // never renders). ctx.request shares the context cookies and resolves the
+    // relative path against the configured baseURL (origin-stable). NO cookie
+    // or token value is read or printed.
+    const probe = await ctx.request.get("/api/idp/api/v1/validate");
+    if (!probe.ok()) {
+      // Stale/revoked — drop cookies + the file so the caller falls through to
+      // a FULL login and re-saves a fresh session.
+      await ctx.clearCookies();
+      try {
+        unlinkSync(stateFile);
+      } catch {
+        // best-effort cleanup
+      }
+      return false;
+    }
     return true;
   } catch {
     return false;
@@ -246,6 +267,179 @@ export async function loginAsSiteAdmin(page: Page): Promise<void> {
   await saveSession(ctx, SITE_ADMIN_SESSION_FILE);
   totpLastSuccessMs.set(SITE_ADMIN_EMAIL, Date.now());
   saveCooldownState(totpLastSuccessMs);
+}
+
+/**
+ * Logs in as site_admin BUT tolerates an account where MFA has NOT been
+ * enrolled. Mirrors the loginAsOrgAdmin MFA-optional pattern.
+ *
+ * Why this exists separately from `loginAsSiteAdmin`:
+ *
+ *   The dev compose stack's site_admin row is created with MFA already
+ *   enrolled (the dev-fixture seed scripts mint a TOTP secret alongside
+ *   the password). Every authenticated `/site-admin/*` Playwright spec
+ *   targeting the dev stack therefore relies on the strict
+ *   "TOTP step always appears" behaviour `loginAsSiteAdmin` enforces.
+ *
+ *   The CE customer-smoke stack's site_admin row is created by the
+ *   bundled-UI M1 setup wizard, which DOES NOT enroll MFA — by
+ *   appliance-install-UX design, MFA enrollment is a deferred operator
+ *   step on `/account/settings` after first login. A customer-smoke
+ *   stack whose operator has not yet enrolled site_admin MFA therefore
+ *   skips the TOTP step entirely on login. `loginAsSiteAdmin` would
+ *   hang waiting for the TOTP page that never renders; this variant
+ *   handles both shapes.
+ *
+ * This function NEVER weakens MFA enforcement: it only tolerates the
+ * absence of the TOTP step in flows where the row has no enrolled
+ * secret. When the secret IS enrolled the function fills the TOTP
+ * code exactly like `loginAsSiteAdmin` does.
+ *
+ * Callers must check `skipAuthTests` first (the canonical EMAIL +
+ * PASSWORD gate). The TOTP_SECRET env var is OPTIONAL — when empty,
+ * login completes after the password step iff the IDP did not render
+ * a TOTP page.
+ *
+ * Used by `e2e/ce-customer-smoke-license-status.spec.ts`.
+ */
+export async function loginAsSiteAdminMFAOptional(page: Page): Promise<void> {
+  // Fast path: restore saved session cookies if available.
+  const ctx = page.context();
+  const restored = await tryRestoreSession(ctx, SITE_ADMIN_SESSION_FILE);
+  if (restored) return;
+
+  // Full login with TOTP cooldown (no-op when TOTP_SECRET is empty).
+  if (SITE_ADMIN_TOTP_SECRET) {
+    await waitForSafeTOTPWindow(SITE_ADMIN_EMAIL, page);
+  }
+
+  await page.goto("/login");
+
+  const emailInput = page.getByLabel("Email or domain");
+  await emailInput.fill(SITE_ADMIN_EMAIL);
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  const passwordInput = page.getByLabel("Password");
+  await passwordInput.waitFor({ state: "visible" });
+  await passwordInput.fill(SITE_ADMIN_PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  // MFA-optional branch: only attempt to complete TOTP when (a) the
+  // operator supplied a TOTP secret AND (b) the IDP actually rendered
+  // the Verification code page within a short window.
+  if (SITE_ADMIN_TOTP_SECRET) {
+    const codeInput = page.getByLabel("Verification code");
+    const hasTOTP = await codeInput
+      .waitFor({ state: "visible", timeout: 4000 })
+      .then(() => true)
+      .catch(() => false);
+    if (hasTOTP) {
+      await completeTOTPWithRetry(page, SITE_ADMIN_TOTP_SECRET, /\/site-admin/);
+      await saveSession(ctx, SITE_ADMIN_SESSION_FILE);
+      totpLastSuccessMs.set(SITE_ADMIN_EMAIL, Date.now());
+      saveCooldownState(totpLastSuccessMs);
+      return;
+    }
+  }
+
+  // No TOTP step rendered (or TOTP secret unset): wait for one of the
+  // three observable post-password-submit outcomes:
+  //
+  //   (i)   `/site-admin/...` URL — login succeeded
+  //   (ii)  TOTP "Verification code" input visible — MFA challenge
+  //         appeared but the operator did not supply a TOTP secret
+  //   (iii) Still on `/login` (with or without a non-secret error
+  //         banner) — credential mismatch most likely
+  //
+  // We race the three signals via Promise.race so the failure path
+  // emits ACTIONABLE diagnostic content (current URL + visible error
+  // banner text if present + MFA-prompt-state) instead of an opaque
+  // `waitForURL` timeout.
+  //
+  // Safety: this block prints ONLY (a) the post-submit URL (which is
+  // not secret — it is the operator's own browser navigation state),
+  // and (b) the visible inline error/banner text (the IDP's standard
+  // login error messages — no credential or session material). It
+  // NEVER prints email, password, TOTP code, cookies, JWT, or env
+  // var values.
+  const succeededPromise = page
+    .waitForURL(/\/site-admin/, { timeout: 12000 })
+    .then(() => "site-admin" as const)
+    .catch(() => null);
+  const totpPromptPromise = page
+    .getByLabel("Verification code")
+    .waitFor({ state: "visible", timeout: 12000 })
+    .then(() => "totp" as const)
+    .catch(() => null);
+  const stillOnLoginPromise = page
+    .waitForURL(/\/login(\?|$|\/)/, { timeout: 12000 })
+    .then(() => "login" as const)
+    .catch(() => null);
+
+  const outcome = await Promise.race([succeededPromise, totpPromptPromise, stillOnLoginPromise]);
+
+  if (outcome === "site-admin") {
+    await saveSession(ctx, SITE_ADMIN_SESSION_FILE);
+    return;
+  }
+
+  // Failure path. Collect SAFE observable evidence: the current URL
+  // (browser navigation state) AND the visible error/banner text on
+  // the page (the IDP's standard login error messages). No credential
+  // value is read or printed.
+  const observedURL = page.url();
+  // Common non-secret banner / error selectors in the bundled UI:
+  //   role="alert" — generic alert role (login form uses it for inline
+  //                  "Invalid credentials" + "Account is disabled" +
+  //                  similar messages).
+  //   .text-red-* / .text-rose-* — Tailwind error-text classes used
+  //                  by the bundled UI for inline form errors.
+  // We use a `role="alert"` first-pass + a regex-text fallback so a
+  // banner-shape rename can't silently break the diagnostic.
+  let bannerText = "";
+  try {
+    const alertText = await page.getByRole("alert").first().textContent({ timeout: 1000 });
+    bannerText = (alertText ?? "").trim();
+  } catch {
+    // No alert role visible — try the fallback.
+  }
+  if (!bannerText) {
+    try {
+      const errish = await page
+        .locator("text=/invalid|incorrect|wrong|denied|locked|disabled|policy|MFA|verification/i")
+        .first()
+        .textContent({ timeout: 1000 });
+      bannerText = (errish ?? "").trim();
+    } catch {
+      // No error-shaped text visible.
+    }
+  }
+  const bannerLine = bannerText
+    ? `Visible inline error/banner: "${bannerText}"`
+    : "Visible inline error/banner: <none>";
+
+  let outcomeLabel: string;
+  switch (outcome) {
+    case "totp":
+      outcomeLabel =
+        "the IDP rendered a TOTP Verification-code prompt, but IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET is empty. " +
+        "Either supply the TOTP secret in the env file OR remove MFA from the site_admin row.";
+      break;
+    case "login":
+      outcomeLabel =
+        "still on /login after the Sign-in click. The most likely cause is a credential mismatch " +
+        "with the site_admin row — no credential value is referenced in this report.";
+      break;
+    default:
+      outcomeLabel =
+        "neither /site-admin nor a TOTP prompt nor /login navigation appeared within 12 seconds. " +
+        "The IDP may be slow or unreachable; verify with `curl ${IDP_BASE_URL}/api/setup/status`.";
+      break;
+  }
+
+  throw new Error(
+    `[loginAsSiteAdminMFAOptional] post-password observable diagnostic — outcome: ${outcomeLabel} Observed URL: ${observedURL} ${bannerLine} MFA prompt detected: ${outcome === "totp"}.`
+  );
 }
 
 /**
@@ -368,7 +562,43 @@ async function completeTOTPWithRetry(
     }
     await inputAfterWait.fill(generateTOTP(secret));
     await page.getByRole("button", { name: "Verify" }).click();
-    // 90s explicit timeout — coordinated with the 180s beforeAll budget
-    await page.waitForURL(successPattern, { timeout: 90_000 });
+    // Race the success navigation against a persistent rejection banner so a
+    // wrong TOTP SECRET fails FAST with an actionable diagnostic instead of
+    // burning the whole test-timeout budget on an opaque `waitForURL`
+    // timeout. After TWO fresh-code attempts in DIFFERENT 30-second windows,
+    // a visible "Invalid verification code" banner means the codes
+    // themselves are being rejected — i.e. the configured TOTP secret does
+    // not match the secret enrolled on the target account (NOT replay, NOT a
+    // slow server). The Playwright TOTP generator (RFC 6238 / SHA-1 / 6-digit
+    // / 30s, e2e/helpers/totp.ts) is correct and the password was already
+    // accepted (the MFA step rendered), so the cause is upstream of this
+    // helper. We surface a SAFE, actionable diagnostic — NO secret, code,
+    // cookie, or env value is read or printed.
+    const successWins = page
+      .waitForURL(successPattern, { timeout: 90_000 })
+      .then(() => "success" as const)
+      .catch(() => "timeout" as const);
+    const rejectionWins = page
+      .getByText(/invalid verification code/i)
+      .first()
+      .waitFor({ state: "visible", timeout: 90_000 })
+      .then(() => "rejected" as const)
+      .catch(() => "timeout" as const);
+    const winner = await Promise.race([successWins, rejectionWins]);
+    if (winner === "rejected") {
+      throw new Error(
+        "TOTP verification code REJECTED by the IDP after two fresh-code attempts in different 30-second windows. " +
+          "The Playwright TOTP generator (RFC 6238 / SHA-1 / 6-digit / 30s, e2e/helpers/totp.ts) is correct and the password was accepted (the MFA step rendered), " +
+          "so the most likely cause is that the configured TOTP secret (e.g. IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET in identuum-ui/.env.playwright.customer-smoke.local) does NOT match the TOTP secret currently enrolled on the target account. " +
+          "Remediate per identuum-idp-ce/docs/CE_CUSTOMER_SMOKE_RUNBOOK.md: re-enroll the authenticator at /account/settings?tab=mfa and capture the NEW base32 secret, OR reset MFA via /admin/users/{id}/mfa/reset, then update the overlay file. " +
+          "NO credential, secret, code, cookie, or env value is read or printed by this diagnostic."
+      );
+    }
+    if (winner === "timeout") {
+      // Neither success nor a rejection banner within the window — fall back
+      // to a final bounded wait so a genuinely slow navigation still
+      // completes (or throws a normal, bounded timeout).
+      await page.waitForURL(successPattern, { timeout: 5000 });
+    }
   }
 }

@@ -17,7 +17,13 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { login, mfaEnrollComplete, mfaEnrollInitiate } from "../lib/idp-client";
+import {
+  accountMfaSetupComplete,
+  accountMfaSetupInitiate,
+  login,
+  mfaEnrollComplete,
+  mfaEnrollInitiate,
+} from "../lib/idp-client";
 import { ApiError } from "../lib/ui-api";
 
 // ── fetch-mock helpers ────────────────────────────────────────────────────────
@@ -513,6 +519,158 @@ const MFA_ENROLL_FORM_SRC = readFileSync(
   resolve(import.meta.dirname, "..", "components", "auth", "mfa-enroll-form.tsx"),
   "utf-8"
 );
+
+// ── accountMfaSetupInitiate / accountMfaSetupComplete — wire-path invariants ──
+//
+// The /account/settings MFA enrollment flow drives the CE backend's
+// /api/v1/mfa/setup/{initiate,complete} routes (mounted as aliases of the
+// legacy /mfa/setup/{initiate,complete} routes by MountAPIV1MFASetupRoutes
+// in identuum-idp-ce; the UI's /api/idp/* proxy forwards verbatim, so a
+// path-constant regression silently 404s the entire enrollment ceremony).
+// These tests pin the exact request URLs the client sends — a wire-path
+// invariant that protects against silent path renames.
+//
+// SECURITY: tests use PLACEHOLDER values for the TOTP secret + recovery
+// codes. No real secret is ever generated or logged.
+
+describe("accountMfaSetupInitiate() — wire-path + response parsing", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("posts to /api/idp/api/v1/mfa/setup/initiate (path-constant invariant)", async () => {
+    const fetchMock = makeFetchMock(200, {
+      secret: "PLACEHOLDER_SECRET",
+      otpauth_url: "otpauth://totp/test?secret=PLACEHOLDER",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await accountMfaSetupInitiate();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/idp/api/v1/mfa/setup/initiate");
+    expect(init?.method).toBe("POST");
+    expect(init?.credentials).toBe("include");
+  });
+
+  it("parses body.otpauth_url (CE / OSS field) into otpauthUrl", async () => {
+    vi.stubGlobal(
+      "fetch",
+      makeFetchMock(200, {
+        secret: "PLACEHOLDER_SECRET",
+        otpauth_url: "otpauth://totp/ce?secret=PLACEHOLDER&issuer=ce",
+      })
+    );
+
+    const result = await accountMfaSetupInitiate();
+
+    expect(result.otpauthUrl).toBe("otpauth://totp/ce?secret=PLACEHOLDER&issuer=ce");
+    expect(result.secret).toBe("PLACEHOLDER_SECRET");
+  });
+
+  it("falls back to body.qr_code_url when otpauth_url is absent (monolith backward compat)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      makeFetchMock(200, {
+        secret: "PLACEHOLDER_SECRET",
+        qr_code_url: "otpauth://totp/mono?secret=PLACEHOLDER&issuer=mono",
+      })
+    );
+
+    const result = await accountMfaSetupInitiate();
+
+    expect(result.otpauthUrl).toBe("otpauth://totp/mono?secret=PLACEHOLDER&issuer=mono");
+  });
+
+  it("throws on non-2xx, non-409 (ApiError)", async () => {
+    vi.stubGlobal("fetch", makeFetchMock(500, { error: "mfa_initiate_failed" }));
+
+    await expect(accountMfaSetupInitiate()).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("accountMfaSetupComplete() — wire-path", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("posts to /api/idp/api/v1/mfa/setup/complete (path-constant invariant)", async () => {
+    const fetchMock = makeFetchMock(201, { recovery_codes: ["XXXXX-XXXXX"] });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await accountMfaSetupComplete("000000");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/idp/api/v1/mfa/setup/complete");
+    expect(init?.method).toBe("POST");
+    expect(init?.credentials).toBe("include");
+    expect(init?.body).toBe(JSON.stringify({ code: "000000" }));
+  });
+
+  it("returns recoveryCodes from the response (structural — no value assertions)", async () => {
+    vi.stubGlobal("fetch", makeFetchMock(201, { recovery_codes: ["XXXXX-XXXXX", "YYYYY-YYYYY"] }));
+
+    const result = await accountMfaSetupComplete("123456");
+
+    expect(Array.isArray(result.recoveryCodes)).toBe(true);
+    expect(result.recoveryCodes).toHaveLength(2);
+  });
+
+  it("returns empty recoveryCodes when backend omits the field", async () => {
+    vi.stubGlobal("fetch", makeFetchMock(201, {}));
+
+    const result = await accountMfaSetupComplete("123456");
+
+    expect(result.recoveryCodes).toEqual([]);
+  });
+});
+
+describe("idp-paths.ts — MFA setup path constants source invariant", () => {
+  const IDP_PATHS_SRC = readFileSync(
+    resolve(import.meta.dirname, "..", "lib", "idp-paths.ts"),
+    "utf-8"
+  );
+
+  it("mfaSetupInitiate is /api/idp/api/v1/mfa/setup/initiate (matches CE alias mount)", () => {
+    expect(IDP_PATHS_SRC).toContain('mfaSetupInitiate: "/api/idp/api/v1/mfa/setup/initiate"');
+  });
+
+  it("mfaSetupComplete is /api/idp/api/v1/mfa/setup/complete (matches CE alias mount)", () => {
+    expect(IDP_PATHS_SRC).toContain('mfaSetupComplete: "/api/idp/api/v1/mfa/setup/complete"');
+  });
+});
+
+describe("idp-client.ts — accountMfaSetupInitiate source invariants", () => {
+  const ACCOUNT_INITIATE_START = IDP_CLIENT_SRC.indexOf(
+    "export async function accountMfaSetupInitiate("
+  );
+  const ACCOUNT_INITIATE_END = IDP_CLIENT_SRC.indexOf(
+    "\nexport async function accountMfaSetupComplete("
+  );
+  const ACCOUNT_INITIATE_BODY = IDP_CLIENT_SRC.slice(ACCOUNT_INITIATE_START, ACCOUNT_INITIATE_END);
+
+  it("targets the IDP.mfaSetupInitiate constant (no inline URL)", () => {
+    expect(ACCOUNT_INITIATE_BODY).toContain("IDP.mfaSetupInitiate");
+  });
+
+  it("parses body.otpauth_url with body.qr_code_url fallback", () => {
+    expect(ACCOUNT_INITIATE_BODY).toContain("body.otpauth_url ?? body.qr_code_url");
+  });
+
+  it("forwards credentials so the cookie session reaches the IDP", () => {
+    expect(ACCOUNT_INITIATE_BODY).toContain('credentials: "include"');
+  });
+});
 
 describe("mfa-enroll-form.tsx — recovery codes invariants", () => {
   it("has a 'recovery' phase in the Phase type", () => {

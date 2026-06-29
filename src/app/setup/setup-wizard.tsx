@@ -2,6 +2,7 @@
 
 import type { LicenseStatusBody } from "@/lib/idp-license-client";
 import { type CompleteSetupInput, completeSetup, verifySetupToken } from "@/lib/idp-setup-client";
+import { initiateSetupMFA, verifySetupMFA } from "@/lib/idp-setup-mfa-client";
 import { AlertCircle, CheckCircle2, KeyRound, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
@@ -37,8 +38,24 @@ type CodeState =
 
 type SubmitState =
   | { kind: "idle" }
+  | { kind: "initiating_mfa" }
+  // D-IDP-INSTALL-26 — operator has filled the email/password form
+  // and the wizard has called initiateSetupMFA. The session_id +
+  // otpauth_url + secret live in component state ONLY during this
+  // phase; they are wiped on transition to "submitting" / "ok" /
+  // "error". The secret is rendered to the screen but never logged
+  // and never persisted to any browser-side storage API or to the
+  // URL. agent-a-20260627-idp-ce-setup-wizard-site-admin-totp-enrollment-implementation.
+  | {
+      kind: "mfa_pending";
+      sessionId: string;
+      otpauthUrl: string;
+      secret: string;
+      verifyError: string | null;
+    }
+  | { kind: "verifying_mfa"; sessionId: string; otpauthUrl: string; secret: string }
   | { kind: "submitting" }
-  | { kind: "ok" }
+  | { kind: "ok"; recoveryCodes: string[] }
   | { kind: "error"; message: string };
 
 const MIN_PASSWORD_LENGTH = 12;
@@ -77,6 +94,10 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   const [submitState, setSubmitState] = useState<SubmitState>({ kind: "idle" });
+  // D-IDP-INSTALL-26 — TOTP verification code the operator types in
+  // the MFA-pending panel. Held only in this React hook's state and
+  // wiped on every transition out of the MFA panel. Never logged.
+  const [mfaCode, setMfaCode] = useState("");
 
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatusBody | null>(
     initialLicenseStatus
@@ -148,6 +169,28 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
     }
   }
 
+  // handleComplete is now a two-stage flow per D-IDP-INSTALL-26:
+  //
+  //   stage 1 — operator clicks "Complete setup": wizard validates
+  //             the form locally, then calls /api/setup/mfa/initiate
+  //             which returns the otpauth URL + secret + session id.
+  //             The wizard transitions to "mfa_pending" and renders
+  //             the QR + secret + code entry panel.
+  //
+  //   stage 2 — operator scans the QR / pairs an authenticator app /
+  //             enters the 6-digit code and clicks "Verify and
+  //             finish": wizard calls /api/setup/mfa/verify; on
+  //             success it calls /api/setup/complete with the
+  //             session id + code threaded through; on the IDP's
+  //             200 the success screen surfaces the recovery codes
+  //             ONCE and redirects to /login.
+  //
+  // The setup token, organization, email, and password fields stay
+  // captured in their existing useState hooks so a back-button or
+  // page reload does not lose them. The MFA session id + secret +
+  // otpauth URL live ONLY inside the SubmitState union for the
+  // duration of the "mfa_pending" / "verifying_mfa" phases.
+  // agent-a-20260627-idp-ce-setup-wizard-site-admin-totp-enrollment-implementation.
   async function handleComplete(event: FormEvent) {
     event.preventDefault();
     if (!codeVerified) return;
@@ -162,8 +205,74 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
       });
       return;
     }
-    setSubmitState({ kind: "submitting" });
+    setSubmitState({ kind: "initiating_mfa" });
 
+    const initiateResult = await initiateSetupMFA(setupCode.trim(), adminEmail.trim());
+    if (initiateResult.kind !== "ok") {
+      const message =
+        initiateResult.kind === "bad_token"
+          ? "Setup code is no longer valid. Re-verify it before continuing."
+          : initiateResult.kind === "already_complete"
+            ? "Setup has already been completed on this installation."
+            : initiateResult.kind === "subsystem_not_configured"
+              ? "MFA subsystem is not configured on the IDP. Restart with the key-wrap provider wired."
+              : initiateResult.kind === "unreachable"
+                ? "Could not reach the identity provider while preparing MFA enrollment."
+                : `MFA enrollment could not be started (HTTP ${initiateResult.status}).`;
+      setSubmitState({ kind: "error", message });
+      return;
+    }
+
+    setMfaCode("");
+    setSubmitState({
+      kind: "mfa_pending",
+      sessionId: initiateResult.result.sessionId,
+      otpauthUrl: initiateResult.result.otpauthUrl,
+      secret: initiateResult.result.secret,
+      verifyError: null,
+    });
+  }
+
+  async function handleVerifyAndFinishMFA() {
+    if (submitState.kind !== "mfa_pending") return;
+    const sessionId = submitState.sessionId;
+    const otpauthUrl = submitState.otpauthUrl;
+    const secret = submitState.secret;
+    if (mfaCode.trim().length < 6) {
+      setSubmitState({
+        ...submitState,
+        verifyError: "Enter the 6-digit code from your authenticator.",
+      });
+      return;
+    }
+    setSubmitState({ kind: "verifying_mfa", sessionId, otpauthUrl, secret });
+
+    const verifyResult = await verifySetupMFA(
+      setupCode.trim(),
+      sessionId,
+      adminEmail.trim(),
+      mfaCode.trim()
+    );
+    if (verifyResult.kind !== "ok") {
+      const message =
+        verifyResult.kind === "code_invalid"
+          ? "That code did not match. Try the current code from your authenticator."
+          : verifyResult.kind === "session_invalid"
+            ? "MFA session expired. Restart the setup wizard to re-enroll."
+            : verifyResult.kind === "email_mismatch"
+              ? "Admin email changed since MFA enrollment started. Restart MFA enrollment."
+              : verifyResult.kind === "bad_token"
+                ? "Setup code is no longer valid. Re-verify it before continuing."
+                : verifyResult.kind === "already_complete"
+                  ? "Setup has already been completed on this installation."
+                  : verifyResult.kind === "unreachable"
+                    ? "Could not reach the identity provider while verifying MFA code."
+                    : `MFA verification failed (HTTP ${verifyResult.status}).`;
+      setSubmitState({ kind: "mfa_pending", sessionId, otpauthUrl, secret, verifyError: message });
+      return;
+    }
+
+    setSubmitState({ kind: "submitting" });
     const input: CompleteSetupInput = {
       setupToken: setupCode.trim(),
       createTenantOrg,
@@ -175,14 +284,16 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
       organizationDomain: createTenantOrg ? orgDomain.trim() : "",
       adminEmail: adminEmail.trim(),
       adminPassword,
+      adminMFASessionId: sessionId,
+      adminMFACode: mfaCode.trim(),
     };
-
+    // Wipe local code state immediately — the server has the verified
+    // copy now; the wizard never needs the plaintext again.
+    setMfaCode("");
     const result = await completeSetup(input);
     switch (result.kind) {
       case "ok":
-        setSubmitState({ kind: "ok" });
-        // Brief pause so the operator sees the success state before redirect.
-        window.setTimeout(() => router.replace("/login"), 600);
+        setSubmitState({ kind: "ok", recoveryCodes: result.result.recoveryCodes });
         break;
       case "bad_token":
         setCodeState({
@@ -193,6 +304,15 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
         break;
       case "already_complete":
         router.replace("/login");
+        break;
+      case "mfa_required":
+      case "mfa_session_invalid":
+      case "mfa_code_invalid":
+        setSubmitState({
+          kind: "error",
+          message:
+            "MFA verification expired between steps. Restart the wizard to enroll the site administrator authenticator.",
+        });
         break;
       case "invalid":
         setSubmitState({ kind: "error", message: `Setup request rejected: ${result.message}.` });
@@ -511,6 +631,9 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
             disabled={
               !codeVerified ||
               !licenseAccepted ||
+              submitState.kind === "initiating_mfa" ||
+              submitState.kind === "mfa_pending" ||
+              submitState.kind === "verifying_mfa" ||
               submitState.kind === "submitting" ||
               submitState.kind === "ok" ||
               // Tenant org fields gated on the createTenantOrg
@@ -524,15 +647,106 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-700 disabled:opacity-70 disabled:cursor-not-allowed"
             data-testid="setup-submit"
           >
-            {submitState.kind === "submitting" ? (
+            {submitState.kind === "submitting" || submitState.kind === "initiating_mfa" ? (
               <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
             ) : null}
             {submitState.kind === "submitting"
               ? "Finishing setup…"
-              : submitState.kind === "ok"
-                ? "Setup complete"
-                : "Complete first-run setup"}
+              : submitState.kind === "initiating_mfa"
+                ? "Preparing MFA enrollment…"
+                : submitState.kind === "mfa_pending" || submitState.kind === "verifying_mfa"
+                  ? "Continue MFA enrollment below"
+                  : submitState.kind === "ok"
+                    ? "Setup complete"
+                    : "Continue to MFA enrollment"}
           </button>
+
+          {/* D-IDP-INSTALL-26 — MFA enrollment panel. Renders after the
+              wizard has called initiateSetupMFA and received a fresh
+              session id + otpauth URL + secret. The QR + secret are
+              displayed exactly here and only while submitState.kind is
+              "mfa_pending" / "verifying_mfa"; they are wiped from
+              component state on any transition out of these phases.
+              agent-a-20260627-idp-ce-setup-wizard-site-admin-totp-enrollment-implementation. */}
+          {(submitState.kind === "mfa_pending" || submitState.kind === "verifying_mfa") && (
+            <div
+              className="flex flex-col gap-3 rounded-2xl border border-sky-100 bg-sky-50 p-4"
+              data-testid="setup-mfa-pending"
+            >
+              <p className="text-sm font-semibold text-sky-950">
+                Enroll site administrator authenticator (TOTP)
+              </p>
+              <p className="text-xs text-stone-600">
+                Scan the QR or paste the secret into your authenticator app, then enter the 6-digit
+                code below.
+              </p>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs uppercase tracking-wide text-stone-500">
+                  Provisioning URL
+                </span>
+                <code
+                  className="break-all rounded-lg bg-white px-3 py-2 text-xs text-sky-950 shadow-sm"
+                  data-testid="setup-mfa-otpauth"
+                >
+                  {submitState.otpauthUrl}
+                </code>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs uppercase tracking-wide text-stone-500">
+                  Secret (base32)
+                </span>
+                <code
+                  className="break-all rounded-lg bg-white px-3 py-2 text-xs text-sky-950 shadow-sm"
+                  data-testid="setup-mfa-secret"
+                >
+                  {submitState.secret}
+                </code>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="setup_mfa_code" className="text-sm text-sky-950">
+                  6-digit code
+                </label>
+                <input
+                  id="setup_mfa_code"
+                  name="setup_mfa_code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+                  disabled={submitState.kind === "verifying_mfa"}
+                  className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm tracking-widest text-sky-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-70 disabled:cursor-not-allowed"
+                  placeholder="123456"
+                  data-testid="setup-mfa-code"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleVerifyAndFinishMFA}
+                disabled={submitState.kind === "verifying_mfa" || mfaCode.trim().length < 6}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-700 disabled:opacity-70 disabled:cursor-not-allowed"
+                data-testid="setup-mfa-verify"
+              >
+                {submitState.kind === "verifying_mfa" ? (
+                  <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                ) : null}
+                {submitState.kind === "verifying_mfa"
+                  ? "Verifying and finishing…"
+                  : "Verify and finish setup"}
+              </button>
+              {submitState.kind === "mfa_pending" && submitState.verifyError ? (
+                <p
+                  role="alert"
+                  className="flex items-start gap-2 text-sm text-rose-700"
+                  data-testid="setup-mfa-error"
+                >
+                  <AlertCircle aria-hidden="true" className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>{submitState.verifyError}</span>
+                </p>
+              ) : null}
+            </div>
+          )}
 
           {submitState.kind === "error" ? (
             <p
@@ -545,13 +759,40 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
             </p>
           ) : null}
           {submitState.kind === "ok" ? (
-            <output
-              className="flex items-start gap-2 text-sm text-emerald-700"
+            <div
+              className="flex flex-col gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4"
               data-testid="setup-submit-ok"
             >
-              <CheckCircle2 aria-hidden="true" className="h-4 w-4 mt-0.5 shrink-0" />
-              <span>Setup complete. Redirecting you to sign in…</span>
-            </output>
+              <output className="flex items-start gap-2 text-sm font-semibold text-emerald-700">
+                <CheckCircle2 aria-hidden="true" className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>Setup complete. Save your recovery codes below before continuing.</span>
+              </output>
+              {submitState.recoveryCodes.length > 0 ? (
+                <>
+                  <p className="text-xs text-stone-600">
+                    Recovery codes (shown once; CE will never display them again):
+                  </p>
+                  <ul
+                    className="grid grid-cols-2 gap-2 rounded-xl bg-white p-3 text-xs text-sky-950 shadow-inner"
+                    data-testid="setup-recovery-codes"
+                  >
+                    {submitState.recoveryCodes.map((c) => (
+                      <li key={c} className="font-mono">
+                        {c}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => router.replace("/login")}
+                className="self-start inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700"
+                data-testid="setup-go-to-login"
+              >
+                Continue to sign in
+              </button>
+            </div>
           ) : null}
         </form>
       </section>

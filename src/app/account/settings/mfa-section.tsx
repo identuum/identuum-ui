@@ -1,5 +1,5 @@
 import type { MfaStatus } from "@/lib/idp-account-client";
-import { AccountMFAEnrollForm } from "./account-mfa-enroll-form";
+import { EnrollmentCTA } from "./enrollment-cta";
 import { DisableMfaForm, RecoveryCodesRegenerateForm } from "./mfa-self-service-forms";
 
 /**
@@ -108,39 +108,12 @@ function EnrolledStatus({ mfaStatus }: { mfaStatus: MfaStatus | null }) {
   );
 }
 
-function EnrollmentCTA() {
-  // The user is authenticated and has no MFA enrolled. Render the
-  // in-place enrollment ceremony driven by the authenticated
-  // /mfa/setup/{initiate,complete} endpoints. The client form holds the
-  // TOTP secret only in component state and clears it as soon as
-  // enrollment succeeds.
-  return (
-    <div className="space-y-3">
-      <div className="flex items-start gap-3">
-        <span
-          aria-hidden="true"
-          className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold"
-        >
-          !
-        </span>
-        <div className="space-y-1">
-          <p className="text-xs font-semibold text-amber-700">Authenticator app not enrolled</p>
-          <p className="text-xs text-stone-500 leading-relaxed">
-            Your account requires two-factor authentication. Follow the steps below to enroll an
-            authenticator app without signing out.
-          </p>
-          <p className="text-xs text-stone-400 leading-relaxed">
-            Changing your password on the Password tab will not enroll an authenticator.
-          </p>
-        </div>
-      </div>
-
-      <div className="pt-2">
-        <AccountMFAEnrollForm />
-      </div>
-    </div>
-  );
-}
+// EnrollmentCTA is now a Client Component in ./enrollment-cta.tsx — it
+// owns the just-enrolled state machine + the Done-button → router.refresh()
+// transition so the "not enrolled" warning never coexists with the
+// post-enrollment "Authenticator app enrolled" success panel. Cf. wiki
+// repos/identuum-idp-ui (or repos/identuum-ui) — "Account Settings MFA
+// enrollment state + Done button (2026-06-24)".
 
 function UnknownStatus() {
   return (

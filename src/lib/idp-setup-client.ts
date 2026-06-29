@@ -67,6 +67,16 @@ export interface CompleteSetupInput {
   organizationDomain: string;
   adminEmail: string;
   adminPassword: string;
+  /**
+   * D-IDP-INSTALL-26. The wizard MUST drive `/api/setup/mfa/initiate`
+   * + `/api/setup/mfa/verify` BEFORE submitting Complete, and thread
+   * the resulting session id + the verified 6-digit code through
+   * these fields. Empty values trigger a server-side
+   * `mfa_enrollment_required` 400 — handled here as
+   * `kind: "mfa_required"`. agent-a-20260627-idp-ce-setup-wizard-site-admin-totp-enrollment-implementation.
+   */
+  adminMFASessionId: string;
+  adminMFACode: string;
 }
 
 export interface CompleteSetupBody {
@@ -86,12 +96,23 @@ export interface CompleteSetupBody {
   organizationId: string;
   organizationName: string;
   adminEmail: string;
+  /**
+   * D-IDP-INSTALL-26 recovery codes. The IDP returns the verified
+   * site_admin's recovery codes ONCE in the Complete response so the
+   * wizard's success screen can render them; the codes never come back
+   * from the IDP again. Empty array on an older IDP that does not
+   * implement D-IDP-INSTALL-26 (forward-compat). agent-a-20260627-idp-ce-setup-wizard-site-admin-totp-enrollment-implementation.
+   */
+  recoveryCodes: string[];
 }
 
 export type CompleteSetupResult =
   | { kind: "ok"; result: CompleteSetupBody }
   | { kind: "bad_token" }
   | { kind: "already_complete" }
+  | { kind: "mfa_required" }
+  | { kind: "mfa_session_invalid" }
+  | { kind: "mfa_code_invalid" }
   | { kind: "invalid"; message: string }
   | { kind: "unreachable" }
   | { kind: "error"; status: number };
@@ -174,6 +195,12 @@ export async function completeSetup(input: CompleteSetupInput): Promise<Complete
         organization_domain: input.organizationDomain,
         admin_email: input.adminEmail,
         admin_password: input.adminPassword,
+        // D-IDP-INSTALL-26 fields. The server requires both; an empty
+        // value triggers mfa_enrollment_required. The wizard MUST have
+        // already driven the initiate + verify pair before reaching
+        // this call.
+        admin_mfa_session_id: input.adminMFASessionId,
+        admin_mfa_code: input.adminMFACode,
       }),
     });
   } catch {
@@ -187,15 +214,29 @@ export async function completeSetup(input: CompleteSetupInput): Promise<Complete
     if (res.status === 400) {
       // Backend returns { error: "..." } on validation failures. The
       // message is a stable code string, not user-supplied content,
-      // so it is safe to surface as a hint.
+      // so it is safe to surface as a hint. D-IDP-INSTALL-26 codes
+      // get routed to distinct variants so the wizard can re-arm the
+      // MFA enrollment step instead of showing a generic invalid
+      // message.
       let message = "Setup request was rejected";
+      let code = "";
       try {
         const body = (await res.json()) as { error?: unknown };
         if (typeof body.error === "string" && body.error) {
+          code = body.error;
           message = body.error.replace(/_/g, " ");
         }
       } catch {
         // ignore
+      }
+      if (code === "mfa_enrollment_required" || code === "mfa_not_verified") {
+        return { kind: "mfa_required" };
+      }
+      if (code === "mfa_session_invalid" || code === "mfa_email_mismatch") {
+        return { kind: "mfa_session_invalid" };
+      }
+      if (code === "mfa_code_invalid") {
+        return { kind: "mfa_code_invalid" };
       }
       return { kind: "invalid", message };
     }
@@ -214,6 +255,10 @@ export async function completeSetup(input: CompleteSetupInput): Promise<Complete
   const body = raw as Record<string, unknown>;
   if (body.state !== "setup_complete") return { kind: "error", status: res.status };
 
+  const rawRecovery = body.recovery_codes;
+  const recoveryCodes = Array.isArray(rawRecovery)
+    ? rawRecovery.filter((c): c is string => typeof c === "string")
+    : [];
   return {
     kind: "ok",
     result: {
@@ -222,6 +267,7 @@ export async function completeSetup(input: CompleteSetupInput): Promise<Complete
       organizationId: typeof body.organization_id === "string" ? body.organization_id : "",
       organizationName: typeof body.organization_name === "string" ? body.organization_name : "",
       adminEmail: typeof body.admin_email === "string" ? body.admin_email : "",
+      recoveryCodes,
     },
   };
 }

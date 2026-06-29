@@ -34,7 +34,8 @@
       "playwright-report",
       "test-results",
       ".playwright",
-      ".gograph"
+      ".gograph",
+      ".tsgraph"
     ]
   }
 }

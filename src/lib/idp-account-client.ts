@@ -23,6 +23,11 @@ function routeUnavailable(status: number): boolean {
 }
 
 export interface SessionItem {
+  /**
+   * Opaque per-session revocation handle (the external_sid / OIDC `sid`
+   * claim). Used ONLY to target a revoke; never rendered as visible text.
+   */
+  id: string;
   created_at: string;
   expires_at: string;
   last_used_at: string | null;
@@ -36,12 +41,22 @@ export type ListSessionsResult =
   | { ok: true; sessions: SessionItem[] }
   | { ok: false; status: number; unavailable: boolean };
 
+/**
+ * Lists the caller's OWN active sessions.
+ *
+ * Uses the self-service Family-A endpoint GET /api/v1/sessions, which is
+ * mounted on BOTH IDP OSS and IDP CE. The OSS-only `/me/sessions` family
+ * (404 on CE) was the cause of the "Session management is not available from
+ * this IDP runtime" account-settings regression on CE customer-smoke. The
+ * `current` row is badged via is_current; CE serializes
+ * the flag as `current`, OSS as `is_current`, so we accept either.
+ */
 export async function listOwnSessions(): Promise<ListSessionsResult> {
   const cfg = loadRuntimeConfig();
   if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, unavailable: true };
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/me/sessions`, {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/sessions`, {
       method: "GET",
       headers: { Cookie: await cookieHeader() },
       cache: "no-store",
@@ -55,13 +70,18 @@ export async function listOwnSessions(): Promise<ListSessionsResult> {
     const data: any = await res.json();
     const raw = Array.isArray(data.sessions) ? (data.sessions as Record<string, unknown>[]) : [];
     const sessions: SessionItem[] = raw.map((s) => ({
+      id: String(s.id ?? ""),
       created_at: String(s.created_at ?? ""),
       expires_at: String(s.expires_at ?? ""),
-      last_used_at: s.last_seen_at ? String(s.last_seen_at) : null,
+      last_used_at: s.last_used_at
+        ? String(s.last_used_at)
+        : s.last_seen_at
+          ? String(s.last_seen_at)
+          : null,
       ip_address: s.ip_address ? String(s.ip_address) : null,
       user_agent: s.user_agent ? String(s.user_agent) : null,
       is_active: true,
-      is_current: Boolean(s.current_session),
+      is_current: Boolean(s.is_current ?? s.current),
     }));
 
     return { ok: true, sessions };
@@ -96,33 +116,45 @@ function failedMutation(status: number): AccountMutationFailure {
   };
 }
 
-async function postNoBody(path: string): Promise<AccountMutationResult> {
+/**
+ * Revokes ONE of the caller's own sessions by its opaque id (external_sid).
+ *
+ * Dual-route, using ONLY pre-existing backend routes (no backend change):
+ *   - IDP CE mounts POST /api/v1/sessions/{id}/revoke (path param).
+ *   - IDP OSS mounts POST /api/v1/revoke with a { session_id } body.
+ * We try the CE path first; on 404 (route absent on OSS) we fall back to the
+ * OSS body form. Both revoke by the SAME id that GET /api/v1/sessions returns,
+ * and both enforce caller ownership server-side. Bulk semantics (current /
+ * others / all) are orchestrated by the caller iterating the session list.
+ */
+export async function revokeSessionById(id: string): Promise<AccountMutationResult> {
   const cfg = loadRuntimeConfig();
   if (!cfg || !cfg.idp.enabled) return failedMutation(503);
+  if (!id) return failedMutation(404);
 
+  const base = idpBaseUrl(cfg);
+  const cookie = await cookieHeader();
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}${path}`, {
+    const ceRes = await fetch(`${base}/api/v1/sessions/${encodeURIComponent(id)}/revoke`, {
       method: "POST",
-      headers: { Cookie: await cookieHeader() },
+      headers: { Cookie: cookie },
       cache: "no-store",
     });
-    if (!res.ok) return failedMutation(res.status);
-    return { ok: true };
+    if (ceRes.ok) return { ok: true };
+    if (ceRes.status !== 404) return failedMutation(ceRes.status);
+
+    // CE route absent (IDP OSS) → fall back to the OSS body form.
+    const ossRes = await fetch(`${base}/api/v1/revoke`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({ session_id: id }),
+      cache: "no-store",
+    });
+    if (ossRes.ok) return { ok: true };
+    return failedMutation(ossRes.status);
   } catch {
     return failedMutation(0);
   }
-}
-
-export function revokeCurrentSession(): Promise<AccountMutationResult> {
-  return postNoBody("/api/v1/me/sessions/revoke-current");
-}
-
-export function revokeOtherSessions(): Promise<AccountMutationResult> {
-  return postNoBody("/api/v1/me/sessions/revoke-others");
-}
-
-export function revokeAllSessions(): Promise<AccountMutationResult> {
-  return postNoBody("/api/v1/me/sessions/revoke-all");
 }
 
 export interface MfaStatus {

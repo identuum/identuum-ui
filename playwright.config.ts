@@ -6,22 +6,65 @@ import { defineConfig, devices } from "@playwright/test";
 // Reads .env.playwright.local (gitignored) before tests run.
 // Shell-provided env vars always take precedence — existing values are not overwritten.
 // Silently skipped in CI or when the file is absent.
-try {
-  const envFile = resolve(__dirname, ".env.playwright.local");
-  const lines = readFileSync(envFile, "utf-8").split("\n");
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eqIdx = trimmed.indexOf("=");
-    if (eqIdx < 1) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    const val = trimmed.slice(eqIdx + 1).trim();
-    if (key && !(key in process.env)) {
-      process.env[key] = val;
+//
+// The customer-smoke overlay (`.env.playwright.customer-smoke.local`) is
+// loaded AFTER the canonical file when the `IDENTUUM_E2E_CE_CUSTOMER_SMOKE`
+// env var is set (which the `pnpm e2e:ce-customer-smoke` script does).
+// This keeps customer-smoke site_admin credentials in a separate
+// gitignored file from the dev-stack credentials — the two stacks
+// typically have different first-run-wizard outputs. Both files honour
+// the same "don't overwrite already-set keys" precedence rule, so the
+// dev-stack file wins on shared key names by default, and the
+// customer-smoke overlay only fills in values the dev-stack file does
+// NOT carry. To force the customer-smoke values over the dev-stack
+// values for a single run, set IDENTUUM_E2E_CE_CUSTOMER_SMOKE_OVERRIDE=1
+// (the overlay then takes precedence over the canonical file).
+function loadEnvFile(filename: string, override: boolean): void {
+  try {
+    const envFile = resolve(__dirname, filename);
+    const lines = readFileSync(envFile, "utf-8").split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eqIdx = trimmed.indexOf("=");
+      if (eqIdx < 1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      const val = trimmed.slice(eqIdx + 1).trim();
+      if (!key) continue;
+      if (override || !(key in process.env)) {
+        process.env[key] = val;
+      }
     }
+  } catch {
+    // File absent — silent skip.
   }
-} catch {
-  // File absent — CI or local dev without credentials; skip silently.
+}
+
+if (process.env.IDENTUUM_E2E_CE_CUSTOMER_SMOKE === "1") {
+  // Customer-smoke mode: the overlay loads FIRST and wins for keys it
+  // defines, so the operator does NOT need to set any extra precedence
+  // flag. The canonical dev-stack file still loads after and fills in
+  // any keys the overlay does not define. This is the inverse of the
+  // normal-dev-mode default below — normal Playwright runs continue to
+  // see the dev-stack credentials win, so the existing authed specs
+  // (site-admin-observability, site-admin-organizations, etc.) are
+  // unchanged.
+  loadEnvFile(".env.playwright.customer-smoke.local", false);
+  loadEnvFile(".env.playwright.local", false);
+} else if (process.env.IDENTUUM_E2E_OSS_CUSTOMER_SMOKE === "1") {
+  // OSS customer-smoke mode (mirror of the CE block above): targets the
+  // identuum-idp-oss dev runtime on 127.0.0.1:7113 + the UI dev server
+  // on 127.0.0.1:7114. Loads `.env.playwright.oss.local` FIRST so OSS
+  // site_admin credentials (different first-run-wizard output than the
+  // CE customer-smoke stack) take precedence for keys it defines; the
+  // canonical dev-stack file still loads after and fills in any keys
+  // the OSS overlay does not carry. Used by the `pnpm
+  // e2e:oss-customer-smoke-passkey` script to close the IDP OSS passkey
+  // parity gap left after the IDP OSS verification-floor closure.
+  loadEnvFile(".env.playwright.oss.local", false);
+  loadEnvFile(".env.playwright.local", false);
+} else {
+  loadEnvFile(".env.playwright.local", false);
 }
 
 /**

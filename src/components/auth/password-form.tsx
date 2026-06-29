@@ -75,7 +75,18 @@ export function PasswordForm({
 
       onSuccess(outcome.role);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
+      if (err instanceof ApiError && err.message === "AUTH_POLICY_BLOCKS_LOCAL_LOGIN") {
+        // D-1: the organization's auth_policy=idp_only blocks NON-admin local
+        // login. The backend allows site_admin/org_admin credential flows
+        // through (they never reach this branch), so this only fires for a
+        // regular org_user. Mirror the IDP HTML surface's honest copy rather
+        // than the misleading "Invalid credentials." — the password was fine,
+        // local sign-in is simply unavailable for this org. The decision is
+        // the backend's; the UI performs NO client-side role/policy logic.
+        setServerError(
+          "Local sign-in is not available for this organization. Please contact your administrator."
+        );
+      } else if (err instanceof ApiError && err.status === 401) {
         setServerError("Invalid credentials.");
       } else {
         setServerError("Login failed. Try again.");

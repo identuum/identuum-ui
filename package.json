@@ -13,7 +13,12 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "e2e:install": "playwright install chromium",
-    "e2e:upgrade-backup-live": "./e2e/scripts/run-upgrade-backup-live.sh"
+    "e2e:upgrade-backup-live": "./e2e/scripts/run-upgrade-backup-live.sh",
+    "e2e:oss-site-admin-smoke": "./e2e/scripts/run-oss-site-admin-smoke.sh",
+    "e2e:ce-customer-smoke": "IDENTUUM_E2E_CE_CUSTOMER_SMOKE=1 IDENTUUM_E2E_CE_LICENSE_UI_PREPARED=1 IDP_BASE_URL=${IDP_BASE_URL:-http://127.0.0.1:7123} IDENTUUM_E2E_BASE_URL=${IDENTUUM_E2E_BASE_URL:-http://127.0.0.1:7124} playwright test e2e/ce-customer-smoke-license-status.spec.ts",
+    "e2e:ce-customer-smoke-passkey": "IDENTUUM_E2E_CE_CUSTOMER_SMOKE=1 IDP_BASE_URL=${IDP_BASE_URL:-http://localhost:7123} IDENTUUM_E2E_BASE_URL=${IDENTUUM_E2E_BASE_URL:-http://localhost:7124} WEBAUTHN_UI_BASE_URL=${WEBAUTHN_UI_BASE_URL:-http://localhost:7124} playwright test e2e/passkey-flow.spec.ts",
+    "e2e:oss-customer-smoke-passkey": "IDENTUUM_E2E_OSS_CUSTOMER_SMOKE=1 IDP_BASE_URL=${IDP_BASE_URL:-http://localhost:7113} IDENTUUM_E2E_BASE_URL=${IDENTUUM_E2E_BASE_URL:-http://localhost:7114} WEBAUTHN_UI_BASE_URL=${WEBAUTHN_UI_BASE_URL:-http://localhost:7114} playwright test e2e/passkey-flow.spec.ts",
+    "e2e:ce-fresh-m1-setup": "IDENTUUM_E2E_CE_FRESH_M1=1 IDP_BASE_URL=${IDP_BASE_URL:-http://localhost:7125} IDENTUUM_E2E_BASE_URL=${IDENTUUM_E2E_BASE_URL:-http://localhost:7126} playwright test e2e/ce-fresh-m1-setup.spec.ts"
   },
   "engines": {
     "node": ">=22.15.0"

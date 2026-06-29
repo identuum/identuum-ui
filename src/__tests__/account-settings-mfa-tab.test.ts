@@ -44,6 +44,17 @@ vi.mock("../components/ui/passkey-section", () => ({
 vi.mock("../app/account/settings/account-mfa-enroll-form", () => ({
   AccountMFAEnrollForm: () => "[[ACCOUNT_MFA_ENROLL_FORM]]",
 }));
+// EnrollmentCTA is a "use client" wrapper that calls useState + useRouter;
+// invoking it from this server-component walker would throw. It is stubbed
+// to emit the same observable surface (the not-enrolled warning copy + the
+// AccountMFAEnrollForm sentinel) the previous server-side EnrollmentCTA
+// emitted, so all pre-existing assertions in this file remain valid. The
+// CLIENT-side state-machine + Done-button contract is pinned separately by
+// src/__tests__/account-mfa-enrollment-done-button.test.ts.
+vi.mock("../app/account/settings/enrollment-cta", () => ({
+  EnrollmentCTA: () =>
+    "Authenticator app not enrolled — Your account requires two-factor authentication. [[ACCOUNT_MFA_ENROLL_FORM]]",
+}));
 vi.mock("../app/account/settings/mfa-self-service-forms", () => ({
   RecoveryCodesRegenerateForm: () => "[[RECOVERY_CODES_REGENERATE_FORM]]",
   DisableMfaForm: () => "[[DISABLE_MFA_FORM]]",
@@ -61,6 +72,16 @@ vi.mock("../lib/idp-account-client", () => ({
 const mockGetServerSession = vi.fn();
 vi.mock("../lib/server-session", () => ({
   getServerSession: () => mockGetServerSession(),
+}));
+
+// getServerRuntimeState gates the Passkeys tab visibility per
+// agent-a-20260744. This test file asserts MFA-tab behaviour only, so a
+// stable null return (capability map absent → webauthn falsy → tab
+// hidden) keeps the existing assertions byte-identical. Tests focused
+// on the Passkeys capability gate live in account-settings-stability-
+// harness.test.ts.
+vi.mock("../lib/server-runtime-state", () => ({
+  getServerRuntimeState: vi.fn().mockResolvedValue(null),
 }));
 
 import AccountSettingsPage from "../app/account/settings/page";

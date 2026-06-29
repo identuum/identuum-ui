@@ -5,11 +5,21 @@
  * This page does NOT repeat the guard.
  *
  * Security:
- *   - Only safe operational data is displayed (enabled/healthy flags, public URLs).
- *   - internal_base_url, DB addresses, Redis config, secrets, and license keys
- *     are intentionally NOT shown.
- *   - Health checks are performed server-side; no internal URLs reach the browser.
+ *   - Only safe operational data is displayed (enabled/healthy flags, public URLs,
+ *     and the safe license-status projection — state + product + distribution
+ *     + tier).
+ *   - internal_base_url, DB addresses, Redis config, secrets, license envelope
+ *     bytes, licensee, expires_at, license_id, license_type, signing material,
+ *     and admin bearer tokens are intentionally NOT shown.
+ *   - Health checks AND the license-status probe are performed server-side; no
+ *     internal URLs reach the browser.
  */
+import {
+  type LicenseProbeOutcome,
+  type SafeLicenseStatus,
+  licenseBadge,
+  loadLicenseStatus,
+} from "@/lib/license-status";
 import { agBaseUrl, idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 import type { Metadata } from "next";
 
@@ -53,6 +63,11 @@ interface ServiceStatus {
   publicUrl?: string;
 }
 
+// Server-side license-status probe + safe projection live in
+// `@/lib/license-status`. Shared with `/site-admin/license` (the
+// read-only status section above the bearer-token-gated
+// LicenseManager). Safety pin: src/__tests__/license-status-lib-safety.test.ts.
+
 async function loadSystemStatus(): Promise<ServiceStatus[]> {
   const cfg = loadRuntimeConfig();
 
@@ -88,9 +103,12 @@ async function loadSystemStatus(): Promise<ServiceStatus[]> {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function SiteAdminSettingsPage() {
-  const services = await loadSystemStatus().catch((): ServiceStatus[] => [
-    { name: "Identity Provider (IdP)", enabled: false, healthy: null },
-    { name: "Agentic Governor (AG)", enabled: false, healthy: null },
+  const [services, licenseOutcome] = await Promise.all([
+    loadSystemStatus().catch((): ServiceStatus[] => [
+      { name: "Identity Provider (IdP)", enabled: false, healthy: null },
+      { name: "Agentic Governor (AG)", enabled: false, healthy: null },
+    ]),
+    loadLicenseStatus().catch((): LicenseProbeOutcome => ({ kind: "unknown" })),
   ]);
 
   return (
@@ -133,11 +151,9 @@ export default async function SiteAdminSettingsPage() {
         </div>
       </div>
 
-      {/* Placeholder system settings cards */}
-      <PlaceholderCard
-        title="License"
-        description="View and update the Identuum license key for this deployment."
-      />
+      {/* License — live safe-status projection from /api/setup/license */}
+      <LicenseCard outcome={licenseOutcome} />
+
       {/* Audit log — real page at /site-admin/audit */}
       <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
         <div className="px-6 py-4 flex items-center justify-between gap-4">
@@ -199,18 +215,55 @@ function statusBadge(svc: ServiceStatus): { label: string; cls: string } {
   return { label: "Unknown", cls: "bg-amber-50 text-amber-700" };
 }
 
-function PlaceholderCard({ title, description }: { title: string; description: string }) {
+// ── License card ─────────────────────────────────────────────────────────────
+//
+// Renders the safe license-status projection from the server-side probe.
+// SAFETY: only state badge + product + distribution + optional tier reach
+// the browser. licensee, expires_at, license_id, license_type, raw envelope,
+// admin bearer tokens are NEVER rendered. The full license-management surface
+// (upload + replace) lives at /site-admin/license behind admin-bearer-token
+// gating; this page links there for that workflow.
+
+function LicenseCard({ outcome }: { outcome: LicenseProbeOutcome }) {
+  const badge = licenseBadge(outcome);
   return (
-    <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden opacity-60">
+    <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
       <div className="px-6 py-4 flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold text-sky-950">{title}</p>
-          <p className="text-xs text-stone-400 mt-0.5">{description}</p>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-sky-950">License</p>
+          <p className="text-xs text-stone-400 mt-0.5">
+            Identuum deployment license status. Upload or replace at{" "}
+            <a
+              href="/site-admin/license"
+              className="font-medium text-sky-700 hover:text-sky-900 underline-offset-2 hover:underline"
+            >
+              /site-admin/license
+            </a>
+            .
+          </p>
+          {outcome.kind === "ok" && <LicenseDetails status={outcome.status} />}
         </div>
-        <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-stone-400 bg-stone-100 px-2 py-0.5 rounded mt-0.5">
-          Coming soon
+        <span
+          className={[
+            "shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
+            badge.cls,
+          ].join(" ")}
+        >
+          {badge.label}
         </span>
       </div>
+    </div>
+  );
+}
+
+function LicenseDetails({ status }: { status: SafeLicenseStatus }) {
+  const productLine = [status.product, status.distribution].filter((v) => v.length > 0).join(" · ");
+  return (
+    <div className="mt-2 space-y-0.5">
+      {productLine !== "" && <p className="text-xs text-stone-600">{productLine}</p>}
+      {status.tier !== undefined && status.tier !== "" && (
+        <p className="text-xs text-stone-500">Tier: {status.tier}</p>
+      )}
     </div>
   );
 }

@@ -42,6 +42,7 @@ import type { SessionItem } from "../lib/idp-account-client";
 // safe metadata only; there is no opaque session identifier on the wire.
 function syntheticSession(overrides: Partial<SessionItem> = {}): SessionItem {
   return {
+    id: "synthetic-external-sid",
     created_at: "2026-05-28T10:00:00Z",
     expires_at: "2026-06-04T10:00:00Z",
     last_used_at: "2026-05-28T11:30:00Z",

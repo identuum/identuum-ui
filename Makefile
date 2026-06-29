@@ -13,7 +13,7 @@ AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 
 .PHONY: verify dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
-.PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-ce-auth
+.PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
 
 verify:
 	pnpm exec biome check . --reporter=json --max-diagnostics=none
@@ -54,6 +54,177 @@ verify-ui-ce-auth:
 		--ignore-snapshots \
 		--reporter=list \
 		--grep-invert "OSS scaffold contract"
+
+## verify-ui-ce-customer-smoke: Playwright regression for the IDP CE
+## customer-smoke M2 license-status verification path.
+##
+## Stable wrapper around `pnpm e2e:ce-customer-smoke` (the canonical
+## script defined in package.json — single source of truth for the
+## env-var defaults). Delegates rather than duplicating the env-var
+## expansion so the script stays the only place those defaults are
+## declared.
+##
+## Targets the customer-smoke stack: CE IDP backend on
+## 127.0.0.1:7123 and bundled UI on 127.0.0.1:7124. Group 1 (3 no-
+## secret backend agreement tests on /api/setup/license +
+## /api/v1/component + invariant #12) runs unconditionally when the
+## stack is reachable. Group 2 (1 authenticated UI render assertion
+## on /site-admin/settings) gates on the operator's gitignored
+## .env.playwright.customer-smoke.local carrying customer-smoke
+## site_admin credentials; the spec auto-loads the overlay file via
+## the IDENTUUM_E2E_CE_CUSTOMER_SMOKE=1 flag that the pnpm script
+## sets, and the overlay's keys win over the dev-stack file by
+## default for this command.
+##
+## Operator workflow (one-time setup):
+##   cp .env.playwright.customer-smoke.local.example \
+##      .env.playwright.customer-smoke.local
+##   # Edit the new file with credentials matching the customer-smoke
+##   # site_admin row chosen at the M1 setup wizard. The file is
+##   # gitignored via .env*.local. NEVER commit. NEVER paste.
+##
+## On every subsequent run:
+##   make verify-ui-ce-customer-smoke
+##
+## Expected result against the prepared customer-smoke stack with
+## matching operator credentials: 4 passed (~5s first run, ~0.5s
+## subsequent runs via the session-restore fast path).
+verify-ui-ce-customer-smoke:
+	pnpm e2e:ce-customer-smoke
+
+## verify-ui-ce-customer-smoke-passkey: Playwright WebAuthn passkey
+## ceremony E2E against the prepared CE customer-smoke stack.
+##
+## Stable wrapper around `pnpm e2e:ce-customer-smoke-passkey` (the
+## canonical script in package.json — single source of truth for the
+## env-var defaults). Delegates rather than duplicating the env-var
+## expansion so the script stays the only place those defaults are
+## declared. Landed by agent-a-20260627 after a direct
+## `npx playwright test e2e/passkey-flow.spec.ts` defaulted to
+## http://localhost:7114/login (the dev stack) and hit
+## net::ERR_CONNECTION_REFUSED — the operator must use this Make
+## target so the runtime is correctly pinned to the customer-smoke
+## stack.
+##
+## Targets the customer-smoke stack: CE IDP backend on
+## 127.0.0.1:7123, bundled UI + WebAuthn RP origin on
+## 127.0.0.1:7124. Uses the existing CDP virtual authenticator
+## machinery in `e2e/passkey-flow.spec.ts` (5 tests: T1 clean slate;
+## T2 register passkey; T3 list it; T4 log in via Login page passkey
+## path; T5 delete it).
+##
+## Prereqs:
+##   1. `cd ../identuum-idp-ce && make customer-smoke-up` first.
+##   2. M1 setup wizard + M2 license envelope upload completed.
+##   3. .env.playwright.customer-smoke.local present with
+##      IDENTUUM_E2E_TEST_EMAIL + IDENTUUM_E2E_TEST_PASSWORD set to
+##      the customer-smoke site_admin credentials. The file is
+##      gitignored via .env*.local. NEVER commit. NEVER paste.
+##
+## Operator workflow:
+##   make verify-ui-ce-customer-smoke-passkey
+##
+## Expected: 5 passed on Chromium against the customer-smoke stack.
+## Most likely failure modes: missing runtime (customer-smoke not up
+## → ERR_CONNECTION_REFUSED), missing credentials (.env.playwright.
+## customer-smoke.local absent → auth helper SKIP), or RP ID /
+## origin mismatch (IDP issuer ≠ UI origin hostname).
+verify-ui-ce-customer-smoke-passkey:
+	pnpm e2e:ce-customer-smoke-passkey
+
+## verify-ui-oss-customer-smoke-passkey: Playwright WebAuthn passkey
+## ceremony E2E (e2e/passkey-flow.spec.ts) against the IDP OSS dev
+## runtime on 127.0.0.1:7113 plus the UI dev server on 127.0.0.1:7114.
+## Closes the OSS-side passkey/customer-smoke runtime parity gap left
+## after the IDP OSS verification-floor closure
+## (see wiki/repos/identuum-idp-oss.md §"OSS passkey runtime parity").
+##
+## Stable wrapper around `pnpm e2e:oss-customer-smoke-passkey` (the
+## canonical script in package.json — single source of truth for the
+## env-var defaults). Delegates rather than duplicating the env-var
+## block; overrides via IDP_BASE_URL / IDENTUUM_E2E_BASE_URL /
+## WEBAUTHN_UI_BASE_URL still flow through unchanged.
+##
+## Operator preconditions:
+##   1. IDP OSS dev runtime up on 127.0.0.1:7113 (typically via
+##      `cd ../identuum-idp-oss && make dev-up` or `make oss-up`).
+##   2. UI dev server reachable on http://localhost:7114 — either via
+##      the docker-compose UI container on 7114 or a manual `pnpm dev`.
+##      Playwright's webServer auto-spawn handles the bring-up when
+##      port 7104 is used; for the OSS smoke the operator should
+##      ensure the 7114-bound UI is reachable so the WebAuthn RP
+##      origin matches the IDP issuer host.
+##   3. .env.playwright.oss.local present with the OSS site_admin
+##      credentials (IDENTUUM_TEST_SITE_ADMIN_EMAIL / _PASSWORD /
+##      _TOTP_SECRET if MFA was enrolled; loginAsSiteAdminMFAOptional
+##      tolerates absent MFA). The file is gitignored via .env*.local.
+##      NEVER commit. NEVER paste.
+##
+## Operator workflow:
+##   make verify-ui-oss-customer-smoke-passkey
+##
+## Expected: 5 passed on Chromium against the OSS dev stack
+## (matches the CE customer-smoke 5/5 passkey green-bar).
+## Most likely failure modes: missing OSS runtime
+## (ERR_CONNECTION_REFUSED on 7113), missing UI on 7114
+## (WebAuthn origin mismatch — go-webauthn rejects FINISH), missing
+## credentials (.env.playwright.oss.local absent → auth helper SKIP).
+verify-ui-oss-customer-smoke-passkey:
+	pnpm e2e:oss-customer-smoke-passkey
+
+## verify-ui-ce-fresh-m1-setup: Playwright spec that drives a fresh
+## first-run CE setup wizard end-to-end against the isolated
+## identuum-idp-ce-m1-fresh compose project (host ports 7125 IDP +
+## 7126 UI). Proves D-IDP-INSTALL-26 — first-run setup MUST enroll
+## site_admin TOTP before setup_complete — against a TRULY fresh CE
+## stack, not against the standing customer-smoke project's existing
+## setup_complete state.
+##
+## Operator workflow (3 commands):
+##   1. cd ../identuum-idp-ce && make m1-fresh-up
+##   2. cd ../identuum-ui     && make verify-ui-ce-fresh-m1-setup
+##   3. cd ../identuum-idp-ce && make m1-fresh-clean
+##
+## The fresh stack is ENTIRELY isolated from the standing
+## identuum-idp-ce-customer-smoke project: different container names,
+## different host ports, different docker volumes, different docker
+## networks. The customer-smoke 5/5 passkey + 107/0/0 quick +
+## 118/0/0 integration green-bar is preserved by this validation.
+##
+## Landed by agent-a-20260627-idp-ce-fresh-setup-m1-totp-e2e-validation.
+verify-ui-ce-fresh-m1-setup:
+	pnpm e2e:ce-fresh-m1-setup
+
+## verify-ui-ce-fresh-m1-setup-licensed: same as
+## verify-ui-ce-fresh-m1-setup but additionally drives the positive
+## T2 wizard happy path by reading a smoke license envelope from the
+## operator-supplied (or default) path and pasting it into the
+## wizard's license-step. The license envelope contents are read by
+## the spec in Playwright process memory only — never written to disk
+## by the spec, never logged, never asserted by value, never echoed
+## to the reporter.
+##
+## Operator workflow (5 commands):
+##   1. IDENTUUM_CE_SMOKE_LICENSE_PRIVATE_KEY=<key> \
+##      make -C ../identuum-idp-ce customer-smoke-license   # generate envelope
+##   2. make -C ../identuum-idp-ce m1-fresh-up               # bring up fresh stack
+##   3. make -C ../identuum-idp-ce m1-fresh-license-check    # safe verify envelope
+##   4. make verify-ui-ce-fresh-m1-setup-licensed            # drive full wizard
+##   5. make -C ../identuum-idp-ce m1-fresh-clean            # teardown
+##
+## The licensed target sets:
+##   IDENTUUM_E2E_M1_FRESH_LICENSE_READY=1                   # gates T2
+##   IDENTUUM_CE_SMOKE_LICENSE_PATH=<envelope path>          # spec reads this
+##
+## Override IDENTUUM_CE_SMOKE_LICENSE_PATH if the envelope lives
+## elsewhere; default uses IDENTUUM_CE_SMOKE_LICENSE_OUTPUT_PATH when
+## set, otherwise /tmp/ce-customer-smoke.lic.
+##
+## Landed by agent-a-20260627-idp-ce-fresh-m1-license-prep-positive-wizard-e2e.
+verify-ui-ce-fresh-m1-setup-licensed:
+	IDENTUUM_E2E_M1_FRESH_LICENSE_READY=1 \
+		IDENTUUM_CE_SMOKE_LICENSE_PATH="$${IDENTUUM_CE_SMOKE_LICENSE_PATH:-$${IDENTUUM_CE_SMOKE_LICENSE_OUTPUT_PATH:-/tmp/ce-customer-smoke.lic}}" \
+		pnpm e2e:ce-fresh-m1-setup
 
 ## verify-live-upgrade-backup: opt-in live-backend Playwright
 ## regression for the OSS-to-CE /upgrade wizard backup flow.

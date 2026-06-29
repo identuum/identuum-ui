@@ -1,5 +1,6 @@
 import { PasskeySection } from "@/components/ui/passkey-section";
 import { getOwnMfaStatus, listOwnSessions } from "@/lib/idp-account-client";
+import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { getServerSession } from "@/lib/server-session";
 import type { Metadata } from "next";
 import { ChangePasswordForm } from "./change-password-form";
@@ -91,6 +92,33 @@ export default async function AccountSettingsPage({
 
   const sessionsResult = tab === "sessions" ? await listOwnSessions() : null;
 
+  // Passkeys capability gate — landed by
+  // agent-a-20260744-account-settings-passkeys-capability-gate per the
+  // audit at agent-a-20260742 + the harness from agent-a-20260743.
+  //
+  // CE's /api/v1/component publishes `"webauthn": false` today; the
+  // /api/v1/webauthn/* routes are not mounted, so an unconditional
+  // PasskeySection would always 404 on its begin call and surface the
+  // "Could not start passkey registration" error. We read the capability
+  // off the SAME path account/layout.tsx already uses (the role-shell
+  // pattern; cached by getServerRuntimeState's React cache) so the page
+  // and the layout agree on the runtime view.
+  //
+  // When webauthnAvailable === false:
+  //   - The Passkeys tab is hidden from the tab nav (most operators
+  //     never see it; no broken button is reachable from normal nav).
+  //   - An explicit ?tab=passkeys URL still resolves to the Passkeys
+  //     surface, but renders a "Passkeys are not available on this
+  //     backend" notice WITH NO Add button + NO PasskeySection mount,
+  //     so even direct/bookmarked URLs do not reach the broken flow.
+  //
+  // When webauthnAvailable === true: every branch behaves as before.
+  // Flipping the CE capability map + mounting WebAuthn (a separate
+  // mini-track) requires no further UI change to re-enable the active
+  // surface.
+  const runtimeState = await getServerRuntimeState();
+  const webauthnAvailable = Boolean(runtimeState?.components?.idp?.capabilities?.webauthn);
+
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
@@ -107,7 +135,7 @@ export default async function AccountSettingsPage({
             { label: "Password", value: "password" },
             { label: "MFA", value: "mfa" },
             { label: "Sessions", value: "sessions" },
-            { label: "Passkeys", value: "passkeys" },
+            ...(webauthnAvailable ? [{ label: "Passkeys", value: "passkeys" as Tab }] : []),
           ] as { label: string; value: Tab }[]
         ).map(({ label, value }) => (
           <a
@@ -182,10 +210,55 @@ export default async function AccountSettingsPage({
             </p>
           </div>
           <div className="px-6 py-5">
-            <PasskeySection />
+            {webauthnAvailable ? <PasskeySection /> : <PasskeysUnavailableNotice />}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * PasskeysUnavailableNotice — rendered when CE's component capability
+ * map declares `"webauthn": false` AND the operator has explicitly
+ * navigated to ?tab=passkeys. Mirrors the `UnknownStatus` shape from
+ * mfa-section.tsx so the tone is consistent with the rolling-upgrade
+ * safety pattern.
+ *
+ * Critically does NOT mount `<PasskeySection />`, so the component's
+ * mount-side `refresh()` call to `/api/v1/webauthn/credentials` and the
+ * Add-passkey click handler that targets `/api/v1/webauthn/register/begin`
+ * are NEVER reachable while the gate is closed. This is the structural
+ * guarantee that the "Could not start passkey registration" error from
+ * the user-reported regression cannot fire from this page.
+ *
+ * When CE later mounts WebAuthn and flips its capability to true, this
+ * branch becomes unreachable (the parent gate flips) and no further UI
+ * change is required to re-enable the active surface.
+ */
+function PasskeysUnavailableNotice() {
+  return (
+    <div className="flex items-start gap-3">
+      <span
+        aria-hidden="true"
+        className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-500 text-[10px] font-bold"
+      >
+        ?
+      </span>
+      <div className="space-y-1">
+        <p className="text-xs font-semibold text-stone-600">
+          Passkeys are not available on this backend
+        </p>
+        <p className="text-xs text-stone-500 leading-relaxed">
+          This Identuum build does not advertise WebAuthn support, so the in-place passkey
+          enrollment flow has been disabled. If you need passkey support, please contact your
+          administrator.
+        </p>
+        <p className="text-xs text-stone-400 leading-relaxed">
+          When the backend gains WebAuthn support, this tab will re-enable automatically — no action
+          on your part is required.
+        </p>
+      </div>
     </div>
   );
 }

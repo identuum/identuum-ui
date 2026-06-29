@@ -76,7 +76,7 @@ describe("admin license page wiring", () => {
   it("page renders inside /site-admin (so the layout guard runs)", () => {
     // The path itself is the wiring contract — pin that page.tsx
     // exists at the expected route segment and exports default.
-    expect(pageSourceRaw).toMatch(/export default function/);
+    expect(pageSourceRaw).toMatch(/export default (?:async )?function/);
     // And pin the path location by re-reading.
     expect(() => readFileSync(pagePath, "utf8")).not.toThrow();
   });

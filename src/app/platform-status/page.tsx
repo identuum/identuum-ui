@@ -11,6 +11,7 @@
  * Security: no internal backend URLs, tokens, session data, or stack
  * traces are rendered. Only public metadata from each backend is shown.
  */
+import { AGCEOrgLinkAvailabilityCard } from "@/components/shared/ag-ce-org-link-availability-card";
 import { fetchAgAuthProviders } from "@/lib/ag-auth-providers";
 import { getCapabilityAvailability } from "@/lib/runtime-composition";
 import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
@@ -31,11 +32,20 @@ export default async function PlatformStatusPage() {
   const state = await getServerRuntimeState();
   const cfg = loadRuntimeConfig();
   const agUrl = cfg?.ag.enabled ? agBaseUrl(cfg) : null;
+
   const agProviders = await fetchAgAuthProviders(agUrl);
 
   if (!state) {
     return <SetupRequiredPrompt />;
   }
+
+  // Read the AG CE-specific org-link availability verdict from the
+  // composed runtime state (2026-07-08). The readiness probe round-trip
+  // was moved into `getServerRuntimeState` so this page no longer fetches
+  // it directly — same verdict, single cached source of truth across
+  // pages. `null` when AG is not enabled in the UI runtime config; the
+  // page then skips the AG CE availability callout entirely.
+  const agCEAvailability = state.agCEOrgLinkAvailability ?? null;
 
   return (
     <div className="min-h-screen bg-stone-50 px-4 py-12">
@@ -65,6 +75,26 @@ export default async function PlatformStatusPage() {
           {/* AG auth provider discovery — shown when AG is configured */}
           {(cfg?.ag.enabled || agProviders.available || agProviders.error_code) && (
             <AgAuthProviderCard providers={agProviders} />
+          )}
+          {/* AG CE org-link availability — read-only callout. Surfaced
+              here so an operator inspecting platform health sees the
+              same 4-variant verdict that drives /site-admin/org-link/
+              readiness. No link/unlink CTAs on /platform-status —
+              actionable variant drills into /readiness only. Verdict
+              composed by `getServerRuntimeState` (2026-07-08); shared
+              component lives at
+              `src/components/shared/ag-ce-org-link-availability-card.tsx`
+              (2026-07-06 refactor). Skipped entirely when AG is not
+              enabled in the UI runtime config. */}
+          {agCEAvailability && (
+            <AGCEOrgLinkAvailabilityCard
+              availability={agCEAvailability}
+              actionableTarget={{
+                href: "/site-admin/org-link/readiness",
+                label: "Open readiness",
+              }}
+              copyVariant="operational-health"
+            />
           )}
         </div>
 
@@ -463,3 +493,9 @@ function SetupRequiredPrompt() {
     </div>
   );
 }
+
+// Note: the prior inline `AGCEOrgLinkAvailabilityCallout` sub-component
+// was extracted to `@/components/shared/ag-ce-org-link-availability-card`
+// in the 2026-07-06 refactor. The page renders that shared component
+// directly above with `copyVariant="operational-health"` and a
+// drill-in actionable target.

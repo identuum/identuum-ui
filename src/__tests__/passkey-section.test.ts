@@ -322,6 +322,65 @@ describe("Negative invariants — passkey module source does not contain credent
   });
 });
 
+// ── Phase state-machine invariants — success banner must survive refresh() ───
+
+describe("PasskeySection — success banner phase state machine", () => {
+  // Pre-existing assumption: passkey-section.tsx already imported above
+  // via SOURCES.component in the negative-invariants block. Re-read here
+  // as a fresh string so the test is independent of evaluation order.
+  function readComponent(): string {
+    return readFileSync(
+      resolve(__dirname, "..", "components", "ui", "passkey-section.tsx"),
+      "utf-8"
+    );
+  }
+
+  it("refresh() declares a preservePhase option so callers can opt out of the finally idle-reset", () => {
+    // Why this matters. Before agent-a-20260627, refresh() ended with
+    // `finally { setPhase("idle") }`, which overwrote the
+    // `setPhase("success")` that handleAddPasskey() set immediately
+    // before awaiting refresh(). The success banner unmounted before
+    // Playwright (or a human operator) could observe it — T2 of the
+    // CE customer-smoke passkey spec failed on the visibility
+    // assertion even though the backend register/finish succeeded.
+    // The option name is part of the same-file contract; renaming it
+    // without updating the call site would re-introduce the bug.
+    const src = readComponent();
+    expect(src).toMatch(/async function refresh\(\s*opts\?:\s*\{\s*preservePhase\?: boolean\s*\}/);
+    expect(src).toMatch(/if\s*\(\s*!opts\?\.preservePhase\s*\)\s*\{\s*setPhase\("idle"\)/);
+  });
+
+  it("handleAddPasskey passes preservePhase: true to refresh() on the success path", () => {
+    // The call site MUST stay paired with the option declaration. A
+    // regression that flipped the flag back to a no-arg call would
+    // silently reproduce the original bug.
+    const src = readComponent();
+    expect(src).toMatch(
+      /setPhase\("success"\);[\s\S]{0,400}refresh\(\s*\{\s*preservePhase:\s*true\s*\}\s*\)/
+    );
+  });
+
+  it("handleAddPasskey retains the post-success setTimeout that returns phase to idle", () => {
+    // The setTimeout is what eventually unmounts the success banner;
+    // dropping it would leave the banner pinned forever. The 3-second
+    // duration is also part of the contract — long enough for a human
+    // (and for Playwright's 10s default visibility window) to observe
+    // it.
+    const src = readComponent();
+    expect(src).toMatch(/setTimeout\(\(\)\s*=>\s*setPhase\("idle"\),\s*3000\)/);
+  });
+
+  it("refresh() still resets phase to idle when called without the preservePhase opt-in (initial mount path)", () => {
+    // Initial mount sets phase to "loading" and relies on refresh()'s
+    // default behavior to transition out of it. The default-behavior
+    // branch MUST remain.
+    const src = readComponent();
+    expect(src).toMatch(
+      /}\s*finally\s*\{\s*if\s*\(!opts\?\.preservePhase\)\s*\{\s*setPhase\("idle"\)\s*;\s*\}\s*\}/
+    );
+  });
+});
+
 describe("PasskeySection module — file exists at the expected path", () => {
   // Simple existence pin. If a future refactor moves the component
   // file, this fails with a clear pointer instead of cryptic import

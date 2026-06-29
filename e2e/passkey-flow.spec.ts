@@ -5,20 +5,19 @@
  * Chromium only — CDP virtual authenticator is not available in Firefox/WebKit.
  * playwright.config.ts configures Chromium as the sole project.
  *
- * KNOWN BACKEND BLOCKER (as of 2026-06-05):
- *   identuum-idp-oss/cmd/identuum-idp/main.go does not set UIPublicBaseURL in
- *   WebAuthnServiceConfig. RPOrigins = ["http://localhost:7113"] only.
- *   Browser ceremonies originate from http://localhost:7104 (the UI port).
- *   go-webauthn v0.15.0 compares url.URL.Host strings exactly:
- *     "localhost:7113" ≠ "localhost:7104" → all FINISH calls rejected.
- *
- *   Required one-line fix in identuum-idp-oss/cmd/identuum-idp/main.go
- *   inside the WebAuthnServiceConfig block (~line 685-703):
- *     UIPublicBaseURL: "http://localhost:7104"
- *   (or derive from WEBAUTHN_UI_BASE_URL env var / config flag).
- *
- *   The WebAuthnService.normalizeUIOriginForRPID helper already handles this
- *   correctly — it is only missing the wiring call in main.go.
+ * Backend blocker history (RESOLVED).
+ *   The 2026-06-05 doc-comment flagged a missing UIPublicBaseURL wiring in
+ *   identuum-idp-oss/cmd/identuum-idp/main.go that caused go-webauthn FINISH
+ *   calls to be rejected on origin mismatch. As of 2026-06-21 the wiring
+ *   lives in identuum-idp-oss/internal/runtime/runtime.go around line 614
+ *   (the `if webAuthnBaseURL != ""` block) and uses
+ *   resolveUIPublicBaseURLForWebAuthn(getenv, webAuthnBaseURL) from
+ *   internal/runtime/webauthn_ui_origin.go to derive the correct origin
+ *   (operator override via WEBAUTHN_UI_BASE_URL env, local-dev default,
+ *   production default empty) — covered by
+ *   internal/runtime/webauthn_ui_origin_test.go. No further backend change
+ *   required for this spec. Verified by
+ *   `agent-a-20260620-idp-ui-oss-webauthn-playwright-discovery`.
  *
  * Security discipline:
  *   - No WebAuthn challenge blobs, attestation bytes, or assertion material printed.
@@ -28,7 +27,12 @@
 
 import type { BrowserContext, CDPSession, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { SITE_ADMIN_EMAIL, SKIP_AUTH_MSG, loginAsSiteAdmin, skipAuthTests } from "./helpers/login";
+import {
+  SITE_ADMIN_EMAIL,
+  SKIP_AUTH_MSG,
+  loginAsSiteAdminMFAOptional,
+  skipAuthTests,
+} from "./helpers/login";
 
 const VIRTUAL_AUTHENTICATOR_OPTS = {
   options: {
@@ -67,7 +71,16 @@ test.describe("passkey ceremony — CDP virtual authenticator", () => {
     // That would bypass TOTP and navigate directly to /site-admin, leaving
     // completeTOTPWithRetry waiting forever for a TOTP input that never shows.
     if (!skipAuthTests) {
-      await loginAsSiteAdmin(page);
+      // MFA-OPTIONAL: this spec runs against TWO stack shapes:
+      //   - dev stack: site_admin row seeded with TOTP enrolled → TOTP step
+      //     ALWAYS appears + the helper completes it.
+      //   - CE customer-smoke stack: site_admin row created by the bundled-UI
+      //     M1 setup wizard which (by appliance-install UX design) does NOT
+      //     enroll MFA on first run → no TOTP page renders. Switched to
+      //     loginAsSiteAdminMFAOptional in agent-a-20260627 so the harness
+      //     tolerates both shapes without weakening MFA enforcement (the
+      //     helper still completes TOTP when the secret is enrolled).
+      await loginAsSiteAdminMFAOptional(page);
     }
 
     // Attach CDP session and add virtual authenticator AFTER login so
@@ -92,22 +105,41 @@ test.describe("passkey ceremony — CDP virtual authenticator", () => {
     await cdp.send("WebAuthn.clearCredentials", { authenticatorId });
 
     // Delete backend-side passkeys left by previous runs.
-    await page.evaluate(async () => {
-      const r = await fetch("/api/idp/api/v1/webauthn/credentials", {
-        credentials: "include",
-        cache: "no-store",
-      });
-      if (!r.ok) return;
+    //
+    // Use page.request — NOT an in-page page.evaluate(...) relative fetch. The
+    // login helper's session-restore fast path (tryRestoreSession → addCookies,
+    // no navigation) can leave the page on about:blank, where a RELATIVE
+    // in-page fetch has no document origin to resolve against and throws
+    // "Failed to parse URL". page.request resolves relative paths against the
+    // configured baseURL (IDENTUUM_E2E_BASE_URL) and shares the browser
+    // context's session cookies, so it is origin-independent and works for
+    // BOTH the CE customer-smoke (7124) and OSS customer-smoke targets without
+    // hard-coding a port.
+    const listRes = await page.request.get("/api/idp/api/v1/webauthn/credentials");
+    if (listRes.ok()) {
       // biome-ignore lint/suspicious/noExplicitAny: raw API response
-      const creds: any[] = await r.json().catch(() => []);
-      if (!Array.isArray(creds)) return;
+      const data: any = await listRes.json().catch(() => null);
+      // The OSS handler returns a bare JSON array; the CE handler returns an
+      // envelope { "credentials": [...] }. Accept BOTH shapes — identical to
+      // the bundled UI's passkey-section.tsx::refresh — so the clean-slate
+      // cleanup actually deletes stale credentials against either backend
+      // (a CE envelope is an object, so a bare Array.isArray check would skip
+      // deletion and leave a stale passkey, breaking T1's empty-state assert).
+      // `creds` is inferred from `data` (already `any`) — no second explicit
+      // `any` annotation (keeps biome's noExplicitAny happy).
+      const creds = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.credentials)
+          ? data.credentials
+          : [];
       for (const cred of creds) {
-        await fetch(
-          `/api/idp/api/v1/webauthn/credentials/${encodeURIComponent(cred.id as string)}`,
-          { method: "DELETE", credentials: "include" }
-        );
+        if (cred?.id) {
+          await page.request.delete(
+            `/api/idp/api/v1/webauthn/credentials/${encodeURIComponent(cred.id as string)}`
+          );
+        }
       }
-    });
+    }
 
     await page.goto("/account/settings?tab=passkeys");
     await page.waitForLoadState("networkidle");
@@ -186,13 +218,11 @@ test.describe("passkey ceremony — CDP virtual authenticator", () => {
       test.skip(true, SKIP_AUTH_MSG);
     }
 
-    // Log out of the current session.
-    await page.evaluate(async () => {
-      await fetch("/api/idp/api/v1/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-    });
+    // Log out of the current session. Use page.request (origin-independent,
+    // baseURL-resolved, shares context cookies) rather than an in-page
+    // page.evaluate(...) relative fetch so it never depends on the current
+    // document origin.
+    await page.request.post("/api/idp/api/v1/logout");
 
     await page.goto("/login");
     await page.waitForURL(/\/login/, { timeout: 10_000 });

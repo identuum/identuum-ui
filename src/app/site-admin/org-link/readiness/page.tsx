@@ -1,3 +1,4 @@
+import { AGCEOrgLinkAvailabilityCard } from "@/components/shared/ag-ce-org-link-availability-card";
 import {
   type OrgExportFetchResult,
   type OrganizationCandidateMatch,
@@ -80,10 +81,21 @@ export default async function OrgLinkReadinessPage() {
   // only; backend URLs, cookies, and bearer tokens never reach the browser.
   // Each fetch independently returns a safe discriminated result — one
   // backend's failure does not block the other.
+  //
+  // The AG CE org-link availability verdict (capability + readiness probe)
+  // is composed server-side by `getServerRuntimeState` (2026-07-08 slice) —
+  // see `state.agCEOrgLinkAvailability`. No direct fetch / derive happens
+  // here; the readiness round-trip is amortised inside the cached runtime-
+  // state call.
   const [idpCandidatesResult, agCandidatesResult] = await Promise.all([
     fetchIDPOrganizationExportCandidates(),
     fetchAGOrganizationExportCandidates(),
   ]);
+
+  // Read the AG CE-specific org-link availability verdict from the
+  // composed runtime state. `null` when AG is not enabled in the UI
+  // runtime config — the AG CE availability card is then skipped.
+  const agCEAvailability = state.agCEOrgLinkAvailability ?? null;
 
   const idpCandidates = idpCandidatesResult.ok ? idpCandidatesResult.organizations : [];
   const agCandidates = agCandidatesResult.ok ? agCandidatesResult.organizations : [];
@@ -116,6 +128,24 @@ export default async function OrgLinkReadinessPage() {
 
       {/* Overall readiness badge */}
       <ReadinessBadge ready={readiness.ready} unmetCount={unmet.length} />
+
+      {/* AG CE org-link availability (capability + readiness probe).
+          Action-planning copy variant; actionable variant drills into
+          the link/unlink console. Verdict composed by
+          `getServerRuntimeState` (2026-07-08); shared component lives
+          at `src/components/shared/ag-ce-org-link-availability-card.tsx`
+          (2026-07-06 refactor). Skipped entirely when AG is not
+          enabled in the UI runtime config. */}
+      {agCEAvailability && (
+        <AGCEOrgLinkAvailabilityCard
+          availability={agCEAvailability}
+          actionableTarget={{
+            href: "/site-admin/org-link",
+            label: "Open the org-link console",
+          }}
+          copyVariant="action-planning"
+        />
+      )}
 
       {/* Backend readiness cards */}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -987,3 +1017,8 @@ function dryRunFailureMessage(reason: string): string {
       return "Dry-run preview could not be completed.";
   }
 }
+
+// Note: the prior inline `AGCEOrgLinkAvailabilityCard` sub-component
+// was extracted to `@/components/shared/ag-ce-org-link-availability-card`
+// in the 2026-07-06 refactor. The page renders that shared component
+// directly above; the inline definition no longer lives here.

@@ -161,6 +161,10 @@ describe("completeSetup", () => {
     organizationDomain: "acme.example",
     adminEmail: "owner@acme.example",
     adminPassword: "very-long-test-password",
+    // D-IDP-INSTALL-26 — synthetic test values; never a real session
+    // id or TOTP code. The fixture asserts shape only.
+    adminMFASessionId: "test-session-id",
+    adminMFACode: "123456",
   };
 
   it("returns ok with the completion view on 200", async () => {

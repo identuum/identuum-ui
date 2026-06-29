@@ -81,6 +81,51 @@ describe("setup wizard never persists secrets in the browser", () => {
   });
 });
 
+describe("D-IDP-INSTALL-26 setup-MFA wiring (agent-a-20260627-idp-ce-setup-wizard-site-admin-totp-enrollment-implementation)", () => {
+  it("imports the setup-MFA client helpers", () => {
+    expect(wizardSource).toMatch(/initiateSetupMFA/);
+    expect(wizardSource).toMatch(/verifySetupMFA/);
+    expect(wizardSource).toMatch(/from "@\/lib\/idp-setup-mfa-client"/);
+  });
+
+  it("CompleteSetupInput literal threads the verified session id + code through to /api/setup/complete", () => {
+    // The wizard's submit-time payload MUST carry both fields so the
+    // server-side D-IDP-INSTALL-26 gate accepts the request. A
+    // regression that dropped either field would silently start
+    // returning mfa_enrollment_required against a fresh stack.
+    expect(wizardSource).toMatch(/adminMFASessionId:\s*sessionId/);
+    expect(wizardSource).toMatch(/adminMFACode:\s*mfaCode\.trim\(\)/);
+  });
+
+  it("submit button transitions through initiating_mfa / mfa_pending / verifying_mfa phases before submitting", () => {
+    // Pins the three new SubmitState variants so a future refactor
+    // that collapses the multi-step flow back into a single submit
+    // (silently dropping the MFA gate) fails here.
+    expect(wizardSource).toMatch(/kind:\s*"initiating_mfa"/);
+    expect(wizardSource).toMatch(/kind:\s*"mfa_pending"/);
+    expect(wizardSource).toMatch(/kind:\s*"verifying_mfa"/);
+  });
+
+  it("MFA panel surfaces otpauth url + secret + 6-digit code input with stable test-ids", () => {
+    // The QR + secret + code field must each have data-testid stable
+    // pins so the future Playwright M1 driver can locate them
+    // deterministically. Wizard authors MUST NOT silently drop
+    // these test-ids.
+    expect(wizardSource).toMatch(/data-testid="setup-mfa-otpauth"/);
+    expect(wizardSource).toMatch(/data-testid="setup-mfa-secret"/);
+    expect(wizardSource).toMatch(/data-testid="setup-mfa-code"/);
+    expect(wizardSource).toMatch(/data-testid="setup-mfa-verify"/);
+  });
+
+  it("success state surfaces recoveryCodes with a stable test-id", () => {
+    // The wizard's success panel renders the IDP-returned recovery
+    // codes ONCE. A regression that hid them would leave the
+    // operator without a fallback path.
+    expect(wizardSource).toMatch(/data-testid="setup-recovery-codes"/);
+    expect(wizardSource).toMatch(/recoveryCodes:\s*result\.result\.recoveryCodes/);
+  });
+});
+
 describe("setup wizard imports the right client surface", () => {
   it("imports the appliance setup client (verifySetupToken + completeSetup)", () => {
     expect(wizardSource).toMatch(/verifySetupToken/);

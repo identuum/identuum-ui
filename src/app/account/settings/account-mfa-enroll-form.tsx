@@ -45,7 +45,20 @@ type FormData = z.infer<typeof schema>;
 
 type Phase = "loading" | "display" | "error" | "already_enrolled" | "success";
 
-export function AccountMFAEnrollForm({ onSuccess }: { onSuccess?: () => void }) {
+export function AccountMFAEnrollForm({
+  onSuccess,
+  onDone,
+}: {
+  onSuccess?: () => void;
+  /**
+   * Invoked when the operator clicks "Done" on the post-enrollment
+   * recovery-code panel. The form clears recoveryCodes from component
+   * state BEFORE invoking the callback, so the callback can transition
+   * the parent into the canonical enrolled state (typically by calling
+   * router.refresh()) without re-rendering the codes one last time.
+   */
+  onDone?: () => void;
+}) {
   const [phase, setPhase] = useState<Phase>("loading");
   // SECURITY: secret, otpauthUrl, recoveryCodes kept ONLY in component state.
   const [secret, setSecret] = useState("");
@@ -147,6 +160,14 @@ export function AccountMFAEnrollForm({ onSuccess }: { onSuccess?: () => void }) 
   }
 
   if (phase === "success") {
+    const handleDone = () => {
+      // Clear codes from component state FIRST so any synchronous re-
+      // render triggered by onDone never sees them again. The parent
+      // typically calls router.refresh() in onDone to re-fetch the
+      // server state (mfa_enabled=true now) and unmount this form.
+      setRecoveryCodes([]);
+      onDone?.();
+    };
     return (
       <div className="space-y-3">
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
@@ -172,6 +193,16 @@ export function AccountMFAEnrollForm({ onSuccess }: { onSuccess?: () => void }) 
             </ul>
           </div>
         )}
+
+        <div className="pt-1">
+          <Button type="button" onClick={handleDone}>
+            Done
+          </Button>
+          <p className="text-xs text-stone-400 mt-2">
+            Clicking Done hides the recovery codes and returns to the normal MFA settings view. Make
+            sure you have saved the codes above — they will not be shown again.
+          </p>
+        </div>
       </div>
     );
   }

@@ -30,13 +30,18 @@ const MFA_FORMS_SRC = readFileSync(
 );
 
 describe("IDP OSS account self-service endpoint wiring", () => {
-  it("uses the OSS /me session endpoints, not legacy session-id revoke endpoints", () => {
-    expect(ACCOUNT_CLIENT_SRC).toContain("/api/v1/me/sessions");
-    expect(ACCOUNT_CLIENT_SRC).toContain("/api/v1/me/sessions/revoke-current");
-    expect(ACCOUNT_CLIENT_SRC).toContain("/api/v1/me/sessions/revoke-others");
-    expect(ACCOUNT_CLIENT_SRC).toContain("/api/v1/me/sessions/revoke-all");
-    expect(ACCOUNT_CLIENT_SRC).not.toContain("/api/v1/revoke");
-    expect(ACCOUNT_CLIENT_SRC).not.toContain('/api/v1/sessions"');
+  it("uses the parity Family-A /api/v1/sessions list + per-session revoke (works on OSS AND CE), not the OSS-only /me/sessions family", () => {
+    // GET list via /api/v1/sessions — mounted on BOTH IDP OSS and IDP CE.
+    expect(ACCOUNT_CLIENT_SRC).toContain("/api/v1/sessions");
+    // Per-session revoke, dual-route using ONLY pre-existing backend routes:
+    //   CE path-param POST /api/v1/sessions/{id}/revoke + OSS body POST /api/v1/revoke.
+    expect(ACCOUNT_CLIENT_SRC).toContain("/api/v1/sessions/${encodeURIComponent(id)}/revoke");
+    expect(ACCOUNT_CLIENT_SRC).toContain("/api/v1/revoke");
+    expect(ACCOUNT_CLIENT_SRC).toContain("session_id");
+    // The OSS-only /me/sessions family (404 on CE) must NOT be used by the
+    // account-settings client — it caused the "Session management is not
+    // available from this IDP runtime" regression on CE customer-smoke.
+    expect(ACCOUNT_CLIENT_SRC).not.toContain("/api/v1/me/sessions");
   });
 
   it("uses the OSS /me MFA status, recovery-code regeneration, and disable endpoints", () => {

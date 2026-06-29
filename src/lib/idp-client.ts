@@ -101,6 +101,28 @@ export async function login(payload: LoginPayload): Promise<LoginOutcome> {
     throw new ApiError(0, "MFA required but server did not return a session token");
   }
 
+  // D-1 (agent-a-20260705-idp-ce-org-admin-authpolicy-local-login-bypass):
+  // organization auth_policy=idp_only refuses local-password login for
+  // NON-admin users. The backend now exempts site_admin AND org_admin
+  // (org.Role.CanAdminister()) — those credential flows succeed and reach the
+  // `success` return below — so a 401 + {"error":"auth_policy_blocks_local_login"}
+  // here ALWAYS denotes a regular org_user whose organization disallows local
+  // login, NOT a wrong password. Surface it with a distinct sentinel so the
+  // caller renders an honest "local sign-in not available" message instead of
+  // "Invalid credentials.". The role/policy decision is made ENTIRELY by the
+  // backend; the UI adds NO client-side role logic. (Mirrors the
+  // SESSION_EXPIRED sentinel-message pattern used by mfaVerify below.)
+  // Checked BEFORE the generic !res.ok path; placed before the
+  // mfa_enrollment_required check so the two distinct 401 error codes each get
+  // their own outcome.
+  if (
+    res.status === 401 &&
+    typeof body.error === "string" &&
+    body.error === "auth_policy_blocks_local_login"
+  ) {
+    throw new ApiError(res.status, "AUTH_POLICY_BLOCKS_LOCAL_LOGIN");
+  }
+
   // OSS backend: HTTP 401 + {"error":"mfa_enrollment_required"} — no session_id.
   // Fires when MFA is required but the user has not yet enrolled a TOTP secret.
   // Must be checked BEFORE the generic !res.ok path so the caller receives a
@@ -278,7 +300,7 @@ export async function accountMfaSetupInitiate(): Promise<{ secret: string; otpau
     throw new ApiError(res.status, "Failed to initiate MFA enrollment");
   }
   const body = await res.json();
-  return { secret: body.secret, otpauthUrl: body.qr_code_url };
+  return { secret: body.secret, otpauthUrl: body.otpauth_url ?? body.qr_code_url };
 }
 
 /**
