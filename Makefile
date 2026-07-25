@@ -11,11 +11,32 @@ DEV_PLATFORM_STATUS_URL ?= http://127.0.0.1:7104/platform-status
 # 127.0.0.1:7315 instead of the monolith on 7215.
 AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 
-.PHONY: verify dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime
+.PHONY: verify wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
 .PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
 
+## wiki-fresh: WIKI-1 gate — fail verify when this repo's wiki page is BEHIND.
+## Runs wiki-freshness.sh --repo identuum-ui --strict against the sibling wiki
+## checkout. BE HONEST ABOUT WHAT THIS ENFORCES: at verify time HEAD is the
+## LAST commit, so a green gate means "the PREVIOUS slice's wiki update was
+## banked before new work is verified" — zero commits of allowed drift. It does
+## NOT and cannot check the commit you are about to make; the §F-bis append for
+## THIS slice is still on you, and the gate will catch its absence on the NEXT
+## slice's verify. A missing wiki dir (fresh clone / CI) prints one loud SKIPPED
+## line and continues — visible, never silent. A typo'd repo name FAILS (the
+## checker exits 2 when --repo matches no page), so the gate cannot be
+## accidentally disabled by a rename.
+WIKI_DIR ?= ../wiki
+
+wiki-fresh:
+	@if [ ! -d "$(WIKI_DIR)" ]; then \
+		echo "WIKI FRESHNESS SKIPPED: no wiki at $(WIKI_DIR)"; \
+	else \
+		bash "$(WIKI_DIR)/tools/wiki-freshness.sh" --repo identuum-ui --strict; \
+	fi
+
 verify:
+	@$(MAKE) --no-print-directory wiki-fresh
 	pnpm exec biome check . --reporter=json --max-diagnostics=none
 	pnpm exec tsc --noEmit
 	pnpm exec vitest run

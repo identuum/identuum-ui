@@ -66,9 +66,7 @@ function requireCredentialsOrFail(file: string, keys: string[]): void {
   if (missing.length > 0) {
     // Variable NAMES only — no credential value is read, printed, or interpolated.
     throw new Error(
-      `[credential-contract] missing required credential variable(s): ${missing.join(", ")}. ` +
-        `These MUST be defined in ${file} (no fallback to any other env file). ` +
-        "Set them in that file and re-run. No credential value is printed."
+      `[credential-contract] missing required credential variable(s): ${missing.join(", ")}. These MUST be defined in ${file} (no fallback to any other env file). Set them in that file and re-run. No credential value is printed.`
     );
   }
 }
