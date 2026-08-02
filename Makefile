@@ -11,7 +11,7 @@ DEV_PLATFORM_STATUS_URL ?= http://127.0.0.1:7104/platform-status
 # 127.0.0.1:7315 instead of the monolith on 7215.
 AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 
-.PHONY: verify wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime
+.PHONY: verify wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
 .PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
 
@@ -37,9 +37,81 @@ wiki-fresh:
 
 verify:
 	@$(MAKE) --no-print-directory wiki-fresh
+	@$(MAKE) --no-print-directory image-base-check
+	@$(MAKE) --no-print-directory image-base-parity
 	pnpm exec biome check . --reporter=json --max-diagnostics=none
 	pnpm exec tsc --noEmit
 	pnpm exec vitest run
+
+## image-base-check: fail if any Dockerfile builds FROM an Alpine base.
+##
+## IMG-NONALPINE (owner decision 2026-07-31): every image WE build must be
+## musl-free. Ported here 2026-08-02 (IMG-GATE-4) BYTE-IDENTICAL to the copy in
+## identuum-idp-oss, identuum-idp-ce and identuum-ag-ce — FOUR copies, held
+## identical by `image-base-parity` below, which pins their shared md5 and fails
+## this repo if its copy drifts by one character. identuum-ag-oss is deliberately
+## absent from the four: it ships NO Dockerfile, so it has nothing to gate and
+## the missing target there is correct, not an oversight.
+##
+## THIS REPO COMPLIES TODAY and the gate is still worth having: `Dockerfile` and
+## `setup/Dockerfile` are both node:22-bookworm-slim. This repo PUBLISHES an
+## image (publish-image.yml) and had no gate at all, so nothing but review stood
+## between a `node:22-alpine` edit and a musl image on the registry.
+##
+## `.next/` is gitignored build output and is NOT scanned: the find below walks
+## the working tree, and a stray Dockerfile under a build directory is not
+## something this policy governs.
+image-base-check:
+	@out="$$(find . -name 'Dockerfile*' -not -path './.git/*' -not -path './vendor/*' -exec awk 'FNR==1{delete A} /^ARG[ \t]+[A-Za-z_][A-Za-z0-9_]*=/{s=$$0;sub(/^ARG[ \t]+/,"",s);p=index(s,"=");n=substr(s,1,p-1);v=substr(s,p+1);sub(/[ \t].*$$/,"",v);gsub(/^"|"$$/,"",v);A[n]=v;if(v~/alpine/){printf "%s:%d: ARG default is an Alpine base: %s\n",FILENAME,FNR,$$0}} /^FROM[ \t]/{r=$$0;for(i=0;i<10;i++){ch=0;for(n in A)if(index(r,"$${" n "}")>0){gsub("[$$][{]" n "[}]",A[n],r);ch=1}if(!ch)break}if(r~/alpine/){printf "%s:%d: FROM resolves to an Alpine base: %s\n",FILENAME,FNR,$$0}else if(r~/[$$]/){printf "%s:%d: FROM has an UNRESOLVED variable, no ARG default in this file - failing loud: %s\n",FILENAME,FNR,$$0}}' {} + 2>/dev/null || true)"; \
+	if [ -n "$$out" ]; then \
+		echo "ALPINE BASE IMAGE FOUND (IMG-NONALPINE):"; \
+		echo "$$out"; \
+		echo "Every image we build must be musl-free. The Postgres SERVICE image is exempt and belongs in compose, not in a Dockerfile."; \
+		exit 1; \
+	fi
+
+
+## image-base-parity: the copies check THEMSELVES.
+##
+## `image-base-check` above is maintained byte-identical in FOUR repos —
+## identuum-idp-oss, identuum-idp-ce, identuum-ag-ce and identuum-ui. Until
+## 2026-08-02 that was a claim in a comment and nothing verified it, which is
+## the same shape as every CLEAN-that-measured-nothing this workspace has
+## found: a policy stated in prose, enforced by hope.
+##
+## HOW IT IS ENFORCED WITHOUT SIBLING CHECKOUTS. A cross-repo diff cannot run
+## in CI — each job checks out ONE repo. So the four do not compare themselves
+## to each other; they each compare their own copy to an AGREED DIGEST, pinned
+## below. Editing any copy by one character changes that copy's digest and
+## turns THAT repo red, in CI and locally, with no sibling required. Four
+## repos agreeing with one constant is equivalent to four repos agreeing with
+## each other, and it is checkable from a single checkout.
+##
+## THE UNIT IS EXACT: from `image-base-check:` through its closing `fi`, plus
+## the blank line that terminates the recipe — 9 lines. The blank line is IN
+## the hash deliberately, because a recipe that swallows the following line is
+## a real defect and would otherwise hash the same. Note the `printf '%s\n\n'`
+## below: command substitution strips ALL trailing newlines, so the 9th line has
+## to be put back or this target hashes 8 lines and is red forever. It was, on
+## first run, in all four repos at once.
+##
+## CHANGING THE GATE ON PURPOSE: edit one copy, run `make image-base-parity`
+## to read the new digest out of the failure message, update IMAGE_BASE_MD5 in
+## all four, and copy the block to all four. The target tells you the value it
+## wanted and the value it got, so the update is mechanical.
+IMAGE_BASE_MD5 ?= 771f2aed39cca106ecdaf4f283ec1007
+
+image-base-parity:
+	@blk="$$(awk '/^image-base-check:/{f=1} f{print; if(f&&/^\tfi$$/){getline; print; exit}}' Makefile)"; \
+	got="$$(printf '%s\n\n' "$$blk" | { md5sum 2>/dev/null || md5; } | awk '{print $$1}')"; \
+	if [ "$$got" != "$(IMAGE_BASE_MD5)" ]; then \
+		echo "IMAGE-BASE-CHECK COPY HAS DIVERGED (IMG-GATE-4):"; \
+		echo "  wanted md5 $(IMAGE_BASE_MD5)"; \
+		echo "  got    md5 $$got"; \
+		echo "This repo's image-base-check no longer matches the copy shared with identuum-idp-oss, identuum-idp-ce, identuum-ag-ce and identuum-ui."; \
+		echo "Either restore this copy, or update the block AND IMAGE_BASE_MD5 in all four."; \
+		exit 1; \
+	fi
 
 ## verify-ui-oss-contract: Playwright spec that validates the OSS
 ## scaffold runtime contract (e2e/oss-contract.spec.ts).
