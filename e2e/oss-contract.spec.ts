@@ -1,42 +1,41 @@
 /**
- * OSS scaffold runtime-contract spec.
+ * OSS runtime-contract spec — the SHIPPED surface, positively pinned.
  *
- * This spec validates that the IDP backend at IDENTUUM_IDP_BASE_URL
- * matches the OSS `--gin-serve` scaffold contract documented in
- * identuum-idp-oss/internal/cli/cli.go and confirmed by
- * `identuum-idp --help`:
+ * REWRITTEN THE-RELEASED-CONTRACT (2026-08-08). This spec used to declare the
+ * `--gin-serve` scaffold contract — verbatim "No auth, no /authorize, no
+ * /token" — and its two negative pins passed VACUOUSLY against every released
+ * build: they probed the bare paths `/authorize` and `/token`, which 404
+ * regardless, and asserted only "not 200". identuum-idp-oss v0.3.0 is the full
+ * OAuth 2.1 / OIDC Authorization Server; the scaffold that framing described
+ * was retired before v0.2.0, and the OSS repo's own
+ * TestOSSContract_NoScaffoldFraming now BANS that string from its main.go. A
+ * contract spec that certifies the absence of the product's core feature, and
+ * passes because it aims at paths the product never served, is drift, not a
+ * contract. It now pins the surface the released artifact actually serves,
+ * discovered from the discovery document.
  *
- *   "Start the production-shaped Gin OSS scaffold on the given address.
- *    Exposes only GET /system/info, /health, /metrics,
- *    /.well-known/openid-configuration, /.well-known/jwks.json.
- *    No auth, no /authorize, no /token."
+ * Positive pins (must be present — a dead port or a non-IDP backend fails all):
+ *   - GET /health                            → 200 status:"healthy"
+ *   - GET /.well-known/openid-configuration  → 200 with issuer + the three
+ *                                              OAuth endpoints
+ *   - GET /.well-known/jwks.json             → 200 with a keys array
+ *   - GET authorization_endpoint (malformed) → 400 — PRESENT and validating,
+ *                                              NOT 404 (absent)
+ *   - POST token_endpoint (malformed)        → 401 — PRESENT and client-auth-
+ *                                              gated, NOT 404
+ *   - POST introspection_endpoint (malformed)→ 401 — PRESENT and client-auth-
+ *                                              gated, NOT 404
  *
- * Positive contract pins (must succeed):
- *   - GET /health             → 200 with status:"healthy"
- *   - GET /.well-known/openid-configuration → 200 valid JSON with `issuer`
- *   - GET /.well-known/jwks.json → 200 valid JSON with `keys` array
+ * The malformed-request status codes are the tell that separates a SERVED,
+ * validating endpoint (4xx) from an ABSENT one (404): the census found the old
+ * negatives green against a backend that serves all three, because "not 200"
+ * is satisfied by the 404 an absent path returns just as well as by the 400 a
+ * present one does. These pins assert the discriminating status directly.
  *
- * Negative contract pins (must NOT succeed — explicit absence):
- *   - GET /authorize          → MUST NOT be 200/302 (OSS scaffold has no auth)
- *   - POST /token             → MUST NOT be 200 (OSS scaffold has no token endpoint)
- *
- * What this spec is NOT:
- *   - This is NOT an auth/E2E test. It does NOT exercise login, MFA,
- *     sessions, /authorize success, /token issuance, the admin UI, or
- *     any CE-only surface.
- *   - It does NOT require .env.playwright.idp-oss.local credentials.
- *   - It does NOT require a CE appliance runtime.
- *
- * Runtime selection:
- *   - This spec is intended to run against an OSS `--gin-serve` runtime
- *     (e.g. container `identuum-idp-oss` on 127.0.0.1:7113).
- *   - It will also PASS against a CE appliance runtime because the CE
- *     surface is a superset — the four positive pins all hold on CE,
- *     and the negative pins assert the absence of OSS scaffold-mode
- *     gaps which CE legitimately fills (so on CE these negative pins
- *     are RELAXED to "endpoint exists and responds with a non-error
- *     auth-flow status code", which is documented in-line below).
- *   - It will FAIL against a non-IDP backend (404 on /.well-known/...).
+ * What this spec is NOT: not an auth/E2E flow — it issues no token and drives
+ * no login. It needs no credentials. It FAILS against a non-IDP backend (404
+ * on discovery) and against a dead port (connection refused) — red-proved in
+ * THE-RELEASED-CONTRACT by pointing IDENTUUM_IDP_BASE_URL at an unused port.
  *
  * Companion source-invariant pin:
  *   src/__tests__/oss-ce-runtime-target-source-invariants.test.ts
@@ -46,7 +45,21 @@ import { expect, test } from "@playwright/test";
 
 const IDP_BASE_URL = process.env.IDENTUUM_IDP_BASE_URL ?? "http://localhost:7113";
 
-test.describe("OSS scaffold contract — positive pins (must be present)", () => {
+interface DiscoveryDoc {
+  issuer?: string;
+  jwks_uri?: string;
+  authorization_endpoint?: string;
+  token_endpoint?: string;
+  introspection_endpoint?: string;
+}
+
+async function discovery(request: import("@playwright/test").APIRequestContext): Promise<DiscoveryDoc> {
+  const res = await request.get(`${IDP_BASE_URL}/.well-known/openid-configuration`);
+  expect(res.status()).toBe(200);
+  return (await res.json()) as DiscoveryDoc;
+}
+
+test.describe("OSS runtime contract — liveness + discovery (must be present)", () => {
   test("GET /health returns 200 with status:healthy", async ({ request }) => {
     const res = await request.get(`${IDP_BASE_URL}/health`);
     expect(res.status()).toBe(200);
@@ -54,19 +67,18 @@ test.describe("OSS scaffold contract — positive pins (must be present)", () =>
     expect(body.status).toBe("healthy");
   });
 
-  test("GET /.well-known/openid-configuration returns 200 with valid `issuer`", async ({
+  test("GET /.well-known/openid-configuration advertises issuer + the OAuth endpoints", async ({
     request,
   }) => {
-    const res = await request.get(`${IDP_BASE_URL}/.well-known/openid-configuration`);
-    expect(res.status()).toBe(200);
-    const body = (await res.json()) as {
-      issuer?: string;
-      jwks_uri?: string;
-    };
+    const body = await discovery(request);
     expect(typeof body.issuer).toBe("string");
     expect(body.issuer?.length).toBeGreaterThan(0);
-    // jwks_uri is part of the OSS scaffold's static discovery doc.
     expect(typeof body.jwks_uri).toBe("string");
+    // The released Authorization Server advertises all three — the scaffold
+    // era advertised none of them.
+    expect(typeof body.authorization_endpoint).toBe("string");
+    expect(typeof body.token_endpoint).toBe("string");
+    expect(typeof body.introspection_endpoint).toBe("string");
   });
 
   test("GET /.well-known/jwks.json returns 200 with a `keys` array", async ({ request }) => {
@@ -77,38 +89,48 @@ test.describe("OSS scaffold contract — positive pins (must be present)", () =>
   });
 });
 
-test.describe("OSS scaffold contract — negative pins (must reflect scaffold semantics)", () => {
-  test("/authorize is NOT a working OSS scaffold auth endpoint", async ({ request }) => {
-    // OSS --gin-serve documents: "No auth, no /authorize, no /token".
-    // We assert the OSS scaffold does NOT serve a successful auth flow.
-    // The endpoint may return 404 (pure OSS scaffold), 400 (CE rejecting
-    // a malformed request), or 405 (method-not-allowed) — none of those
-    // are a successful auth flow. A 200 OR a 302 to a login page would
-    // indicate a FULL-AUTH runtime is on this port, which would break
-    // the OSS scaffold contract on an OSS-only deployment.
-    const res = await request.get(`${IDP_BASE_URL}/authorize`, {
+test.describe("OSS runtime contract — the OAuth surface is SERVED", () => {
+  test("authorization_endpoint validates a malformed request (400, not 404)", async ({
+    request,
+  }) => {
+    const { authorization_endpoint } = await discovery(request);
+    expect(authorization_endpoint).toBeTruthy();
+    const res = await request.get(authorization_endpoint as string, {
       maxRedirects: 0,
       failOnStatusCode: false,
     });
-    // 200 success on a vanilla GET /authorize would be a contract break
-    // for OSS scaffold mode. Negative pin: not 200.
-    expect(res.status()).not.toBe(200);
+    // A present, validating authorize endpoint rejects a parameterless GET
+    // with 400. An ABSENT endpoint would 404. Pinning "400, not 404" is what
+    // the old "not 200" pin could not do — it passed on the 404 too.
+    expect(res.status(), "authorize must be SERVED and validating (400), not absent (404)").toBe(
+      400
+    );
   });
 
-  test("POST /token returns no successful token issuance from the OSS scaffold", async ({
-    request,
-  }) => {
-    // OSS --gin-serve has no token-issuance path. A POST with empty body
-    // returning 200 with a JSON body containing access_token would be a
-    // contract break.
-    const res = await request.post(`${IDP_BASE_URL}/token`, {
+  test("token_endpoint is client-auth-gated (401, not 404)", async ({ request }) => {
+    const { token_endpoint } = await discovery(request);
+    expect(token_endpoint).toBeTruthy();
+    const res = await request.post(token_endpoint as string, {
       failOnStatusCode: false,
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      data: "",
+      data: "grant_type=client_credentials",
     });
-    // Either the endpoint is absent (404), or it rejects the empty body
-    // (400/415). Either way, no successful token issuance from a malformed
-    // empty request. Pin: not 200.
-    expect(res.status()).not.toBe(200);
+    expect(res.status(), "token must be SERVED and client-auth-gated (401), not absent (404)").toBe(
+      401
+    );
+  });
+
+  test("introspection_endpoint is client-auth-gated (401, not 404)", async ({ request }) => {
+    const { introspection_endpoint } = await discovery(request);
+    expect(introspection_endpoint).toBeTruthy();
+    const res = await request.post(introspection_endpoint as string, {
+      failOnStatusCode: false,
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      data: "token=irrelevant",
+    });
+    expect(
+      res.status(),
+      "introspection must be SERVED and client-auth-gated (401), not absent (404)"
+    ).toBe(401);
   });
 });
