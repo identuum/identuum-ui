@@ -205,6 +205,41 @@ export function loadSiteAdminFixture(): SiteAdminFixtureCredentials | null {
 }
 
 /**
+ * The org_user credentials the released-appliance harness mints during
+ * globalSetup (THE-ALL-GREEN-SUITE). The three credential types the suite must
+ * cover are site_admin, org_admin, and a regular org_user — this is the third.
+ * The fixture org carries a REQUIRED MFA policy, so the org_user is TOTP-enrolled
+ * like the admins and this block carries a captured totp_secret: the suite
+ * exercises TOTP login for every user type.
+ *
+ * Same null-on-absent contract; returns email + password + totpSecret.
+ */
+export interface OrgUserFixtureCredentials {
+  email: string;
+  password: string;
+  totpSecret: string;
+}
+
+export function loadOrgUserFixture(): OrgUserFixtureCredentials | null {
+  const path = resolveFixturePath();
+  try {
+    statSync(path);
+  } catch {
+    return null;
+  }
+  const raw = readFileSync(path, "utf-8");
+  const parsed = JSON.parse(raw) as unknown;
+  validateFixture(parsed, path);
+  const ou = (parsed as { org_user?: unknown }).org_user;
+  if (!isObject(ou)) return null;
+  const { email, password, totp_secret } = ou as Record<string, unknown>;
+  if (typeof email !== "string" || email.length === 0) return null;
+  if (typeof password !== "string" || password.length === 0) return null;
+  if (typeof totp_secret !== "string" || totp_secret.length === 0) return null;
+  return { email, password, totpSecret: totp_secret };
+}
+
+/**
  * Returns the fixture org's primary domain (e2e-<runID>.test) when the
  * dynamic fixture file is present and valid. Returns null when the
  * file is absent (durable-env mode) — same null-on-absent contract as
@@ -289,15 +324,13 @@ export function isDynamicFixtureModeRequested(): boolean {
 }
 
 /**
- * The non-secret subset of the seeded sample OAuth client surfaced by
- * the IDP fixture CLI. The fields here mirror exactly the four fields
- * `cli.FixtureSampleClientBlock` writes into the JSON envelope:
- * `id`, `client_id`, `name`, `is_public`. NEVER expose
- * `client_secret`, `client_secret_hash`, `private_key`, inline `jwks`,
- * signing material, `access_token`, `refresh_token`, or any other
- * credential-shaped field — the IDP fixture envelope does not write
- * them, and a regression that started doing so would surface in the
- * IDP Vitest pin too.
+ * The non-secret subset of the seeded sample OAuth client the released-API
+ * producer (e2e/helpers/appliance-fixture.ts) writes into the JSON envelope:
+ * `id`, `client_id`, `name`, `is_public`. NEVER expose `client_secret`,
+ * `client_secret_hash`, `private_key`, inline `jwks`, signing material,
+ * `access_token`, `refresh_token`, or any other credential-shaped field — the
+ * producer creates a PUBLIC client (no secret at all) and never writes secret
+ * material into the envelope.
  */
 export interface OrgAdminFixtureSampleClient {
   id: string;
@@ -307,11 +340,11 @@ export interface OrgAdminFixtureSampleClient {
 }
 
 /**
- * Returns the disposable sample OAuth client the IDP fixture CLI
+ * Returns the disposable sample OAuth client the released-API producer
  * seeded alongside the fixture organization, when the dynamic fixture
  * file is present and valid. Returns null when the file is absent
  * (durable-env mode) OR when the envelope was written by a pre-sample-
- * client IDP build (the field is optional on the envelope by design,
+ * client producer (the field is optional on the envelope by design,
  * so older fixtures still round-trip cleanly through validateFixture).
  *
  * SECURITY:
@@ -327,9 +360,10 @@ export interface OrgAdminFixtureSampleClient {
  *   - The id is validated against a narrow UUID-shape regex; a non-
  *     UUID id is dropped fail-closed so it cannot be silently
  *     surfaced into a test URL.
- *   - The client_id is validated against the reserved e2e-fixture-
- *     <runID>-app pattern — anything else means the envelope was
- *     written for a different run and is fail-closed dropped.
+ *   - The released appliance generates the OAuth client_id server-side, so
+ *     run-scoping anchors on the reserved `E2E Sample Application <runID>`
+ *     NAME (which the producer sets); client_id is validated only as a real
+ *     32-hex generated id. A block for a different run fails the name gate.
  */
 export function loadOrgAdminFixtureSampleClient(): OrgAdminFixtureSampleClient | null {
   const path = resolveFixturePath();
@@ -350,23 +384,28 @@ export function loadOrgAdminFixtureSampleClient(): OrgAdminFixtureSampleClient |
   if (!isObject(sample)) return null;
   const { id, client_id, name, is_public } = sample as Record<string, unknown>;
   if (typeof id !== "string" || !/^[0-9a-fA-F-]{32,36}$/.test(id)) return null;
-  if (typeof client_id !== "string" || client_id !== `e2e-fixture-${runID}-app`) return null;
-  if (typeof name !== "string" || name.length === 0) return null;
+  // The released appliance GENERATES the OAuth client_id server-side
+  // (crypto.GenerateRandomString(16) → 32 lowercase-hex chars); a producer
+  // cannot inject the readable literal the retired monolith CLI used. Run-
+  // scoping therefore anchors on the reserved NAME below (which the released-
+  // API producer DOES set), and client_id is validated only as a real
+  // generated OAuth id — anything non-hex means the block is malformed.
+  if (typeof client_id !== "string" || !/^[0-9a-f]{32}$/.test(client_id)) return null;
+  if (typeof name !== "string" || name !== `E2E Sample Application ${runID}`) return null;
   if (typeof is_public !== "boolean") return null;
   return { id, clientId: client_id, name, isPublic: is_public };
 }
 
 /**
- * Non-secret subset of the seeded CONFIDENTIAL OAuth client written by
- * the IDP fixture CLI alongside the public sample client. The fields
- * mirror exactly the four fields `cli.FixtureConfidentialSampleClientBlock`
- * writes into the JSON envelope: `id`, `client_id`, `name`, `is_public`.
- * NEVER expose `client_secret`, `client_secret_hash`, `private_key`,
- * inline `jwks`, signing material, `access_token`, `refresh_token`, or
- * any other credential-shaped field — the IDP fixture envelope does
- * not write them, and a regression that started doing so would
- * surface in the IDP-side Go test
- * TestFixtureConfidentialSampleClientBlock_NeverIncludesSecretMaterial.
+ * Non-secret subset of the seeded CONFIDENTIAL OAuth client the released-API
+ * producer writes alongside the public sample client. The fields are
+ * `id`, `client_id`, `name`, `is_public`. NEVER expose `client_secret`,
+ * `client_secret_hash`, `private_key`, inline `jwks`, signing material,
+ * `access_token`, `refresh_token`, or any other credential-shaped field — the
+ * producer creates the client, DISCARDS the one-time client_secret the API
+ * returns, and never writes secret material into the envelope. (The rotation
+ * spec mints a fresh secret at test time via the UI; it never reads a seeded
+ * one.)
  */
 export interface OrgAdminFixtureConfidentialSampleClient {
   id: string;
@@ -376,11 +415,11 @@ export interface OrgAdminFixtureConfidentialSampleClient {
 }
 
 /**
- * Returns the disposable CONFIDENTIAL OAuth client the IDP fixture
- * CLI seeded alongside the fixture organization, when the dynamic
+ * Returns the disposable CONFIDENTIAL OAuth client the released-API
+ * producer seeded alongside the fixture organization, when the dynamic
  * fixture file is present and valid. Returns null when the file is
  * absent (durable-env mode) OR when the envelope was written by a
- * pre-confidential-client IDP build (the field is optional on the
+ * pre-confidential-client producer (the field is optional on the
  * envelope by design, so older fixtures still round-trip cleanly
  * through validateFixture).
  *
@@ -398,12 +437,12 @@ export interface OrgAdminFixtureConfidentialSampleClient {
  *   - The id is validated against a narrow UUID-shape regex; a non-
  *     UUID id is dropped fail-closed so it cannot be silently
  *     surfaced into a test URL.
- *   - The client_id is validated against the reserved
- *     `e2e-fixture-<runID>-confidential-app` pattern — anything else
- *     means the envelope was written for a different run and is
- *     fail-closed dropped.
+ *   - The released appliance generates the OAuth client_id server-side, so
+ *     client_id is validated only as a real 32-hex generated id; run-scoping
+ *     anchors on the reserved NAME below.
  *   - The name is validated against the reserved
- *     `E2E Confidential Application <runID>` pattern.
+ *     `E2E Confidential Application <runID>` pattern — anything else means the
+ *     envelope was written for a different run and is fail-closed dropped.
  *   - is_public is validated to be the boolean literal `false` — if a
  *     future regression flips the seeded client to public, the
  *     loader returns null and the confidential Playwright test
@@ -427,7 +466,10 @@ export function loadOrgAdminFixtureConfidentialSampleClient(): OrgAdminFixtureCo
   if (!isObject(block)) return null;
   const { id, client_id, name, is_public } = block as Record<string, unknown>;
   if (typeof id !== "string" || !/^[0-9a-fA-F-]{32,36}$/.test(id)) return null;
-  if (typeof client_id !== "string" || client_id !== `e2e-fixture-${runID}-confidential-app`) {
+  // Server-generated OAuth client_id (see the public-client loader): validated
+  // as a real 32-hex id, not a reserved literal. Run-scoping anchors on the
+  // reserved NAME check below, which the released-API producer sets.
+  if (typeof client_id !== "string" || !/^[0-9a-f]{32}$/.test(client_id)) {
     return null;
   }
   if (typeof name !== "string" || name !== `E2E Confidential Application ${runID}`) {
@@ -448,15 +490,17 @@ export function fixtureDirectory(): string {
 }
 
 /**
- * Non-secret subset of the seeded API resource written by the IDP
- * fixture CLI alongside the org + admin + sample OAuth clients. Mirrors
- * exactly the five fields cli.FixtureAPIResourceBlock writes into the
- * JSON envelope: id, audience, name, active, token_ttl_secs. NEVER
- * expose resource_secret, resource_secret_hash, private_key, inline
- * jwks, signing material, access_token, refresh_token, or any other
- * credential-shaped field — the IDP fixture envelope does not write
- * them, and a regression that started doing so would surface in the
- * IDP-side Go test TestFixtureAPIResourceBlock_NeverIncludesSecretMaterial.
+ * Non-secret subset of a seeded API resource: id, audience, name, active,
+ * token_ttl_secs. NEVER expose resource_secret, resource_secret_hash,
+ * private_key, inline jwks, signing material, access_token, refresh_token, or
+ * any other credential-shaped field.
+ *
+ * NOTE: the released OSS v0.3.0 producer does NOT write an api_resource block —
+ * the whole /api/v1/api-resources admin surface is site_admin-gated on OSS
+ * (mw.RequireSiteAdmin), so an org_admin can neither create nor read one. This
+ * loader consequently returns null and the org-admin-api-resources
+ * [dynamic mode only] specs self-skip. The loader is retained as the consumer
+ * contract for an overlay that widens api-resources to org_admin.
  */
 export interface OrgAdminFixtureApiResource {
   id: string;
@@ -467,12 +511,13 @@ export interface OrgAdminFixtureApiResource {
 }
 
 /**
- * Returns the disposable API resource the IDP fixture CLI seeded
- * alongside the fixture organization, when the dynamic fixture file is
- * present and valid. Returns null when the file is absent (durable-env
- * mode) OR when the envelope was written by a pre-api-resource IDP
- * build (the field is optional on the envelope by design, so older
- * fixtures still round-trip cleanly through validateFixture).
+ * Returns a disposable API resource block when the dynamic fixture file is
+ * present and carries one. Returns null when the file is absent (durable-env
+ * mode) OR when no api_resource block was written — which is the case on the
+ * released OSS appliance, where the api-resources admin surface is
+ * site_admin-gated and the producer seeds no such block (see the interface
+ * note above). The block is optional on the envelope by design, so a fixture
+ * without it still round-trips cleanly through validateFixture.
  *
  * SECURITY:
  *   - Returns ONLY non-secret identifiers: id (opaque UUID used as the

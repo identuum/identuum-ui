@@ -21,6 +21,11 @@
  *   5. org_admin first-login TOTP enrolment CAPTURES the server-generated
  *      secret — the released API never accepts an injected secret, so the
  *      fixture's totp_secret is whatever the server minted, captured once.
+ *   6. FIXTURE-DEPTH (Order B): the org_admin seeds the tenant-owned OAuth
+ *      clients its [dynamic mode only] specs consume — a public client and a
+ *      confidential client — over the same released API, discarding the
+ *      one-time secret the confidential create returns. (API resources are NOT
+ *      seeded: that admin surface is site_admin-gated on OSS.)
  *
  * SECURITY: passwords and the captured TOTP secret live only in the envelope
  * the loader reads (mode 0600, gitignored e2e/.auth/). This module never
@@ -46,7 +51,14 @@ export interface FixtureEnvelope {
   site_admin: { email: string; password: string; totp_secret: string };
   organization: { name: string; slug: string; domain: string; id: string };
   org_admin: { email: string; password: string; totp_secret: string; user_id: string };
-  org_user: { email: string; password: string; user_id: string };
+  org_user: { email: string; password: string; totp_secret: string; user_id: string };
+  // FIXTURE-DEPTH (Order B) — tenant-owned OAuth clients the org_admin
+  // [dynamic mode only] specs consume. Never carry secret material: the public
+  // sample client has no secret, and the confidential client discards the
+  // one-time secret the create API returns. (No api_resource block: that admin
+  // surface is site_admin-gated on OSS — see the createClient note below.)
+  sample_client: { id: string; client_id: string; name: string; is_public: boolean };
+  confidential_sample_client: { id: string; client_id: string; name: string; is_public: boolean };
 }
 
 interface Json {
@@ -204,11 +216,16 @@ async function createOrg(
   // org-liveness boundary (P0-3) refuses login for every user in a
   // non-operational org — surfacing as an opaque invalid_credentials that
   // looks like a wrong password but is a dead tenant.
+  //
+  // mfa_policy:"required" so EVERY user type is TOTP-enrolled, not just the
+  // admins. TOTP enrolment is demanded of admins by default; a required org
+  // policy extends that to org_users, so all three fixture identities have a
+  // captured TOTP secret and the suite covers TOTP login for each.
   const res = await api(
     base,
     "POST",
     "/api/v1/organizations",
-    { name, domain, slug, active: true },
+    { name, domain, slug, active: true, mfa_policy: "required" },
     bearer
   );
   must(res.status === 201, `create org → ${res.status}`);
@@ -242,6 +259,63 @@ async function createVerifiedUser(
   must(verify.status >= 200 && verify.status < 300, `verify ${role} → ${verify.status}`);
   return id;
 }
+
+interface SeededClient {
+  id: string;
+  client_id: string;
+  name: string;
+  is_public: boolean;
+}
+
+/**
+ * Seeds one OAuth client in the fixture org via the org_admin bearer — the
+ * tenant-owned surface an org_admin manages for its OWN org (the handler pins
+ * organization_id to the actor's org). The released API GENERATES the
+ * client_id server-side (crypto random, 32 hex); a caller cannot inject the
+ * readable literal the retired monolith CLI used, so the envelope carries the
+ * server's real client_id and the loader anchors run-scoping on the reserved
+ * NAME. The seeded redirect URI + scope are the operator-safe loopback values
+ * the applications specs assert verbatim. For a confidential client the create
+ * API returns a one-time client_secret; it is DISCARDED here — the envelope
+ * never stores client secrets.
+ */
+async function createClient(
+  base: string,
+  bearer: string,
+  name: string,
+  isPublic: boolean
+): Promise<SeededClient> {
+  const res = await api(
+    base,
+    "POST",
+    "/api/v1/clients",
+    {
+      name,
+      redirect_uris: ["http://localhost:7104/callback"],
+      scope: "openid profile email",
+      is_public: isPublic,
+    },
+    bearer
+  );
+  must(res.status === 201, `create client "${name}" → ${res.status}, want 201`);
+  const client = (res.json.client as Json) ?? {};
+  const id = (client.id as string) ?? "";
+  const clientId = (client.client_id as string) ?? "";
+  must(id.length > 0 && clientId.length > 0, `create client "${name}" returned no id/client_id`);
+  // is_public is not echoed by the safe client shape; it is exactly what we
+  // requested, so record the requested value.
+  return { id, client_id: clientId, name, is_public: isPublic };
+}
+
+// NOTE (Order B / Order C): NO API-resource seed. On the released OSS v0.3.0
+// appliance the ENTIRE /api/v1/api-resources admin surface is gated by
+// mw.RequireSiteAdmin() (create AND read), so an org_admin gets 403 — the
+// org-admin API-resources UI surface (built against a wider org_admin contract)
+// is unreachable on OSS. Seeding cannot fix a backend authz gate, so the
+// org-admin-api-resources [dynamic mode only] specs stay justified SKIPs
+// (loader returns null → explicit skip) rather than being forced. Service
+// accounts likewise need no seed: both service-account dynamic specs create +
+// delete their OWN SA (fixture-org CASCADE cleanup).
 
 /**
  * Builds the full fixture envelope against the released appliance at `base`.
@@ -286,6 +360,30 @@ export async function buildFixtureEnvelope(
     org.id
   );
 
+  // Capture the org_user's TOTP secret via first-login enrolment too. The org's
+  // required MFA policy makes enrolment demanded for org_users as well, so all
+  // three fixture identities carry a captured secret and the suite covers TOTP
+  // login for site_admin, org_admin, AND org_user.
+  const orgUser = await firstLoginBearerAsync(base, orgUserEmail, ORG_USER_PASSWORD);
+
+  // FIXTURE-DEPTH (THE-ALL-GREEN-SUITE Order B): seed the tenant-owned OAuth
+  // clients the org_admin [dynamic mode only] specs consume — a PUBLIC client
+  // and a CONFIDENTIAL client — both created with the org_admin's OWN authority
+  // over its OWN org (POST /api/v1/clients pins organization_id to the actor).
+  // API resources are NOT seeded (site_admin-gated on OSS; see the note above).
+  const sampleClient = await createClient(
+    base,
+    orgAdmin.bearer,
+    `E2E Sample Application ${runId}`,
+    true
+  );
+  const confidentialClient = await createClient(
+    base,
+    orgAdmin.bearer,
+    `E2E Confidential Application ${runId}`,
+    false
+  );
+
   return {
     fixture_marker: E2E_FIXTURE_MARKER,
     schema_version: E2E_FIXTURE_SCHEMA_VERSION,
@@ -302,7 +400,14 @@ export async function buildFixtureEnvelope(
       totp_secret: orgAdmin.totpSecret,
       user_id: orgAdminId,
     },
-    org_user: { email: orgUserEmail, password: ORG_USER_PASSWORD, user_id: orgUserId },
+    org_user: {
+      email: orgUserEmail,
+      password: ORG_USER_PASSWORD,
+      totp_secret: orgUser.totpSecret,
+      user_id: orgUserId,
+    },
+    sample_client: sampleClient,
+    confidential_sample_client: confidentialClient,
   };
 }
 

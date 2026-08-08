@@ -32,7 +32,7 @@
 
 import { statSync } from "node:fs";
 import type { BrowserContext, Page } from "@playwright/test";
-import { loadOrgAdminFixture, loadSiteAdminFixture } from "./fixture";
+import { loadOrgAdminFixture, loadOrgUserFixture, loadSiteAdminFixture } from "./fixture";
 import { generateTOTP } from "./totp";
 
 // ── Site-admin credentials ────────────────────────────────────────────────────
@@ -94,6 +94,23 @@ const ORG_ADMIN_TOTP_SECRET =
 
 /** True when org_admin auth credentials are absent from BOTH sources. */
 export const skipOrgAdminTests = !ORG_ADMIN_EMAIL || !ORG_ADMIN_PASSWORD;
+
+// ── Org-user credentials (dynamic fixture; the third credential type) ─────────
+//
+// A regular org_user in the fixture org, TOTP-enrolled (the fixture org's MFA
+// policy is required), so the suite covers a full password+TOTP login for a
+// non-admin identity too. Env-var fallback for durable mode.
+const dynamicOrgUserFixture = loadOrgUserFixture();
+
+const ORG_USER_EMAIL =
+  dynamicOrgUserFixture?.email ?? process.env.IDENTUUM_TEST_ORG_USER_EMAIL ?? "";
+const ORG_USER_PASSWORD =
+  dynamicOrgUserFixture?.password ?? process.env.IDENTUUM_TEST_ORG_USER_PASSWORD ?? "";
+const ORG_USER_TOTP_SECRET =
+  dynamicOrgUserFixture?.totpSecret ?? process.env.IDENTUUM_TEST_ORG_USER_TOTP_SECRET ?? "";
+
+/** True when org_user auth credentials (incl. TOTP) are absent from both sources. */
+export const skipOrgUserTests = !ORG_USER_EMAIL || !ORG_USER_PASSWORD || !ORG_USER_TOTP_SECRET;
 
 // ── Per-account TOTP cooldown ─────────────────────────────────────────────────
 //
@@ -183,6 +200,7 @@ async function waitForSafeTOTPWindow(email: string, page: Page): Promise<void> {
 
 const SITE_ADMIN_SESSION_FILE = "/tmp/identuum-site-admin-session.json";
 const ORG_ADMIN_SESSION_FILE = "/tmp/identuum-org-admin-session.json";
+const ORG_USER_SESSION_FILE = "/tmp/identuum-org-user-session.json";
 // Use saved session only if it is younger than this (access_token TTL is 900s)
 const SESSION_MAX_AGE_MS = 600_000; // 10 minutes — well within the 900s access token TTL
 
@@ -511,6 +529,38 @@ export async function loginAsOrgAdmin(page: Page): Promise<void> {
     totpLastSuccessMs.set(ORG_ADMIN_EMAIL, Date.now());
     saveCooldownState(totpLastSuccessMs);
   }
+}
+
+/**
+ * Logs in as a regular org_user (the third credential type) with password +
+ * TOTP, landing on /dashboard. The fixture org has a required MFA policy, so
+ * the TOTP step always appears; this helper enforces it (never tolerates its
+ * absence). Callers must check `skipOrgUserTests` first and allow ≥90s in the
+ * hook for the TOTP cooldown.
+ */
+export async function loginAsOrgUser(page: Page): Promise<void> {
+  const ctx = page.context();
+  const restored = await tryRestoreSession(ctx, ORG_USER_SESSION_FILE);
+  if (restored) return;
+
+  await waitForSafeTOTPWindow(ORG_USER_EMAIL, page);
+
+  await page.goto("/login");
+  const emailInput = page.getByLabel("Email or domain");
+  await emailInput.fill(ORG_USER_EMAIL);
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  const passwordInput = page.getByLabel("Password");
+  await passwordInput.waitFor({ state: "visible" });
+  await passwordInput.fill(ORG_USER_PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  // The fixture org requires MFA, so the TOTP step is mandatory for org_users.
+  await completeTOTPWithRetry(page, ORG_USER_TOTP_SECRET, /\/dashboard/);
+
+  await saveSession(ctx, ORG_USER_SESSION_FILE);
+  totpLastSuccessMs.set(ORG_USER_EMAIL, Date.now());
+  saveCooldownState(totpLastSuccessMs);
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
