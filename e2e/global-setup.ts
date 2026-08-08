@@ -1,10 +1,16 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { buildFixtureEnvelope, composeCommand, readSetupCode } from "./helpers/appliance-fixture";
+import {
+  buildFixtureEnvelope,
+  composeCommand,
+  readSetupCode,
+  totpLoginWorks,
+} from "./helpers/appliance-fixture";
 import {
   fixtureDirectory,
   isDynamicFixtureModeRequested,
+  loadSiteAdminFixture,
   resolveFixturePath,
 } from "./helpers/fixture";
 
@@ -41,10 +47,11 @@ const INTER_RUN_RECOVERY_MS = 5_000;
 // The released appliance the fixtures are built against.
 const IDP_BASE_URL = process.env.IDENTUUM_IDP_BASE_URL ?? "http://localhost:7113";
 const E2E_COMPOSE_FILE = path.join(__dirname, "docker-compose.e2e.yml");
-const IDP_SERVICE = "identuum-idp";
-// Where the fixture org_id is stashed so teardown can purge it without re-reading
-// the (secret-bearing) envelope.
-const ORG_HANDLE_FILE = path.join(fixtureDirectory(), "e2e-fixture-org.json");
+// The Docker Compose SERVICE name in e2e/docker-compose.e2e.yml (a compose-file
+// label, not the product/repo name). It IS identuum-idp-oss — the released OSS
+// appliance — kept explicit here so it can never be mistaken for the retired
+// pre-split `identuum-idp` monolith.
+const IDP_SERVICE = "identuum-idp-oss";
 
 export default async function globalSetup() {
   try {
@@ -82,18 +89,35 @@ export default async function globalSetup() {
 }
 
 /**
- * Brings up the released appliance (reusing a healthy one already on
- * IDP_BASE_URL) and builds the fixture envelope via its HTTP API.
+ * REUSE-OR-REBUILD. Credentials stop churning between runs
+ * (THE-ALL-GREEN-SUITE): if a valid envelope exists AND its site_admin can
+ * still log in against the running appliance, reuse both — the envelope file is
+ * left untouched (mtime unchanged) and no `down`/`up` runs. Only when the
+ * envelope is absent OR its credentials no longer authenticate does this
+ * recreate a fresh appliance and build a new envelope. This is why reuse must
+ * NOT `down` a healthy appliance: the saved credentials exist only inside the
+ * appliance that minted them.
+ *
+ * NOTE: the isolated e2e ui-runtime config (localhost-only, no
+ * host.docker.internal) is written and wired to the webServer in
+ * playwright.config.ts — Playwright launches the webServer before this
+ * globalSetup runs, so a config chosen here would arrive too late.
  */
 async function orchestrateReleasedApplianceFixture(): Promise<void> {
   const hostFixtureDir = fixtureDirectory();
   fs.mkdirSync(hostFixtureDir, { recursive: true, mode: 0o700 });
+  const fixturePath = resolveFixturePath();
 
-  // NOTE: the isolated e2e ui-runtime config (localhost-only, no
-  // host.docker.internal) is written and wired to the webServer in
-  // playwright.config.ts — it MUST be, because Playwright launches the
-  // webServer before this globalSetup runs, so a config chosen here would
-  // arrive too late for the spawned `next dev`.
+  // Fast path: a saved envelope whose site_admin still authenticates against a
+  // healthy appliance. No appliance churn, no credential regeneration.
+  if (fs.existsSync(fixturePath) && (await idpHealthy())) {
+    const sa = safeLoadSiteAdmin();
+    if (sa && (await totpLoginWorks(IDP_BASE_URL, sa.email, sa.password, sa.totpSecret))) {
+      process.stdout.write("[e2e setup] reusing the existing valid fixture (credentials stable).\n");
+      return;
+    }
+    process.stdout.write("[e2e setup] saved fixture is stale/invalid — rebuilding.\n");
+  }
 
   const compose = composeCommand(E2E_COMPOSE_FILE);
   if (!compose) {
@@ -104,12 +128,9 @@ async function orchestrateReleasedApplianceFixture(): Promise<void> {
   }
   const [prog, ...pre] = compose;
 
-  // ALWAYS a FRESH appliance in dynamic mode. The appliance is STATEFUL (it
-  // holds setup + fixture rows), so "reuse if healthy" — right for the
-  // stateless UI dev server — is wrong here: a reused, already-set-up appliance
-  // has no setup code and its site_admin is already enrolled, so the fixture
-  // build cannot run. `down` (no -v) then `up` gives a guaranteed setup_required
-  // appliance; the volume-less Postgres means a fresh DB WITHOUT `down -v`.
+  // Fresh appliance when we must rebuild. The appliance is STATEFUL, so `down`
+  // (no -v) then `up` gives a guaranteed setup_required appliance; the
+  // volume-less Postgres means a fresh DB WITHOUT `down -v`.
   process.stdout.write("[e2e setup] (re)creating a fresh released appliance (v0.3.0)...\n");
   try {
     execFileSync(prog, [...pre, "down"], { stdio: ["ignore", "inherit", "inherit"] });
@@ -123,25 +144,26 @@ async function orchestrateReleasedApplianceFixture(): Promise<void> {
   await waitForIdpHealthy(90_000);
 
   const setupCode = readSetupCode(compose, IDP_SERVICE);
-
   const runId = randomRunId();
   process.stdout.write("[e2e setup] building org/admin/user fixtures via the released API...\n");
   const envelope = await buildFixtureEnvelope(IDP_BASE_URL, runId, setupCode);
 
-  const fixturePath = resolveFixturePath();
   fs.writeFileSync(fixturePath, `${JSON.stringify(envelope, null, 2)}\n`, { mode: 0o600 });
   try {
     fs.chmodSync(fixturePath, 0o600);
   } catch {
     /* bind-mount platforms may reject chmod; the file is gitignored regardless */
   }
-  // Non-secret org handle for teardown (org_id + run_id only — no credentials).
-  fs.writeFileSync(
-    ORG_HANDLE_FILE,
-    `${JSON.stringify({ org_id: envelope.organization.id, run_id: runId })}\n`,
-    { mode: 0o600 }
-  );
   process.stdout.write(`[e2e setup] fixture ready (run ${runId}).\n`);
+}
+
+/** loadSiteAdminFixture, swallowing a malformed-envelope throw as "no reuse". */
+function safeLoadSiteAdmin(): { email: string; password: string; totpSecret: string } | null {
+  try {
+    return loadSiteAdminFixture();
+  } catch {
+    return null;
+  }
 }
 
 async function idpHealthy(): Promise<boolean> {

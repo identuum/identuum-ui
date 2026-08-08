@@ -33,7 +33,7 @@ services:
       start_period: 10s
     # No `volumes:` — ephemeral by design (see header).
 
-  identuum-idp:
+  identuum-idp-oss:
     image: ghcr.io/identuum/identuum-idp-oss:v0.3.0
     depends_on:
       postgres:

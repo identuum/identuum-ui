@@ -1,19 +1,19 @@
 /**
- * Dynamic org-admin Playwright fixture loader.
+ * Dynamic Playwright fixture LOADER (the consumer half).
  *
- * Companion to the IDP CLI commands:
- *   identuum --e2e-create-org-admin-fixture --output <path>
- *   identuum --e2e-purge-org-fixture --fixture-file <path> --confirm-e2e-purge
- *
- * The loader reads the JSON envelope written by the IDP CLI. It validates
- * every safety invariant the IDP side enforces (marker, schema version,
- * reserved e2e-<runID> prefixes on org name/domain/admin email) and then
- * returns ONLY the three credentials login.ts needs (email, password,
- * totp_secret) — no audit metadata, no UUIDs, no organization JSON.
+ * The producer is `e2e/helpers/appliance-fixture.ts`, driven by
+ * `e2e/global-setup.ts`, which builds the envelope against the RELEASED
+ * appliance's HTTP API (THE-RELEASED-CONTRACT). This module only READS and
+ * validates that envelope — it validates every safety invariant (marker, schema
+ * version, reserved e2e-<runID> prefixes on org name/domain/admin email) and
+ * returns ONLY the credentials login.ts needs — no audit metadata, no UUIDs,
+ * no organization JSON. (Prior to THE-RELEASED-CONTRACT the producer was the
+ * retired `identuum --e2e-create-org-admin-fixture` monolith CLI; the envelope
+ * shape is unchanged, so this loader was untouched by that migration.)
  *
  * Resolution order (path):
  *   1. process.env.IDENTUUM_E2E_FIXTURE_FILE — explicit override.
- *   2. <UI_REPO>/e2e/.auth/e2e-org-admin-fixture.json — default.
+ *   2. <UI_REPO>/e2e/.auth/e2e-org-admin-fixture.json — the ONE canonical path.
  *
  * SECURITY:
  *   - NEVER console.log the parsed fixture contents.

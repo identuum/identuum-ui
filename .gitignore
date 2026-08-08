@@ -33,8 +33,12 @@ next-env.d.ts
 # test artifacts
 playwright-report/
 test-results/
-# Local E2E fixture material written by `identuum --e2e-create-org-admin-fixture`.
-# Contains generated password + TOTP secret. Never committed.
+# Local E2E fixture material written by the released-appliance harness
+# (e2e/global-setup.ts → e2e/helpers/appliance-fixture.ts). Holds the
+# generated fixture envelope (org/admin/user credentials + captured TOTP
+# secrets), the non-secret org handle, and the isolated e2e ui-runtime config.
+# Never committed. (Was the pre-split `identuum --e2e-create-org-admin-fixture`
+# CLI, retired in THE-RELEASED-CONTRACT.)
 e2e/.auth/
 
 # local agent instructions

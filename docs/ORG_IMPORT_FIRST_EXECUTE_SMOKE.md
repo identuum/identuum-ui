@@ -41,7 +41,7 @@ Create a local env file (already covered by `.gitignore` —
 `.smoke-org-import.env` and `*.smoke.env` are excluded):
 
 ```sh
-cd /Users/odemir/Development/2025-11/identuum/identuum-ui
+# from this repository's root (identuum-ui/)
 
 cat > .smoke-org-import.env <<'EOF'
 # IDP site_admin login

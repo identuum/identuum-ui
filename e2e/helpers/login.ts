@@ -71,10 +71,11 @@ export const SKIP_AUTH_MSG =
 // ── Org-admin credentials ─────────────────────────────────────────────────────
 //
 // Resolution precedence:
-//   1. Dynamic fixture file written by `identuum --e2e-create-org-admin-fixture`.
-//      Loaded at module init via loadOrgAdminFixture(). The loader returns
-//      null when the file is absent (durable-env mode); throws when the
-//      file exists but is malformed.
+//   1. Dynamic fixture envelope built by the released-appliance harness
+//      (e2e/global-setup.ts → e2e/helpers/appliance-fixture.ts). Loaded at
+//      module init via loadOrgAdminFixture(). The loader returns null when the
+//      envelope is absent (durable-env mode); throws when it exists but is
+//      malformed.
 //   2. IDENTUUM_TEST_ORG_ADMIN_EMAIL / _PASSWORD / _TOTP_SECRET env vars
 //      (durable mode — see identuum-ui/docs/LOCAL_ORG_ADMIN_PLAYWRIGHT_FIXTURE.md).
 //

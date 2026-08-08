@@ -159,6 +159,39 @@ async function firstLoginBearerAsync(
   return { bearer, totpSecret: secret };
 }
 
+/**
+ * Logs an ALREADY-ENROLLED account in with a KNOWN TOTP secret
+ * (password → mfa_required → verify). Used by the reuse probe: it proves a
+ * saved envelope's credentials still authenticate against the running
+ * appliance WITHOUT re-enrolling. Returns true on a 200 with a bearer.
+ *
+ * SECURITY: takes the secret only as an argument, returns a boolean; never
+ * logs the secret or the password.
+ */
+export async function totpLoginWorks(
+  base: string,
+  email: string,
+  password: string,
+  totpSecret: string
+): Promise<boolean> {
+  try {
+    const login = await api(base, "POST", "/api/v1/auth/login", { email, password });
+    if (login.status !== 401 || !login.json.session_id) return false;
+    const sessionId = login.json.session_id as string;
+    // Already-enrolled accounts return mfa_required → verify at /login/mfa.
+    for (const win of [0, 1]) {
+      const verify = await api(base, "POST", "/api/v1/auth/login/mfa", {
+        session_id: sessionId,
+        code: generateTOTP(totpSecret, win),
+      });
+      if (verify.status === 200 && (verify.json.access_token || verify.json.token)) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 async function createOrg(
   base: string,
   bearer: string,

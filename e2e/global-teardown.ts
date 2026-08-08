@@ -1,41 +1,24 @@
-import { existsSync, rmSync, writeFileSync } from "node:fs";
-import path from "node:path";
-import {
-  fixtureDirectory,
-  isDynamicFixtureModeRequested,
-  resolveFixturePath,
-} from "./helpers/fixture";
+import { writeFileSync } from "node:fs";
 
 const RUN_END_FILE = "/tmp/identuum-run-end.json";
-const ORG_HANDLE_FILE = path.join(fixtureDirectory(), "e2e-fixture-org.json");
 
 /**
- * Playwright global teardown — THE-RELEASED-CONTRACT (2026-08-08).
+ * Playwright global teardown — THE-ALL-GREEN-SUITE (2026-08-08).
  *
- * Pre-split machinery is gone (no /app/identuum, no /e2e-auth, no monolith
- * compose path). The disposable-appliance model makes teardown trivial:
- * global-setup RECREATES a fresh volume-less appliance on every dynamic run
- * (`down` then `up`), so the fixture organization is reset wholesale on the
- * next run — there is nothing to soft-delete here, and no `down -v` is ever
- * used (the Postgres has no named volume). Teardown only removes the local
- * fixture files and records the run-end timestamp for the inter-run gap.
+ * Teardown deliberately PRESERVES the fixture envelope and leaves the appliance
+ * running. Credentials are meant to be stable across runs: the next
+ * global-setup validates the saved envelope (its site_admin login) and reuses
+ * it when still valid, rebuilding only when absent or invalid. Deleting the
+ * envelope here would force a rebuild every run — the churn this slice removes.
  *
- * The e2e appliance is deliberately LEFT RUNNING so a developer can inspect it
- * after a run; the next dynamic run's `down`+`up` recreates it fresh.
+ * The e2e appliance is volume-less, so whenever a rebuild IS needed the next
+ * global-setup's `down`+`up` gives a fresh DB — no teardown work, and never a
+ * `docker compose down -v`.
  *
- * SECURITY: never reads the fixture JSON credentials; only local file cleanup
- * and a timestamp write.
+ * The only durable action is recording the run-end timestamp for the inter-run
+ * recovery gap. No fixture JSON is read; no secret is logged.
  */
 export default async function globalTeardown() {
-  if (isDynamicFixtureModeRequested()) {
-    for (const f of [resolveFixturePath(), ORG_HANDLE_FILE]) {
-      try {
-        if (existsSync(f)) rmSync(f, { force: true });
-      } catch {
-        /* best-effort */
-      }
-    }
-  }
   try {
     writeFileSync(RUN_END_FILE, JSON.stringify({ endMs: Date.now() }), "utf-8");
   } catch {

@@ -8,31 +8,34 @@ Unauthenticated tests run without any credentials:
 npx playwright test
 ```
 
-## Recommended: dynamic org-admin fixture mode
+## Recommended: dynamic fixture mode (released appliance)
 
-**For non-destructive org-admin Playwright tests, prefer dynamic fixture
-mode.** It provisions a disposable org + org_admin pair before the run
-and hard-purges it after. No `.env.playwright.idp-oss.local` edits are required
-for the org_admin slot; the IDP CLI generates a fresh password + TOTP
-secret per run and writes them to a gitignored local file the login
-helper consumes automatically.
+**For authenticated Playwright tests, prefer dynamic fixture mode.** It stands
+up the PUBLISHED `identuum-idp-oss` appliance on a throwaway database and mints
+a disposable org + site_admin + org_admin + org_user against its HTTP API — the
+same surface a customer's appliance exposes. No sibling monolith checkout, no
+`make local-restart`, and no `.env.playwright.idp-oss.local` edits for the fixture
+slots: credentials are generated per run (or reused when still valid) and written
+to a gitignored local envelope the login helper consumes automatically.
 
-### Before the first dynamic run after pulling changes
+### Prerequisites
 
-Rebuild + restart the local IDP so the new CLI binary, migration,
-compose bind mount, and env gate are all live:
+Docker with Compose (v2 `docker compose` or legacy `docker-compose`) and the
+Playwright browser:
 
 ```sh
-cd /Users/odemir/Development/2025-11/identuum/identuum-idp
-make local-restart
-curl -s http://localhost:7113/health
+pnpm e2e:install
 ```
 
-### Run
+Everything else is automatic — `e2e/global-setup.ts` brings up
+`e2e/docker-compose.e2e.yml` (the published v0.3.0 image + a volume-less
+Postgres) and builds the fixtures. Credentials are stable across runs: a saved
+envelope whose site_admin still authenticates is reused; only an absent or
+invalid one triggers a rebuild.
+
+### Run (from this repository root)
 
 ```sh
-cd /Users/odemir/Development/2025-11/identuum/identuum-ui
-
 IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true \
   npx playwright test e2e/org-admin-smoke.spec.ts --workers=1
 
@@ -48,37 +51,28 @@ logins with the same 30-second code).
 
 ### What happens automatically
 
-1. `e2e/global-setup.ts` runs preflight diagnostics inside the IDP
-   container (`/app/identuum`, `/e2e-auth`, env gates, bind-mount
-   probe). On any failure the error message names the exact fix.
-2. `globalSetup` shells out to the IDP CLI to create the disposable
-   fixture; the JSON envelope appears briefly under
-   `identuum-ui/e2e/.auth/` with mode `0600`.
-3. `e2e/helpers/login.ts` reads the file via `loadOrgAdminFixture()` and
-   uses the generated credentials for every authenticated org_admin spec.
-4. `e2e/global-teardown.ts` shells out to the IDP CLI to hard-purge the
-   fixture organization (cascading every FK child row including
-   `audit_events`) and unlinks the host file.
+1. `e2e/global-setup.ts` brings up the published appliance via
+   `e2e/docker-compose.e2e.yml` (unless a saved envelope is still valid,
+   in which case it reuses it), then builds the fixtures against the
+   released HTTP API — setup → site_admin TOTP enrolment → org →
+   org_admin → org_user — and writes the JSON envelope under
+   `identuum-ui/e2e/.auth/` at mode `0600`.
+2. `e2e/helpers/login.ts` reads the envelope via `loadSiteAdminFixture()`
+   / `loadOrgAdminFixture()` and uses the generated credentials for every
+   authenticated spec.
+3. `e2e/global-teardown.ts` PRESERVES the envelope (credentials are stable
+   across runs) and records the run-end timestamp. The volume-less
+   appliance is reset by the next rebuild's `down`+`up`, never `down -v`.
 
 ### Security
 
 - `e2e/.auth/` is gitignored (entry in `identuum-ui/.gitignore`). The
-  fixture JSON written there must never be committed.
-- The fixture JSON contains a generated org_admin password + TOTP
-  secret while tests run. **Never `cat`, paste, screenshot, or
-  otherwise print its contents.** `globalTeardown` removes it after a
-  successful run.
+  fixture envelope written there must never be committed.
+- The envelope contains generated passwords + captured TOTP secrets.
+  **Never `cat`, paste, screenshot, or otherwise print its contents.**
 - Setting `IDENTUUM_E2E_USE_DYNAMIC_FIXTURE` to any value other than
   the literal string `"true"` is a no-op; durable env mode is
   preserved unchanged.
-
-### Detailed runbook
-
-Full prerequisites, preflight troubleshooting matrix, cleanup
-commands, audit-cascade contract, and recovery procedures live at
-[`docs/LOCAL_ORG_ADMIN_PLAYWRIGHT_FIXTURE.md`](../docs/LOCAL_ORG_ADMIN_PLAYWRIGHT_FIXTURE.md)
-(Section 9). Use that document whenever a preflight check fails or the
-fixture file appears to be orphaned.
 
 ---
 
@@ -90,8 +84,8 @@ long-lived credentials kept in `.env.playwright.idp-oss.local`.
 
 ### 1. Create `.env.playwright.idp-oss.local`
 
-Create `/Users/odemir/Development/2025-11/identuum/identuum-ui/.env.playwright.idp-oss.local`
-(or the equivalent path relative to `identuum-ui/`).
+Create `.env.playwright.idp-oss.local` at this repository's root
+(`identuum-ui/.env.playwright.idp-oss.local`).
 
 **This file is gitignored by `.env*.local` — never commit it.**
 
