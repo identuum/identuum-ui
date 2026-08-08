@@ -912,16 +912,17 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       // Step 13 — click the rotation row to drill into the dedicated
       // audit page; assert the URL carries BOTH subject_id and
       // event_type=client_secret_rotated. The row's accessible name
-      // is "View audit event client_secret_rotated for this
-      // application".
+      // is "View audit event client.secret_rotated for this
+      // application" — the released OSS DOT-FORM action name (the
+      // underscore spelling was the retired monolith's).
       const rotationRow = page.getByRole("link", {
-        name: "View audit event client_secret_rotated for this application",
+        name: "View audit event client.secret_rotated for this application",
       });
       await expect(rotationRow).toBeVisible();
       await Promise.all([page.waitForLoadState("networkidle"), rotationRow.click()]);
       expect(page.url()).toContain("/org-admin/audit");
       expect(page.url()).toContain(`subject_id=${encodeURIComponent(confidential.id)}`);
-      expect(page.url()).toContain(`event_type=${encodeURIComponent("client_secret_rotated")}`);
+      expect(page.url()).toContain(`event_type=${encodeURIComponent("client.secret_rotated")}`);
 
       // Step 14 — defence-in-depth: after navigating to the audit
       // page the captured secret value MUST STILL be absent from the

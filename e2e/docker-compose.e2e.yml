@@ -34,7 +34,10 @@ services:
     # No `volumes:` — ephemeral by design (see header).
 
   identuum-idp-oss:
-    image: ghcr.io/identuum/identuum-idp-oss:v0.3.0
+    # v0.3.1 (digest sha256:b0730238bbc3f0e046006a89a95f3dcbc188d553f6e80dc77c2acf3db0cd0700):
+    # adds is_public on client responses + the oauth_client subject on the
+    # secret-rotation audit event — the two gaps THE-ALL-GREEN-SUITE left red.
+    image: ghcr.io/identuum/identuum-idp-oss:v0.3.1
     depends_on:
       postgres:
         condition: service_healthy

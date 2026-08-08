@@ -53,6 +53,14 @@ export const APPLICATION_AUDIT_EVENT_LABELS: Record<string, string> = {
   client_deleted: "Application deleted",
   client_linked_service_account: "Service account linked",
   client_unlinked_service_account: "Service account unlinked",
+  // Released identuum-idp-oss emits DOT-FORM actions (audit.Event.Action:
+  // "client.secret_rotated" etc. — v0.3.1 subject-tags the rotation event);
+  // the underscore keys above are the retired monolith's spelling, kept for
+  // envelope compatibility. Same labels, both spellings.
+  "client.created": "Application created",
+  "client.updated": "Application updated",
+  "client.secret_rotated": "Client secret rotated",
+  "client.deleted": "Application deleted",
 };
 
 /**
