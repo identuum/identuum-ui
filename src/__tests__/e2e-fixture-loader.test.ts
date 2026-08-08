@@ -456,9 +456,11 @@ describe("loadOrgAdminFixtureSampleClient — present file", () => {
   it("returns the trimmed non-secret block when sample_client is present and valid", () => {
     const runID = "0123456789ab";
     const env = goodFixture(runID) as Record<string, unknown>;
+    // Released producer: client_id is SERVER-GENERATED (32 lowercase hex);
+    // run-scoping anchors on the reserved name.
     env.sample_client = {
       id: "11111111-1111-1111-1111-111111111111",
-      client_id: `e2e-fixture-${runID}-app`,
+      client_id: "a1b2c3d4e5f60718293a4b5c6d7e8f90",
       name: `E2E Sample Application ${runID}`,
       is_public: true,
     };
@@ -467,7 +469,7 @@ describe("loadOrgAdminFixtureSampleClient — present file", () => {
     expect(out).not.toBeNull();
     expect(out).toEqual({
       id: "11111111-1111-1111-1111-111111111111",
-      clientId: `e2e-fixture-${runID}-app`,
+      clientId: "a1b2c3d4e5f60718293a4b5c6d7e8f90",
       name: `E2E Sample Application ${runID}`,
       isPublic: true,
     });
@@ -661,9 +663,11 @@ describe("loadOrgAdminFixtureConfidentialSampleClient — present file", () => {
   it("returns the trimmed non-secret block when confidential_sample_client is present and valid", () => {
     const runID = "0123456789ab";
     const env = goodFixture(runID) as Record<string, unknown>;
+    // Released producer: client_id is SERVER-GENERATED (32 lowercase hex);
+    // run-scoping anchors on the reserved name.
     env.confidential_sample_client = {
       id: "22222222-2222-2222-2222-222222222222",
-      client_id: `e2e-fixture-${runID}-confidential-app`,
+      client_id: "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
       name: `E2E Confidential Application ${runID}`,
       is_public: false,
     };
@@ -672,7 +676,7 @@ describe("loadOrgAdminFixtureConfidentialSampleClient — present file", () => {
     expect(out).not.toBeNull();
     expect(out).toEqual({
       id: "22222222-2222-2222-2222-222222222222",
-      clientId: `e2e-fixture-${runID}-confidential-app`,
+      clientId: "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
       name: `E2E Confidential Application ${runID}`,
       isPublic: false,
     });

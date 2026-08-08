@@ -110,11 +110,15 @@ describe("Four new wire helpers — generic GET-only / no-body / no-secret invar
 // ── Per-helper explicit allowlist projection pins ───────────────────────────
 
 describe("listOrganizationIdentityProviders — explicit allowlist", () => {
-  it("GETs /api/v1/organizations/:id/identity-providers with the id URL-encoded", () => {
+  it("is CROSS-TIER: tries the plural list (CE) first, then the singular OSS route, id URL-encoded", () => {
     const body = isolateHelperBody("listOrganizationIdentityProviders");
-    expect(body).toMatch(
-      /\/api\/v1\/organizations\/\$\{encodeURIComponent\(orgID\)\}\/identity-providers/
-    );
+    // One URL-encoded org base feeds both fetches.
+    expect(body).toMatch(/\/api\/v1\/organizations\/\$\{encodeURIComponent\(orgID\)\}/);
+    expect(body).toMatch(/\$\{base\}\/identity-providers/);
+    expect(body).toMatch(/\$\{base\}\/identity-provider`/);
+    // OSS "none configured" (404 on the singular) normalizes to an EMPTY
+    // LIST, not an error.
+    expect(body).toMatch(/identity_providers:\s*\[\],\s*count:\s*0/);
   });
 
   it("projects ONLY id/name/slug/type/priority/active/created_at/updated_at — and DROPS the IDP's `config` block", () => {
@@ -141,9 +145,10 @@ describe("listOrganizationIdentityProviders — explicit allowlist", () => {
     expect(stripped).not.toMatch(/p\.claim_mapping\b/);
   });
 
-  it("routes absent/license-gated responses through the shared IDP status classifier", () => {
+  it("routes real failures through the shared IDP status classifier on BOTH tiers' paths", () => {
     const body = isolateHelperBody("listOrganizationIdentityProviders");
-    expect(body).toContain("classifyAdminReadFailure(res)");
+    expect(body).toContain("classifyAdminReadFailure(listRes)");
+    expect(body).toContain("classifyAdminReadFailure(oneRes)");
     expect(body).not.toMatch(/res\.status\s*===\s*404[\s\S]*?featureUnavailable:\s*true/);
   });
 });

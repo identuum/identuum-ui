@@ -42,8 +42,11 @@ describe("passkey-flow.spec.ts — origin-stable API calls (no relative in-page 
     expect(passkeySpec).toContain("data?.credentials");
   });
 
-  it("uses page.request for the T4 logout call", () => {
-    expect(passkeySpec).toContain('page.request.post("/api/idp/api/v1/logout")');
+  it("uses page.request for the T4 logout call, at the SERVED logout path", () => {
+    // Released OSS serves /api/v1/auth/logout; the bare /api/v1/logout of the
+    // pre-split monolith is CALLED-NOT-SERVED and must stay gone.
+    expect(passkeySpec).toContain('page.request.post("/api/idp/api/v1/auth/logout")');
+    expect(passkeySpec).not.toContain('"/api/idp/api/v1/logout"');
   });
 
   it("preserves the T1 clean-slate empty-state assertion (not weakened)", () => {

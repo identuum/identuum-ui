@@ -137,11 +137,17 @@ describe("OSS-vs-CE Playwright runtime contract — OSS-compatible specs", () =>
       expect(hasMarker, `${spec} must pin at least one OSS scaffold marker`).toBe(true);
     });
 
-    it(`${spec} explicitly asserts /authorize is NOT a successful endpoint`, () => {
+    it(`${spec} POSITIVELY pins the served authorization endpoint (validates, 400 — not the old absence negative)`, () => {
       const src = read(spec);
-      // Negative-pin pattern documenting OSS scaffold absence.
-      expect(src).toMatch(/\/authorize/);
-      expect(src).toMatch(/expect\(.+\)\.not\.toBe\(200\)/);
+      // THE-RELEASED-CONTRACT flipped this spec from scaffold-era negatives
+      // ("no /authorize") — which passed vacuously against a backend that
+      // SERVES the endpoint — to positive shipped-surface pins: the
+      // discovery-advertised authorization_endpoint answers a malformed
+      // request with a VALIDATING 400 (an absent path would 404).
+      expect(src).toMatch(/authorization_endpoint/);
+      expect(src).toMatch(/validates a malformed request \(400, not 404\)/);
+      // The scaffold-era negative pattern must stay gone.
+      expect(src).not.toMatch(/expect\(.+\)\.not\.toBe\(200\)/);
     });
   }
 });

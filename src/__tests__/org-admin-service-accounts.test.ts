@@ -138,9 +138,10 @@ describe("idp-admin-client.ts — wire-helper safety", () => {
     const fn = CLIENT_SRC.match(/export\s+async\s+function\s+deleteServiceAccount[\s\S]*?\n\}\n/);
     expect(fn).not.toBeNull();
     const body = fn?.[0] ?? "";
-    expect(body).toMatch(
-      /\/api\/v1\/organizations\/\$\{encodeURIComponent\(orgID\)\}\/service-accounts\/\$\{encodeURIComponent\(saID\)\}/
-    );
+    // Released OSS keys SA deletes by SA id at the NON-org-prefixed route;
+    // org scope is derived server-side from the actor + the SA row
+    // (cross-org reads 404 — anti-enumeration).
+    expect(body).toMatch(/\/api\/v1\/service-accounts\/\$\{encodeURIComponent\(saID\)\}/);
     expect(body).toMatch(/method:\s*"DELETE"/);
     expect(body).not.toMatch(/body:\s*JSON\.stringify/);
   });
@@ -426,19 +427,20 @@ describe("idp-admin-client.ts — linkServiceAccountToOAuthClient wire helper", 
   it("exports linkServiceAccountToOAuthClient", () => {
     expect(CLIENT_SRC).toMatch(/export\s+async\s+function\s+linkServiceAccountToOAuthClient\b/);
   });
-  it("targets the documented backend route POST /api/v1/organizations/:id/service-accounts/:sa_id/oauth-clients/:oauth_client_id/link", () => {
+  it("links via the released client-update surface: PUT /api/v1/clients/:id with { service_account_id }", () => {
     const fn = CLIENT_SRC.match(
       /export\s+async\s+function\s+linkServiceAccountToOAuthClient[\s\S]*?\n\}\n/
     );
     expect(fn).not.toBeNull();
     const body = fn?.[0] ?? "";
-    expect(body).toMatch(/method:\s*"POST"/);
-    expect(body).toMatch(/\/api\/v1\/organizations\/\$\{encodeURIComponent\(orgID\)\}/);
-    expect(body).toMatch(/\/service-accounts\/\$\{encodeURIComponent\(serviceAccountID\)\}/);
-    expect(body).toMatch(/\/oauth-clients\/\$\{encodeURIComponent\(oauthClientID\)\}\/link/);
-    // No request body / no Content-Type — the route takes path params only.
-    expect(body).not.toMatch(/body:\s*JSON\.stringify/);
-    expect(body).not.toMatch(/"Content-Type":\s*"application\/json"/);
+    // Released OSS has no per-SA link route; binding rides the client-update
+    // surface (patch semantics; confidential-only + same-org validated
+    // server-side via ValidateBindingForClient + requireClientInActorOrg).
+    expect(body).toMatch(/method:\s*"PUT"/);
+    expect(body).toMatch(/\/api\/v1\/clients\/\$\{encodeURIComponent\(oauthClientID\)\}/);
+    expect(body).toMatch(/JSON\.stringify\(\{\s*service_account_id:\s*serviceAccountID\s*\}\)/);
+    // No client-supplied org id anywhere in the URL — scope is server-derived.
+    expect(body).not.toMatch(/organizations\/\$\{encodeURIComponent\(orgID\)\}/);
   });
   it("projects ONLY the four documented safe identifiers — never a credential / hash / token field", () => {
     const fn = CLIENT_SRC.match(
@@ -446,10 +448,13 @@ describe("idp-admin-client.ts — linkServiceAccountToOAuthClient wire helper", 
     );
     expect(fn).not.toBeNull();
     const body = fn?.[0] ?? "";
+    // The released PUT returns the safeClient top-level shape; the helper
+    // projects it into the four documented identifiers (uuid ← id,
+    // identifier ← client_id).
     expect(body).toMatch(/d\?\.organization_id/);
     expect(body).toMatch(/d\?\.service_account_id/);
-    expect(body).toMatch(/d\?\.oauth_client_uuid/);
-    expect(body).toMatch(/d\?\.oauth_client_identifier/);
+    expect(body).toMatch(/oauth_client_uuid:\s*typeof d\?\.id === "string"/);
+    expect(body).toMatch(/oauth_client_identifier:\s*typeof d\?\.client_id === "string"/);
     for (const forbidden of [
       "d?.client_secret",
       "d?.client_secret_hash",
@@ -874,19 +879,18 @@ describe("idp-admin-client.ts — unlinkServiceAccountFromOAuthClient wire helpe
   it("exports unlinkServiceAccountFromOAuthClient", () => {
     expect(CLIENT_SRC).toMatch(/export\s+async\s+function\s+unlinkServiceAccountFromOAuthClient\b/);
   });
-  it("targets the documented backend route DELETE /api/v1/organizations/:id/service-accounts/:sa_id/oauth-clients/:oauth_client_id/link", () => {
+  it("unlinks via the released client-update surface: PUT /api/v1/clients/:id with the explicit nil UUID", () => {
     const fn = CLIENT_SRC.match(
       /export\s+async\s+function\s+unlinkServiceAccountFromOAuthClient[\s\S]*?\n\}\n/
     );
     expect(fn).not.toBeNull();
     const body = fn?.[0] ?? "";
-    expect(body).toMatch(/method:\s*"DELETE"/);
-    expect(body).toMatch(/\/api\/v1\/organizations\/\$\{encodeURIComponent\(orgID\)\}/);
-    expect(body).toMatch(/\/service-accounts\/\$\{encodeURIComponent\(serviceAccountID\)\}/);
-    expect(body).toMatch(/\/oauth-clients\/\$\{encodeURIComponent\(oauthClientID\)\}\/link/);
-    // No request body / no Content-Type — the route takes path params only.
-    expect(body).not.toMatch(/body:\s*JSON\.stringify/);
-    expect(body).not.toMatch(/"Content-Type":\s*"application\/json"/);
+    // ClientService.UpdateClient treats a non-nil pointer to uuid.Nil as
+    // "remove the binding" (patch semantics leave every other field alone).
+    expect(body).toMatch(/method:\s*"PUT"/);
+    expect(body).toMatch(/\/api\/v1\/clients\/\$\{encodeURIComponent\(oauthClientID\)\}/);
+    expect(body).toMatch(/service_account_id:\s*"00000000-0000-0000-0000-000000000000"/);
+    expect(body).not.toMatch(/organizations\/\$\{encodeURIComponent\(orgID\)\}/);
   });
   it("maps 400/403/404/409 to safe operator-facing states", () => {
     const fn = CLIENT_SRC.match(
@@ -1135,17 +1139,18 @@ describe("idp-admin-client.ts — listServiceAccountOAuthClients wire helper", (
   it("exports listServiceAccountOAuthClients", () => {
     expect(CLIENT_SRC).toMatch(/export\s+async\s+function\s+listServiceAccountOAuthClients\b/);
   });
-  it("targets GET /api/v1/organizations/:id/service-accounts/:sa_id/oauth-clients", () => {
+  it("derives the linked set from the released org client list, filtered by service_account_id", () => {
     const fn = CLIENT_SRC.match(
       /export\s+async\s+function\s+listServiceAccountOAuthClients[\s\S]*?\n\}\n/
     );
     expect(fn).not.toBeNull();
     const body = fn?.[0] ?? "";
+    // Released OSS has no per-SA clients route; the org-scoped client list
+    // carries service_account_id on each row (the list handler org-pins an
+    // org_admin actor server-side).
     expect(body).toMatch(/method:\s*"GET"/);
-    expect(body).toMatch(/\/api\/v1\/organizations\/\$\{encodeURIComponent\(orgID\)\}/);
-    expect(body).toMatch(
-      /\/service-accounts\/\$\{encodeURIComponent\(serviceAccountID\)\}\/oauth-clients/
-    );
+    expect(body).toMatch(/\/api\/v1\/clients\?/);
+    expect(body).toMatch(/r\.service_account_id === serviceAccountID/);
     // No request body / no Content-Type — pure GET.
     expect(body).not.toMatch(/body:\s*JSON\.stringify/);
     expect(body).not.toMatch(/"Content-Type":\s*"application\/json"/);
@@ -1180,13 +1185,15 @@ describe("idp-admin-client.ts — listServiceAccountOAuthClients wire helper", (
       expect(body).not.toContain(forbidden);
     }
   });
-  it("returns [] for absent / non-array oauth_clients (helper must never produce null to callers)", () => {
+  it("returns [] for absent / non-array clients (helper must never produce null to callers)", () => {
     const fn = CLIENT_SRC.match(
       /export\s+async\s+function\s+listServiceAccountOAuthClients[\s\S]*?\n\}\n/
     );
     const body = fn?.[0] ?? "";
-    expect(body).toMatch(/Array\.isArray\(d\?\.oauth_clients\)/);
-    expect(body).toMatch(/\[\]/);
+    // Released list shape is { clients: [...] }; a missing/non-array key
+    // degrades to an empty list, never null.
+    expect(body).toMatch(/Array\.isArray\(d\?\.clients\)/);
+    expect(body).toMatch(/:\s*\[\]/);
     expect(body).toMatch(/oauth_clients:\s*projected/);
   });
   it("maps 400/403/404 safely (no other 4xx leak)", () => {
@@ -1360,16 +1367,18 @@ describe("idp-admin-client.ts — disableServiceAccount / enableServiceAccount w
     expect(CLIENT_SRC).toMatch(/export\s+async\s+function\s+disableServiceAccount\b/);
     expect(CLIENT_SRC).toMatch(/export\s+async\s+function\s+enableServiceAccount\b/);
   });
-  it("targets the documented backend routes via the shared callServiceAccountLifecycle", () => {
+  it("targets the released lifecycle routes via the shared callServiceAccountLifecycle", () => {
     const fn = CLIENT_SRC.match(/async\s+function\s+callServiceAccountLifecycle[\s\S]*?\n\}\n/);
     expect(fn).not.toBeNull();
     const body = fn?.[0] ?? "";
+    // Released OSS mounts disable/enable at the NON-org-prefixed
+    // POST /api/v1/service-accounts/:id/{segment}; org scope is derived
+    // server-side from the actor + the SA row.
     expect(body).toMatch(/method:\s*"POST"/);
-    expect(body).toMatch(/\/api\/v1\/organizations\/\$\{encodeURIComponent\(orgID\)\}/);
     expect(body).toMatch(
-      /\/service-accounts\/\$\{encodeURIComponent\(serviceAccountID\)\}\/\$\{segment\}/
+      /\/api\/v1\/service-accounts\/\$\{encodeURIComponent\(serviceAccountID\)\}\/\$\{segment\}/
     );
-    expect(body).toMatch(/segment\s*===\s*"disable"|segment:\s*"disable"/);
+    expect(body).not.toMatch(/organizations\/\$\{encodeURIComponent\(orgID\)\}/);
     // No request body / no Content-Type — POST takes path params only.
     expect(body).not.toMatch(/body:\s*JSON\.stringify/);
     expect(body).not.toMatch(/"Content-Type":\s*"application\/json"/);
@@ -1620,14 +1629,17 @@ describe("types.ts — OrgServiceAccountItem now exposes active", () => {
 // ── Edit Details slice (identuum-20260530-service-account-edit-ui) ─────────
 
 describe("idp-admin-client.ts — updateServiceAccount wire helper", () => {
-  it("targets PATCH /api/v1/organizations/:id/service-accounts/:sa_id", () => {
+  it("targets the released update route PUT /api/v1/service-accounts/:id", () => {
     const fn = CLIENT_SRC.match(/export\s+async\s+function\s+updateServiceAccount[\s\S]*?\n\}\n/);
     expect(fn).not.toBeNull();
     const body = fn?.[0] ?? "";
-    expect(body).toMatch(/method:\s*"PATCH"/);
+    // Released OSS updates a service account with PUT at the NON-org-prefixed
+    // route; org scope is derived server-side from the actor + the SA row.
+    expect(body).toMatch(/method:\s*"PUT"/);
     expect(body).toMatch(
-      /\/api\/v1\/organizations\/\$\{encodeURIComponent\(orgID\)\}\/service-accounts\/\$\{encodeURIComponent\(serviceAccountID\)\}/
+      /\/api\/v1\/service-accounts\/\$\{encodeURIComponent\(serviceAccountID\)\}/
     );
+    expect(body).not.toMatch(/organizations\/\$\{encodeURIComponent\(orgID\)\}/);
     expect(body).toMatch(/"Content-Type":\s*"application\/json"/);
     expect(body).toMatch(/body:\s*JSON\.stringify/);
   });
