@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 
 // ── Local env autoload ────────────────────────────────────────────────────────
@@ -127,8 +127,52 @@ if (process.env.IDENTUUM_E2E_CE_CUSTOMER_SMOKE === "1") {
 // baseURL is composed automatically — useful for one-spec smoke runs
 // that need source-fresh code without touching the standing dev
 // container.
-const e2ePort = process.env.IDENTUUM_E2E_PORT ?? "7104";
-const e2eBaseURL = process.env.IDENTUUM_E2E_BASE_URL ?? `http://localhost:${e2ePort}`;
+// SINGLE SOURCE for the UI port and base URL (THE-RELEASED-CONTRACT,
+// 2026-08-08). These were two independent env vars — IDENTUUM_E2E_PORT drove
+// the webServer while IDENTUUM_E2E_BASE_URL drove page.goto — and the census
+// found them diverged: a gitignored env file set the base URL to :7114 while
+// the webServer defaulted to :7104, so every browser test hit a port with no
+// server (ERR_CONNECTION_REFUSED, the whole default run red). They now derive
+// from ONE authoritative value: if a base URL is given its port wins and the
+// webServer follows it; otherwise the port (or the 7104 default) composes the
+// base URL. Divergence is no longer expressible.
+const e2eBaseURLRaw = process.env.IDENTUUM_E2E_BASE_URL;
+const e2ePort = e2eBaseURLRaw
+  ? new URL(e2eBaseURLRaw).port || "7104"
+  : (process.env.IDENTUUM_E2E_PORT ?? "7104");
+const e2eBaseURL = e2eBaseURLRaw ?? `http://localhost:${e2ePort}`;
+
+// Isolated e2e ui-runtime config, wired AT CONFIG-EVAL TIME (THE-RELEASED-
+// CONTRACT). Playwright launches the webServer BEFORE globalSetup runs, so a
+// config file chosen inside globalSetup arrives too late — the freshly spawned
+// `next dev` has already bound its env. When dynamic-fixture mode is on and the
+// operator has not pinned their own config, write a localhost-only config and
+// hand it to the dev server via webServer.env below. This replaces the standing
+// config/ui-runtime.json whose internal_base_url points at host.docker.internal
+// — resolvable under OrbStack/Docker-Desktop, ENOTFOUND from a host-side dev
+// server under colima (the census's owner-local-residue class).
+const dynamicFixtureMode = process.env.IDENTUUM_E2E_USE_DYNAMIC_FIXTURE === "true";
+const idpBaseForE2E = process.env.IDENTUUM_IDP_BASE_URL ?? "http://localhost:7113";
+let e2eConfigFile = process.env.IDENTUUM_UI_CONFIG_FILE;
+if (dynamicFixtureMode && !e2eConfigFile) {
+  e2eConfigFile = resolve(__dirname, "e2e", ".auth", "ui-runtime.e2e.json");
+  mkdirSync(dirname(e2eConfigFile), { recursive: true });
+  writeFileSync(
+    e2eConfigFile,
+    `${JSON.stringify(
+      {
+        configured: true,
+        ui_origin: e2eBaseURL,
+        idp: { enabled: true, public_base_url: idpBaseForE2E },
+        ag: { enabled: false, public_base_url: "" },
+      },
+      null,
+      2
+    )}\n`,
+    "utf-8"
+  );
+  process.env.IDENTUUM_UI_CONFIG_FILE = e2eConfigFile;
+}
 
 export default defineConfig({
   testDir: "./e2e",
@@ -179,8 +223,14 @@ export default defineConfig({
     // continue to match unchanged.
     url: `http://127.0.0.1:${e2ePort}/api/health`,
     // Local: reuse an already-running server (Compose stack or manual pnpm dev).
-    // CI: always start fresh to avoid stale state between test runs.
-    reuseExistingServer: !process.env.CI,
+    // CI: always start fresh to avoid stale state between test runs. In dynamic
+    // mode DO NOT reuse — a standing dev server carries the operator's
+    // host.docker.internal config; force a fresh spawn that reads the isolated
+    // e2e config below.
+    reuseExistingServer: !process.env.CI && !dynamicFixtureMode,
     timeout: 60_000,
+    // Hand the spawned `next dev` the isolated config from birth (see above);
+    // globalSetup runs too late to influence it.
+    ...(e2eConfigFile ? { env: { IDENTUUM_UI_CONFIG_FILE: e2eConfigFile } } : {}),
   },
 });

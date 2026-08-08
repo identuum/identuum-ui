@@ -32,22 +32,34 @@
 
 import { statSync } from "node:fs";
 import type { BrowserContext, Page } from "@playwright/test";
-import { loadOrgAdminFixture } from "./fixture";
+import { loadOrgAdminFixture, loadSiteAdminFixture } from "./fixture";
 import { generateTOTP } from "./totp";
 
-// ── Site-admin credentials (canonical names only) ─────────────────────────────
+// ── Site-admin credentials ────────────────────────────────────────────────────
+//
+// Resolution precedence, mirroring the org_admin path:
+//   1. The dynamic fixture the released-appliance harness mints in globalSetup
+//      (THE-RELEASED-CONTRACT). This is what lets the site-admin specs
+//      authenticate against the FRESH appliance the harness stood up.
+//   2. IDENTUUM_TEST_SITE_ADMIN_* env vars (durable long-lived-stack mode).
+//
+// Whichever wins feeds the same three constants; the rest of the file is
+// unaware. Never log the resolved values.
+
+const dynamicSiteAdminFixture = loadSiteAdminFixture();
 
 /**
  * Resolved site_admin credentials. Exported so the login UI spec can drive
- * the email/password/TOTP steps without re-reading process.env directly —
- * keeping a single source of truth.
- *
- * Never log these values.
+ * the email/password/TOTP steps without re-reading process.env directly.
  */
 export const SITE_ADMIN_EMAIL =
-  process.env.IDENTUUM_TEST_SITE_ADMIN_EMAIL ?? "site_admin@system.local";
-export const SITE_ADMIN_PASSWORD = process.env.IDENTUUM_TEST_SITE_ADMIN_PASSWORD ?? "";
-export const SITE_ADMIN_TOTP_SECRET = process.env.IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET ?? "";
+  dynamicSiteAdminFixture?.email ??
+  process.env.IDENTUUM_TEST_SITE_ADMIN_EMAIL ??
+  "site_admin@system.local";
+export const SITE_ADMIN_PASSWORD =
+  dynamicSiteAdminFixture?.password ?? process.env.IDENTUUM_TEST_SITE_ADMIN_PASSWORD ?? "";
+export const SITE_ADMIN_TOTP_SECRET =
+  dynamicSiteAdminFixture?.totpSecret ?? process.env.IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET ?? "";
 
 /** True when site_admin auth env vars are absent. */
 export const skipAuthTests = !SITE_ADMIN_PASSWORD || !SITE_ADMIN_TOTP_SECRET;

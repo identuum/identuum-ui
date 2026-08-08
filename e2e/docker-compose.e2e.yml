@@ -1,0 +1,52 @@
+# Self-contained E2E appliance stack for identuum-ui (THE-RELEASED-CONTRACT).
+#
+# A fresh clone with Docker reaches an authenticated green run from NOTHING:
+# this file brings up the PUBLISHED identuum-idp-oss image (the artifact a
+# customer pulls) plus a throwaway Postgres, and the e2e harness
+# (global-setup.ts) drives setup + fixtures against it over the HTTP API. No
+# sibling monolith checkout, no /app/identuum probe, no /e2e-auth bind mount,
+# no `make local-restart`.
+#
+# THE POSTGRES HAS NO NAMED VOLUME BY DESIGN. Data lives only in the container's
+# writable layer, so `docker compose ... down` (no -v) yields a FRESH database
+# on the next `up`. This keeps every run fresh WITHOUT `docker compose down -v`
+# or `docker volume rm`, both of which the repo's CLAUDE.md forbids.
+#
+# Distinct project name (identuum-ui-e2e) and the canonical :7113 IDP port. If a
+# dev appliance already holds :7113, stop it first; the harness reuses a healthy
+# appliance already on IDP_BASE_URL rather than double-binding the port.
+
+name: identuum-ui-e2e
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: identuum_idp
+      POSTGRES_PASSWORD: dev-identuum_idp-not-a-secret
+      POSTGRES_DB: identuum_idp
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U identuum_idp -d identuum_idp"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    # No `volumes:` — ephemeral by design (see header).
+
+  identuum-idp:
+    image: ghcr.io/identuum/identuum-idp-oss:v0.3.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "7113:7113"
+    environment:
+      IDENTUUM_IDP_OSS_DB: "postgres://identuum_idp:dev-identuum_idp-not-a-secret@postgres:5432/identuum_idp?sslmode=disable"
+      IDENTUUM_IDP_OSS_LISTEN: "0.0.0.0:7113"
+      IDENTUUM_IDP_OSS_ISSUER: "http://localhost:7113"
+      IDENTUUM_IDP_DATA_DIR: "/app/data"
+      IDENTUUM_IDP_UI_PUBLIC_BASE_URL: "http://localhost:7104"
+      IDENTUUM_IDP_DATABASE_URL: "postgres://identuum_idp:dev-identuum_idp-not-a-secret@postgres:5432/identuum_idp?sslmode=disable"
+      # Transparent, fake-by-construction e2e at-rest key (sequential bytes) —
+      # a throwaway appliance, never production.
+      IDENTUUM_IDP_ENCRYPTION_KEY: "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"

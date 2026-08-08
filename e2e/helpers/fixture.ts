@@ -167,6 +167,44 @@ function isObject(v: unknown): v is Record<string, unknown> {
 }
 
 /**
+ * The site_admin credentials the released-appliance harness mints during
+ * globalSetup (THE-RELEASED-CONTRACT, 2026-08-08). Added so the site-admin
+ * specs authenticate against the FRESH appliance the harness stood up, instead
+ * of owner-seeded env-file credentials that only exist on a long-lived stack
+ * (the census's SEEDED-COUPLING class). Same null-on-absent contract as
+ * loadOrgAdminFixture: env-file mode is still valid when no fixture is present.
+ *
+ * SECURITY: returns ONLY the three site_admin credentials, no envelope
+ * metadata; never console.logs them.
+ */
+export interface SiteAdminFixtureCredentials {
+  email: string;
+  password: string;
+  totpSecret: string;
+}
+
+export function loadSiteAdminFixture(): SiteAdminFixtureCredentials | null {
+  const path = resolveFixturePath();
+  try {
+    statSync(path);
+  } catch {
+    return null;
+  }
+  const raw = readFileSync(path, "utf-8");
+  const parsed = JSON.parse(raw) as unknown;
+  // Run the full envelope validation (marker, schema, reserved org prefixes)
+  // for side-effect safety before trusting any block.
+  validateFixture(parsed, path);
+  const sa = (parsed as { site_admin?: unknown }).site_admin;
+  if (!isObject(sa)) return null;
+  const { email, password, totp_secret } = sa as Record<string, unknown>;
+  if (typeof email !== "string" || email.length === 0) return null;
+  if (typeof password !== "string" || password.length === 0) return null;
+  if (typeof totp_secret !== "string" || totp_secret.length === 0) return null;
+  return { email, password, totpSecret: totp_secret };
+}
+
+/**
  * Returns the fixture org's primary domain (e2e-<runID>.test) when the
  * dynamic fixture file is present and valid. Returns null when the
  * file is absent (durable-env mode) — same null-on-absent contract as
