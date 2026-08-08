@@ -52,7 +52,7 @@ afterEach(() => {
 });
 
 describe("/api/status liveness paths", () => {
-  it("probes /healthz on the IDP base URL (regression pin: pre-fix used /health and surfaced false-positive 'unreachable' on customer-smoke)", async () => {
+  it("probes /healthz FIRST on the IDP base URL and stops there when it answers (CE pin: pre-fix used /health and surfaced false-positive 'unreachable' on customer-smoke)", async () => {
     const observed: string[] = [];
     vi.stubGlobal(
       "fetch",
@@ -69,6 +69,7 @@ describe("/api/status liveness paths", () => {
     expect(body.idp.healthy).toBe(true);
 
     expect(observed).toContain("http://identuum-idp:7123/healthz");
+    // A 200 from /healthz must SHORT-CIRCUIT: no second probe of /health.
     expect(observed).not.toContain("http://identuum-idp:7123/health");
   });
 
@@ -114,12 +115,36 @@ describe("/api/status liveness paths", () => {
     }
   });
 
-  it("classifies the IDP as unreachable when /healthz returns non-2xx (no fallback to /health)", async () => {
-    // Pins that the route does NOT silently fall back to /health on
-    // a 404/5xx from /healthz. The IDP-CE binary's contract is that
-    // /healthz is THE liveness endpoint; if it stops returning 200
-    // the operator should see a real 'unreachable' signal, not a
-    // success masked by a second-chance probe against /health.
+  it("falls back to /health when /healthz 404s (released identuum-idp-oss mounts /health, not /healthz) and reports healthy", async () => {
+    // CROSS-TIER pin (THE-ALL-GREEN-SUITE): identuum-idp-ce answers /healthz;
+    // released identuum-idp-oss v0.3.0 404s /healthz and answers /health. The
+    // probe must try the CE path first and fall back to the OSS path, so both
+    // tiers report healthy without a false 'unreachable' chip.
+    const observed: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        observed.push(url);
+        if (url.endsWith("identuum-idp:7123/healthz")) {
+          return new Response("not found", { status: 404 });
+        }
+        return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+      })
+    );
+
+    const res = await GET();
+    const body = await res.json();
+    expect(body.idp.healthy).toBe(true);
+    // Ordered probe: /healthz attempted BEFORE the /health fallback.
+    const idpProbes = observed.filter((u) => u.includes("identuum-idp"));
+    expect(idpProbes).toEqual([
+      "http://identuum-idp:7123/healthz",
+      "http://identuum-idp:7123/health",
+    ]);
+  });
+
+  it("classifies the IDP as unreachable only when BOTH /healthz and /health fail", async () => {
     let idpProbeCount = 0;
     vi.stubGlobal(
       "fetch",
@@ -136,6 +161,7 @@ describe("/api/status liveness paths", () => {
     const res = await GET();
     const body = await res.json();
     expect(body.idp.healthy).toBe(false);
-    expect(idpProbeCount).toBe(1);
+    // Both tiers' paths were exhausted before declaring unreachable.
+    expect(idpProbeCount).toBe(2);
   });
 });

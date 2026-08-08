@@ -6,19 +6,17 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// healthPath returns the liveness path each backend mounts. identuum-idp-ce
-// uses the Kubernetes-convention `/healthz` (registered in
-// cmd/identuum-idp/serve.go and the symmetric upgrade_serve.go); the same
-// path is also wired into the UI container's own Dockerfile HEALTHCHECK.
-// identuum-ag still publishes `/health` today; this helper preserves that
-// AG-side behaviour until a paired AG-side audit confirms the Kubernetes
-// convention is universal on the AG binary too. Pinned by
-// src/__tests__/api-status-health-paths.test.ts so a future refactor
-// cannot silently regress the IDP probe back to `/health` and surface a
+// healthPaths returns the liveness paths each backend may mount, probed in
+// order. The IDP is CROSS-TIER: identuum-idp-ce uses the Kubernetes-convention
+// `/healthz` (cmd/identuum-idp/serve.go), while released identuum-idp-oss
+// mounts `/health` (+`/livez`) and 404s `/healthz` — so the probe tries the CE
+// path first and falls back to the OSS path. identuum-ag still publishes
+// `/health` today. Pinned by src/__tests__/api-status-health-paths.test.ts so
+// a future refactor cannot silently drop either tier's path and surface a
 // false "identuum-idp unreachable" on the logged-in site-admin overview.
-function healthPath(domain: BackendDomain): string {
-  if (domain === "idp") return "/healthz";
-  return "/health";
+function healthPaths(domain: BackendDomain): string[] {
+  if (domain === "idp") return ["/healthz", "/health"];
+  return ["/health"];
 }
 
 async function checkHealth(
@@ -26,23 +24,27 @@ async function checkHealth(
   domain: BackendDomain
 ): Promise<{ healthy: boolean; product: string }> {
   const fallback = domain === "idp" ? "identuum-idp" : "identuum-ag";
-  try {
-    const res = await fetch(`${url.replace(/\/$/, "")}${healthPath(domain)}`, {
-      signal: AbortSignal.timeout(4000),
-    });
-    if (!res.ok) {
-      return { healthy: false, product: fallback };
-    }
-    let body: unknown;
+  for (const path of healthPaths(domain)) {
     try {
-      body = await res.json();
+      const res = await fetch(`${url.replace(/\/$/, "")}${path}`, {
+        signal: AbortSignal.timeout(4000),
+      });
+      if (!res.ok) {
+        // Try the next tier's path; a later path may still answer.
+        continue;
+      }
+      let body: unknown;
+      try {
+        body = await res.json();
+      } catch {
+        // Non-JSON response — fall back to generic label.
+      }
+      return { healthy: true, product: deriveProductLabel(domain, body) };
     } catch {
-      // Non-JSON response — fall back to generic label.
+      // Network error on this path — try the next one.
     }
-    return { healthy: true, product: deriveProductLabel(domain, body) };
-  } catch {
-    return { healthy: false, product: fallback };
   }
+  return { healthy: false, product: fallback };
 }
 
 export async function GET(): Promise<Response> {

@@ -156,7 +156,12 @@ function CapabilityBadge({ affordance }: { affordance: CapabilityAffordance }) {
           : "border-amber-300/40 bg-amber-300/10 text-amber-200";
 
   return (
+    // Decorative capability-status pill. aria-hidden keeps it OUT of the parent
+    // nav link's accessible name (which must remain the destination, e.g.
+    // "Service accounts", not "Service accounts Available") — the visible badge
+    // and any getByText assertions are unaffected.
     <span
+      aria-hidden="true"
       className={`shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${className}`}
     >
       {affordance.label}

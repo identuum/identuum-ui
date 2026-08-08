@@ -68,12 +68,31 @@ export type CreateOrgResult =
     }
   | { ok: false; status: number; conflict: boolean };
 
-async function cookieHeader(): Promise<string> {
-  const store = await cookies();
-  return store
-    .getAll()
-    .map((c) => `${c.name}=${c.value}`)
-    .join("; ");
+/**
+ * Server-side IdP auth headers for the BFF. Returns BOTH credentials:
+ *   - Cookie: the full httpOnly cookie jar — the IdP's cookie-aware endpoints
+ *     (e.g. /api/v1/validate) read the session from here.
+ *   - Authorization: Bearer <access_token> — released OSS resource endpoints
+ *     (clients, users, organizations, service-accounts, …) establish the
+ *     request principal ONLY from the Authorization header: mw.BearerPrincipal
+ *     never reads the access_token cookie, so a cookie-only call 401s. The
+ *     bearer is lifted from the SAME httpOnly access_token cookie.
+ *
+ * The token stays server-side: this module is `server-only`, and the header is
+ * attached only to the server→IdP fetch — it is never returned to the browser,
+ * never serialised into a response body, and never logged. Sending both
+ * credentials is safe: each endpoint reads only the one it understands.
+ * `extra` merges caller-supplied headers (e.g. Content-Type).
+ */
+async function idpAuthHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
+  const all = (await cookies()).getAll();
+  const headers: Record<string, string> = {
+    ...extra,
+    Cookie: all.map((c) => `${c.name}=${c.value}`).join("; "),
+  };
+  const accessToken = all.find((c) => c.name === "access_token")?.value;
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  return headers;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -134,7 +153,7 @@ export async function listOrganizations(opts?: {
 
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/organizations?${params.toString()}`, {
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
 
@@ -203,7 +222,7 @@ export async function createOrganization(opts: CreateOrgOptions): Promise<Create
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Cookie: await cookieHeader(),
+        ...(await idpAuthHeaders()),
       },
       body: JSON.stringify(body),
       cache: "no-store",
@@ -247,7 +266,7 @@ export async function getOrganization(id: string): Promise<OrgDetail | null> {
 
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}`, {
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -294,14 +313,18 @@ export async function getOwnOrganization(): Promise<OrgDetail | null> {
 
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/organizations/current`, {
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (!res.ok) return null;
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json();
-    const o = data.organization ?? {};
+    // Released OSS GET /organizations/current returns the org fields at the TOP
+    // LEVEL (id, name, domain, org_slug, active, mfa_policy, …), not wrapped in
+    // an `organization` envelope. Tolerate both shapes so a future wrapped
+    // response still round-trips.
+    const o = data.organization ?? data ?? {};
 
     return {
       id: String(o.id ?? ""),
@@ -379,7 +402,7 @@ export async function updateOrganization(
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        Cookie: await cookieHeader(),
+        ...(await idpAuthHeaders()),
       },
       body: JSON.stringify(body),
       cache: "no-store",
@@ -427,7 +450,7 @@ export async function deleteOrganization(id: string): Promise<DeleteOrgResult> {
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}`, {
       method: "DELETE",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
 
@@ -463,7 +486,7 @@ export async function restoreOrganization(id: string): Promise<RestoreOrgResult>
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}/restore`,
       {
         method: "POST",
-        headers: { Cookie: await cookieHeader() },
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -545,7 +568,7 @@ export async function assignOrgAdmin(opts: AssignOrgAdminOptions): Promise<Assig
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Cookie: await cookieHeader(),
+          ...(await idpAuthHeaders()),
         },
         body: JSON.stringify({ recipient_email: opts.recipientEmail.toLowerCase().trim() }),
         cache: "no-store",
@@ -607,7 +630,7 @@ export async function changeOwnPassword(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Cookie: await cookieHeader(),
+        ...(await idpAuthHeaders()),
       },
       body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
       cache: "no-store",
@@ -687,7 +710,7 @@ export async function inviteOrgUser(opts: InviteOrgUserOptions): Promise<InviteO
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Cookie: await cookieHeader(),
+        ...(await idpAuthHeaders()),
       },
       body: JSON.stringify(body),
       cache: "no-store",
@@ -733,7 +756,7 @@ export async function getOwnProfile(): Promise<UserProfile | null> {
 
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/profile`, {
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -780,7 +803,7 @@ export async function listOrgUsers(): Promise<OrgUserItem[] | null> {
 
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/users?limit=200&sort=created_at&order=asc`, {
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -834,7 +857,7 @@ export async function resetUserMFA(
       `${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/mfa/reset`,
       {
         method: "POST",
-        headers: { Cookie: await cookieHeader() },
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -871,7 +894,7 @@ export async function getOrgUserById(id: string): Promise<OrgUserItem | null> {
 
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(id)}`, {
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -922,7 +945,7 @@ export async function regenerateInvitation(
       `${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/setup/resend`,
       {
         method: "POST",
-        headers: { Cookie: await cookieHeader() },
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -973,7 +996,7 @@ export async function setUserActive(
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        Cookie: await cookieHeader(),
+        ...(await idpAuthHeaders()),
       },
       body: JSON.stringify({ active }),
       cache: "no-store",
@@ -1032,7 +1055,7 @@ export async function listOwnSessions(): Promise<ListSessionsResult> {
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/sessions`, {
       method: "GET",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
 
@@ -1082,7 +1105,7 @@ export async function revokeOwnSession(sessionId: string): Promise<RevokeSession
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Cookie: await cookieHeader(),
+        ...(await idpAuthHeaders()),
       },
       body: JSON.stringify({ session_id: sessionId }),
       cache: "no-store",
@@ -1155,22 +1178,24 @@ export async function listAuditEvents(opts?: {
   if (!cfg || !cfg.idp.enabled)
     return { ok: false, status: 503, featureUnavailable: false, forbidden: false };
 
+  // Released OSS mounts GET /api/v1/audit/events with limit/offset paging and
+  // start/end RFC3339 bounds (parseAuditFilters); page/page_size are translated
+  // here. subject_type is not a released filter — subject scoping travels via
+  // subject_id only.
   const page = opts?.page ?? 1;
   const pageSize = opts?.pageSize ?? 50;
   const params = new URLSearchParams({
-    page: String(page),
-    page_size: String(pageSize),
+    limit: String(pageSize),
+    offset: String((page - 1) * pageSize),
   });
   if (opts?.eventType) params.set("event_type", opts.eventType);
-  if (opts?.subjectType) params.set("subject_type", opts.subjectType);
   if (opts?.subjectId) params.set("subject_id", opts.subjectId);
-  if (opts?.startDate) params.set("start_date", opts.startDate);
-  if (opts?.endDate) params.set("end_date", opts.endDate);
-  if (opts?.sortOrder && opts.sortOrder !== "desc") params.set("order", opts.sortOrder);
+  if (opts?.startDate) params.set("start", opts.startDate);
+  if (opts?.endDate) params.set("end", opts.endDate);
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/audit?${params}`, {
-      headers: { Cookie: await cookieHeader() },
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/audit/events?${params}`, {
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
 
@@ -1202,7 +1227,9 @@ export async function listAuditEvents(opts?: {
     return {
       ok: true,
       events,
-      total_count: typeof body.total_count === "number" ? body.total_count : 0,
+      // Released OSS reports { events, has_more } with no absolute total; the
+      // returned batch length is the honest floor when total_count is absent.
+      total_count: typeof body.total_count === "number" ? body.total_count : events.length,
       page: typeof body.page === "number" ? body.page : page,
       page_size: typeof body.page_size === "number" ? body.page_size : pageSize,
     };
@@ -1235,7 +1262,7 @@ export async function listAuditEventTypes(): Promise<AuditEventTypeGroupFromAPI[
 
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/audit/event-types`, {
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -1307,7 +1334,7 @@ export async function resetOrgAdminMFA(userID: string): Promise<ResetOrgAdminMFA
       `${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userID)}/recovery/reset-mfa`,
       {
         method: "POST",
-        headers: { Cookie: await cookieHeader() },
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -1381,7 +1408,7 @@ export async function listOrgAdminsForRecovery(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/admin-recovery-candidates`,
       {
         method: "GET",
-        headers: { Cookie: await cookieHeader() },
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -1472,7 +1499,7 @@ export async function listOrganizationDomains(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/domains`,
       {
         method: "GET",
-        headers: { Cookie: await cookieHeader() },
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -1480,7 +1507,13 @@ export async function listOrganizationDomains(
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json();
-    const raw = Array.isArray(data?.domains) ? data.domains : [];
+    // Released OSS returns { count, organization_domains: [...] }; tolerate the
+    // legacy `domains` key too.
+    const raw = Array.isArray(data?.organization_domains)
+      ? data.organization_domains
+      : Array.isArray(data?.domains)
+        ? data.domains
+        : [];
     return {
       ok: true,
       data: {
@@ -1527,7 +1560,7 @@ export async function addOrganizationDomain(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Cookie: await cookieHeader(),
+          ...(await idpAuthHeaders()),
         },
         body: JSON.stringify(body),
         cache: "no-store",
@@ -1605,7 +1638,7 @@ export async function verifyOrganizationDomain(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/domains/${encodeURIComponent(domainID)}/verify`,
       {
         method: "POST",
-        headers: { Cookie: await cookieHeader() },
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -1687,7 +1720,7 @@ export async function deleteOrganizationDomain(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/domains/${encodeURIComponent(domainID)}`,
       {
         method: "DELETE",
-        headers: { Cookie: await cookieHeader() },
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -1728,7 +1761,7 @@ export async function setPrimaryOrganizationDomain(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/domains/${encodeURIComponent(domainID)}/primary`,
       {
         method: "POST",
-        headers: { Cookie: await cookieHeader() },
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -1805,14 +1838,15 @@ export async function listOwnOrganizationClients(opts?: {
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/clients?${params.toString()}`, {
       method: "GET",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (!res.ok) return { ok: false, status: res.status };
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
     const body: any = await res.json();
-    const rawList = Array.isArray(body?.data) ? body.data : [];
+    // Released OSS HandleListClients returns { clients, total, page, page_size }.
+    const rawList = Array.isArray(body?.clients) ? body.clients : [];
 
     // Sanitise to the narrow OrgClientItem shape. Explicitly DROP
     // any client_secret / signing-key material even if the wire
@@ -1854,7 +1888,7 @@ export async function listOwnOrganizationClients(opts?: {
         clients,
         total: typeof body?.total === "number" ? body.total : clients.length,
         page: typeof body?.page === "number" ? body.page : page,
-        page_size: typeof body?.limit === "number" ? body.limit : pageSize,
+        page_size: typeof body?.page_size === "number" ? body.page_size : pageSize,
       },
     };
   } catch {
@@ -1903,7 +1937,7 @@ export async function getOrganizationClientById(
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(id)}`, {
       method: "GET",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
 
@@ -2023,7 +2057,7 @@ export async function createOrganizationClient(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Cookie: await cookieHeader(),
+        ...(await idpAuthHeaders()),
       },
       body: JSON.stringify(body),
       cache: "no-store",
@@ -2172,7 +2206,7 @@ export async function updateOrganizationClient(
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        Cookie: await cookieHeader(),
+        ...(await idpAuthHeaders()),
       },
       body: JSON.stringify(body),
       cache: "no-store",
@@ -2339,7 +2373,7 @@ export async function deleteOrganizationClient(id: string): Promise<DeleteOrgCli
     // enforced by the IDP from the actor's session.
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(id)}`, {
       method: "DELETE",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
 
@@ -2459,7 +2493,7 @@ export async function rotateOrganizationClientSecret(
       `${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(id)}/secret/regenerate`,
       {
         method: "POST",
-        headers: { Cookie: await cookieHeader() },
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -2590,7 +2624,7 @@ export async function listSigningKeys(): Promise<ListSigningKeysResult> {
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/keys`, {
       method: "GET",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (res.status === 403) return { ok: false, status: 403, forbidden: true };
@@ -2635,7 +2669,7 @@ export async function listAnomalyEvents(): Promise<ListAnomalyEventsResult> {
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/anomaly/events`, {
       method: "GET",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (!res.ok) {
@@ -2681,7 +2715,7 @@ export async function getAnomalyStats(): Promise<GetAnomalyStatsResult> {
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/anomaly/stats`, {
       method: "GET",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (!res.ok) {
@@ -2725,7 +2759,7 @@ export async function listAdminSessions(): Promise<ListAdminSessionsResult> {
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/system/sessions`, {
       method: "GET",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (res.status === 403) return { ok: false, status: 403, forbidden: true };
@@ -2793,7 +2827,7 @@ export async function verifyAuditChain(): Promise<VerifyAuditChainResult> {
     // (status counts + per-shard head signature status).
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/system/audit/chain/verify`, {
       method: "GET",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (!res.ok) {
@@ -2858,7 +2892,7 @@ export async function getSystemInfo(): Promise<GetSystemInfoResult> {
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/health/details`, {
       method: "GET",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (res.status === 403) return { ok: false, status: 403, forbidden: true };
@@ -2974,7 +3008,13 @@ export const SITE_ADMIN_REPORT_FAMILIES: ReportFamily[] = [
 // explicit field projection as defence-in-depth so a future mapper
 // regression cannot leak through.
 
-// ── Identity providers (GET /api/v1/organizations/:id/identity-providers) ──
+// ── Identity providers (cross-tier: CE plural list vs OSS singular) ──────────
+//
+// CE may expose a PLURAL list endpoint returning 0..N providers; released OSS
+// exposes a SINGULAR endpoint returning ONE optional provider (404 "no OIDC
+// provider configured" when none). This helper tries the list form first, falls
+// back to the singular, and normalizes BOTH cardinalities to a list so the
+// read-only section renders identically on either tier.
 
 /**
  * Operator-safe projection of one configured organization identity
@@ -3013,35 +3053,68 @@ export async function listOrganizationIdentityProviders(
   if (!cfg || !cfg.idp.enabled) {
     return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
   }
+  const base = `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}`;
+  // Map one raw IDP record to the operator-safe shape (drops config/secret).
+  const mapOne = (p: Record<string, unknown>): OrgIdentityProviderItem => ({
+    id: typeof p.id === "string" ? p.id : "",
+    name: typeof p.name === "string" ? p.name : "",
+    slug: typeof p.slug === "string" ? p.slug : "",
+    type: typeof p.type === "string" ? p.type : "",
+    priority: typeof p.priority === "number" ? p.priority : 0,
+    active: Boolean(p.active),
+    created_at: typeof p.created_at === "string" ? p.created_at : "",
+    updated_at: typeof p.updated_at === "string" ? p.updated_at : "",
+  });
   try {
-    const res = await fetch(
-      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/identity-providers`,
-      { method: "GET", headers: { Cookie: await cookieHeader() }, cache: "no-store" }
-    );
-    if (!res.ok) {
-      const failure = await classifyAdminReadFailure(res);
+    // 1) List form first (CE, 0..N providers).
+    const listRes = await fetch(`${base}/identity-providers`, {
+      method: "GET",
+      headers: await idpAuthHeaders(),
+      cache: "no-store",
+    });
+    if (listRes.ok) {
+      // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+      const d: any = await listRes.json();
+      const rawList = Array.isArray(d?.identity_providers) ? d.identity_providers : [];
+      const identity_providers: OrgIdentityProviderItem[] = rawList.map(mapOne);
+      return {
+        ok: true,
+        identity_providers,
+        count: typeof d?.count === "number" ? d.count : identity_providers.length,
+      };
+    }
+    // Only a MISSING list route (404) falls through to the singular; a real
+    // failure (e.g. 403 feature-gated) is surfaced as-is.
+    if (listRes.status !== 404) {
+      const failure = await classifyAdminReadFailure(listRes);
+      return { ok: false, ...failure };
+    }
+
+    // 2) Singular fallback (OSS — one optional provider). 404 here means "none
+    //    configured", which normalizes to an EMPTY list (not an error).
+    const oneRes = await fetch(`${base}/identity-provider`, {
+      method: "GET",
+      headers: await idpAuthHeaders(),
+      cache: "no-store",
+    });
+    if (oneRes.status === 404) {
+      return { ok: true, identity_providers: [], count: 0 };
+    }
+    if (!oneRes.ok) {
+      const failure = await classifyAdminReadFailure(oneRes);
       return { ok: false, ...failure };
     }
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
-    const d: any = await res.json();
-    const rawList = Array.isArray(d?.identity_providers) ? d.identity_providers : [];
-    const identity_providers: OrgIdentityProviderItem[] = rawList.map(
-      (p: Record<string, unknown>) => ({
-        id: typeof p.id === "string" ? p.id : "",
-        name: typeof p.name === "string" ? p.name : "",
-        slug: typeof p.slug === "string" ? p.slug : "",
-        type: typeof p.type === "string" ? p.type : "",
-        priority: typeof p.priority === "number" ? p.priority : 0,
-        active: Boolean(p.active),
-        created_at: typeof p.created_at === "string" ? p.created_at : "",
-        updated_at: typeof p.updated_at === "string" ? p.updated_at : "",
-      })
-    );
-    return {
-      ok: true,
-      identity_providers,
-      count: typeof d?.count === "number" ? d.count : identity_providers.length,
-    };
+    const body: any = await oneRes.json();
+    // Tolerate { identity_provider: {…} }, { identity_providers: [...] }, or a
+    // bare provider object.
+    const identity_providers: OrgIdentityProviderItem[] = Array.isArray(body?.identity_providers)
+      ? body.identity_providers.map(mapOne)
+      : ((): OrgIdentityProviderItem[] => {
+          const one = body?.identity_provider ?? body;
+          return one && typeof one === "object" && !Array.isArray(one) ? [mapOne(one)] : [];
+        })();
+    return { ok: true, identity_providers, count: identity_providers.length };
   } catch {
     return {
       ok: false,
@@ -3093,7 +3166,7 @@ export async function listOrganizationWebhooks(
   try {
     const res = await fetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/webhooks`,
-      { method: "GET", headers: { Cookie: await cookieHeader() }, cache: "no-store" }
+      { method: "GET", headers: await idpAuthHeaders(), cache: "no-store" }
     );
     if (!res.ok) {
       const failure = await classifyAdminReadFailure(res);
@@ -3147,7 +3220,7 @@ export async function listOrgRoles(orgID: string): Promise<ListOrgRolesResult> {
   try {
     const res = await fetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/roles`,
-      { method: "GET", headers: { Cookie: await cookieHeader() }, cache: "no-store" }
+      { method: "GET", headers: await idpAuthHeaders(), cache: "no-store" }
     );
     if (res.status === 403) return { ok: false, status: 403, forbidden: true };
     if (!res.ok) return { ok: false, status: res.status, forbidden: false };
@@ -3196,7 +3269,7 @@ export async function listScopeTemplates(): Promise<ListScopeTemplatesResult> {
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/scope-templates`, {
       method: "GET",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (!res.ok) {
@@ -3268,7 +3341,7 @@ export async function bulkCreateUsers(entries: BulkUserEntry[]): Promise<BulkCre
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Cookie: await cookieHeader(),
+        ...(await idpAuthHeaders()),
       },
       body: JSON.stringify({ users: sanitized }),
       cache: "no-store",
@@ -3355,7 +3428,7 @@ export async function getBulkJobStatus(jobId: string): Promise<GetBulkJobStatusR
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/jobs/${encodeURIComponent(jobId)}`, {
       method: "GET",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (!res.ok) {
@@ -3454,7 +3527,7 @@ export async function approveUserRegistration(userId: string): Promise<ApproveRe
       `${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/approve`,
       {
         method: "POST",
-        headers: { Cookie: await cookieHeader() },
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -3495,7 +3568,7 @@ export async function listUserRoles(userId: string): Promise<ListUserRolesResult
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/roles`, {
       method: "GET",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (res.status === 403) return { ok: false, status: 403, forbidden: true };
@@ -3542,7 +3615,7 @@ export async function assignUserRole(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Cookie: await cookieHeader(),
+        ...(await idpAuthHeaders()),
       },
       body: JSON.stringify({ role_id: roleId }),
       cache: "no-store",
@@ -3584,7 +3657,7 @@ export async function removeUserRole(
       `${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/roles/${encodeURIComponent(roleId)}`,
       {
         method: "DELETE",
-        headers: { Cookie: await cookieHeader() },
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -3692,7 +3765,7 @@ export async function listApiResources(): Promise<ListAPIResourcesResult> {
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/api-resources`, {
       method: "GET",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (!res.ok) {
@@ -3735,7 +3808,7 @@ export async function getApiResource(id: string): Promise<GetAPIResourceResult> 
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`, {
       method: "GET",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (res.status === 400)
@@ -3850,7 +3923,7 @@ export async function createApiResource(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Cookie: await cookieHeader(),
+        ...(await idpAuthHeaders()),
       },
       body: JSON.stringify(body),
       cache: "no-store",
@@ -3972,7 +4045,7 @@ export async function updateApiResource(
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
-        Cookie: await cookieHeader(),
+        ...(await idpAuthHeaders()),
       },
       body: JSON.stringify(body),
       cache: "no-store",
@@ -4104,7 +4177,7 @@ export async function rotateApiResourceSecret(id: string): Promise<RotateAPIReso
       `${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}/secret/regenerate`,
       {
         method: "POST",
-        headers: { Cookie: await cookieHeader() },
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -4212,7 +4285,7 @@ export async function deleteApiResource(id: string): Promise<DeleteAPIResourceRe
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`, {
       method: "DELETE",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
     if (res.status === 204 || res.ok) return { ok: true };
@@ -4353,7 +4426,7 @@ export async function listServiceAccounts(orgID: string): Promise<ListServiceAcc
   try {
     const res = await fetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/service-accounts`,
-      { method: "GET", headers: { Cookie: await cookieHeader() }, cache: "no-store" }
+      { method: "GET", headers: await idpAuthHeaders(), cache: "no-store" }
     );
     if (!res.ok) {
       const failure = await classifyAdminReadFailure(res);
@@ -4361,7 +4434,13 @@ export async function listServiceAccounts(orgID: string): Promise<ListServiceAcc
     }
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const d: any = await res.json();
-    const rawList = Array.isArray(d?.service_accounts) ? d.service_accounts : [];
+    // Released OSS returns a BARE ARRAY of service accounts; tolerate a
+    // { service_accounts: [...] } envelope too.
+    const rawList = Array.isArray(d)
+      ? d
+      : Array.isArray(d?.service_accounts)
+        ? d.service_accounts
+        : [];
     return { ok: true, serviceAccounts: rawList.map(projectServiceAccount) };
   } catch {
     return { ok: false, status: 0, forbidden: false, featureUnavailable: false };
@@ -4410,7 +4489,7 @@ export async function createServiceAccount(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Cookie: await cookieHeader(),
+          ...(await idpAuthHeaders()),
         },
         body: JSON.stringify(body),
         cache: "no-store",
@@ -4501,11 +4580,16 @@ export async function deleteServiceAccount(
     };
   }
   try {
+    // Released OSS: delete/update/toggle are keyed by SA id at the NON-prefixed
+    // /api/v1/service-accounts/:id route (org scope is derived from the SA +
+    // actor, not the URL). orgID is retained on the signature for the caller's
+    // authorization intent but is not part of the path.
+    void orgID;
     const res = await fetch(
-      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/service-accounts/${encodeURIComponent(saID)}`,
+      `${idpBaseUrl(cfg)}/api/v1/service-accounts/${encodeURIComponent(saID)}`,
       {
         method: "DELETE",
-        headers: { Cookie: await cookieHeader() },
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -4613,17 +4697,20 @@ export async function linkServiceAccountToOAuthClient(
     };
   }
   try {
-    // Empty POST — no body, no Content-Type header. Path params carry
-    // all three resource ids. Tenant scope is server-enforced from the
-    // session cookie and re-validated at the service layer on both
-    // halves.
+    // Released OSS links via the client-update surface: PUT /api/v1/clients/:id
+    // with { service_account_id } (patch semantics — every other field is left
+    // unchanged). The service layer validates the binding: confidential clients
+    // only, SA must live in the client's org (ValidateBindingForClient), and
+    // requireClientInActorOrg pins the client to the acting org_admin's org.
+    // orgID stays on the signature for caller intent; the org is derived
+    // server-side from the actor + the client row, never from the request.
+    void orgID;
     const res = await fetch(
-      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}` +
-        `/service-accounts/${encodeURIComponent(serviceAccountID)}` +
-        `/oauth-clients/${encodeURIComponent(oauthClientID)}/link`,
+      `${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(oauthClientID)}`,
       {
-        method: "POST",
-        headers: { Cookie: await cookieHeader() },
+        method: "PUT",
+        headers: await idpAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ service_account_id: serviceAccountID }),
         cache: "no-store",
       }
     );
@@ -4665,19 +4752,16 @@ export async function linkServiceAccountToOAuthClient(
       };
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const d: any = await res.json().catch(() => ({}));
-    // Explicit projection — the backend LinkServiceAccountResponse
-    // carries ONLY four operational identifiers (organization_id,
-    // service_account_id, oauth_client_uuid, oauth_client_identifier).
-    // Any other key a future backend regression returned would be
-    // dropped on the floor here.
+    // Explicit projection from the released safeClient response (top-level
+    // client fields) into the four operational identifiers this result
+    // carries. No secret-shaped key is ever read.
     return {
       ok: true,
       data: {
         organization_id: typeof d?.organization_id === "string" ? d.organization_id : "",
         service_account_id: typeof d?.service_account_id === "string" ? d.service_account_id : "",
-        oauth_client_uuid: typeof d?.oauth_client_uuid === "string" ? d.oauth_client_uuid : "",
-        oauth_client_identifier:
-          typeof d?.oauth_client_identifier === "string" ? d.oauth_client_identifier : "",
+        oauth_client_uuid: typeof d?.id === "string" ? d.id : "",
+        oauth_client_identifier: typeof d?.client_id === "string" ? d.client_id : "",
       },
     };
   } catch {
@@ -4764,13 +4848,19 @@ export async function unlinkServiceAccountFromOAuthClient(
     };
   }
   try {
+    // Released OSS unlinks via the client-update surface: PUT /api/v1/clients/:id
+    // with the EXPLICIT nil UUID — ClientService.UpdateClient treats a non-nil
+    // pointer to uuid.Nil as "remove the binding" (patch semantics leave every
+    // other field unchanged). serviceAccountID/orgID stay on the signature for
+    // caller intent; scope is enforced server-side from the actor + client row.
+    void orgID;
+    void serviceAccountID;
     const res = await fetch(
-      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}` +
-        `/service-accounts/${encodeURIComponent(serviceAccountID)}` +
-        `/oauth-clients/${encodeURIComponent(oauthClientID)}/link`,
+      `${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(oauthClientID)}`,
       {
-        method: "DELETE",
-        headers: { Cookie: await cookieHeader() },
+        method: "PUT",
+        headers: await idpAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ service_account_id: "00000000-0000-0000-0000-000000000000" }),
         cache: "no-store",
       }
     );
@@ -4933,15 +5023,16 @@ export async function listServiceAccountOAuthClients(
     };
   }
   try {
-    const res = await fetch(
-      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}` +
-        `/service-accounts/${encodeURIComponent(serviceAccountID)}/oauth-clients`,
-      {
-        method: "GET",
-        headers: { Cookie: await cookieHeader() },
-        cache: "no-store",
-      }
-    );
+    // Released OSS has no per-SA clients route; the org-scoped client list
+    // carries service_account_id on each row (safeClient), so the linked set
+    // is the org's clients filtered to this SA. The list handler org-pins an
+    // org_admin actor server-side; orgID stays for caller intent only.
+    void orgID;
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/clients?page=1&page_size=200`, {
+      method: "GET",
+      headers: await idpAuthHeaders(),
+      cache: "no-store",
+    });
     if (res.status === 400)
       return {
         ok: false,
@@ -4980,7 +5071,13 @@ export async function listServiceAccountOAuthClients(
       };
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const d: any = await res.json().catch(() => ({}));
-    const rawList = Array.isArray(d?.oauth_clients) ? d.oauth_clients : [];
+    // Released list shape { clients: [...] }; filter to rows bound to this SA.
+    const allClients = Array.isArray(d?.clients) ? d.clients : [];
+    const rawList = allClients.filter(
+      // biome-ignore lint/suspicious/noExplicitAny: raw row before projection
+      (r: any) =>
+        typeof r?.service_account_id === "string" && r.service_account_id === serviceAccountID
+    );
     // Explicit 7-field allowlist projection. Any extra key a future
     // backend regression returned would be dropped on the floor.
     const projected: LinkedOAuthClientForServiceAccount[] = rawList.map(
@@ -5075,12 +5172,12 @@ async function callServiceAccountLifecycle(
     };
   }
   try {
+    void orgID;
     const res = await fetch(
-      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}` +
-        `/service-accounts/${encodeURIComponent(serviceAccountID)}/${segment}`,
+      `${idpBaseUrl(cfg)}/api/v1/service-accounts/${encodeURIComponent(serviceAccountID)}/${segment}`,
       {
         method: "POST",
-        headers: { Cookie: await cookieHeader() },
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -5240,12 +5337,14 @@ export async function updateServiceAccount(
     };
   }
   try {
+    void orgID;
     const res = await fetch(
-      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/service-accounts/${encodeURIComponent(serviceAccountID)}`,
+      `${idpBaseUrl(cfg)}/api/v1/service-accounts/${encodeURIComponent(serviceAccountID)}`,
       {
-        method: "PATCH",
+        // Released OSS updates a service account with PUT /service-accounts/:id.
+        method: "PUT",
         headers: {
-          Cookie: await cookieHeader(),
+          ...(await idpAuthHeaders()),
           "Content-Type": "application/json",
         },
         cache: "no-store",
@@ -5390,7 +5489,7 @@ export async function getOrgProtocolSettings(orgId: string): Promise<GetOrgProto
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgId)}/protocol-settings`,
       {
         method: "GET",
-        headers: { Cookie: await cookieHeader() },
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -5487,7 +5586,7 @@ export async function updateOrgProtocolSettings(
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Cookie: await cookieHeader(),
+          ...(await idpAuthHeaders()),
         },
         body: JSON.stringify({
           dynamic_client_registration_enabled: opts.dynamic_client_registration_enabled,

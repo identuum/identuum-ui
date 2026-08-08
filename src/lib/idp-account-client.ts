@@ -10,12 +10,22 @@ import "server-only";
 import { cookies } from "next/headers";
 import { idpBaseUrl, loadRuntimeConfig } from "./runtime-config";
 
-async function cookieHeader(): Promise<string> {
-  const store = await cookies();
-  return store
-    .getAll()
-    .map((c) => `${c.name}=${c.value}`)
-    .join("; ");
+/**
+ * Server-side IdP auth headers: forwards the httpOnly cookie jar AND lifts the
+ * access_token cookie into Authorization: Bearer — released OSS resource
+ * endpoints establish the principal ONLY from the Authorization header
+ * (mw.BearerPrincipal never reads the cookie). Token stays server-side
+ * (`server-only` module); never logged, never returned to the browser.
+ */
+async function idpAuthHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
+  const all = (await cookies()).getAll();
+  const headers: Record<string, string> = {
+    ...extra,
+    Cookie: all.map((c) => `${c.name}=${c.value}`).join("; "),
+  };
+  const accessToken = all.find((c) => c.name === "access_token")?.value;
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  return headers;
 }
 
 function routeUnavailable(status: number): boolean {
@@ -58,7 +68,7 @@ export async function listOwnSessions(): Promise<ListSessionsResult> {
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/sessions`, {
       method: "GET",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
 
@@ -133,11 +143,11 @@ export async function revokeSessionById(id: string): Promise<AccountMutationResu
   if (!id) return failedMutation(404);
 
   const base = idpBaseUrl(cfg);
-  const cookie = await cookieHeader();
+  const authHeaders = await idpAuthHeaders();
   try {
     const ceRes = await fetch(`${base}/api/v1/sessions/${encodeURIComponent(id)}/revoke`, {
       method: "POST",
-      headers: { Cookie: cookie },
+      headers: authHeaders,
       cache: "no-store",
     });
     if (ceRes.ok) return { ok: true };
@@ -146,7 +156,7 @@ export async function revokeSessionById(id: string): Promise<AccountMutationResu
     // CE route absent (IDP OSS) → fall back to the OSS body form.
     const ossRes = await fetch(`${base}/api/v1/revoke`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: cookie },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify({ session_id: id }),
       cache: "no-store",
     });
@@ -176,7 +186,7 @@ export async function getOwnMfaStatus(): Promise<MfaStatusResult> {
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/me/mfa/status`, {
       method: "GET",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
 
@@ -215,7 +225,7 @@ export async function regenerateOwnMfaRecoveryCodes(): Promise<RecoveryCodesResu
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/me/mfa/recovery-codes/regenerate`, {
       method: "POST",
-      headers: { Cookie: await cookieHeader() },
+      headers: await idpAuthHeaders(),
       cache: "no-store",
     });
 
@@ -243,10 +253,7 @@ export async function disableOwnMfa(input: {
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/me/mfa/disable`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Cookie: await cookieHeader(),
-      },
+      headers: await idpAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ code: input.code ?? "", password: input.password ?? "" }),
       cache: "no-store",
     });

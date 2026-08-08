@@ -38,8 +38,10 @@ const FIXTURE_ORG_DOMAIN = "playwright-expired.local";
 const FIXTURE_ORG_NAME = "Playwright Expired Recovery Org";
 const FIXTURE_ADMIN_EMAIL = "expired-admin@playwright-expired.local";
 
-// /api/idp/ proxy at localhost:7104 carries the browser session cookies
-const IDP_PROXY = "http://localhost:7104/api/idp";
+// /api/idp/ proxy on the UI dev server carries the browser session cookies.
+// 127.0.0.1 (NOT localhost): Playwright's request context resolves localhost
+// to ::1 first, and `next dev` listens on IPv4 only → ECONNREFUSED ::1:7104.
+const IDP_PROXY = "http://127.0.0.1:7104/api/idp";
 
 // Local dev DB — credentials are public in deployment/docker-compose.local.yml
 const PSQL = "PGPASSWORD=idp_local_password psql -h localhost -p 5432 -U idp_user -d identuum_idp";
@@ -192,7 +194,8 @@ async function createUserViaClaimConsume(ctx: BrowserContext, orgId: string): Pr
   if (!token) throw new Error("Fixture claim generation returned no token");
 
   // Consume the claim — sets email_verified=true
-  const consumeRes = await ctx.request.post("http://localhost:7113/api/v1/auth/claim", {
+  // 127.0.0.1 for the same IPv6-localhost reason as IDP_PROXY above.
+  const consumeRes = await ctx.request.post("http://127.0.0.1:7113/api/v1/auth/claim", {
     data: {
       token,
       email: FIXTURE_ADMIN_EMAIL,

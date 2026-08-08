@@ -33,15 +33,20 @@ const IDP_TIMEOUT_MS = 5000;
 const AG_TIMEOUT_MS = 5000;
 
 /**
- * Builds a Cookie header from the inbound request cookies, mirroring the
- * existing pattern in idp-admin-client.ts.
+ * Server-side IdP auth headers, mirroring idp-admin-client.ts: forwards the
+ * httpOnly cookie jar AND lifts the access_token cookie into
+ * Authorization: Bearer — released OSS resource endpoints establish the
+ * principal ONLY from the Authorization header. Token stays server-side.
  */
-async function cookieHeader(): Promise<string> {
-  const store = await cookies();
-  return store
-    .getAll()
-    .map((c) => `${c.name}=${c.value}`)
-    .join("; ");
+async function idpAuthHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
+  const all = (await cookies()).getAll();
+  const headers: Record<string, string> = {
+    ...extra,
+    Cookie: all.map((c) => `${c.name}=${c.value}`).join("; "),
+  };
+  const accessToken = all.find((c) => c.name === "access_token")?.value;
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  return headers;
 }
 
 /**
@@ -69,7 +74,7 @@ export async function fetchIDPOrganizationExportCandidates(): Promise<OrgExportF
   let res: Response;
   try {
     res = await fetch(url, {
-      headers: { Cookie: await cookieHeader(), Accept: "application/json" },
+      headers: await idpAuthHeaders({ Accept: "application/json" }),
       cache: "no-store",
       signal: AbortSignal.timeout(IDP_TIMEOUT_MS),
     });
