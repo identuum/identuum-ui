@@ -94,6 +94,19 @@ function readSetupTokenFromContainer(): string {
 }
 
 test.describe("D-IDP-INSTALL-26 fresh M1 setup — backend gate enforcement", () => {
+  // CONDITION-JUSTIFIED SKIP (THE-V032-ALL-GREEN Order D). This spec drives
+  // the CE M1-fresh stack (container identuum-idp-ce-m1-fresh + docker-logs
+  // token capture) — port reachability cannot distinguish that stack from an
+  // unrelated listener, so the gate is the operator's explicit readiness
+  // mark; on an OSS-only workstation these skip with this condition printed
+  // and run unchanged when CE ships.
+  test.beforeEach(() => {
+    test.skip(
+      process.env.IDENTUUM_E2E_M1_FRESH_STACK_READY !== "1",
+      `CE M1-fresh stack not marked ready — set IDENTUUM_E2E_M1_FRESH_STACK_READY=1 with the identuum-idp-ce-m1-fresh stack up at ${IDP_BASE} (see identuum-idp-ce Makefile m1-fresh targets; these tests ship with CE).`
+    );
+  });
+
   test("T1 — POST /api/setup/complete refuses without MFA fields", async ({ request }) => {
     const setupToken = readSetupTokenFromContainer();
     const res = await request.post(`${IDP_BASE}/api/setup/complete`, {

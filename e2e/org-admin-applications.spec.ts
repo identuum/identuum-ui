@@ -915,9 +915,15 @@ test.describe("/org-admin/applications — read-only foundation", () => {
       // is "View audit event client.secret_rotated for this
       // application" — the released OSS DOT-FORM action name (the
       // underscore spelling was the retired monolith's).
-      const rotationRow = page.getByRole("link", {
-        name: "View audit event client.secret_rotated for this application",
-      });
+      // .first(): the audit trail legitimately ACCUMULATES — a reused
+      // appliance carries rotation events from earlier runs, and the card
+      // lists newest first, so .first() is the rotation this test just
+      // performed.
+      const rotationRow = page
+        .getByRole("link", {
+          name: "View audit event client.secret_rotated for this application",
+        })
+        .first();
       await expect(rotationRow).toBeVisible();
       await Promise.all([page.waitForLoadState("networkidle"), rotationRow.click()]);
       expect(page.url()).toContain("/org-admin/audit");

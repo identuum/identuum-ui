@@ -471,11 +471,12 @@ describe("/org-admin/settings/page.tsx — Promise.all + section mounts", () => 
     expect(placeholderIdx).toBeGreaterThan(templatesIdx);
   });
 
-  it("PRESERVES the pre-existing OrgProfileForm + MFAPolicyForm + InvitePolicyForm + DomainsCard mounts unchanged", () => {
-    expect(PAGE_SRC).toMatch(/<OrgProfileForm\b/);
-    expect(PAGE_SRC).toMatch(/<MFAPolicyForm\b/);
-    expect(PAGE_SRC).toMatch(/<InvitePolicyForm\b/);
+  it("mounts the READ-ONLY OrgRecordReadOnlySection + DomainsCard (ruling C: the editable org-record forms are gone — their saves could only ever fail)", () => {
+    expect(PAGE_SRC).toMatch(/<OrgRecordReadOnlySection\b/);
     expect(PAGE_SRC).toMatch(/<DomainsCard\b/);
+    expect(PAGE_SRC).not.toMatch(/<OrgProfileForm\b/);
+    expect(PAGE_SRC).not.toMatch(/<MFAPolicyForm\b/);
+    expect(PAGE_SRC).not.toMatch(/<InvitePolicyForm\b/);
   });
 
   it("page has NO console.* call", () => {

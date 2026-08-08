@@ -8,9 +8,6 @@
  */
 import { ProtocolSettingsPanel } from "@/app/site-admin/organizations/[id]/protocol-settings-panel";
 import { DomainsCard } from "@/components/org-admin/domains-card";
-import { InvitePolicyForm } from "@/components/org-admin/invite-policy-form";
-import { MFAPolicyForm } from "@/components/org-admin/mfa-policy-form";
-import { OrgProfileForm } from "@/components/org-admin/org-profile-form";
 import { getAuthorizationServerPageBoundary } from "@/lib/capability-affordances";
 import {
   getOrgProtocolSettings,
@@ -25,12 +22,15 @@ import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { Metadata } from "next";
 import {
   ORG_ADMIN_DOMAINS_CARD_COPY,
+  ORG_ADMIN_INVITE_POLICY_MODE_COPY,
   ORG_ADMIN_SETTINGS_PAGE_COPY,
   ORG_ADMIN_SETTINGS_PLACEHOLDERS,
   ORG_ADMIN_SETTINGS_PLACEHOLDER_BADGE,
+  deriveOrgAdminInvitePolicyMode,
 } from "./settings-helpers";
 import {
   IdentityProvidersReadOnlySection,
+  OrgRecordReadOnlySection,
   OrgRolesReadOnlySection,
   ScopeTemplatesReadOnlySection,
   WebhooksReadOnlySection,
@@ -47,6 +47,8 @@ export default async function OrgAdminSettingsPage() {
     allow_public_registration: org?.allow_public_registration ?? false,
     require_registration_approval: org?.require_registration_approval ?? false,
   };
+  const invitePolicyModeCopy =
+    ORG_ADMIN_INVITE_POLICY_MODE_COPY[deriveOrgAdminInvitePolicyMode(invitePolicy)];
   const runtimeState = await getServerRuntimeState();
   const idpCapabilities = runtimeState?.components.idp.capabilities;
   const scopeTemplatesCapabilityBoundary = getAuthorizationServerPageBoundary({
@@ -94,40 +96,20 @@ export default async function OrgAdminSettingsPage() {
         <p className="text-sm text-stone-500 mt-0.5">{ORG_ADMIN_SETTINGS_PAGE_COPY.pageSubtitle}</p>
       </div>
 
-      {/* Organization profile — editable */}
-      <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-stone-100">
-          <p className="text-sm font-semibold text-sky-950">
-            {ORG_ADMIN_SETTINGS_PAGE_COPY.profileCardTitle}
-          </p>
-          <p className="text-xs text-stone-400 mt-0.5">
-            {ORG_ADMIN_SETTINGS_PAGE_COPY.profileCardSubtitle}
-          </p>
-        </div>
-        <div className="px-6 py-5">
-          <OrgProfileForm currentName={orgName} domain={domain} />
-        </div>
-      </div>
-
-      {/* Security policy — MFA requirement */}
-      <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-stone-100">
-          <p className="text-sm font-semibold text-sky-950">
-            {ORG_ADMIN_SETTINGS_PAGE_COPY.securityCardTitle}
-          </p>
-          <p className="text-xs text-stone-400 mt-0.5">
-            {ORG_ADMIN_SETTINGS_PAGE_COPY.securityCardSubtitle}
-          </p>
-        </div>
-        <div className="px-6 py-5">
-          <MFAPolicyForm currentPolicy={mfaPolicy} />
-        </div>
-      </div>
-
-      {/* Invite policy — write form. Maps the three operator-visible modes
-          to the persisted (allow_public_registration, require_registration_approval)
-          boolean pair via invitePolicyFlagsFromMode/-FromFlags helpers. */}
-      <InvitePolicyForm policy={invitePolicy} />
+      {/* Organization record — READ-ONLY (THE-V032-ALL-GREEN ruling C).
+          AdminPermissionsModel.md scopes org_admin to the seven day-to-day
+          resource areas and excludes the org record (infrastructure
+          authority); the backend refuses org_admin writes to it, so this
+          page presents it without save affordances. The previous editable
+          profile/security/registration forms rendered saves that always
+          failed with 403. */}
+      <OrgRecordReadOnlySection
+        name={orgName}
+        domain={domain}
+        mfaPolicy={mfaPolicy}
+        invitePolicyLabel={invitePolicyModeCopy.label}
+        invitePolicyDescription={invitePolicyModeCopy.description}
+      />
 
       {/* Protocol settings card — same-org org_admin can manage DCR Foundation
           and view the SCIM Enterprise/CE boundary for their own organization. Fetched in

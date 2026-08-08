@@ -547,20 +547,20 @@ test.describe("/org-admin/service-accounts/[id] — link to OAuth client (dynami
       //     duplicating the navigation. Re-uses the SA UUID captured
       //     earlier in this test as `saUUIDForUnlink`.
       const lifecycleRow = page.getByRole("link", {
-        name: "View audit event service_account_disabled for this service account",
+        name: "View audit event service_account.disabled for this service account",
       });
       await expect(lifecycleRow).toBeVisible();
       const lifecycleRowHref = await lifecycleRow.getAttribute("href");
       expect(lifecycleRowHref).toBe(
-        `/org-admin/audit?subject_id=${encodeURIComponent(saUUIDForUnlink)}&event_type=service_account_disabled`
+        `/org-admin/audit?subject_id=${encodeURIComponent(saUUIDForUnlink)}&event_type=service_account.disabled`
       );
       const enableRow = page.getByRole("link", {
-        name: "View audit event service_account_enabled for this service account",
+        name: "View audit event service_account.enabled for this service account",
       });
       await expect(enableRow).toBeVisible();
       const enableRowHref = await enableRow.getAttribute("href");
       expect(enableRowHref).toBe(
-        `/org-admin/audit?subject_id=${encodeURIComponent(saUUIDForUnlink)}&event_type=service_account_enabled`
+        `/org-admin/audit?subject_id=${encodeURIComponent(saUUIDForUnlink)}&event_type=service_account.enabled`
       );
 
       // 10. Per-row drill-in on the UNLINK row: click the row whose
@@ -570,21 +570,21 @@ test.describe("/org-admin/service-accounts/[id] — link to OAuth client (dynami
       //     the resulting /org-admin/audit URL.
       const saUUID = saUUIDForUnlink;
       const unlinkRow = page.getByRole("link", {
-        name: "View audit event service_account_unlinked_oauth_client for this service account",
+        name: "View audit event service_account.unlinked_oauth_client for this service account",
       });
       await expect(unlinkRow).toBeVisible();
       const unlinkRowHref = await unlinkRow.getAttribute("href");
       expect(unlinkRowHref).toBe(
-        `/org-admin/audit?subject_id=${encodeURIComponent(saUUID)}&event_type=service_account_unlinked_oauth_client`
+        `/org-admin/audit?subject_id=${encodeURIComponent(saUUID)}&event_type=service_account.unlinked_oauth_client`
       );
       await unlinkRow.click();
       await page.waitForURL(
-        /\/org-admin\/audit\?subject_id=[^&]+&event_type=service_account_unlinked_oauth_client/,
+        /\/org-admin\/audit\?subject_id=[^&]+&event_type=service_account.unlinked_oauth_client/,
         { timeout: 15_000 }
       );
       const auditURL = page.url();
       expect(auditURL).toContain(`subject_id=${encodeURIComponent(saUUID)}`);
-      expect(auditURL).toContain("event_type=service_account_unlinked_oauth_client");
+      expect(auditURL).toContain("event_type=service_account.unlinked_oauth_client");
 
       // 11. Negative scan on the audit page: no credential / secret /
       //     hash / private-key / token / bearer / set-cookie / session-id
@@ -733,12 +733,12 @@ test.describe("/org-admin/service-accounts/[id] — edit details (dynamic mode, 
       //    "Service account updated" row, with the per-row drill-in
       //    href pinning subject_id + event_type.
       const updatedRow = page.getByRole("link", {
-        name: "View audit event service_account_updated for this service account",
+        name: "View audit event service_account.updated for this service account",
       });
       await expect(updatedRow).toBeVisible({ timeout: 15_000 });
       const updatedHref = await updatedRow.getAttribute("href");
       expect(updatedHref).toBe(
-        `/org-admin/audit?subject_id=${encodeURIComponent(saUUID)}&event_type=service_account_updated`
+        `/org-admin/audit?subject_id=${encodeURIComponent(saUUID)}&event_type=service_account.updated`
       );
       // 10. Negative scan on the detail page <main>: no credential /
       //     secret / hash / private-key / token / bearer / set-cookie /

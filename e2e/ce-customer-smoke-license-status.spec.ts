@@ -131,6 +131,20 @@ test.describe("CE customer-smoke M2 — backend license-status agreement (no-sec
     "IDENTUUM_E2E_CE_LICENSE_GATE_PREPARED=0 — stack explicitly marked not-prepared; M1/M2 manual runbook has not run."
   );
 
+  // CONDITION-JUSTIFIED SKIP (THE-V032-ALL-GREEN Order D). These tests
+  // assert the M2-PROVISIONED CE customer-smoke stack (license_valid on both
+  // endpoints) — a mere listener on the port is not that (a partially-up CE
+  // dev stack answers but is not runbook-provisioned). They therefore run
+  // only when the operator marks the M1/M2 manual runbook complete; on an
+  // OSS-only workstation they skip with this condition printed and run
+  // unchanged when CE ships.
+  test.beforeEach(() => {
+    test.skip(
+      CE_LICENSE_GATE_PREPARED !== "1",
+      `CE customer-smoke stack not marked M2-provisioned — set IDENTUUM_E2E_CE_LICENSE_GATE_PREPARED=1 after running the M1/M2 runbook against ${IDP_BASE_URL} (these tests ship with CE).`
+    );
+  });
+
   test("GET /api/setup/license returns state=license_valid", async ({ request }) => {
     const res = await request.get(`${IDP_BASE_URL}/api/setup/license`);
     expect(res.status()).toBe(200);

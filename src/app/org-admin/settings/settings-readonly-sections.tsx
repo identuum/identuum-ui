@@ -340,3 +340,66 @@ function ErrorBody() {
     </div>
   );
 }
+
+// ── Organization record section (read-only — THE-V032-ALL-GREEN ruling C) ──
+//
+// AdminPermissionsModel.md pins org_admin to "day-to-day control of that
+// organization's resources (users, clients, service accounts, identity
+// provider, protocol settings, domains, RBAC roles)" and explicitly outside
+// "organization lifecycle (create/delete/activate -- infrastructure
+// authority)". The ORG RECORD itself — display name, security policy,
+// registration policy — is not among the seven areas, and the backend
+// correctly refuses org_admin writes to it (PUT /organizations/:id is
+// infrastructure authority). This section therefore PRESENTS the record
+// read-only instead of rendering save affordances that must always fail.
+//
+// COPY RULE: the settings page body-scan bans authority language
+// ("site admin", "cross-org", …) — the copy below says "platform
+// administrator", matching the page's established error copy.
+export function OrgRecordReadOnlySection({
+  name,
+  domain,
+  mfaPolicy,
+  invitePolicyLabel,
+  invitePolicyDescription,
+}: {
+  name: string;
+  domain: string | null | undefined;
+  mfaPolicy: string;
+  invitePolicyLabel: string;
+  invitePolicyDescription: string;
+}) {
+  return (
+    <Card
+      headingId="organization-record-heading"
+      title="Organization record"
+      subtitle="Read-only. The organization record (display name, security policy, registration policy) is managed at the infrastructure level — contact your platform administrator to change it."
+    >
+      <dl className="px-6 py-4 space-y-3">
+        <div className="flex items-start justify-between gap-4">
+          <dt className="text-xs font-medium text-stone-500">Organization name</dt>
+          <dd className="text-sm text-sky-950 text-right">{name}</dd>
+        </div>
+        <div className="flex items-start justify-between gap-4">
+          <dt className="text-xs font-medium text-stone-500">Primary domain</dt>
+          <dd className="text-sm font-mono text-sky-950 text-right">{domain ?? "—"}</dd>
+        </div>
+        <div className="flex items-start justify-between gap-4">
+          <dt className="text-xs font-medium text-stone-500">MFA policy</dt>
+          <dd className="text-sm text-sky-950 text-right">
+            {mfaPolicy === "required" ? "Required" : "Optional"}
+          </dd>
+        </div>
+        <div className="flex items-start justify-between gap-4">
+          <dt className="text-xs font-medium text-stone-500">Invite policy</dt>
+          <dd className="text-right">
+            <p className="text-sm text-sky-950">{invitePolicyLabel}</p>
+            <p className="text-[11px] text-stone-400 leading-snug max-w-md">
+              {invitePolicyDescription}
+            </p>
+          </dd>
+        </div>
+      </dl>
+    </Card>
+  );
+}

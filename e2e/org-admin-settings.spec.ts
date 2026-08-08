@@ -102,12 +102,14 @@ test.describe("/org-admin/settings — main settings surface", () => {
       // Page heading
       await expect(page.getByRole("heading", { name: "Organization settings" })).toBeVisible();
 
-      // Four card titles — the two implemented forms, the new Invite policy
-      // read-only card, and the Domains placeholder.
-      await expect(page.getByText("Organization profile", { exact: true })).toBeVisible();
-      await expect(page.getByText("Security policy", { exact: true })).toBeVisible();
+      // Card titles — the read-only Organization record card (ruling C:
+      // the org record is infrastructure authority; the old editable
+      // profile/security cards are gone) and the Domains card.
+      await expect(page.getByRole("heading", { name: "Organization record" })).toBeVisible();
       await expect(page.getByText("Invite policy", { exact: true })).toBeVisible();
       await expect(page.getByText("Domains", { exact: true })).toBeVisible();
+      expect(await page.getByText("Organization profile", { exact: true }).count()).toBe(0);
+      expect(await page.getByText("Security policy", { exact: true }).count()).toBe(0);
 
       // Four NEW read-only headings landed by slice
       // identuum-20260530-org-admin-settings-readonly-tabs. Each
@@ -148,10 +150,25 @@ test.describe("/org-admin/settings — main settings surface", () => {
   });
 });
 
-// ── 2. Organization profile form ─────────────────────────────────────────────
+// ── 2. Organization record — READ-ONLY (THE-V032-ALL-GREEN ruling C) ────────
+//
+// AdminPermissionsModel.md scopes org_admin to day-to-day control of the
+// seven resource areas (users, clients, service accounts, identity provider,
+// protocol settings, domains, RBAC roles) and EXCLUDES the organization
+// record itself — "cannot manage organization lifecycle (create/delete/
+// activate -- infrastructure authority)". The backend enforces this
+// (PUT /api/v1/organizations/:id is infrastructure authority; an org_admin
+// write is refused), so the page PRESENTS the record read-only. These pins
+// replace the editable-form pins that asserted name inputs, policy radios
+// and Save buttons — those saves could only ever fail.
+//
+// RED-PROOF: every assertion below is the direct negation of the previous
+// editable-form pins, which passed against the pre-flip UI — the old suite
+// state is the failing witness for these pins, and the flipped dynamic test
+// additionally proves the REFUSAL live.
 
-test.describe("/org-admin/settings — Organization profile form", () => {
-  test("renders name input + Save profile button + read-only Primary domain", async () => {
+test.describe("/org-admin/settings — Organization record (read-only)", () => {
+  test("renders the record card with name/domain/policies as text — no inputs, no radios, no save affordances", async () => {
     if (skipOrgAdminTests) {
       test.skip(true, SKIP_MSG);
     }
@@ -161,152 +178,46 @@ test.describe("/org-admin/settings — Organization profile form", () => {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
 
-      // Organization name label + input. The input is enabled (operator can
-      // edit), but this spec does NOT fill it.
-      const nameInput = page.getByLabel("Organization name");
-      await expect(nameInput).toBeVisible();
-      expect(await nameInput.isDisabled()).toBe(false);
+      // Card heading + read-only justification copy.
+      await expect(page.getByRole("heading", { name: "Organization record" })).toBeVisible();
+      await expect(page.getByText(/managed at the infrastructure level/i)).toBeVisible();
 
-      // Save profile button is visible — but this spec does NOT click it.
-      await expect(page.getByRole("button", { name: /save profile/i })).toBeVisible();
-
-      // Primary domain section renders as a read-only <p>, not as <input>.
-      // `getByLabel("Primary domain")` would only match an input control;
-      // assert the COUNT is zero so a future regression that wired an
-      // editable input would be caught.
-      expect(await page.getByLabel(/primary domain/i).count()).toBe(0);
-
-      // The OIDC-discovery helper copy block, when present, identifies the
-      // read-only justification rendered with the domain.
-      const helpCount = await page.getByText("Domain changes affect", { exact: false }).count();
-      if (helpCount > 0) {
-        await expect(page.getByText("Domain changes affect", { exact: false })).toBeVisible();
-      }
-    } finally {
-      await page.close();
-    }
-  });
-});
-
-// ── 3. MFA policy form ───────────────────────────────────────────────────────
-
-test.describe("/org-admin/settings — MFA policy form", () => {
-  test("renders Optional + Required radios + Save policy button (mutex enforced)", async () => {
-    if (skipOrgAdminTests) {
-      test.skip(true, SKIP_MSG);
-    }
-
-    const page = await getSharedContext().newPage();
-    try {
-      await page.goto("/org-admin/settings");
-      await page.waitForLoadState("networkidle");
-
-      const optionalOpt = page.getByRole("radio", { name: /^Optional/ });
-      const requiredOpt = page.getByRole("radio", { name: /^Required/ });
-      await expect(optionalOpt).toBeVisible();
-      await expect(requiredOpt).toBeVisible();
-
-      // Mutex: exactly one selected. This spec does NOT toggle the selection.
-      const optChecked = await optionalOpt.isChecked();
-      const reqChecked = await requiredOpt.isChecked();
-      expect(optChecked || reqChecked).toBe(true);
-      expect(optChecked && reqChecked).toBe(false);
-
-      await expect(page.getByRole("button", { name: /save policy/i })).toBeVisible();
-    } finally {
-      await page.close();
-    }
-  });
-});
-
-// ── 4. Invite policy card (read-only) ────────────────────────────────────────
-
-test.describe("/org-admin/settings — Invite policy card", () => {
-  test("renders card title, three mode radios, exactly one initial selection, Save button, and Users-page link", async () => {
-    if (skipOrgAdminTests) {
-      test.skip(true, SKIP_MSG);
-    }
-
-    const page = await getSharedContext().newPage();
-    try {
-      await page.goto("/org-admin/settings");
-      await page.waitForLoadState("networkidle");
-
-      // Card title + sr-only legend.
+      // The four record rows render as definition text.
+      await expect(page.getByText("Organization name", { exact: true })).toBeVisible();
+      await expect(page.getByText("Primary domain", { exact: true }).first()).toBeVisible();
+      await expect(page.getByText("MFA policy", { exact: true })).toBeVisible();
       await expect(page.getByText("Invite policy", { exact: true })).toBeVisible();
 
-      // Three radios, one per documented mode.
-      // Use the input's `value` attribute to disambiguate — the
-      // accessible names of the three radios all include long descriptions
-      // and "Public self-registration" is a prefix of two distinct modes.
-      const inviteOnlyRadio = page.locator('input[name="invite_policy_mode"][value="invite-only"]');
-      const publicWithApprovalRadio = page.locator(
-        'input[name="invite_policy_mode"][value="public-with-approval"]'
-      );
-      const publicImmediateRadio = page.locator(
-        'input[name="invite_policy_mode"][value="public-immediate"]'
-      );
-      await expect(inviteOnlyRadio).toBeVisible();
-      await expect(publicWithApprovalRadio).toBeVisible();
-      await expect(publicImmediateRadio).toBeVisible();
+      // NO editable affordances for the org record: no name input, no policy
+      // radios, no record-save buttons.
+      expect(await page.getByLabel("Organization name").count()).toBe(0);
+      expect(await page.locator('input[name="invite_policy_mode"]').count()).toBe(0);
+      expect(await page.getByRole("radio", { name: /^Optional/ }).count()).toBe(0);
+      expect(await page.getByRole("radio", { name: /^Required/ }).count()).toBe(0);
+      expect(await page.getByRole("button", { name: /save profile/i }).count()).toBe(0);
+      expect(await page.getByRole("button", { name: /save policy/i }).count()).toBe(0);
+      expect(await page.getByRole("button", { name: /save invite policy/i }).count()).toBe(0);
 
-      // Exactly one is initially checked. The dynamic-fixture org is created
-      // with allow=false, approval=false → "invite-only" is initially
-      // selected. Durable fixtures depend on their row.
-      const inviteOnlyChecked = await inviteOnlyRadio.isChecked();
-      const publicWithApprovalChecked = await publicWithApprovalRadio.isChecked();
-      const publicImmediateChecked = await publicImmediateRadio.isChecked();
-      const checkedCount = [
-        inviteOnlyChecked,
-        publicWithApprovalChecked,
-        publicImmediateChecked,
-      ].filter(Boolean).length;
-      expect(checkedCount).toBe(1);
-
-      // "Save invite policy" button is visible (this spec does NOT click it
-      // unless the dynamic-mode test below opts in).
-      await expect(page.getByRole("button", { name: /save invite policy/i })).toBeVisible();
-
-      // "Open Users page →" link points at /org-admin/users (internal,
-      // relative). Catches a regression that pointed it at /site-admin/* or
-      // an external URL.
-      const usersLink = page.getByRole("link", { name: /Open Users page/i });
-      await expect(usersLink).toBeVisible();
-      expect(await usersLink.getAttribute("href")).toBe("/org-admin/users");
-
-      // The page now has exactly three Save buttons (Save profile, Save
-      // policy, Save invite policy) PLUS the Protocol settings panel's Save —
-      // that panel renders now that the org resolves against the released
-      // appliance (it was silently absent while getOwnOrganization failed).
-      // A fifth would indicate an unexpected new mutation surface.
-      expect(await page.getByRole("button", { name: /^Save\b/i }).count()).toBe(4);
+      // Exactly ONE Save remains on the page — the Protocol settings panel's
+      // (protocol settings ARE one of the model's seven org_admin areas).
+      expect(await page.getByRole("button", { name: /^Save\b/i }).count()).toBe(1);
     } finally {
       await page.close();
     }
   });
 
-  // Write-path coverage — DYNAMIC FIXTURE MODE ONLY.
-  //
-  // This test toggles the Invite policy mode and clicks Save against the
-  // disposable fixture organization. The dynamic fixture is per-run and is
-  // hard-purged by globalTeardown regardless of test outcome, so the
-  // mutation is contained and reversible by construction.
-  //
-  // The test self-skips when the operator did NOT opt into dynamic mode
-  // (durable env mode might target a long-lived fixture; mutating that
-  // would be irreversible). The opt-in signal is the env value the loader
-  // honors — when the dynamic JSON file is present, login.ts used its
-  // generated credentials; when it is absent, durable env vars are in use.
-  test("[dynamic mode only] toggling a radio enables Save; clicking persists and the new mode is reflected", async () => {
+  // FLIPPED write-path coverage (was: "toggling a radio enables Save;
+  // clicking persists"). The refusal is now asserted as CORRECT, live:
+  // an org_admin PUT against its own org record must be REFUSED by the
+  // backend, and the page must offer no path to attempt it.
+  test("[dynamic mode only] org_admin write to the org record is REFUSED (403) and the page offers no save path", async () => {
     if (skipOrgAdminTests) {
       test.skip(true, SKIP_MSG);
     }
-    // Only run when dynamic fixture mode is explicitly requested — this
-    // is the only safe path to click Save against a real org.
     if (process.env.IDENTUUM_E2E_USE_DYNAMIC_FIXTURE !== "true") {
       test.skip(
         true,
-        "Set IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true to opt in. This test mutates the disposable fixture org."
+        "Set IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true to opt in. This test issues a (refused) write against the disposable fixture org."
       );
     }
 
@@ -315,47 +226,28 @@ test.describe("/org-admin/settings — Invite policy card", () => {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
 
-      // The dynamic-fixture org is created with mode "invite-only".
-      // Disambiguate the three radios by the input's `value` attribute
-      // (matches the form's `name="invite_policy_mode"` input pair).
-      const inviteOnlyRadio = page.locator('input[name="invite_policy_mode"][value="invite-only"]');
-      const publicImmediateRadio = page.locator(
-        'input[name="invite_policy_mode"][value="public-immediate"]'
+      // No record-save affordance exists on the rendered page.
+      expect(await page.getByRole("button", { name: /save invite policy/i }).count()).toBe(0);
+      expect(await page.getByRole("button", { name: /save profile/i }).count()).toBe(0);
+
+      // Live refusal proof: the same org_admin session attempting the org-
+      // record write directly (through the UI proxy, which carries the
+      // session's own credentials) is REFUSED by the backend. 403 — not
+      // 404, not 2xx — the record exists and the actor is authenticated;
+      // the authority is what is missing (infrastructure authority).
+      const orgRes = await page.request.get("/api/idp/api/v1/organizations/current");
+      expect(orgRes.status()).toBe(200);
+      const org = (await orgRes.json()) as { id?: string };
+      expect(typeof org.id).toBe("string");
+
+      const put = await page.request.put(
+        `/api/idp/api/v1/organizations/${encodeURIComponent(org.id as string)}`,
+        { data: { allow_public_registration: true } }
       );
-      const saveBtn = page.getByRole("button", { name: /save invite policy/i });
-
-      expect(await inviteOnlyRadio.isChecked()).toBe(true);
-      expect(await saveBtn.isDisabled()).toBe(true);
-
-      // Toggle to public-immediate; Save becomes enabled.
-      await publicImmediateRadio.check();
-      expect(await publicImmediateRadio.isChecked()).toBe(true);
-      expect(await saveBtn.isDisabled()).toBe(false);
-
-      // Click Save and wait for the success banner. The banner appears
-      // ONLY when the server action returned `{phase: "success"}`, which
-      // means the IDP accepted the PUT. The success banner is the load-
-      // bearing signal that the save persisted.
-      await saveBtn.click();
-      await expect(
-        page.getByText("Invite policy updated successfully.", { exact: true })
-      ).toBeVisible({ timeout: 10_000 });
-
-      // Cross-check: no error banner is visible.
       expect(
-        await page
-          .locator("div.bg-red-50")
-          .filter({ hasText: /Failed/i })
-          .count()
-      ).toBe(0);
-
-      // Reload the page and verify the new mode is now the initial selection
-      // (proves the change was actually persisted to the DB and re-projected
-      // through the IDP read path).
-      await page.reload();
-      await page.waitForLoadState("networkidle");
-      expect(await publicImmediateRadio.isChecked()).toBe(true);
-      expect(await inviteOnlyRadio.isChecked()).toBe(false);
+        put.status(),
+        "org_admin org-record write must be refused (infrastructure authority)"
+      ).toBe(403);
     } finally {
       await page.close();
     }

@@ -425,11 +425,10 @@ describe("Page + InvitePolicyForm source — wiring and negative invariants", ()
     "utf-8"
   );
 
-  it("page.tsx imports InvitePolicyForm and renders it with the projected booleans", () => {
-    expect(PAGE_SRC).toMatch(
-      /import\s*\{\s*InvitePolicyForm\s*\}\s*from\s+["']@\/components\/org-admin\/invite-policy-form["']/
-    );
-    expect(PAGE_SRC).toMatch(/<InvitePolicyForm\s+policy=\{\s*invitePolicy\s*\}\s*\/>/);
+  it("page.tsx presents the invite policy READ-ONLY via OrgRecordReadOnlySection (ruling C: the org record is infrastructure authority — no editable form is mounted)", () => {
+    expect(PAGE_SRC).not.toMatch(/InvitePolicyForm/);
+    expect(PAGE_SRC).toMatch(/<OrgRecordReadOnlySection\b/);
+    expect(PAGE_SRC).toMatch(/deriveOrgAdminInvitePolicyMode/);
     expect(PAGE_SRC).toMatch(/allow_public_registration/);
     expect(PAGE_SRC).toMatch(/require_registration_approval/);
   });

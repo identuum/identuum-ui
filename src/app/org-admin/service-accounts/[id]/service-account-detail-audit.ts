@@ -58,6 +58,17 @@ export const SERVICE_ACCOUNT_AUDIT_EVENT_LABELS: Record<string, string> = {
   service_account_unlinked_oauth_client: "OAuth client unlinked",
   service_account_disabled: "Service account disabled",
   service_account_enabled: "Service account enabled",
+  // Released identuum-idp-oss emits DOT-FORM actions (audit.Event.Action —
+  // v0.3.2 subject-tags + tenant-scopes the whole family); the underscore
+  // keys above are the retired monolith's spelling, kept for envelope
+  // compatibility. Same labels, both spellings.
+  "service_account.created": "Service account created",
+  "service_account.updated": "Service account updated",
+  "service_account.deleted": "Service account deleted",
+  "service_account.linked_oauth_client": "OAuth client linked",
+  "service_account.unlinked_oauth_client": "OAuth client unlinked",
+  "service_account.disabled": "Service account disabled",
+  "service_account.enabled": "Service account enabled",
 };
 
 /**

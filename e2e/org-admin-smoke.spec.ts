@@ -181,34 +181,19 @@ test.describe("/org-admin — authenticated route access", () => {
       expect(await page.title()).not.toMatch(/500|internal error|application error/i);
       await expect(page.getByRole("heading", { name: "Organization settings" })).toBeVisible();
 
-      // Organization profile card
-      await expect(page.getByText("Organization profile")).toBeVisible();
-      const nameInput = page.getByLabel("Organization name");
-      await expect(nameInput).toBeVisible();
-      expect(await nameInput.isDisabled()).toBe(false);
-      await expect(page.getByRole("button", { name: /save profile/i })).toBeVisible();
+      // Organization record card — READ-ONLY (THE-V032-ALL-GREEN ruling C:
+      // the org record is infrastructure authority; the old editable
+      // profile/security forms are gone, and with them every always-failing
+      // save affordance).
+      await expect(page.getByRole("heading", { name: "Organization record" })).toBeVisible();
+      await expect(page.getByText("Organization name", { exact: true })).toBeVisible();
+      await expect(page.getByText("MFA policy", { exact: true })).toBeVisible();
+      expect(await page.getByLabel("Organization name").count()).toBe(0);
+      expect(await page.getByRole("radio", { name: /^Optional/ }).count()).toBe(0);
+      expect(await page.getByRole("button", { name: /save profile/i }).count()).toBe(0);
+      expect(await page.getByRole("button", { name: /save policy/i }).count()).toBe(0);
 
-      // Domain field is read-only (rendered as <p>, not <input>)
-      expect(await page.getByLabel(/primary domain/i).count()).toBe(0);
-      if ((await page.getByText("Domain changes affect", { exact: false }).count()) > 0) {
-        await expect(page.getByText("Domain changes affect", { exact: false })).toBeVisible();
-      }
-
-      // Security policy card — MFA radio buttons
-      await expect(page.getByText("Security policy")).toBeVisible();
-      const optionalOpt = page.getByRole("radio", { name: /^Optional/ });
-      const requiredOpt = page.getByRole("radio", { name: /^Required/ });
-      await expect(optionalOpt).toBeVisible();
-      await expect(requiredOpt).toBeVisible();
-      const optChecked = await optionalOpt.isChecked();
-      const reqChecked = await requiredOpt.isChecked();
-      expect(optChecked || reqChecked).toBe(true);
-      expect(optChecked && reqChecked).toBe(false);
-      await expect(page.getByRole("button", { name: /save policy/i })).toBeVisible();
-
-      // Settings cards below the two forms:
-      // - Invite policy: real read-only card (since 2026-05-30 invite-policy task)
-      // - Domains: still a "Coming soon" placeholder (backend gap documented in UI-FEATURES.md Section 6c)
+      // Remaining cards:
       expect(await page.getByText("Domains", { exact: true }).count()).toBeGreaterThan(0);
       expect(await page.getByText("Invite policy", { exact: true }).count()).toBeGreaterThan(0);
       // The former "Coming soon" placeholders are gone: with the released

@@ -655,7 +655,16 @@ describe("service-account-detail-audit.ts — label map + helpers", () => {
     // Slice identuum-20260530-service-account-disable-enable-ui added
     // the disabled/enabled events; the dedicated label-map describe
     // block at the bottom of this file pins each entry explicitly.
+    // Both spellings per event: the released OSS DOT-FORM actions plus the
+    // retired monolith's underscore keys (kept for envelope compatibility).
     expect(Object.keys(SERVICE_ACCOUNT_AUDIT_EVENT_LABELS).sort()).toEqual([
+      "service_account.created",
+      "service_account.deleted",
+      "service_account.disabled",
+      "service_account.enabled",
+      "service_account.linked_oauth_client",
+      "service_account.unlinked_oauth_client",
+      "service_account.updated",
       "service_account_created",
       "service_account_deleted",
       "service_account_disabled",
@@ -1103,7 +1112,16 @@ describe("service-account-detail-audit.ts — label map includes the unlink even
     );
   });
   it("label map now covers exactly the documented IDP event types (7 entries after edit slice)", () => {
+    // Both spellings per event: the released OSS DOT-FORM actions plus the
+    // retired monolith's underscore keys (kept for envelope compatibility).
     expect(Object.keys(SERVICE_ACCOUNT_AUDIT_EVENT_LABELS).sort()).toEqual([
+      "service_account.created",
+      "service_account.deleted",
+      "service_account.disabled",
+      "service_account.enabled",
+      "service_account.linked_oauth_client",
+      "service_account.unlinked_oauth_client",
+      "service_account.updated",
       "service_account_created",
       "service_account_deleted",
       "service_account_disabled",
