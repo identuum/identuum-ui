@@ -183,10 +183,14 @@ export async function listOrganizations(opts?: {
 
     return {
       organizations,
-      total_count: Number(data.total_count ?? 0),
-      count: Number(data.count ?? 0),
-      offset: Number(data.offset ?? 0),
-      limit: Number(data.limit ?? limit),
+      // Released OSS paginates as { total, page, page_size }; legacy shapes
+      // carried total_count/count/offset/limit. Tolerate both.
+      total_count: Number(data.total_count ?? data.total ?? organizations.length),
+      count: Number(data.count ?? organizations.length),
+      offset: Number(
+        data.offset ?? (data.page && data.page_size ? (data.page - 1) * data.page_size : 0)
+      ),
+      limit: Number(data.limit ?? data.page_size ?? limit),
     };
   } catch {
     return null;
@@ -233,7 +237,8 @@ export async function createOrganization(opts: CreateOrgOptions): Promise<Create
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json();
-    const org = data.organization ?? {};
+    // Released OSS returns the created org top-level; tolerate a wrapped shape.
+    const org = data.organization ?? data ?? {};
 
     // Sanitize to UI-safe shape. activation_token is conditionally included:
     // - non-empty string → air-gapped mode; must be delivered out-of-band to admin.
@@ -273,7 +278,9 @@ export async function getOrganization(id: string): Promise<OrgDetail | null> {
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json();
-    const o = data.organization ?? {};
+    // Released OSS GET /organizations/:id returns the org fields at the TOP
+    // LEVEL (safeOrganization), not wrapped; tolerate both shapes.
+    const o = data.organization ?? data ?? {};
 
     // Sanitize to the UI-safe OrgDetail shape.
     return {
@@ -414,7 +421,8 @@ export async function updateOrganization(
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json();
-    const org = data.organization ?? {};
+    // Released OSS returns the updated org top-level; tolerate a wrapped shape.
+    const org = data.organization ?? data ?? {};
 
     return {
       ok: true,
@@ -901,7 +909,8 @@ export async function getOrgUserById(id: string): Promise<OrgUserItem | null> {
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json();
-    const u = data.user ?? {};
+    // Released OSS returns the user top-level; tolerate a wrapped shape.
+    const u = data.user ?? data ?? {};
 
     return {
       id: String(u.id ?? ""),
@@ -1573,17 +1582,22 @@ export async function addOrganizationDomain(
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json();
+    // Released OSS returns { organization_domain, txt_record_name,
+    // txt_record_value, verification_token } top-level; a legacy shape nested
+    // the same data as { domain, challenge: {...} }. Tolerate both.
     const ch = (data?.challenge ?? {}) as Partial<OrganizationDomainChallenge>;
     return {
       ok: true,
       data: {
-        domain: sanitizeDomainInfo(data?.domain),
+        domain: sanitizeDomainInfo(data?.organization_domain ?? data?.domain),
         challenge: {
-          record_name: String(ch.record_name ?? ""),
+          record_name: String(data?.txt_record_name ?? ch.record_name ?? ""),
           record_type: String(ch.record_type ?? "TXT"),
-          record_value: String(ch.record_value ?? ""),
-          token: String(ch.token ?? ""),
-          expires_at: String(ch.expires_at ?? ""),
+          record_value: String(data?.txt_record_value ?? ch.record_value ?? ""),
+          token: String(data?.verification_token ?? ch.token ?? ""),
+          expires_at: String(
+            ch.expires_at ?? data?.organization_domain?.verification_token_expires_at ?? ""
+          ),
         },
       },
     };

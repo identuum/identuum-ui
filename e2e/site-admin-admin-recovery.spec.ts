@@ -50,6 +50,7 @@
 
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import { loadOrgAdminFixture, loadOrgAdminFixtureOrgId } from "./helpers/fixture";
 import { SKIP_AUTH_MSG, loginAsSiteAdmin, skipAuthTests } from "./helpers/login";
 
 // Neutral placeholder defaults. Operators with a different local fixture
@@ -59,8 +60,32 @@ import { SKIP_AUTH_MSG, loginAsSiteAdmin, skipAuthTests } from "./helpers/login"
 const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000000";
 const DEFAULT_ORG_ADMIN_EMAIL = "admin@example.org";
 
-const ORG_ID = process.env.IDENTUUM_TEST_ORG_ID ?? DEFAULT_ORG_ID;
-const ORG_ADMIN_EMAIL = process.env.IDENTUUM_TEST_ORG_ADMIN_EMAIL ?? DEFAULT_ORG_ADMIN_EMAIL;
+// Dynamic-fixture mode resolves the disposable org + its org_admin from the
+// envelope, so the read-only recovery-card pins run against a REAL org rather
+// than the nil-UUID placeholder (which renders "Organization not found").
+// PRECEDENCE: the envelope WINS over IDENTUUM_TEST_* env vars — those may be
+// residue from a retired local stack (the census's local-env-residue class:
+// a stale admin email here once pointed the assertions at an org that only
+// existed on the owner's machine). Env vars apply only when no envelope is
+// present (durable-env mode).
+function safeFixtureOrgId(): string | null {
+  try {
+    return loadOrgAdminFixtureOrgId();
+  } catch {
+    return null;
+  }
+}
+function safeFixtureAdminEmail(): string | null {
+  try {
+    return loadOrgAdminFixture()?.email ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const ORG_ID = safeFixtureOrgId() ?? process.env.IDENTUUM_TEST_ORG_ID ?? DEFAULT_ORG_ID;
+const ORG_ADMIN_EMAIL =
+  safeFixtureAdminEmail() ?? process.env.IDENTUUM_TEST_ORG_ADMIN_EMAIL ?? DEFAULT_ORG_ADMIN_EMAIL;
 
 const ORG_ADMIN_PASSWORD = process.env.IDENTUUM_TEST_ORG_ADMIN_PASSWORD ?? "";
 

@@ -165,6 +165,39 @@ test.describe("passkey ceremony — CDP virtual authenticator", () => {
     await expect(nicknameInput).toBeVisible();
     await nicknameInput.fill(TEST_PASSKEY_NICKNAME);
 
+    // Diagnostic tap: record ONLY the method/path/status of the register
+    // wire calls (never a body, never a header) so a red here names the
+    // failing hop instead of a bare banner timeout.
+    const wireStatuses: string[] = [];
+    const onResponse = (res: import("@playwright/test").Response) => {
+      if (/webauthn\/register/.test(res.url())) {
+        const path = new URL(res.url()).pathname;
+        let extra = "";
+        if (/finish/.test(path)) {
+          // Decode ONLY the public clientDataJSON envelope (type/origin/
+          // crossOrigin — the spec-defined public fields; challenge redacted
+          // to its length). Never key material, never the attestation blob.
+          try {
+            const post = res.request().postDataJSON() as {
+              response?: { clientDataJSON?: string };
+            } | null;
+            const b64 = post?.response?.clientDataJSON ?? "";
+            const cd = JSON.parse(Buffer.from(b64, "base64").toString("utf-8")) as {
+              type?: string;
+              origin?: string;
+              crossOrigin?: boolean;
+              challenge?: string;
+            };
+            extra = ` [clientData type=${cd.type} origin=${cd.origin} crossOrigin=${cd.crossOrigin} challengeLen=${(cd.challenge ?? "").length}]`;
+          } catch {
+            extra = " [clientData: unparseable]";
+          }
+        }
+        wireStatuses.push(`${res.request().method()} ${path} → ${res.status()}${extra}`);
+      }
+    };
+    page.on("response", onResponse);
+
     // Arm the CDP listener BEFORE clicking "Add" so the event is not missed.
     // navigator.credentials.create() is handled synchronously by the virtual
     // authenticator (automaticPresenceSimulation: true — no user interaction needed).
@@ -172,18 +205,33 @@ test.describe("passkey ceremony — CDP virtual authenticator", () => {
       cdp.once("WebAuthn.credentialAdded", () => resolve());
     });
 
-    // Click "Add" — triggers the WebAuthn create() ceremony.
+    // Click "Add" — triggers the WebAuthn create() ceremony. Bound the CDP
+    // wait so a ceremony that never starts fails loudly instead of eating
+    // the whole test timeout.
     await page.getByRole("button", { name: "Add" }).click();
 
     // CDP event confirms the ceremony completed on the browser side.
-    await credentialAdded;
+    await Promise.race([
+      credentialAdded,
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error("WebAuthn.credentialAdded never fired (create() not reached)")),
+          30_000
+        )
+      ),
+    ]);
 
     // Success banner — proves the backend accepted the attestation.
-    // NOTE: this step WILL FAIL until UIPublicBaseURL is wired in main.go.
-    // The error will be a classifyPasskeyEnrollmentError message, not a crash.
-    await expect(page.getByText("Passkey added successfully.")).toBeVisible({
-      timeout: 10_000,
-    });
+    try {
+      await expect(page.getByText("Passkey added successfully.")).toBeVisible({
+        timeout: 10_000,
+      });
+    } finally {
+      page.off("response", onResponse);
+      if (wireStatuses.length > 0) {
+        console.log(`[passkey T2] register wire: ${wireStatuses.join(" | ")}`);
+      }
+    }
 
     // Credential row must appear in the passkeys list.
     await expect(page.locator("li").filter({ hasText: TEST_PASSKEY_NICKNAME })).toBeVisible({
@@ -221,8 +269,24 @@ test.describe("passkey ceremony — CDP virtual authenticator", () => {
     // Log out of the current session. Use page.request (origin-independent,
     // baseURL-resolved, shares context cookies) rather than an in-page
     // page.evaluate(...) relative fetch so it never depends on the current
-    // document origin.
-    await page.request.post("/api/idp/api/v1/logout");
+    // document origin. Released OSS serves the logout at /api/v1/auth/logout
+    // (the bare /api/v1/logout of the pre-split monolith is CALLED-NOT-SERVED).
+    const logoutRes = await page.request.post("/api/idp/api/v1/auth/logout");
+    if (!logoutRes.ok()) {
+      console.log(`[passkey T4] logout → ${logoutRes.status()}`);
+    }
+
+    // Diagnostic tap (status-only, never bodies): name the failing hop if the
+    // post-assertion navigation never happens.
+    const t4Statuses: string[] = [];
+    const onT4Response = (res: import("@playwright/test").Response) => {
+      if (/webauthn/.test(res.url())) {
+        t4Statuses.push(
+          `${res.request().method()} ${new URL(res.url()).pathname} → ${res.status()}`
+        );
+      }
+    };
+    page.on("response", onT4Response);
 
     await page.goto("/login");
     await page.waitForURL(/\/login/, { timeout: 10_000 });
@@ -246,8 +310,14 @@ test.describe("passkey ceremony — CDP virtual authenticator", () => {
     await credentialAsserted;
 
     // site_admin should be routed to /site-admin after successful authentication.
-    // NOTE: this step WILL FAIL until UIPublicBaseURL is wired in main.go.
-    await page.waitForURL(/\/site-admin/, { timeout: 15_000 });
+    try {
+      await page.waitForURL(/\/site-admin/, { timeout: 15_000 });
+    } finally {
+      page.off("response", onT4Response);
+      if (t4Statuses.length > 0) {
+        console.log(`[passkey T4] webauthn wire: ${t4Statuses.join(" | ")}`);
+      }
+    }
     expect(page.url()).toContain("/site-admin");
   });
 

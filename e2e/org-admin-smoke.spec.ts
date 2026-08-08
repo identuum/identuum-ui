@@ -93,11 +93,16 @@ test.describe("/org-admin — authenticated route access", () => {
       await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
       await expect(page.getByText("Members of your organization")).toBeVisible();
 
-      // Filter tabs are hardcoded and always rendered
-      await expect(page.getByRole("link", { name: /^All/ })).toBeVisible();
-      await expect(page.getByRole("link", { name: /^Active/ })).toBeVisible();
-      await expect(page.getByRole("link", { name: /^Pending/ })).toBeVisible();
-      await expect(page.getByRole("link", { name: /^Disabled/ })).toBeVisible();
+      // Filter tabs are hardcoded and always rendered. Each tab may carry a
+      // live member count in its label ("All 2", "Disabled 2"), so every
+      // locator is a BOUNDED regex — the `( \d+)?$` tail admits the count
+      // while the anchor keeps "Pending" from colliding with the separate
+      // "Pending approval" tab.
+      await expect(page.getByRole("link", { name: /^All( \d+)?$/ })).toBeVisible();
+      await expect(page.getByRole("link", { name: /^Active( \d+)?$/ })).toBeVisible();
+      await expect(page.getByRole("link", { name: /^Pending( \d+)?$/ })).toBeVisible();
+      await expect(page.getByRole("link", { name: /^Pending approval( \d+)?$/ })).toBeVisible();
+      await expect(page.getByRole("link", { name: /^Disabled( \d+)?$/ })).toBeVisible();
 
       // One of: table, empty state, or error state
       const hasTable = (await page.getByRole("columnheader", { name: "Role" }).count()) > 0;
@@ -119,8 +124,11 @@ test.describe("/org-admin — authenticated route access", () => {
       await page.goto("/org-admin/users");
       await page.waitForLoadState("networkidle");
 
-      for (const tabName of ["Active", "Pending", "Disabled"]) {
-        await page.getByRole("link", { name: new RegExp(`^${tabName}`) }).click();
+      // Bounded regexes: labels may carry live counts ("Disabled 2"), and the
+      // anchor keeps "Pending" from colliding with "Pending approval". The
+      // approval tab is exercised too.
+      for (const tabName of ["Active", "Pending", "Pending approval", "Disabled"]) {
+        await page.getByRole("link", { name: new RegExp(`^${tabName}( \\d+)?$`) }).click();
         await page.waitForLoadState("networkidle");
         expect(await page.title()).not.toMatch(/500|internal error|application error/i);
         await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
@@ -203,7 +211,12 @@ test.describe("/org-admin — authenticated route access", () => {
       // - Domains: still a "Coming soon" placeholder (backend gap documented in UI-FEATURES.md Section 6c)
       expect(await page.getByText("Domains", { exact: true }).count()).toBeGreaterThan(0);
       expect(await page.getByText("Invite policy", { exact: true }).count()).toBeGreaterThan(0);
-      expect(await page.getByText("Coming soon").count()).toBeGreaterThanOrEqual(1);
+      // The former "Coming soon" placeholders are gone: with the released
+      // appliance resolving the org, the REAL sections render — pin them.
+      expect(await page.getByText("Identity providers", { exact: true }).count()).toBeGreaterThan(
+        0
+      );
+      expect(await page.getByText("Protocol settings", { exact: true }).count()).toBeGreaterThan(0);
     } finally {
       await page.close();
     }

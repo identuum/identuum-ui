@@ -53,7 +53,9 @@ interface DiscoveryDoc {
   introspection_endpoint?: string;
 }
 
-async function discovery(request: import("@playwright/test").APIRequestContext): Promise<DiscoveryDoc> {
+async function discovery(
+  request: import("@playwright/test").APIRequestContext
+): Promise<DiscoveryDoc> {
   const res = await request.get(`${IDP_BASE_URL}/.well-known/openid-configuration`);
   expect(res.status()).toBe(200);
   return (await res.json()) as DiscoveryDoc;

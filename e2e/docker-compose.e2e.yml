@@ -45,8 +45,21 @@ services:
       IDENTUUM_IDP_OSS_LISTEN: "0.0.0.0:7113"
       IDENTUUM_IDP_OSS_ISSUER: "http://localhost:7113"
       IDENTUUM_IDP_DATA_DIR: "/app/data"
-      IDENTUUM_IDP_UI_PUBLIC_BASE_URL: "http://localhost:7104"
+      # WebAuthn UI origin — MUST equal the suite's baseURL origin or every
+      # passkey finish 400s on clientDataJSON origin validation. The harness
+      # (playwright.config.ts) exports IDENTUUM_E2E_UI_ORIGIN from its ONE
+      # authoritative baseURL before global-setup runs `up`, so a local env
+      # file that moves the suite to another port moves this with it.
+      IDENTUUM_IDP_UI_PUBLIC_BASE_URL: "${IDENTUUM_E2E_UI_ORIGIN:-http://localhost:7104}"
       IDENTUUM_IDP_DATABASE_URL: "postgres://identuum_idp:dev-identuum_idp-not-a-secret@postgres:5432/identuum_idp?sslmode=disable"
       # Transparent, fake-by-construction e2e at-rest key (sequential bytes) —
       # a throwaway appliance, never production.
       IDENTUUM_IDP_ENCRYPTION_KEY: "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      # Rate-limit relaxation via the image's DOCUMENTED operator env knobs
+      # (resolveRateLimitConfig). The released defaults are per-IP
+      # (LOGIN 5/min, REGISTER — which also gates WebAuthn begin/finish —
+      # 10/hour); the whole suite runs from ONE IP, so back-to-back runs
+      # exhaust them and green tests flip 429 (an amplification a real
+      # multi-client deployment never sees). Enforcement itself stays ON.
+      IDENTUUM_IDP_RATE_LIMIT_LOGIN_REQUESTS: "1000"
+      IDENTUUM_IDP_RATE_LIMIT_REGISTER_REQUESTS: "1000"

@@ -79,6 +79,18 @@ async function proxyToIdP(req: NextRequest, segments: string[]): Promise<Respons
     }
   });
 
+  // Released OSS resource endpoints establish the principal ONLY from
+  // Authorization: Bearer (mw.BearerPrincipal never reads the access_token
+  // cookie), so the proxy lifts the caller's OWN httpOnly access_token cookie
+  // into a Bearer header on this server→IdP hop. No elevation: it is the same
+  // credential the request already carries, the IdP validates it fully, and it
+  // never reaches browser JS. A browser-supplied Authorization header, if any,
+  // is left untouched.
+  if (!forwardHeaders.has("authorization")) {
+    const accessToken = req.cookies.get("access_token")?.value;
+    if (accessToken) forwardHeaders.set("authorization", `Bearer ${accessToken}`);
+  }
+
   let body: BodyInit | null = null;
   const method = req.method.toUpperCase();
   if (method !== "GET" && method !== "HEAD") {

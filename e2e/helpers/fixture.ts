@@ -490,6 +490,37 @@ export function fixtureDirectory(): string {
 }
 
 /**
+ * Returns the fixture organization's opaque UUID when the dynamic
+ * fixture file is present and valid — the id site-admin specs need to
+ * deep-link /site-admin/organizations/[id] at the disposable org.
+ *
+ * SECURITY:
+ *   - The id is a non-secret opaque row identifier; no credential
+ *     crosses this boundary.
+ *   - Re-uses validateFixture (marker, schema version, reserved
+ *     prefixes); a malformed file still throws.
+ *   - The id is validated against a narrow UUID-shape regex and
+ *     dropped fail-closed otherwise.
+ */
+export function loadOrgAdminFixtureOrgId(): string | null {
+  const path = resolveFixturePath();
+  try {
+    statSync(path);
+  } catch {
+    return null;
+  }
+  const raw = readFileSync(path, "utf-8");
+  const parsed = JSON.parse(raw) as unknown;
+  validateFixture(parsed, path);
+  const org = (parsed as { organization?: unknown }).organization;
+  if (!isObject(org)) return null;
+  const id = (org as Record<string, unknown>).id;
+  if (typeof id !== "string") return null;
+  if (!/^[0-9a-fA-F-]{32,36}$/.test(id)) return null;
+  return id;
+}
+
+/**
  * Non-secret subset of a seeded API resource: id, audience, name, active,
  * token_ttl_secs. NEVER expose resource_secret, resource_secret_hash,
  * private_key, inline jwks, signing material, access_token, refresh_token, or

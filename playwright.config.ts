@@ -142,6 +142,14 @@ const e2ePort = e2eBaseURLRaw
   : (process.env.IDENTUUM_E2E_PORT ?? "7104");
 const e2eBaseURL = e2eBaseURLRaw ?? `http://localhost:${e2ePort}`;
 
+// Export the suite's ONE authoritative UI origin for the appliance compose
+// (docker-compose.e2e.yml interpolates it into IDENTUUM_IDP_UI_PUBLIC_BASE_URL,
+// the IdP's allowed WebAuthn origin). Config-eval runs in the SAME process as
+// globalSetup, so the `up` it execs inherits this. Without it, a local env
+// file that moves the suite's port breaks every passkey finish on origin
+// validation (clientDataJSON origin ≠ appliance's allowed UI origin).
+process.env.IDENTUUM_E2E_UI_ORIGIN = new URL(e2eBaseURL).origin;
+
 // Isolated e2e ui-runtime config, wired AT CONFIG-EVAL TIME (THE-RELEASED-
 // CONTRACT). Playwright launches the webServer BEFORE globalSetup runs, so a
 // config file chosen inside globalSetup arrives too late — the freshly spawned

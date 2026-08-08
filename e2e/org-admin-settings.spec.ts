@@ -275,9 +275,11 @@ test.describe("/org-admin/settings — Invite policy card", () => {
       expect(await usersLink.getAttribute("href")).toBe("/org-admin/users");
 
       // The page now has exactly three Save buttons (Save profile, Save
-      // policy, Save invite policy). A fourth would indicate an
-      // unexpected new mutation surface.
-      expect(await page.getByRole("button", { name: /^Save\b/i }).count()).toBe(3);
+      // policy, Save invite policy) PLUS the Protocol settings panel's Save —
+      // that panel renders now that the org resolves against the released
+      // appliance (it was silently absent while getOwnOrganization failed).
+      // A fifth would indicate an unexpected new mutation surface.
+      expect(await page.getByRole("button", { name: /^Save\b/i }).count()).toBe(4);
     } finally {
       await page.close();
     }
@@ -627,9 +629,10 @@ test.describe("/org-admin/settings — Domains card", () => {
 
       // Success banner appears. We pin the exact bundle copy so a
       // regression that inlined a backend-derived string would
-      // surface.
+      // surface. Located by ROLE (the banner is an <output>, whose
+      // implicit role is status — a div[role=status] locator misses it).
       const successBanner = page
-        .locator('div[role="status"]')
+        .getByRole("status")
         .filter({ hasText: new RegExp(`^${syntheticDomain} has been removed\\.$`) });
       await expect(successBanner).toBeVisible({ timeout: 10_000 });
 
@@ -798,10 +801,13 @@ test.describe("/org-admin/settings — page-body negative invariants", () => {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
 
-      // Snapshot the rendered body text only. NEVER print this value or
-      // include it in assertion error messages — it could otherwise leak
-      // user-visible content into CI logs.
-      const bodyText = (await page.locator("body").textContent()) ?? "";
+      // Snapshot the rendered VISIBLE body text only (innerText, not
+      // textContent — textContent would also read Next.js RSC flight-payload
+      // <script> internals, whose serialized module paths contain strings
+      // like "site-admin" and would false-positive the authority scan).
+      // NEVER print this value or include it in assertion error messages —
+      // it could otherwise leak user-visible content into CI logs.
+      const bodyText = (await page.locator("body").innerText()) ?? "";
 
       // Credential-material blocklist. None of these should ever appear in
       // the rendered Organization profile + MFA policy + Invite policy +

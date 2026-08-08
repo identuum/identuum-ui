@@ -8,7 +8,7 @@ import type { OrgConfig, PublicIDPInfo, UserRole } from "@/lib/types";
 import { ApiError } from "@/lib/ui-api";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ChevronRight, Mail } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { MFAEnrollForm } from "./mfa-enroll-form";
@@ -55,8 +55,16 @@ export function LoginFlow({ onSuccess }: LoginFlowProps) {
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
 
-  const isWebAuthnSupported =
-    typeof window !== "undefined" && typeof window.PublicKeyCredential !== "undefined";
+  // Hydration-safe WebAuthn capability probe. A bare `typeof window` check
+  // renders the passkey button on the client's FIRST render but not on the
+  // server, which is a hydration mismatch (and in dev the resulting issue
+  // overlay can cover other controls). useEffect runs only after mount, so the
+  // server HTML and the initial client render agree (no button), and the
+  // button appears post-hydration on capable browsers.
+  const [isWebAuthnSupported, setIsWebAuthnSupported] = useState(false);
+  useEffect(() => {
+    setIsWebAuthnSupported(typeof window.PublicKeyCredential !== "undefined");
+  }, []);
 
   const {
     register,
@@ -248,7 +256,13 @@ export function LoginFlow({ onSuccess }: LoginFlowProps) {
         }
       }
 
-      if (!finishRes.ok || !finishData.success) {
+      // Released OSS returns the session envelope (user_id/session_id/role)
+      // with NO `success` flag; legacy shapes carried success:true. A 200
+      // with a session_id IS success on either shape.
+      const finished =
+        finishData.success === true ||
+        (typeof finishData.session_id === "string" && finishData.session_id.length > 0);
+      if (!finishRes.ok || !finished) {
         throw new Error("Passkey sign-in failed. Try again or use your password.");
       }
 

@@ -113,7 +113,9 @@ async function orchestrateReleasedApplianceFixture(): Promise<void> {
   if (fs.existsSync(fixturePath) && (await idpHealthy())) {
     const sa = safeLoadSiteAdmin();
     if (sa && (await totpLoginWorks(IDP_BASE_URL, sa.email, sa.password, sa.totpSecret))) {
-      process.stdout.write("[e2e setup] reusing the existing valid fixture (credentials stable).\n");
+      process.stdout.write(
+        "[e2e setup] reusing the existing valid fixture (credentials stable).\n"
+      );
       return;
     }
     process.stdout.write("[e2e setup] saved fixture is stale/invalid — rebuilding.\n");
