@@ -87,7 +87,11 @@ long-lived credentials kept in `.env.playwright.idp-oss.local`.
 Create `.env.playwright.idp-oss.local` at this repository's root
 (`identuum-ui/.env.playwright.idp-oss.local`).
 
-**This file is gitignored by `.env*.local` — never commit it.**
+**This file is gitignored by `.env*.local` — never commit it.** The same
+applies to its CE-overlay sibling, `.env.playwright.idp-ce.local`. Neither
+file's contents should be read or printed (by a person or an agent working
+in this repository) outside of the test harness actually consuming it —
+both hold long-lived, real credentials, not fixtures.
 
 Required env vars (fill in values from your local `identuum-idp-setup` output):
 

@@ -1,5 +1,23 @@
 # identuum-ui
 
+Copyright © 2026 Ozgur Demir. All rights reserved.
+
+## Project Status
+
+This repository is currently published for public inspection and
+evaluation only.
+
+- Not currently open source
+- External contributions are not accepted
+- No permission is granted to use, modify, redistribute, sublicense, or
+  create derivative works, except as necessarily required by GitHub's
+  Terms of Service and applicable law
+- Current repository license: `LicenseRef-AllRightsReserved` (see
+  [`LICENSE`](LICENSE))
+- Licensing terms may change in a future release
+
+---
+
 Next.js control-plane shell for the Identuum stack. Talks to
 `identuum-idp` (human IdP / OIDC AS) and `identuum-ag` (Agentic
 Governor) over server-side fetches and exposes the operator-facing

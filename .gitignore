@@ -4,6 +4,14 @@ node_modules/
 .pnp.js
 .yarn/install-state.gz
 
+# OS / editor artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
 # next.js
 .next/
 out/
@@ -33,6 +41,9 @@ next-env.d.ts
 # test artifacts
 playwright-report/
 test-results/
+# vitest coverage output (opt-in via `vitest run --coverage`; not part
+# of the default `pnpm test` script, but a realistic ad-hoc local run).
+coverage/
 # Local E2E fixture material written by the released-appliance harness
 # (e2e/global-setup.ts → e2e/helpers/appliance-fixture.ts). Holds the
 # generated fixture envelope (org/admin/user credentials + captured TOTP
@@ -41,8 +52,10 @@ test-results/
 # CLI, retired in THE-RELEASED-CONTRACT.)
 e2e/.auth/
 
-# local agent instructions
+# local agent instructions — local-only development-agent guidance,
+# must not be committed
 CLAUDE.md
+/AGENTS.md
 
 # Local-only MCP / AI tooling configuration (e.g. gograph MCP server
 # binding). Per-developer; may carry tokens or local paths in future
