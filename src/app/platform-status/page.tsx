@@ -60,18 +60,28 @@ export default async function PlatformStatusPage() {
         <ModeBadge mode={state.mode} />
 
         <div className="space-y-4">
-          <BackendCard
-            label="Identity (IDP)"
-            abbreviation="IDP"
-            backend={state.components.idp}
-            expectedComponent="identuum-idp"
-          />
-          <BackendCard
-            label="Agent Governance (AG)"
-            abbreviation="AG"
-            backend={state.components.ag}
-            expectedComponent="identuum-ag"
-          />
+          {/* ABSENCE IS NOT FAILURE (THE-ABSENT-BACKEND): a backend that is
+              not enabled in the runtime config is not mentioned at all — no
+              card, no error, no callout. The ModeBadge above already carries
+              the composition vocabulary ("Identity Only", …). A backend that
+              IS enabled but unreachable still renders its card with
+              "Unavailable" — that distinction is the point. */}
+          {cfg?.idp.enabled && (
+            <BackendCard
+              label="Identity (IDP)"
+              abbreviation="IDP"
+              backend={state.components.idp}
+              expectedComponent="identuum-idp"
+            />
+          )}
+          {cfg?.ag.enabled && (
+            <BackendCard
+              label="Agent Governance (AG)"
+              abbreviation="AG"
+              backend={state.components.ag}
+              expectedComponent="identuum-ag"
+            />
+          )}
           {/* AG auth provider discovery — shown when AG is configured */}
           {(cfg?.ag.enabled || agProviders.available || agProviders.error_code) && (
             <AgAuthProviderCard providers={agProviders} />
@@ -102,12 +112,16 @@ export default async function PlatformStatusPage() {
           <a href="/" className="text-sm text-sky-600 hover:text-sky-700 underline">
             Return to home
           </a>
-          <a
-            href="/site-admin/org-link/readiness"
-            className="text-sm text-stone-500 hover:text-stone-700 underline"
-          >
-            Organization linking readiness
-          </a>
+          {/* Org linking is an IDP↔AG feature — the drill-in is only offered
+              when AG is enabled (absence is not mentioned). */}
+          {cfg?.ag.enabled && (
+            <a
+              href="/site-admin/org-link/readiness"
+              className="text-sm text-stone-500 hover:text-stone-700 underline"
+            >
+              Organization linking readiness
+            </a>
+          )}
         </div>
       </div>
     </div>
@@ -149,11 +163,15 @@ function ModeBadge({ mode }: { mode: PlatformMode }) {
       description:
         "Both backends are configured but neither is responding correctly. Check backend connectivity.",
     },
+    // BOTH backends absent is an ERROR, not a calm empty state
+    // (THE-ABSENT-BACKEND addendum): identuum-ui-setup refuses to write a
+    // config with no enabled backend, so reaching this mode means the
+    // runtime config is missing or was hand-edited into an invalid state.
     unconfigured: {
       label: "Unconfigured",
-      colorClass: "bg-stone-100 text-stone-600 border-stone-200",
+      colorClass: "bg-red-100 text-red-800 border-red-200",
       description:
-        "No backends are configured. Run identuum-ui-setup to write the runtime configuration.",
+        "No backends are configured — this is an invalid configuration. Run identuum-ui-setup to write the runtime configuration.",
     },
   };
 

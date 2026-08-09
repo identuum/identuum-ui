@@ -145,9 +145,21 @@ export default async function SiteAdminSettingsPage() {
           </p>
         </div>
         <div className="px-6 py-5 divide-y divide-stone-100">
-          {services.map((svc) => (
-            <ServiceRow key={svc.name} service={svc} />
-          ))}
+          {/* ABSENCE IS NOT FAILURE (THE-ABSENT-BACKEND): backends that are
+              not enabled in the runtime config are not mentioned — no row,
+              no "Disabled" badge. Enabled-but-unhealthy still shows
+              Unhealthy. */}
+          {services.filter((svc) => svc.enabled).length > 0 ? (
+            services
+              .filter((svc) => svc.enabled)
+              .map((svc) => <ServiceRow key={svc.name} service={svc} />)
+          ) : (
+            // BOTH absent is an ERROR (invalid runtime config — setup
+            // refuses to write it), not a calm empty state.
+            <p className="py-3.5 text-sm font-medium text-red-600">
+              No backends are enabled — invalid runtime configuration. Re-run identuum-ui-setup.
+            </p>
+          )}
         </div>
       </div>
 

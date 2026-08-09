@@ -167,8 +167,13 @@ describe("global-teardown.ts source — no-trace default", () => {
 });
 
 describe("docker-compose.e2e.yml — released appliance stack", () => {
-  it("runs the PUBLISHED identuum-idp-oss image", () => {
-    expect(COMPOSE_SRC).toMatch(/image:\s*ghcr\.io\/identuum\/identuum-idp-oss:/);
+  it("defaults to the PUBLISHED identuum-idp-oss image (env-overridable for pre-release builds)", () => {
+    // The image line is env-interpolated (IDENTUUM_E2E_IDP_IMAGE overrides
+    // for local pre-release verification) with the PUBLISHED registry image
+    // as the default — the customer-shaped path stays the default path.
+    expect(COMPOSE_SRC).toMatch(
+      /image:\s*"\$\{IDENTUUM_E2E_IDP_IMAGE:-ghcr\.io\/identuum\/identuum-idp-oss:/
+    );
   });
 
   it("the Postgres service is volume-less by design (fresh DB via plain down)", () => {

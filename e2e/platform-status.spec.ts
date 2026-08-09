@@ -46,9 +46,45 @@ test.describe("/platform-status — page structure", () => {
     await expect(page.getByText("Identity (IDP)")).toBeVisible();
   });
 
-  test("AG backend card is present", async ({ page }) => {
-    await page.goto("/platform-status");
-    await expect(page.getByText("Agent Governance (AG)")).toBeVisible();
+  // ABSENCE IS NOT FAILURE (THE-ABSENT-BACKEND). The e2e appliance runs an
+  // IdP-only runtime config (global-setup writes ag.enabled=false), so a
+  // not-enabled AG must not be MENTIONED anywhere on this page: no backend
+  // card, no providers card, no org-link callout, no readiness drill-in
+  // link. The mode badge carries the composition vocabulary instead.
+  // (Enabled-but-unreachable is a different state — it still reports
+  // Unavailable; that permutation is covered by the unit suite, see
+  // src/__tests__/absent-backend-not-failure.test.ts.)
+  test.describe("not-enabled AG is absent, not failing", () => {
+    test("AG backend card is ABSENT and the mode reads Identity Only", async ({ page }) => {
+      await page.goto("/platform-status");
+      // The identity-only vocabulary is the positive signal…
+      await expect(page.getByText("Identity Only")).toBeVisible();
+      await expect(
+        page.getByText("Only the Identity backend is configured and operational.")
+      ).toBeVisible();
+      // …and the absent backend is not mentioned at all.
+      await expect(page.getByText("Agent Governance (AG)")).toHaveCount(0);
+    });
+
+    test("AG providers card, org-link callout, and readiness drill-in are ABSENT", async ({
+      page,
+    }) => {
+      await page.goto("/platform-status");
+      await expect(page.getByText("AG Login Providers")).toHaveCount(0);
+      // The AG CE org-link availability callout (any of its 4 variants).
+      await expect(page.getByText(/AG org-link/)).toHaveCount(0);
+      await expect(page.getByRole("link", { name: "Organization linking readiness" })).toHaveCount(
+        0
+      );
+    });
+
+    test("the enabled IDP backend still renders its full card — absence rules never hide a configured backend", async ({
+      page,
+    }) => {
+      await page.goto("/platform-status");
+      await expect(page.getByText("Identity (IDP)")).toBeVisible();
+      await expect(page.getByText("Operational").first()).toBeVisible();
+    });
   });
 });
 

@@ -1,18 +1,4 @@
 import { AGCEOrgLinkAvailabilityCard } from "@/components/shared/ag-ce-org-link-availability-card";
-import {
-  type OrgExportFetchResult,
-  type OrganizationCandidateMatch,
-  deriveOrganizationCandidateMatches,
-} from "@/lib/org-export-candidates";
-import {
-  fetchAGOrganizationExportCandidates,
-  fetchIDPOrganizationExportCandidates,
-} from "@/lib/org-export-candidates-client";
-import { dryRunImportIDPOrganizationToAG } from "@/lib/org-import-dry-run-client";
-import {
-  type LinkingPrerequisite,
-  deriveOrganizationLinkingReadiness,
-} from "@/lib/org-linking-readiness";
 /**
  * /site-admin/org-link/readiness
  *
@@ -33,6 +19,22 @@ import {
  * ComponentCapabilities. No raw backend payloads, internal URLs, entitlements,
  * license keys, customer IDs, signatures, ciphertext, or user data are rendered.
  */
+import { BackendNotConfiguredNotice } from "@/components/shared/backend-not-configured-notice";
+import {
+  type OrgExportFetchResult,
+  type OrganizationCandidateMatch,
+  deriveOrganizationCandidateMatches,
+} from "@/lib/org-export-candidates";
+import {
+  fetchAGOrganizationExportCandidates,
+  fetchIDPOrganizationExportCandidates,
+} from "@/lib/org-export-candidates-client";
+import { dryRunImportIDPOrganizationToAG } from "@/lib/org-import-dry-run-client";
+import {
+  type LinkingPrerequisite,
+  deriveOrganizationLinkingReadiness,
+} from "@/lib/org-linking-readiness";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type {
   BackendComponentState,
@@ -59,6 +61,18 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Organization Linking — Identuum" };
 
 export default async function OrgLinkReadinessPage() {
+  // ABSENCE IS NOT FAILURE (THE-ABSENT-BACKEND): org linking needs BOTH
+  // backends. When either is not enabled in the runtime config this page
+  // does not render readiness checks marked unmet — it states the
+  // not-configured fact plainly (AG copy matches the /ag-admin route guard;
+  // the rule is symmetric for the IdP). BOTH absent is an ERROR — an
+  // invalid runtime config — and presents in the error style.
+  const cfg = loadRuntimeConfig();
+  if (cfg && (!cfg.ag.enabled || !cfg.idp.enabled)) {
+    const missing = !cfg.ag.enabled && !cfg.idp.enabled ? "both" : !cfg.ag.enabled ? "ag" : "idp";
+    return <BackendNotConfiguredNotice title="Organization linking" missing={missing} />;
+  }
+
   const state = await getServerRuntimeState();
 
   if (!state) {

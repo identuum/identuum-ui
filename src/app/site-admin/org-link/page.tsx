@@ -1,8 +1,3 @@
-import { hasAgSession } from "@/lib/ag-client";
-import { fetchAGOrgLinkPlan } from "@/lib/ag-org-client";
-import { listOrganizations } from "@/lib/idp-admin-client";
-import type { IDPOrgSummaryForLink } from "@/lib/org-link-types";
-import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 /**
  * /site-admin/org-link
  *
@@ -18,6 +13,12 @@ import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
  *
  * Security: no internal backend URLs, no tokens, no credentials are rendered.
  */
+import { BackendNotConfiguredNotice } from "@/components/shared/backend-not-configured-notice";
+import { hasAgSession } from "@/lib/ag-client";
+import { fetchAGOrgLinkPlan } from "@/lib/ag-org-client";
+import { listOrganizations } from "@/lib/idp-admin-client";
+import type { IDPOrgSummaryForLink } from "@/lib/org-link-types";
+import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 import type { Metadata } from "next";
 import { IDPImportSection, OrgLinkActions } from "./org-link-actions";
 
@@ -28,6 +29,17 @@ export default async function OrgLinkPlanPage() {
   const cfg = loadRuntimeConfig();
   const idpEnabled = Boolean(cfg?.idp.enabled);
   const agEnabled = Boolean(cfg?.ag.enabled);
+
+  // ABSENCE IS NOT FAILURE (THE-ABSENT-BACKEND): org linking needs BOTH
+  // backends. When either is not enabled in the runtime config this page does
+  // not render the console with that backend framed as unreachable — it
+  // states the not-configured fact plainly (AG copy matches the /ag-admin
+  // route guard; the rule is symmetric for the IdP). BOTH absent is an
+  // ERROR — an invalid runtime config — and presents in the error style.
+  if (!agEnabled || !idpEnabled) {
+    const missing = !agEnabled && !idpEnabled ? "both" : !agEnabled ? "ag" : "idp";
+    return <BackendNotConfiguredNotice title="Organization Link" missing={missing} />;
+  }
 
   let idpOrgs: IDPOrgSummaryForLink[] = [];
   let idpAvailable = false;

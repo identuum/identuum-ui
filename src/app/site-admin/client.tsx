@@ -57,14 +57,23 @@ export function SiteAdminOverviewClient({
           <LoadingRow />
         ) : config ? (
           <>
-            <CapabilityRow
-              label={status?.idp.product ?? "identuum-idp"}
-              enabled={config.idp.enabled}
-            />
-            <CapabilityRow
-              label={status?.ag.product ?? "identuum-ag"}
-              enabled={config.ag.enabled}
-            />
+            {/* ABSENCE IS NOT FAILURE (THE-ABSENT-BACKEND): a backend that
+                is not enabled in the runtime config is not mentioned — no
+                "disabled" chip. */}
+            {config.idp.enabled && (
+              <CapabilityRow label={status?.idp.product ?? "identuum-idp"} enabled />
+            )}
+            {config.ag.enabled && (
+              <CapabilityRow label={status?.ag.product ?? "identuum-ag"} enabled />
+            )}
+            {/* BOTH absent is an ERROR (invalid runtime config — setup
+                refuses to write it), not a calm empty state. */}
+            {!config.idp.enabled && !config.ag.enabled && (
+              <ErrorRow
+                message="No backends are enabled — invalid runtime configuration."
+                tone="error"
+              />
+            )}
           </>
         ) : (
           <ErrorRow message="Could not load runtime configuration." />
@@ -84,7 +93,10 @@ export function SiteAdminOverviewClient({
               <HealthRow label={status.ag.product} healthy={status.ag.healthy} />
             )}
             {!status.idp.enabled && !status.ag.enabled && (
-              <ErrorRow message="No backends are enabled." />
+              <ErrorRow
+                message="No backends are enabled — invalid runtime configuration."
+                tone="error"
+              />
             )}
           </>
         ) : (
@@ -168,10 +180,14 @@ function LoadingRow() {
   );
 }
 
-function ErrorRow({ message }: { message: string }) {
+function ErrorRow({ message, tone = "muted" }: { message: string; tone?: "muted" | "error" }) {
   return (
     <div className="px-5 py-3">
-      <p className="text-sm text-stone-500">{message}</p>
+      <p
+        className={tone === "error" ? "text-sm font-medium text-red-600" : "text-sm text-stone-500"}
+      >
+        {message}
+      </p>
     </div>
   );
 }
