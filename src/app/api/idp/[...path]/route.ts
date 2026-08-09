@@ -86,9 +86,13 @@ async function proxyToIdP(req: NextRequest, segments: string[]): Promise<Respons
   // credential the request already carries, the IdP validates it fully, and it
   // never reaches browser JS. A browser-supplied Authorization header, if any,
   // is left untouched.
+  let liftedBearerFromCookie = false;
   if (!forwardHeaders.has("authorization")) {
     const accessToken = req.cookies.get("access_token")?.value;
-    if (accessToken) forwardHeaders.set("authorization", `Bearer ${accessToken}`);
+    if (accessToken) {
+      forwardHeaders.set("authorization", `Bearer ${accessToken}`);
+      liftedBearerFromCookie = true;
+    }
   }
 
   let body: BodyInit | null = null;
@@ -109,6 +113,76 @@ async function proxyToIdP(req: NextRequest, segments: string[]): Promise<Respons
   } catch (err) {
     console.error("[idp-proxy] upstream fetch failed:", err);
     return NextResponse.json({ error: "IdP unreachable" }, { status: 502 });
+  }
+
+  // THE-STALE-COOKIE self-healing retry: a stale/revoked access_token
+  // cookie must not break PUBLIC endpoints. The backend's GLOBAL
+  // BearerPrincipal middleware verifies any presented bearer and, on
+  // rejection, aborts with exactly 401 {"error":"unauthorized"} BEFORE
+  // the route's handler runs — even on public routes like
+  // organization-lookup. When (and only when) ALL THREE hold —
+  //   (1) the Authorization header was OUR OWN cookie-lift (never a
+  //       browser-supplied header),
+  //   (2) upstream answered 401, and
+  //   (3) the body is the middleware's distinctive pre-handler shape
+  //       ({"error":"unauthorized"} — no handler emits that code;
+  //       handler-level 401s use invalid_credentials /
+  //       mfa_enrollment_required / etc., so no handler side effects
+  //       can be double-executed by the retry)
+  // — the request is retried ONCE without the lifted header, exactly as
+  // an anonymous caller (this is what curl-without-cookies gets).
+  //
+  // WHY THIS CANNOT MASK a genuine authorization failure on a PROTECTED
+  // route: the retry carries STRICTLY FEWER credentials, never more. A
+  // protected route's guard (RequireAuthenticated / RequireSiteAdmin /
+  // scope checks) rejects the credential-less retry with the same 401
+  // the caller would have seen — the outcome is unchanged, only one
+  // round trip is added. Masking would require the retry to SUCCEED
+  // where a credentialed attempt legitimately failed, which is
+  // impossible with a strict subset of credentials on a route that
+  // requires one. Chosen over a path-aware attachment list because a
+  // maintained public-path list drifts — every future public endpoint
+  // would re-create this bug until listed; the retry is self-healing
+  // for all present and future public paths.
+  if (liftedBearerFromCookie && upstreamRes.status === 401) {
+    const firstBodyText = await upstreamRes.text();
+    let middlewareReject = false;
+    try {
+      middlewareReject =
+        (JSON.parse(firstBodyText) as { error?: unknown }).error === "unauthorized";
+    } catch {
+      // Non-JSON 401 body — not the middleware shape; fall through.
+    }
+    if (middlewareReject) {
+      forwardHeaders.delete("authorization");
+      try {
+        upstreamRes = await fetch(upstreamUrl, {
+          method,
+          headers: forwardHeaders,
+          body: body ?? undefined,
+          redirect: "manual",
+        });
+      } catch (err) {
+        console.error("[idp-proxy] anonymous retry failed:", err);
+        return NextResponse.json({ error: "IdP unreachable" }, { status: 502 });
+      }
+    } else {
+      // Rebuild the consumed first response verbatim.
+      const rebuiltHeaders = new Headers();
+      upstreamRes.headers.forEach((value, key) => {
+        if (HOP_BY_HOP.has(key.toLowerCase())) return;
+        if (key.toLowerCase() === "set-cookie") {
+          rebuiltHeaders.append("set-cookie", rewriteSetCookie(value));
+        } else {
+          rebuiltHeaders.set(key, value);
+        }
+      });
+      return new Response(firstBodyText, {
+        status: upstreamRes.status,
+        statusText: upstreamRes.statusText,
+        headers: rebuiltHeaders,
+      });
+    }
   }
 
   // Build response headers, rewriting Set-Cookie domain.

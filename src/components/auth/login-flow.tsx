@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { orgLookup } from "@/lib/idp-client";
 import { IDP_PATHS } from "@/lib/idp-paths";
 import type { OrgConfig, PublicIDPInfo, UserRole } from "@/lib/types";
-import { ApiError } from "@/lib/ui-api";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ChevronRight, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -131,12 +130,21 @@ export function LoginFlow({ onSuccess }: LoginFlowProps) {
       }
 
       setStep("PASSWORD");
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setServerError("Unable to look up your organization. Try again.");
-      } else {
-        setServerError("Network error. Check your connection and try again.");
-      }
+    } catch {
+      // THE-STALE-COOKIE defence in depth: the org lookup is a ROUTING
+      // OPTIMIZATION (pick the friendlier SSO redirect early), not an
+      // authorization gate — a 404 already falls through to the password
+      // step, so a transport failure must too, instead of dead-ending
+      // sign-in ("Unable to look up your organization"). This does NOT
+      // make an SSO-mandated org bypassable: auth_policy is enforced by
+      // the BACKEND at the login endpoint itself — a policy-bound user
+      // who reaches the password step gets 401
+      // auth_policy_blocks_local_login from the server (see
+      // idp-client.ts's login()), exactly as if the lookup had never
+      // existed. Failing the lookup only costs the early SSO
+      // convenience routing, never the enforcement.
+      setOrgConfig(null);
+      setStep("PASSWORD");
     }
   };
 

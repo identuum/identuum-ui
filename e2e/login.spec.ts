@@ -85,6 +85,62 @@ test.describe("identuum-ui login flow", () => {
     const validateRes = await page.request.get("/api/idp/api/v1/validate");
     expect(validateRes.status()).toBe(401);
   });
+
+  // THE-STALE-COOKIE: the coverage gap that hid a total sign-in dead-end.
+  // No test signed in, signed out, and signed in AGAIN in one browser
+  // context — so nothing caught that logout never cleared the browser's
+  // auth cookies, the /api/idp proxy lifted the surviving revoked
+  // access_token into Authorization: Bearer, and the backend's global
+  // BearerPrincipal 401'd the PUBLIC organization-lookup before its
+  // handler ran ("Unable to look up your organization"; measured by hand
+  // on v0.3.3). This cycle is the regression fence.
+  test("sign in → sign out → sign in AGAIN in one browser context (stale-cookie fence)", async ({
+    page,
+  }) => {
+    if (skipAuthTests) {
+      test.skip(true, SKIP_AUTH_MSG);
+    }
+    test.setTimeout(90_000);
+
+    async function signInViaUI() {
+      await page.goto("/login");
+      await page.getByLabel("Email or domain").fill(SITE_ADMIN_EMAIL);
+      await page.getByRole("button", { name: "Continue" }).click();
+      const passwordInput = page.getByLabel("Password");
+      await expect(passwordInput).toBeVisible();
+      await passwordInput.fill(SITE_ADMIN_PASSWORD);
+      await page.getByRole("button", { name: "Sign in" }).click();
+      const codeInput = page.getByLabel("Verification code");
+      await expect(codeInput).toBeVisible();
+      await codeInput.fill(generateTOTP(SITE_ADMIN_TOTP_SECRET));
+      await page.getByRole("button", { name: "Verify" }).click();
+      await page.waitForURL(/\/(dashboard|site-admin|org-admin)/);
+    }
+
+    // Round 1.
+    await signInViaUI();
+
+    // Cookie-clearing proof, half 1: the auth cookies exist while
+    // signed in (values never read beyond presence).
+    const cookiesBefore = (await page.context().cookies()).map((c) => c.name);
+    expect(cookiesBefore).toContain("access_token");
+
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.waitForURL(/\/login/);
+
+    // Cookie-clearing proof, half 2: logout's OWN response expired them.
+    const cookiesAfter = (await page.context().cookies()).map((c) => c.name);
+    expect(cookiesAfter).not.toContain("access_token");
+    expect(cookiesAfter).not.toContain("refresh_token");
+
+    // Round 2 — the previously-impossible part: the SAME context signs
+    // in again, all the way through.
+    await signInViaUI();
+
+    // And the session is genuinely live.
+    const validateRes = await page.request.get("/api/idp/api/v1/validate");
+    expect(validateRes.status()).toBe(200);
+  });
 });
 
 // ── /login passkey/WebAuthn affordance — non-destructive render pins ──────────
