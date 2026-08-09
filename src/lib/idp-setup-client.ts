@@ -68,12 +68,16 @@ export interface CompleteSetupInput {
   adminEmail: string;
   adminPassword: string;
   /**
-   * D-IDP-INSTALL-26. The wizard MUST drive `/api/setup/mfa/initiate`
-   * + `/api/setup/mfa/verify` BEFORE submitting Complete, and thread
-   * the resulting session id + the verified 6-digit code through
-   * these fields. Empty values trigger a server-side
-   * `mfa_enrollment_required` 400 — handled here as
-   * `kind: "mfa_required"`. agent-a-20260627-idp-ce-setup-wizard-site-admin-totp-enrollment-implementation.
+   * D-IDP-INSTALL-26 — CE ONLY (THE-OPERATOR-PATH). On a CE backend the
+   * wizard MUST drive `/api/setup/mfa/initiate` + `/api/setup/mfa/verify`
+   * BEFORE submitting Complete, and thread the resulting session id + the
+   * verified 6-digit code through these fields; empty values trigger a
+   * server-side `mfa_enrollment_required` 400 — handled here as
+   * `kind: "mfa_required"`. On OSS these endpoints DO NOT EXIST (released
+   * OSS serves only status/verify-token/complete) — the wizard passes
+   * empty strings, the OSS backend has no such request fields and ignores
+   * them, and authenticator enrollment happens at first sign-in via the
+   * login flow. agent-a-20260627-idp-ce-setup-wizard-site-admin-totp-enrollment-implementation.
    */
   adminMFASessionId: string;
   adminMFACode: string;
@@ -195,10 +199,10 @@ export async function completeSetup(input: CompleteSetupInput): Promise<Complete
         organization_domain: input.organizationDomain,
         admin_email: input.adminEmail,
         admin_password: input.adminPassword,
-        // D-IDP-INSTALL-26 fields. The server requires both; an empty
-        // value triggers mfa_enrollment_required. The wizard MUST have
-        // already driven the initiate + verify pair before reaching
-        // this call.
+        // D-IDP-INSTALL-26 fields — CE only. The CE server requires
+        // both (an empty value triggers mfa_enrollment_required); the
+        // OSS server has no such fields and ignores them. The wizard
+        // sends empty strings on the OSS path.
         admin_mfa_session_id: input.adminMFASessionId,
         admin_mfa_code: input.adminMFACode,
       }),

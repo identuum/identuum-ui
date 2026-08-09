@@ -140,8 +140,11 @@ export default async function OrgLinkPlanPage() {
             </span>
           )}
         </h2>
+        {/* THE-ABSENT-BACKEND made the not-configured half of this copy
+            dead: this page short-circuits when AG is not enabled, so an
+            unavailable AG here is always an enabled-but-unreachable one. */}
         {!agAvailable ? (
-          <p className="text-xs text-stone-400">AG is not configured or not reachable.</p>
+          <p className="text-xs text-stone-400">AG is not reachable.</p>
         ) : (
           <OrgLinkActions agOrgs={agPlan?.organizations ?? []} idpOrgs={idpOrgs} canAct={canAct} />
         )}
@@ -217,9 +220,9 @@ function IDPOrgCard({ orgs, available }: { orgs: IDPOrgSummaryForLink[]; availab
           {available ? `${orgs.length} found` : "Unavailable"}
         </span>
       </div>
-      {!available && (
-        <p className="text-xs text-stone-400">IDP is not configured or not reachable.</p>
-      )}
+      {/* Same dead-half cut: the page requires idp.enabled, so an
+          unavailable IdP here is always enabled-but-unreachable. */}
+      {!available && <p className="text-xs text-stone-400">IDP is not reachable.</p>}
       {available && orgs.length === 0 && (
         <p className="text-xs text-stone-400">No IDP organizations found.</p>
       )}

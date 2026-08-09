@@ -117,6 +117,28 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
   const showLicenseStep =
     distributionIsCE && licenseStatus !== null && licenseStatus.state !== "license_valid";
 
+  // THE-OPERATOR-PATH: setup-time MFA enrollment is a CE-ONLY capability
+  // (/api/setup/mfa/initiate + /verify exist only on CE; released OSS
+  // serves exactly status / verify-token / complete and answers 404 to
+  // the MFA pair — measured by hand on v0.3.3). The wizard therefore
+  // drives setup-time MFA ONLY when the backend self-identifies as CE;
+  // every other distribution (oss, or unknown on an older backend) takes
+  // the OSS path: complete setup directly, then the operator enrolls
+  // their authenticator at FIRST SIGN-IN via the existing login-flow
+  // enrollment step (login → mfa_enrollment_required → enroll form).
+  // Never assume a CE-only endpoint: if a CE backend were misdetected,
+  // its server-side complete rejects with mfa_enrollment_required — a
+  // recoverable error — whereas the old unconditional CE assumption
+  // dead-ended OSS setups at a 404.
+  const setupTimeMFA = distributionIsCE;
+
+  // OSS's /api/setup/complete REQUIRES organization_name (the first
+  // organization is always created; organization_domain is optional and
+  // defaults server-side to slug(name) + ".local"). CE keeps the
+  // optional create_tenant_org toggle. The form below renders
+  // accordingly.
+  const orgFieldsAlwaysRequired = !distributionIsCE;
+
   // For a CE backend, a missing licenseStatus value (probe failed
   // server-side — same relative-URL path used by the setup-status
   // probe that 044aa0e patched) means we have NO evidence the CE
@@ -205,6 +227,14 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
       });
       return;
     }
+
+    // OSS path (THE-OPERATOR-PATH): no setup-time MFA endpoints exist —
+    // complete directly; the authenticator is enrolled at first sign-in.
+    if (!setupTimeMFA) {
+      await submitComplete("", "");
+      return;
+    }
+
     setSubmitState({ kind: "initiating_mfa" });
 
     const initiateResult = await initiateSetupMFA(setupCode.trim(), adminEmail.trim());
@@ -272,20 +302,33 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
       return;
     }
 
+    await submitComplete(sessionId, mfaCode.trim());
+  }
+
+  /**
+   * submitComplete drives /api/setup/complete and maps every outcome to
+   * wizard state. Shared by both distribution paths: the CE flow threads
+   * the verified setup-time MFA session id + code through; the OSS flow
+   * passes empty strings (OSS's complete endpoint has no MFA fields —
+   * enrollment happens at first sign-in).
+   */
+  async function submitComplete(sessionId: string, verifiedMfaCode: string) {
     setSubmitState({ kind: "submitting" });
     const input: CompleteSetupInput = {
       setupToken: setupCode.trim(),
       createTenantOrg,
-      // When createTenantOrg is false the IDP ignores both fields; we
+      // CE: when createTenantOrg is false the IDP ignores both fields; we
       // still forward the trimmed values so a re-toggled "yes, create
       // one" path picks up whatever the operator typed previously
-      // without forcing a re-entry.
-      organizationName: createTenantOrg ? orgName.trim() : "",
-      organizationDomain: createTenantOrg ? orgDomain.trim() : "",
+      // without forcing a re-entry. OSS: organization_name is REQUIRED
+      // by the backend (the first organization is always created), so
+      // the form requires it and we always send it.
+      organizationName: orgFieldsAlwaysRequired || createTenantOrg ? orgName.trim() : "",
+      organizationDomain: orgFieldsAlwaysRequired || createTenantOrg ? orgDomain.trim() : "",
       adminEmail: adminEmail.trim(),
       adminPassword,
       adminMFASessionId: sessionId,
-      adminMFACode: mfaCode.trim(),
+      adminMFACode: verifiedMfaCode,
     };
     // Wipe local code state immediately — the server has the verified
     // copy now; the wizard never needs the plaintext again.
@@ -495,36 +538,41 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
           aria-disabled={!codeVerified || !licenseAccepted}
           noValidate
         >
-          {/* Optional first tenant organization toggle. Default: off
+          {/* CE: optional first tenant organization toggle. Default: off
               (site-admin-only bootstrap). When on, the org name +
               domain fields below become required; when off, the IDP
-              ignores them and no tenant org is created. The hidden
-              System Organization sentinel is seeded by the IDP at
-              boot independently of this choice. */}
-          <div className="flex items-start gap-2 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5">
-            <input
-              id="create_tenant_org"
-              name="create_tenant_org"
-              type="checkbox"
-              checked={createTenantOrg}
-              onChange={(e) => setCreateTenantOrg(e.target.checked)}
-              disabled={!codeVerified || !licenseAccepted || submitState.kind === "submitting"}
-              className="mt-1 h-4 w-4 rounded border-stone-300 text-sky-600 focus:ring-sky-300"
-              data-testid="setup-create-tenant-org"
-            />
-            <label htmlFor="create_tenant_org" className="text-sm text-sky-950 leading-relaxed">
-              <span className="font-semibold">
-                Also create a first tenant organization (optional).
-              </span>{" "}
-              <span className="text-stone-600">
-                Leave unchecked for a site-admin-only bootstrap; you can create tenant organizations
-                from the admin surface after sign-in. Check to provide the first tenant's name and
-                domain below.
-              </span>
-            </label>
-          </div>
+              ignores them and no tenant org is created.
+              OSS: no toggle — /api/setup/complete REQUIRES
+              organization_name (the first organization is always
+              created), so the fields render unconditionally below.
+              The hidden System Organization sentinel is seeded by the
+              IDP at boot independently of this choice. */}
+          {!orgFieldsAlwaysRequired && (
+            <div className="flex items-start gap-2 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5">
+              <input
+                id="create_tenant_org"
+                name="create_tenant_org"
+                type="checkbox"
+                checked={createTenantOrg}
+                onChange={(e) => setCreateTenantOrg(e.target.checked)}
+                disabled={!codeVerified || !licenseAccepted || submitState.kind === "submitting"}
+                className="mt-1 h-4 w-4 rounded border-stone-300 text-sky-600 focus:ring-sky-300"
+                data-testid="setup-create-tenant-org"
+              />
+              <label htmlFor="create_tenant_org" className="text-sm text-sky-950 leading-relaxed">
+                <span className="font-semibold">
+                  Also create a first tenant organization (optional).
+                </span>{" "}
+                <span className="text-stone-600">
+                  Leave unchecked for a site-admin-only bootstrap; you can create tenant
+                  organizations from the admin surface after sign-in. Check to provide the first
+                  tenant's name and domain below.
+                </span>
+              </label>
+            </div>
+          )}
 
-          {createTenantOrg ? (
+          {orgFieldsAlwaysRequired || createTenantOrg ? (
             <div
               className="grid grid-cols-1 sm:grid-cols-2 gap-3"
               data-testid="setup-tenant-org-fields"
@@ -549,6 +597,9 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
               <div className="flex flex-col gap-1">
                 <label htmlFor="organization_domain" className="text-sm text-sky-950">
                   Organization domain
+                  {orgFieldsAlwaysRequired ? (
+                    <span className="ml-1 text-xs text-stone-400">(optional)</span>
+                  ) : null}
                 </label>
                 <input
                   id="organization_domain"
@@ -557,18 +608,30 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
                   value={orgDomain}
                   onChange={(e) => setOrgDomain(e.target.value)}
                   disabled={!codeVerified || !licenseAccepted || submitState.kind === "submitting"}
-                  required
+                  required={!orgFieldsAlwaysRequired}
                   className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-sky-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-70 disabled:cursor-not-allowed"
                   placeholder="acme.example"
                   data-testid="setup-org-domain"
                 />
+                {orgFieldsAlwaysRequired ? (
+                  <p className="text-xs text-stone-500">
+                    Leave blank to derive it from the organization name.
+                  </p>
+                ) : null}
               </div>
             </div>
           ) : null}
 
+          {/* THE-OPERATOR-PATH order C: this field writes the site_admin's
+              CONTACT address (users.contact_email) — the LOGIN is pinned
+              to site_admin@system.local by the backend regardless of what
+              is typed here. Both facts are stated AT the field, with the
+              pinned login shown as a read-only fact, because an operator
+              who types the sentinel here leaves the account unreachable
+              at the one address that matters in recovery. */}
           <div className="flex flex-col gap-1">
             <label htmlFor="admin_email" className="text-sm text-sky-950">
-              Site administrator email
+              Site administrator contact email
             </label>
             <input
               id="admin_email"
@@ -583,6 +646,21 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
               placeholder="owner@acme.example"
               data-testid="setup-admin-email"
             />
+            <p className="text-xs text-stone-500">
+              Your own reachable address, for operator communication and account recovery. Do not
+              enter the sign-in name here.
+            </p>
+            <div
+              className="mt-1 flex items-center justify-between gap-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2"
+              data-testid="setup-pinned-login"
+            >
+              <span className="text-xs text-sky-900">
+                The site administrator always signs in as
+              </span>
+              <code className="rounded bg-white px-2 py-0.5 text-xs font-semibold text-sky-950 shadow-sm">
+                site_admin@system.local
+              </code>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -636,10 +714,13 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
               submitState.kind === "verifying_mfa" ||
               submitState.kind === "submitting" ||
               submitState.kind === "ok" ||
-              // Tenant org fields gated on the createTenantOrg
-              // toggle. When the checkbox is off the inputs are not
-              // rendered at all and must not block submit.
-              (createTenantOrg && (!orgName.trim() || !orgDomain.trim())) ||
+              // CE: tenant org fields gated on the createTenantOrg
+              // toggle (both required when on). OSS: organization name
+              // is ALWAYS required by /api/setup/complete; the domain
+              // is optional (server derives it from the name).
+              (orgFieldsAlwaysRequired
+                ? !orgName.trim()
+                : createTenantOrg && (!orgName.trim() || !orgDomain.trim())) ||
               !adminEmail.trim() ||
               adminPassword.length < MIN_PASSWORD_LENGTH ||
               !passwordsMatch
@@ -658,7 +739,9 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
                   ? "Continue MFA enrollment below"
                   : submitState.kind === "ok"
                     ? "Setup complete"
-                    : "Continue to MFA enrollment"}
+                    : setupTimeMFA
+                      ? "Continue to MFA enrollment"
+                      : "Complete setup"}
           </button>
 
           {/* D-IDP-INSTALL-26 — MFA enrollment panel. Renders after the
@@ -765,8 +848,20 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
             >
               <output className="flex items-start gap-2 text-sm font-semibold text-emerald-700">
                 <CheckCircle2 aria-hidden="true" className="h-4 w-4 mt-0.5 shrink-0" />
-                <span>Setup complete. Save your recovery codes below before continuing.</span>
+                <span>
+                  {submitState.recoveryCodes.length > 0
+                    ? "Setup complete. Save your recovery codes below before continuing."
+                    : "Setup complete."}
+                </span>
               </output>
+              <p className="text-xs text-stone-600" data-testid="setup-success-signin-hint">
+                Sign in as{" "}
+                <code className="rounded bg-white px-1.5 py-0.5 font-semibold text-sky-950 shadow-sm">
+                  site_admin@system.local
+                </code>{" "}
+                with the password you just chose.
+                {setupTimeMFA ? "" : " You will enroll your authenticator app at first sign-in."}
+              </p>
               {submitState.recoveryCodes.length > 0 ? (
                 <>
                   <p className="text-xs text-stone-600">

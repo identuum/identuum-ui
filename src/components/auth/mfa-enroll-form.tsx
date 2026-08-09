@@ -59,9 +59,26 @@ export function MFAEnrollForm({ sessionId, onBack, onSuccess }: MFAEnrollFormPro
     resolver: zodResolver(schema),
   });
 
+  // ONE initiate call per session handle (THE-OPERATOR-PATH). The backend
+  // deliberately refuses a second /enroll/initiate for the same pending
+  // handle ("refuse rather than re-mint" — anti secret-rotation), so this
+  // effect must never fire the request twice. React 18 StrictMode runs
+  // mount effects twice in development; the old one-fetch-per-effect-run
+  // shape made the second run receive the backend's 401 refusal and
+  // overwrite a successful first enrollment with the error state
+  // ("Setup session expired" on a perfectly healthy flow — measured live
+  // on the published v0.3.3 appliance). Both effect runs now share one
+  // promise keyed by sessionId; the surviving run applies its result.
+  const initiateRef = useRef<{
+    sessionId: string;
+    promise: ReturnType<typeof mfaEnrollInitiate>;
+  } | null>(null);
   useEffect(() => {
+    if (!initiateRef.current || initiateRef.current.sessionId !== sessionId) {
+      initiateRef.current = { sessionId, promise: mfaEnrollInitiate(sessionId) };
+    }
     let cancelled = false;
-    mfaEnrollInitiate(sessionId)
+    initiateRef.current.promise
       .then((data) => {
         if (cancelled) return;
         setSecret(data.secret);

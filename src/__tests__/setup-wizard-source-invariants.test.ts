@@ -90,11 +90,16 @@ describe("D-IDP-INSTALL-26 setup-MFA wiring (agent-a-20260627-idp-ce-setup-wizar
 
   it("CompleteSetupInput literal threads the verified session id + code through to /api/setup/complete", () => {
     // The wizard's submit-time payload MUST carry both fields so the
-    // server-side D-IDP-INSTALL-26 gate accepts the request. A
+    // server-side D-IDP-INSTALL-26 gate accepts the request on CE. A
     // regression that dropped either field would silently start
-    // returning mfa_enrollment_required against a fresh stack.
+    // returning mfa_enrollment_required against a fresh CE stack.
+    // THE-OPERATOR-PATH refactored the completeSetup call into the
+    // shared submitComplete(sessionId, verifiedMfaCode): the CE verify
+    // handler threads the pair through the call, and the input literal
+    // forwards them verbatim.
+    expect(wizardSource).toMatch(/await submitComplete\(sessionId, mfaCode\.trim\(\)\)/);
     expect(wizardSource).toMatch(/adminMFASessionId:\s*sessionId/);
-    expect(wizardSource).toMatch(/adminMFACode:\s*mfaCode\.trim\(\)/);
+    expect(wizardSource).toMatch(/adminMFACode:\s*verifiedMfaCode/);
   });
 
   it("submit button transitions through initiating_mfa / mfa_pending / verifying_mfa phases before submitting", () => {
