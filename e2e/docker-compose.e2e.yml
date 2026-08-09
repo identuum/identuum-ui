@@ -34,12 +34,12 @@ services:
     # No `volumes:` — ephemeral by design (see header).
 
   identuum-idp-oss:
-    # Default: the PUBLISHED v0.3.2 image (digest sha256:2d25b116…4db6e9d —
-    # enriched client/SA audit emits, primary-domain row at org create,
-    # per-org SA name uniqueness → 409, build-time version stamping).
+    # Default: the PUBLISHED v0.3.3 image (digest sha256:484de101…b53ba4f5 —
+    # relicense to All Rights Reserved, first-public-release history reset;
+    # no code/protocol behavior change from v0.3.2).
     # IDENTUUM_E2E_IDP_IMAGE overrides for pre-release verification against a
     # LOCAL build (as THE-V032-ALL-GREEN did before v0.3.2 was published).
-    image: "${IDENTUUM_E2E_IDP_IMAGE:-ghcr.io/identuum/identuum-idp-oss:v0.3.2}"
+    image: "${IDENTUUM_E2E_IDP_IMAGE:-ghcr.io/identuum/identuum-idp-oss:v0.3.3}"
     depends_on:
       postgres:
         condition: service_healthy
