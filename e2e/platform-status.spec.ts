@@ -55,7 +55,7 @@ test.describe("/platform-status — page structure", () => {
   // Unavailable; that permutation is covered by the unit suite, see
   // src/__tests__/absent-backend-not-failure.test.ts.)
   test.describe("not-enabled AG is absent, not failing", () => {
-    test("AG backend card is ABSENT and the mode reads Identity Only", async ({ page }) => {
+    test("AG backend card is ABSENT and the mode reads Identity Only [ABSENT-AG-1]", async ({ page }) => {
       await page.goto("/platform-status");
       // The identity-only vocabulary is the positive signal…
       await expect(page.getByText("Identity Only")).toBeVisible();

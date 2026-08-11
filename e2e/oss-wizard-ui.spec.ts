@@ -52,7 +52,7 @@ test.describe("/setup — OSS wizard UI end-to-end (fresh appliance → signed-i
       "Run `pnpm e2e:oss-wizard-ui` for the dedicated disposable stack."
   );
 
-  test("wizard: verify code → OSS org+admin form → complete (no setup-time MFA) → first-login TOTP enrollment → signed in", async ({
+  test("wizard: verify code → OSS org+admin form → complete (no setup-time MFA) → first-login TOTP enrollment → signed in [WIZARD-1] [PIN-CHIP-1]", async ({
     page,
   }) => {
     test.setTimeout(120_000);

@@ -68,7 +68,7 @@ test.describe("/account/settings — site_admin MFA enrollment", () => {
       "a prepared stack where the site_admin currently has mfa_enabled=false."
   );
 
-  test("end-to-end ceremony — initiate, verify, success + recovery codes visible", async ({
+  test("end-to-end ceremony — initiate, verify, success + recovery codes visible [MFA-SA-1]", async ({
     page,
   }) => {
     // Race-free response capture: install the waiter BEFORE the

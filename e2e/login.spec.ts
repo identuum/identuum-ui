@@ -94,7 +94,7 @@ test.describe("identuum-ui login flow", () => {
   // BearerPrincipal 401'd the PUBLIC organization-lookup before its
   // handler ran ("Unable to look up your organization"; measured by hand
   // on v0.3.3). This cycle is the regression fence.
-  test("sign in → sign out → sign in AGAIN in one browser context (stale-cookie fence)", async ({
+  test("sign in → sign out → sign in AGAIN in one browser context (stale-cookie fence) [COOKIE-1]", async ({
     page,
   }) => {
     if (skipAuthTests) {
