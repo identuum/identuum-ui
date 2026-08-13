@@ -100,7 +100,17 @@ pnpm install
 pnpm dev          # http://localhost:7104 with hot reload
 pnpm typecheck
 pnpm build
+pnpm rulefloor    # verify the RULE-FLOOR.md rule ledger (see below)
 ```
+
+### Rule ledger (RULE-FLOOR.md)
+
+`pnpm rulefloor` verifies the machine-checked rule ledger at the repo
+root with the sibling `../rulefloor` CLI (the ledger's only writer).
+Bootstrap: clone the `rulefloor` repo next to this checkout; the script
+builds the binary on first use (`go build`, stdlib-only Go). A missing
+sibling or a failed tool build fails the script loudly — there is no
+skip, and no flag lowers the check's strictness.
 
 ## Runtime configuration
 
