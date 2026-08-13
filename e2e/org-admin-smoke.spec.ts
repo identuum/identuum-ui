@@ -207,7 +207,7 @@ test.describe("/org-admin — authenticated route access", () => {
     }
   });
 
-  test("/org-admin/audit: renders without crash, org-scoped, no site-admin navigation", async () => {
+  test("/org-admin/audit: renders without crash, org-scoped, no site-admin navigation [ORG-AUDIT-SCOPE-1]", async () => {
     if (skipOrgAdminTests) {
       test.skip(true, SKIP_MSG);
     }
@@ -277,7 +277,7 @@ test.describe("/account/settings — authenticated from org_admin session", () =
 // ── site-admin access denied ───────────────────────────────────────────────────
 
 test.describe("/site-admin/* — access denied for org_admin", () => {
-  test("org_admin cannot reach /site-admin/organizations — redirected away", async () => {
+  test("org_admin cannot reach /site-admin/organizations — redirected away [ROLE-ORGADMIN-FENCE-1]", async () => {
     if (skipOrgAdminTests) {
       test.skip(true, SKIP_MSG);
     }

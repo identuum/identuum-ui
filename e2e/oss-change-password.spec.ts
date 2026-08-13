@@ -133,7 +133,7 @@ test.describe("/account/settings — change password (rotate + rotate-back)", ()
       "on a freshly-provisioned OSS stack."
   );
 
-  test("rotate → temp login → old login fails → rotate back → original login works", async ({
+  test("rotate → temp login → old login fails [PASSWORD-ROTATE-1] → rotate back → original login works", async ({
     page,
   }) => {
     test.setTimeout(120_000);

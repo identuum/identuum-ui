@@ -266,7 +266,7 @@ test.describe("/login — MFA enrollment flow (mocked backend)", () => {
     await page.getByRole("button", { name: "I've saved my recovery codes" }).click();
   });
 
-  test("mfa_enrollment_required with null sessionId (old OSS path) shows fallback message", async ({
+  test("mfa_enrollment_required with null sessionId (old OSS path) shows fallback message [LOGIN-MFA-FALLBACK-1]", async ({
     page,
   }) => {
     // Old OSS contract: 401 + error field only — no booleans, no session_id.
@@ -302,7 +302,7 @@ test.describe("/login — MFA enrollment flow (mocked backend)", () => {
     await expect(page.getByText("Set up two-factor authentication")).not.toBeVisible();
   });
 
-  test("mfa_required with session_id (OSS 401) shows MFA verify form", async ({ page }) => {
+  test("mfa_required with session_id (OSS 401) shows MFA verify form [LOGIN-MFA-VERIFY-1]", async ({ page }) => {
     await page.addInitScript(`
       (function() {
         var _orig = window.fetch.bind(window);
@@ -338,7 +338,7 @@ test.describe("/login — MFA enrollment flow (mocked backend)", () => {
 });
 
 test.describe("/login — passkey/WebAuthn login affordance (non-destructive)", () => {
-  test("password login form renders without auto-submitting on a fresh /login visit", async ({
+  test("password login form renders without auto-submitting on a fresh /login visit [LOGIN-NO-AUTOSUBMIT-1]", async ({
     page,
   }) => {
     await page.goto("/login");
@@ -384,7 +384,7 @@ test.describe("/login — passkey/WebAuthn login affordance (non-destructive)", 
     expect(buttonText).not.toMatch(/Follow your device prompt/i);
   });
 
-  test("WebAuthn-unsupported branch: passkey button is gated off, password form still renders", async ({
+  test("WebAuthn-unsupported branch: passkey button is gated off, password form still renders [LOGIN-WEBAUTHN-GATED-1]", async ({
     browser,
   }) => {
     // Fresh context so the addInitScript only affects this test. The
@@ -428,7 +428,7 @@ test.describe("/login — passkey/WebAuthn login affordance (non-destructive)", 
     }
   });
 
-  test("navigator.credentials.get / create are NOT invoked by rendering /login", async ({
+  test("navigator.credentials.get / create are NOT invoked by rendering /login [LOGIN-WEBAUTHN-PASSIVE-1]", async ({
     browser,
   }) => {
     // Instrumented test: wrap navigator.credentials.get and .create

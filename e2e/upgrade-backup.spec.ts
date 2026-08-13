@@ -420,7 +420,7 @@ test.describe("/upgrade — backup affordance", () => {
     expect(state.backups.some((b) => b.filename === PRESEEDED_OLDER)).toBe(true);
   });
 
-  test("Remove → Cancel does NOT call /backup/prune; Remove → Confirm calls it exactly once and removes only the targeted entry", async ({
+  test("Remove → Cancel does NOT call /backup/prune; Remove → Confirm calls it exactly once and removes only the targeted entry [BACKUP-PRUNE-1]", async ({
     page,
   }) => {
     await page.addInitScript(

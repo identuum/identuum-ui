@@ -334,7 +334,7 @@ test.describe("/site-admin/organizations/[id] — admin recovery flow (DESTRUCTI
     }
   });
 
-  test("the configured org_admin's next login routes into TOTP enrollment, not /org-admin", async ({
+  test("the configured org_admin's next login routes into TOTP enrollment, not /org-admin [MFA-RESET-REENROLL-1]", async ({
     browser,
   }) => {
     if (!DESTRUCTIVE_ALLOWED) {

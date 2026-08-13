@@ -239,7 +239,7 @@ test.describe("passkey ceremony — CDP virtual authenticator", () => {
     });
   });
 
-  test("T3 — credential persists after page reload", async () => {
+  test("T3 — credential persists after page reload [PASSKEY-PERSIST-1]", async () => {
     if (skipAuthTests) {
       test.skip(true, SKIP_AUTH_MSG);
     }

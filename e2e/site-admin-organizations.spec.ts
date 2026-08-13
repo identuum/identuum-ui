@@ -432,7 +432,7 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
     }
   });
 
-  test("detail page shows accurate admin status copy — no stale text variants", async () => {
+  test("detail page shows accurate admin status copy — no stale text variants [SA-ORG-COPY-1]", async () => {
     if (skipAuthTests) {
       test.skip(true, SKIP_AUTH_MSG);
     }
@@ -580,7 +580,7 @@ test.describe("/site-admin/organizations/[id] — lifecycle action confirmation 
     }
   });
 
-  test("/delete renders the destructive-confirm form with required checkbox (when org is active)", async () => {
+  test("/delete renders the destructive-confirm form with required checkbox (when org is active) [SA-ORG-DESTRUCTIVE-1]", async () => {
     if (skipAuthTests) {
       test.skip(true, SKIP_AUTH_MSG);
     }

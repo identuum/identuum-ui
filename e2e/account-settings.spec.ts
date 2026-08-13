@@ -510,7 +510,7 @@ test.describe("/account/settings authenticated section rendering (non-destructiv
       }
     });
 
-    test("page body never contains cookies, bearer tokens, session validators, or other credential material", async () => {
+    test("page body never contains cookies, bearer tokens, session validators, or other credential material [NOLEAK-BODY-1]", async () => {
       if (skipAuthTests) {
         test.skip(true, SKIP_AUTH_MSG);
       }

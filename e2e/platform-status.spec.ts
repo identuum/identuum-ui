@@ -78,7 +78,7 @@ test.describe("/platform-status — page structure", () => {
       );
     });
 
-    test("the enabled IDP backend still renders its full card — absence rules never hide a configured backend", async ({
+    test("the enabled IDP backend still renders its full card — absence rules never hide a configured backend [ABSENT-NEVERHIDE-1]", async ({
       page,
     }) => {
       await page.goto("/platform-status");
@@ -89,7 +89,7 @@ test.describe("/platform-status — page structure", () => {
 });
 
 test.describe("/platform-status — mode badge matches /api/runtime", () => {
-  test("live mode badge label corresponds to /api/runtime mode", async ({ page, request }) => {
+  test("live mode badge label corresponds to /api/runtime mode [RUNTIME-BADGE-1]", async ({ page, request }) => {
     // Fetch the live runtime mode from the JSON API.
     const apiRes = await request.get("/api/runtime");
     expect(apiRes.status()).toBe(200);
@@ -116,7 +116,7 @@ test.describe("/platform-status — mode badge matches /api/runtime", () => {
 });
 
 test.describe("/api/runtime — JSON contract", () => {
-  test("returns 200 with valid RuntimeState shape", async ({ request }) => {
+  test("returns 200 with valid RuntimeState shape [RUNTIME-SHAPE-1]", async ({ request }) => {
     const res = await request.get("/api/runtime");
     expect(res.status()).toBe(200);
 
@@ -149,7 +149,7 @@ test.describe("/api/runtime — JSON contract", () => {
     expect(typeof body.components.ag.license.status).toBe("string");
   });
 
-  test("response never contains internal_base_url", async ({ request }) => {
+  test("response never contains internal_base_url [RUNTIME-NOLEAK-1]", async ({ request }) => {
     const res = await request.get("/api/runtime");
     const text = await res.text();
     expect(text).not.toContain("internal_base_url");

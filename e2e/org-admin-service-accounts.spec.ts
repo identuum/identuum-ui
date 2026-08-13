@@ -62,7 +62,7 @@ test.describe("/org-admin/service-accounts — safe-state list + nav", () => {
     }
   });
 
-  test("list page renders no rotate/regenerate or Recent activity copy", async () => {
+  test("list page renders no rotate/regenerate or Recent activity copy [SA-SAFE-1]", async () => {
     if (skipOrgAdminTests) test.skip(true, SKIP_MSG);
     if (!sharedCtx) throw new Error("shared context not initialized");
     const page = await sharedCtx.newPage();
@@ -766,7 +766,7 @@ test.describe("/org-admin/service-accounts/[id] — edit details (dynamic mode, 
     }
   });
 
-  test("[dynamic mode only] renaming to an existing SA's name surfaces a name-field error (409 conflict)", async () => {
+  test("[dynamic mode only] renaming to an existing SA's name surfaces a name-field error (409 conflict) [SA-NAME-CONFLICT-1]", async () => {
     if (skipOrgAdminTests) test.skip(true, SKIP_MSG);
     if (process.env.IDENTUUM_E2E_USE_DYNAMIC_FIXTURE !== "true") {
       test.skip(true, DYNAMIC_ONLY_SKIP_MSG);

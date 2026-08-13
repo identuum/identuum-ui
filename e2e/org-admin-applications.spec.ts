@@ -109,7 +109,7 @@ test.afterAll(async () => {
 // ── /org-admin/applications page render + sidebar active state ─────────────
 
 test.describe("/org-admin/applications — read-only foundation", () => {
-  test("[dynamic mode only] populated list renders the seeded sample client (name + client_id + Public); empty-state copy is gone; no secret-shaped string in body", async () => {
+  test("[dynamic mode only] populated list renders the seeded sample client (name + client_id + Public); empty-state copy is gone; no secret-shaped string in body [APP-NOSECRET-1]", async () => {
     if (skipOrgAdminTests) {
       test.skip(true, SKIP_MSG);
     }
@@ -500,7 +500,7 @@ test.describe("/org-admin/applications — read-only foundation", () => {
     }
   });
 
-  test("[dynamic mode only] Danger zone renders on detail page; type-to-confirm gate blocks submit; first click does NOT delete; NO submit", async () => {
+  test("[dynamic mode only] Danger zone renders on detail page; type-to-confirm gate blocks submit; first click does NOT delete [APP-DANGER-GATE-1]; NO submit", async () => {
     // Non-mutating: we expand the Danger zone, observe the
     // confirmation copy and the disabled-until-match state of the
     // final Delete submit, type a deliberately-wrong value to prove
@@ -695,7 +695,7 @@ test.describe("/org-admin/applications — read-only foundation", () => {
     }
   });
 
-  test("[dynamic mode only] Confidential rotation: type-to-confirm → success panel → copy-once → caveat → navigate-away clears the secret", async () => {
+  test("[dynamic mode only] Confidential rotation: type-to-confirm → success panel → copy-once → caveat → navigate-away clears the secret [APP-ROTATE-ONCE-1]", async () => {
     // Mutating BUT scoped strictly to the disposable confidential
     // fixture client: we rotate that client's secret via the Security
     // section's RotateConfirmForm. The new secret is captured into a

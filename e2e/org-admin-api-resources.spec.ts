@@ -64,7 +64,7 @@ test.describe("/org-admin/api-resources — list page (safe-state)", () => {
     }
   });
 
-  test("does not render any rotate/regenerate or recent-activity affordance in the safe-state DOM", async () => {
+  test("does not render any rotate/regenerate or recent-activity affordance in the safe-state DOM [APIRES-SAFE-1]", async () => {
     if (skipOrgAdminTests) test.skip(true, SKIP_MSG);
     if (!sharedCtx) throw new Error("shared context not initialized");
     const page = await sharedCtx.newPage();

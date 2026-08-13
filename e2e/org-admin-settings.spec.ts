@@ -210,7 +210,7 @@ test.describe("/org-admin/settings — Organization record (read-only)", () => {
   // clicking persists"). The refusal is now asserted as CORRECT, live:
   // an org_admin PUT against its own org record must be REFUSED by the
   // backend, and the page must offer no path to attempt it.
-  test("[dynamic mode only] org_admin write to the org record is REFUSED (403) and the page offers no save path", async () => {
+  test("[dynamic mode only] org_admin write to the org record is REFUSED (403) and the page offers no save path [ORGREC-READONLY-1]", async () => {
     if (skipOrgAdminTests) {
       test.skip(true, SKIP_MSG);
     }
@@ -577,7 +577,7 @@ test.describe("/org-admin/settings — Domains card", () => {
 // presence/absence at the rendered-DOM layer.
 
 test.describe("/org-admin/settings — Primary domain row", () => {
-  test("[dynamic mode only] Domains card shows exactly one Primary + Verified row matching the fixture domain; no operator controls on it", async () => {
+  test("[dynamic mode only] Domains card shows exactly one Primary + Verified row matching the fixture domain; no operator controls on it [DOMAINS-PRIMARY-1]", async () => {
     if (skipOrgAdminTests) {
       test.skip(true, SKIP_MSG);
     }

@@ -83,7 +83,7 @@ test.describe("/site-admin/audit subject-filter notice", () => {
     }
   });
 
-  test("non-zero org UUID subject filter shows org message and View organization link", async () => {
+  test("non-zero org UUID subject filter shows org message and View organization link [AUDIT-SUBJECT-LINK-1]", async () => {
     if (skip) {
       test.skip(true, SKIP_AUTH_MSG);
     }

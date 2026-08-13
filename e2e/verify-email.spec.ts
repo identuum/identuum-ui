@@ -41,7 +41,7 @@ test.describe("/verify-email page — safe states", () => {
     await expect(page.getByRole("button", { name: "Send new link" })).not.toBeVisible();
   });
 
-  test("renders a safe error state for an unrecognised token", async ({ page }) => {
+  test("renders a safe error state for an unrecognised token [VERIFY-EMAIL-SAFE-1]", async ({ page }) => {
     await page.goto("/verify-email?token=invalid_e2e_test_token_verify");
 
     // Either "Link invalid or expired" (IdP running, 400 response) or
@@ -66,7 +66,7 @@ test.describe("/verify-email page — safe states", () => {
     await expect(page.getByLabel("Request a new link")).toBeVisible();
   });
 
-  test("resend form shows generic sent message after submission", async ({ page }) => {
+  test("resend form shows generic sent message after submission [VERIFY-RESEND-GENERIC-1]", async ({ page }) => {
     await page.goto("/verify-email?token=invalid_e2e_test_token_verify");
 
     await page.getByLabel("Request a new link").fill("test-resend@example.com");

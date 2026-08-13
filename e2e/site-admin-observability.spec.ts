@@ -131,7 +131,7 @@ test.describe("/site-admin observability pages — read-only smoke", () => {
     await expect(page.getByRole("link", { name: /^Verify audit chain$/ })).toBeVisible();
   });
 
-  test("System / info page renders WITHOUT exposing DB URLs / Redis URLs / env vars", async ({
+  test("System / info page renders WITHOUT exposing DB URLs / Redis URLs / env vars [OBS-PASSIVE-1]", async ({
     page,
   }) => {
     await page.goto("/site-admin/system/info");

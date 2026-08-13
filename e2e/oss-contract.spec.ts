@@ -69,7 +69,7 @@ test.describe("OSS runtime contract — liveness + discovery (must be present)",
     expect(body.status).toBe("healthy");
   });
 
-  test("GET /.well-known/openid-configuration advertises issuer + the OAuth endpoints", async ({
+  test("GET /.well-known/openid-configuration advertises issuer + the OAuth endpoints [CONTRACT-SURFACE-1]", async ({
     request,
   }) => {
     const body = await discovery(request);
@@ -109,7 +109,7 @@ test.describe("OSS runtime contract — the OAuth surface is SERVED", () => {
     );
   });
 
-  test("token_endpoint is client-auth-gated (401, not 404)", async ({ request }) => {
+  test("token_endpoint is client-auth-gated (401, not 404) [CONTRACT-CLIENT-AUTH-1]", async ({ request }) => {
     const { token_endpoint } = await discovery(request);
     expect(token_endpoint).toBeTruthy();
     const res = await request.post(token_endpoint as string, {
