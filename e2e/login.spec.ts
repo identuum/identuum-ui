@@ -485,7 +485,7 @@ test.describe("/login — passkey/WebAuthn login affordance (non-destructive)", 
     }
   });
 
-  test("/login page body never contains WebAuthn credential material or other credential terms", async ({
+  test("/login page body never contains WebAuthn credential material or other credential terms [NOLEAK-LOGIN-1]", async ({
     page,
   }) => {
     await page.goto("/login");

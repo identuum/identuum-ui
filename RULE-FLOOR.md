@@ -1,4 +1,4 @@
-FLOOR: 43
+FLOOR: 44
 
 | ID | one-sentence rule | enforced-by | check | red-proof | hash |
 |---|---|---|---|---|---|
@@ -45,3 +45,4 @@ FLOOR: 43
 | SA-ORG-DESTRUCTIVE-1 | Destructive lifecycle actions require the checkbox confirm form; reversible ones never do. | playwright | e2e/site-admin-organizations.spec.ts @ e2e-run | - | ca4072618935 |
 | BACKUP-PRUNE-1 | Backup prune fires only on confirm, exactly once, and removes only its target. | playwright | e2e/upgrade-backup.spec.ts @ chromium | - | 6694ae77cc51 |
 | OBS-PASSIVE-1 | Observability pages render passively and never expose environment internals. | playwright | e2e/site-admin-observability.spec.ts @ e2e-run | - | 07ba5173ad64 |
+| NOLEAK-LOGIN-1 | The /login page body never contains WebAuthn credential material or other credential terms. | playwright | e2e/login.spec.ts @ chromium | - | c2e1e78b4f5e |
