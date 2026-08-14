@@ -155,7 +155,7 @@ test.describe("/api/runtime — JSON contract", () => {
     expect(text).not.toContain("internal_base_url");
   });
 
-  test("response never contains secret, password, or private_key", async ({ request }) => {
+  test("response never contains secret, password, or private_key [RUNTIME-NOLEAK-2]", async ({ request }) => {
     const res = await request.get("/api/runtime");
     const text = await res.text();
     expect(text).not.toContain("password");
