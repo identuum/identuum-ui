@@ -47,7 +47,11 @@ export interface IDPOrgSummaryForLink {
   domain: string;
   active: boolean;
   deleted: boolean;
-  has_admin: boolean;
+  /**
+   * Mirrors OrgListItem.has_admin: undefined when the backend did not emit
+   * admin state (ABSENT ≠ NEGATIVE — only `false` may render "no admin").
+   */
+  has_admin: boolean | undefined;
 }
 
 /**

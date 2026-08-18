@@ -127,12 +127,17 @@ async function classifyAdminReadFailure(res: Response): Promise<{
  * Sanitizes the response to a narrow UI-safe shape before returning.
  *
  * Field mapping note — is_claimed → has_admin:
- *   The IdP handler calls ToOrganizationList(orgs, adminCounts) which sets
- *   OrganizationInfo.IsClaimed = (adminCounts[org.ID] > 0).
- *   Despite the name "is_claimed", the field means "has at least one active
- *   org_admin". This mapping is intentional but fragile: if the IdP changes
- *   the semantics of is_claimed (e.g. to reflect domain activation), this
- *   mapping MUST be updated.
+ *   The IdP read handlers project is_claimed = (live org_admin count > 0)
+ *   and can_assign_admin = (is_claimed && verified count == 0) onto the
+ *   org payloads. Despite the name "is_claimed", the field means "has at
+ *   least one live org_admin".
+ *
+ *   ABSENT ≠ NEGATIVE (PHANTOM-NO-ADMIN): the backend emits both fields
+ *   pointer+omitempty — when the payload does not carry them (older
+ *   backend, unwired counter, count error) the mapping below preserves
+ *   `undefined` instead of coercing to false. Boolean()-coercing the
+ *   absent is_claimed here was the root cause of every org rendering
+ *   "No active administrator".
  */
 export async function listOrganizations(opts?: {
   offset?: number;
@@ -172,11 +177,12 @@ export async function listOrganizations(opts?: {
       slug: String(o.org_slug ?? ""),
       active: Boolean(o.active),
       deleted: Boolean(o.deleted),
-      // is_claimed means "has at least one active org_admin" (see mapping note above).
-      has_admin: Boolean(o.is_claimed),
+      // is_claimed means "has at least one live org_admin" (see mapping note
+      // above). ABSENT stays undefined — never coerced to false.
+      has_admin: typeof o.is_claimed === "boolean" ? o.is_claimed : undefined,
       // can_assign_admin: true when site_admin recovery delegation is allowed (same
       // semantics as GenerateClaimToken — expired pending invitations don't block).
-      can_assign_admin: Boolean(o.can_assign_admin),
+      can_assign_admin: typeof o.can_assign_admin === "boolean" ? o.can_assign_admin : undefined,
       created_at: String(o.created_at ?? ""),
       updated_at: String(o.updated_at ?? ""),
     }));
@@ -292,8 +298,10 @@ export async function getOrganization(id: string): Promise<OrgDetail | null> {
       deleted: Boolean(o.deleted),
       auth_policy: String(o.auth_policy ?? "local_only"),
       mfa_policy: String(o.mfa_policy ?? "optional"),
-      has_admin: Boolean(o.is_claimed),
-      can_assign_admin: Boolean(o.can_assign_admin),
+      // ABSENT ≠ NEGATIVE: undefined admin state stays undefined so the
+      // detail page renders "status unavailable", never "No administrator".
+      has_admin: typeof o.is_claimed === "boolean" ? o.is_claimed : undefined,
+      can_assign_admin: typeof o.can_assign_admin === "boolean" ? o.can_assign_admin : undefined,
       allow_public_registration: Boolean(o.allow_public_registration),
       require_registration_approval: Boolean(o.require_registration_approval),
       created_at: String(o.created_at ?? ""),
@@ -342,7 +350,8 @@ export async function getOwnOrganization(): Promise<OrgDetail | null> {
       deleted: Boolean(o.deleted),
       auth_policy: String(o.auth_policy ?? "local_only"),
       mfa_policy: String(o.mfa_policy ?? "optional"),
-      has_admin: Boolean(o.is_claimed),
+      // /current does not emit admin state today; preserve absence.
+      has_admin: typeof o.is_claimed === "boolean" ? o.is_claimed : undefined,
       // org_admin views their own org; recovery affordance is not applicable here.
       can_assign_admin: false,
       allow_public_registration: Boolean(o.allow_public_registration),

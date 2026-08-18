@@ -240,9 +240,11 @@ function OrgActions({ org }: { org: OrgListItem }) {
           Reactivate
         </a>
       )}
-      {/* Show "Assign admin" when no blocking admin exists: either no admin at all
-          (!has_admin) or admins exist but none are verified (can_assign_admin recovery). */}
-      {(!org.has_admin || org.can_assign_admin) && (
+      {/* Show "Assign admin" when no blocking admin PROVABLY exists: either no
+          admin at all (has_admin === false) or admins exist but none are
+          verified (can_assign_admin recovery). Undefined admin state (ABSENT ≠
+          NEGATIVE) never yields the affordance. */}
+      {(org.has_admin === false || org.can_assign_admin === true) && (
         <a
           href={`/site-admin/organizations/${org.id}/assign-admin`}
           className="text-xs font-semibold text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-3 py-1.5 rounded-lg transition-colors"
@@ -292,26 +294,40 @@ function StatusBadge({ active, deleted }: { active: boolean; deleted: boolean })
 }
 
 function AdminStateBadge({ org }: { org: OrgListItem }) {
-  // Derive the three-state admin signal mirroring the detail page Operational status card.
+  // Derive the admin signal mirroring the detail page Operational status card.
   // Labels are shortened for table rows; detail page copy is more explanatory.
-  const state: "active" | "expired-pending" | "no-admin" =
-    org.has_admin && !org.can_assign_admin
-      ? "active"
-      : org.has_admin && org.can_assign_admin
-        ? "expired-pending"
-        : "no-admin";
+  // ABSENT ≠ NEGATIVE (PHANTOM-NO-ADMIN): undefined admin state renders its
+  // own neutral "Status unknown" badge — never the amber "No admin" claim.
+  const state: "active" | "expired-pending" | "no-admin" | "unknown" =
+    org.has_admin === undefined || org.can_assign_admin === undefined
+      ? "unknown"
+      : org.has_admin && !org.can_assign_admin
+        ? "active"
+        : org.has_admin && org.can_assign_admin
+          ? "expired-pending"
+          : "no-admin";
 
   const label =
     state === "active"
       ? "Admin active"
       : state === "expired-pending"
         ? "Invitation expired"
-        : "No admin";
+        : state === "unknown"
+          ? "Status unknown"
+          : "No admin";
 
   // Deleted orgs: show state in muted style — admin management is suspended
   if (org.deleted) {
     return (
       <span className="inline-flex items-center rounded-full bg-stone-50 border border-stone-200 px-2 py-0.5 text-xs font-medium text-stone-400">
+        {label}
+      </span>
+    );
+  }
+
+  if (state === "unknown") {
+    return (
+      <span className="inline-flex items-center rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-xs font-medium text-stone-500">
         {label}
       </span>
     );

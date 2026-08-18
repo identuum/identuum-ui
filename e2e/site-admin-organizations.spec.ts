@@ -14,8 +14,10 @@
  *   - Create organization page renders expected form fields.
  *   - Edit action page renders the edit form for the first available organization.
  *   - assign-admin page never shows the stale "Already has an active administrator" copy.
- *   - assign-admin page shows the recovery form when can_assign_admin=true, or an accurate
- *     policy-blocked message when can_assign_admin=false — conditional on DB state.
+ *   - assign-admin page shows the recovery form when assignment is provably allowed, or the
+ *     "Administrator already assigned" blocked panel — conditional on DB state.
+ *   - SA-ORG-COPY-1: admin-status copy asserted for BOTH seeded states (fixture org with a
+ *     verified admin AND the admin-less bootstrap org) — see the vacuity-fix comment at the test.
  *   - List "Assign admin" affordance links open the recovery form (conditional on DB state).
  *   - Detail page "Assign admin" affordance is consistent with the list affordance.
  *
@@ -26,10 +28,40 @@
  * Requires: full Compose stack (IdP at localhost:7113, UI at localhost:7104).
  */
 
+import { readFileSync, statSync } from "node:fs";
 import type { BrowserContext } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import { E2E_FIXTURE_MARKER, resolveFixturePath } from "./helpers/fixture";
 import { ensureExpiredPendingOrgFixture } from "./helpers/fixture-expired-org";
 import { SKIP_AUTH_MSG, loginAsSiteAdmin, skipAuthTests } from "./helpers/login";
+
+/**
+ * Reads ONLY the organization block from the dynamic-fixture envelope —
+ * never the credential fields. SA-ORG-COPY-1 needs the fixture org's id
+ * because that org is the seeded "active verified org_admin exists"
+ * reality (appliance-fixture.ts creates the org_admin with
+ * email_verified=true and a completed TOTP enrolment).
+ */
+function readFixtureOrganization(): { id: string; name: string } | null {
+  const path = resolveFixturePath();
+  try {
+    statSync(path);
+  } catch {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf-8")) as {
+      fixture_marker?: string;
+      organization?: { id?: string; name?: string };
+    };
+    if (parsed.fixture_marker !== E2E_FIXTURE_MARKER) return null;
+    const org = parsed.organization;
+    if (!org?.id || !org?.name) return null;
+    return { id: org.id, name: org.name };
+  } catch {
+    return null;
+  }
+}
 
 const ORG_UUID_RE =
   /^\/site-admin\/organizations\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -329,18 +361,19 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
       await expect(page.getByText("Already has an active administrator")).not.toBeVisible();
 
       // Page must render one of the three valid states:
-      //   (a) Recovery form — when can_assign_admin=true
-      //   (b) Policy-blocked panel — when can_assign_admin=false
+      //   (a) Recovery form — when assignment is provably allowed
+      //   (b) Blocked panel "Administrator already assigned" — when a
+      //       verified admin blocks delegation (this became reachable once
+      //       the backend started emitting real admin state; the previous
+      //       expectation text here was stale and unreachable)
       //   (c) Deleted-org panel — when org.deleted=true
       const showsForm = await page
         .getByRole("button", { name: /generate admin setup link/i })
         .isVisible();
-      const showsRecoveryBlocked = await page
-        .getByText("Recovery delegation not available")
-        .isVisible();
+      const showsBlockedPanel = await page.getByText("Administrator already assigned").isVisible();
       const showsDeletedGuard = await page.getByText("Organization is deleted").isVisible();
 
-      expect(showsForm || showsRecoveryBlocked || showsDeletedGuard).toBe(true);
+      expect(showsForm || showsBlockedPanel || showsDeletedGuard).toBe(true);
     } finally {
       await page.close();
     }
@@ -432,41 +465,98 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
     }
   });
 
-  test("detail page shows accurate admin status copy — no stale text variants [SA-ORG-COPY-1]", async () => {
+  // VACUITY FIX (THE-PHANTOM-NO-ADMIN): the previous SA-ORG-COPY-1 test
+  // asserted "one of the valid admin-status strings appears" — an OR-chain
+  // any state satisfies, so it stayed GREEN while every org falsely rendered
+  // "No active administrator". This rewrite asserts BOTH states against
+  // seeded reality:
+  //   STATE A — the dynamic-fixture org (one ACTIVE VERIFIED org_admin,
+  //     seeded by appliance-fixture.ts) must read "Administrator account
+  //     active" with NO Assign affordance and NO no-admin claim.
+  //   STATE B — the seeded BOOTSTRAP org ("E2E System Bootstrap", created
+  //     by the fixture's setup with ZERO org_admin rows — the site_admin
+  //     lives in the System organization) must read "No administrator"
+  //     WITH the Assign affordance.
+  // Both states also refuse the absent-state copy ("Administrator status
+  // unavailable") — so the test fails against a backend that does not emit
+  // admin state at all, instead of passing vacuously.
+  //
+  // Why not a self-created SHELL org for STATE B: a shell org is born
+  // INACTIVE and the released backend's GetByID read path filters
+  // active=true, so its detail (and every per-org action page) answers
+  // "Organization not found" — measured live on the first green run and
+  // recorded as a latent finding outside this slice's scope.
+  test("admin-status copy is truthful for BOTH seeded states — active-admin org and admin-less org [SA-ORG-COPY-1]", async () => {
     if (skipAuthTests) {
       test.skip(true, SKIP_AUTH_MSG);
+    }
+    test.setTimeout(120_000);
+
+    const fixtureOrg = readFixtureOrganization();
+    if (!fixtureOrg) {
+      // FAIL, do not skip: under the armed e2e-run profile the envelope
+      // always exists; a silent skip would re-open the vacuity hole.
+      throw new Error(
+        "SA-ORG-COPY-1 requires the dynamic-fixture envelope (e2e/.auth). " +
+          "Run with IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true — the seeded verified-admin org is the STATE A ground truth."
+      );
     }
 
     const page = await getSiteAdminContext().newPage();
     try {
-      await page.goto("/site-admin/organizations");
+      // ── STATE A: the seeded org WITH an active verified org_admin ────────
+      await page.goto(`/site-admin/organizations/${fixtureOrg.id}`);
       await page.waitForLoadState("networkidle");
+      await page.getByText("Operational status").waitFor({ state: "visible" });
 
-      const detailsLinks = page.getByRole("link", { name: "Details" });
-      if ((await detailsLinks.count()) === 0) {
-        test.skip(true, "No organizations in DB — skipping stale copy regression test");
-        return;
+      // The truthful positive claim, on both cards…
+      await expect(page.getByText("Administrator account active")).toBeVisible();
+      await expect(page.getByText("Administrator account present")).toBeVisible();
+      // …and NO variant of the phantom no-admin claim anywhere.
+      await expect(page.getByText("No administrator", { exact: true })).toHaveCount(0);
+      await expect(page.getByText("No active administrator")).toHaveCount(0);
+      await expect(page.getByText("No admin", { exact: true })).toHaveCount(0);
+      // The backend emitted real state — the absent-state copy must not show.
+      await expect(page.getByText("Administrator status unavailable")).toHaveCount(0);
+      // NO Assign affordance on a steady-state org — anywhere on the page.
+      await expect(page.locator('a[href*="/assign-admin"]')).toHaveCount(0);
+      // Stale copy variants never appear.
+      await expect(page.getByText("Active administrator present")).toHaveCount(0);
+      await expect(page.getByText("Already has an active administrator")).toHaveCount(0);
+
+      // ── STATE B: the seeded BOOTSTRAP org (active, ZERO org_admin rows) ──
+      await page.goto("/site-admin/organizations?deleted=false");
+      const bootstrapRow = page.locator('tr:has-text("E2E System Bootstrap")').first();
+      await expect(bootstrapRow).toBeVisible({ timeout: 10_000 });
+      // The truthful list badge for a provably admin-less org, with its
+      // Assign affordance…
+      await expect(bootstrapRow.getByText("No admin", { exact: true })).toBeVisible();
+      await expect(bootstrapRow.getByRole("link", { name: "Assign admin" })).toBeVisible();
+
+      const detailsHref = await bootstrapRow
+        .getByRole("link", { name: "Details" })
+        .getAttribute("href");
+      const idMatch = detailsHref?.match(
+        /\/site-admin\/organizations\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i
+      );
+      if (!idMatch) {
+        throw new Error(`could not extract bootstrap org id from ${detailsHref ?? "(null)"}`);
       }
 
-      const firstDetailsHref = await detailsLinks.first().getAttribute("href");
-      const orgId = extractOrgId(firstDetailsHref ?? "");
-
-      await page.goto(`/site-admin/organizations/${orgId}`);
+      await page.goto(`/site-admin/organizations/${idMatch[1]}`);
       await page.waitForLoadState("networkidle");
+      await page.getByText("Operational status").waitFor({ state: "visible" });
 
-      // Stale copy must not appear anywhere (Operational status card or Administrator status card)
-      await expect(page.getByText("Active administrator present")).not.toBeVisible();
-      await expect(page.getByText("Already has an active administrator")).not.toBeVisible();
-
-      // Operational status card must be present
-      await expect(page.getByText("Operational status")).toBeVisible();
-
-      // Administrator status card must show one of the current valid strings
-      // Use count() to avoid strict-mode violations when text appears in multiple elements.
-      const accountPresent = (await page.getByText("Administrator account present").count()) > 0;
-      const noAdmin = (await page.getByText("No active administrator").count()) > 0;
-      const pendingExpired = (await page.getByText("Pending invitation expired").count()) > 0;
-      expect(accountPresent || noAdmin || pendingExpired).toBe(true);
+      // The truthful negative claim…
+      await expect(page.getByText("No administrator", { exact: true })).toBeVisible();
+      await expect(page.getByText("No active administrator").first()).toBeVisible();
+      // …never the positive claim…
+      await expect(page.getByText("Administrator account active")).toHaveCount(0);
+      await expect(page.getByText("Administrator account present")).toHaveCount(0);
+      // …never the absent-state copy…
+      await expect(page.getByText("Administrator status unavailable")).toHaveCount(0);
+      // …and the Assign affordance IS offered for a provably admin-less org.
+      expect(await page.locator('a[href*="/assign-admin"]').count()).toBeGreaterThan(0);
     } finally {
       await page.close();
     }

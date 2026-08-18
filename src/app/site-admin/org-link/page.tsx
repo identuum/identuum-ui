@@ -237,7 +237,10 @@ function IDPOrgCard({ orgs, available }: { orgs: IDPOrgSummaryForLink[]; availab
               />
               <span className="font-medium text-stone-700">{o.name}</span>
               {o.domain && <span className="text-stone-400">{o.domain}</span>}
-              {!o.has_admin && <span className="text-amber-600 text-[10px]">no admin</span>}
+              {/* ABSENT ≠ NEGATIVE: only a provable false renders "no admin". */}
+              {o.has_admin === false && (
+                <span className="text-amber-600 text-[10px]">no admin</span>
+              )}
             </li>
           ))}
           {orgs.length > 10 && (

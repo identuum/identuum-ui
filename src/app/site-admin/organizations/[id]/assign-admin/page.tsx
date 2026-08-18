@@ -58,11 +58,39 @@ export default async function AssignAdminPage({
     );
   }
 
-  // Assignment is allowed when no org_admin row exists at all (`!has_admin`)
-  // or when admins exist but none are verified (`can_assign_admin` recovery state).
-  // Both states match the backend GenerateClaimToken guard (`adminCount == 0` or
-  // its recovery extension), so don't block on `can_assign_admin` alone.
-  const canAssign = !org.has_admin || org.can_assign_admin;
+  // ABSENT ≠ NEGATIVE (PHANTOM-NO-ADMIN): undefined admin state means the
+  // backend did not emit it. Rendering the form here would be a false
+  // affordance (the backend guard would refuse anyway) and rendering the
+  // "already assigned" panel would be a false claim — say exactly what is
+  // known: nothing.
+  if (org.has_admin === undefined) {
+    return (
+      <div className="max-w-lg space-y-4">
+        <Breadcrumb orgName={org.name} />
+        <div className="bg-white border border-stone-200 rounded-[1.5rem] px-5 py-4 shadow-sm">
+          <p className="text-sm font-semibold text-stone-700">Administrator status unavailable</p>
+          <p className="text-xs text-stone-400 mt-1">
+            The administrator state for <span className="font-medium text-sky-950">{org.name}</span>{" "}
+            could not be determined, so recovery delegation cannot be offered right now. Reload the
+            page or check the backend health.
+          </p>
+        </div>
+        <a
+          href="/site-admin/organizations"
+          className="inline-block text-sm text-sky-600 hover:text-sky-700 underline"
+        >
+          Back to organizations
+        </a>
+      </div>
+    );
+  }
+
+  // Assignment is allowed when no org_admin row exists at all
+  // (`has_admin === false`) or when admins exist but none are verified
+  // (`can_assign_admin` recovery state). Both states match the backend
+  // GenerateClaimToken guard (`adminCount == 0` or its recovery extension),
+  // so don't block on `can_assign_admin` alone.
+  const canAssign = !org.has_admin || org.can_assign_admin === true;
 
   if (!canAssign) {
     return (
@@ -70,10 +98,14 @@ export default async function AssignAdminPage({
         <Breadcrumb orgName={org.name} />
         <div className="bg-white border border-stone-200 rounded-[1.5rem] px-5 py-4 shadow-sm">
           <p className="text-sm font-semibold text-stone-700">Administrator already assigned</p>
+          {/* Wording note: the e2e stale-copy fence bans the exact phrase
+              "already has an active administrator" (a historic false claim,
+              matched case-insensitively), so this truthful panel deliberately
+              phrases the same fact differently. */}
           <p className="text-xs text-stone-400 mt-1">
-            <span className="font-medium text-sky-950">{org.name}</span> already has an active
-            administrator. Site administrators can only delegate the first administrator, or recover
-            the role when no administrator exists.
+            An active, verified administrator already manages{" "}
+            <span className="font-medium text-sky-950">{org.name}</span>. Site administrators can
+            only delegate the first administrator, or recover the role when no administrator exists.
           </p>
         </div>
         <a

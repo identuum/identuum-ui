@@ -245,3 +245,54 @@ describe("operator-facing copy is pinned (regression sentry for label/body edits
     }
   });
 });
+
+// ── ABSENT ≠ NEGATIVE (PHANTOM-NO-ADMIN) ─────────────────────────────────────
+//
+// Undefined admin flags mean the backend did not emit admin state. That
+// must derive the dedicated `unknown` state — NEVER `no-admin` — with no
+// assignment affordance, and its copy must say "unavailable", not "No
+// administrator". Boolean(undefined)=false coercion in the client mapper
+// was the root cause of every org rendering as admin-less.
+
+describe("deriveOperationalStatus — unknown admin state (absent ≠ negative)", () => {
+  it("undefined has_admin → adminState unknown, never no-admin, no assignment", () => {
+    const s = deriveOperationalStatus(org({ has_admin: undefined, can_assign_admin: undefined }));
+    expect(s.adminState).toBe("unknown");
+    expect(s.adminState).not.toBe("no-admin");
+    expect(s.assignmentAllowed).toBe(false);
+    expect(s.nextAction).toBe("none");
+  });
+
+  it("undefined can_assign_admin alone also derives unknown (both flags travel together)", () => {
+    const s = deriveOperationalStatus(org({ has_admin: true, can_assign_admin: undefined }));
+    expect(s.adminState).toBe("unknown");
+    expect(s.assignmentAllowed).toBe(false);
+  });
+
+  it("unknown on an inactive org still surfaces reactivate, but never assign", () => {
+    const s = deriveOperationalStatus(
+      org({ active: false, has_admin: undefined, can_assign_admin: undefined })
+    );
+    expect(s.lifecycle).toBe("inactive");
+    expect(s.adminState).toBe("unknown");
+    expect(s.assignmentAllowed).toBe(false);
+    expect(s.nextAction).toBe("reactivate");
+  });
+
+  it("deleted still dominates unknown: suspended + restore", () => {
+    const s = deriveOperationalStatus(
+      org({ deleted: true, has_admin: undefined, can_assign_admin: undefined })
+    );
+    expect(s.adminState).toBe("suspended");
+    expect(s.nextAction).toBe("restore");
+  });
+
+  it('unknown copy reads "Administrator status unavailable" and never claims no admin', () => {
+    expect(ADMIN_STATE_COPY.unknown.label).toBe("Administrator status unavailable");
+    expect(ADMIN_STATE_COPY.unknown.body).toMatch(/could not be determined/);
+    expect(ADMIN_STATE_COPY.unknown.body).toMatch(/not a statement that no administrator exists/);
+    expect(`${ADMIN_STATE_COPY.unknown.label} ${ADMIN_STATE_COPY.unknown.body}`).not.toMatch(
+      /^No administrator$/m
+    );
+  });
+});

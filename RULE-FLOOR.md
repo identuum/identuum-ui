@@ -41,7 +41,7 @@ FLOOR: 45
 | RUNTIME-NOLEAK-1 | /api/runtime never exposes internal URLs or secrets. | playwright | e2e/platform-status.spec.ts @ chromium | - | 3100037e828b |
 | MFA-RESET-REENROLL-1 | After an MFA reset the next login routes into TOTP enrollment. | playwright | e2e/site-admin-admin-recovery.spec.ts @ e2e-destructive | - | dbd2ba502c87 |
 | AUDIT-SUBJECT-LINK-1 | Audit subject filters resolve to valid organization links. | playwright | e2e/site-admin-audit.spec.ts @ e2e-run | - | d091a487ae67 |
-| SA-ORG-COPY-1 | Organization detail admin-status copy is accurate, never stale. | playwright | e2e/site-admin-organizations.spec.ts @ e2e-run | - | 2573e8f768ca |
+| SA-ORG-COPY-1 | Organization detail admin-status copy is accurate, never stale. | playwright | e2e/site-admin-organizations.spec.ts @ e2e-run | - | faa48a61804c |
 | SA-ORG-DESTRUCTIVE-1 | Destructive lifecycle actions require the checkbox confirm form; reversible ones never do. | playwright | e2e/site-admin-organizations.spec.ts @ e2e-run | - | ca4072618935 |
 | BACKUP-PRUNE-1 | Backup prune fires only on confirm, exactly once, and removes only its target. | playwright | e2e/upgrade-backup.spec.ts @ chromium | - | 6694ae77cc51 |
 | OBS-PASSIVE-1 | Observability pages render passively and never expose environment internals. | playwright | e2e/site-admin-observability.spec.ts @ e2e-run | - | 07ba5173ad64 |

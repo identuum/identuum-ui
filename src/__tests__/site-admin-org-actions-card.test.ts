@@ -579,3 +579,38 @@ describe("Negative invariants — no misleading labels, no tenant-internal hrefs
     }
   });
 });
+
+// ── ABSENT ≠ NEGATIVE (PHANTOM-NO-ADMIN) ─────────────────────────────────────
+
+describe("deriveOrganizationActions — unknown admin state never yields assign-admin", () => {
+  it("active org with undefined admin flags: lifecycle actions only", () => {
+    const actions = deriveOrganizationActions({
+      active: true,
+      deleted: false,
+      has_admin: undefined,
+      can_assign_admin: undefined,
+    });
+    expect(actions).toEqual(["edit", "deactivate", "archive"]);
+    expect(actions).not.toContain("assign-admin");
+  });
+
+  it("inactive org with undefined admin flags: reactivate but no assign-admin", () => {
+    const actions = deriveOrganizationActions({
+      active: false,
+      deleted: false,
+      has_admin: undefined,
+      can_assign_admin: undefined,
+    });
+    expect(actions).toEqual(["edit", "reactivate", "archive"]);
+  });
+
+  it("provable no-admin still yields assign-admin (the fix must not over-suppress)", () => {
+    const actions = deriveOrganizationActions({
+      active: true,
+      deleted: false,
+      has_admin: false,
+      can_assign_admin: false,
+    });
+    expect(actions).toContain("assign-admin");
+  });
+});

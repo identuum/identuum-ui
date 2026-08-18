@@ -111,12 +111,19 @@ export default async function OrgDetailPage({
           </span>
           <span
             className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
-              org.has_admin
-                ? "text-sky-700 bg-sky-50 border-sky-200"
-                : "text-amber-700 bg-amber-50 border-amber-200"
+              org.has_admin === undefined
+                ? "text-stone-500 bg-stone-100 border-stone-200"
+                : org.has_admin
+                  ? "text-sky-700 bg-sky-50 border-sky-200"
+                  : "text-amber-700 bg-amber-50 border-amber-200"
             }`}
           >
-            {org.has_admin ? "Has admin" : "No admin"}
+            {/* ABSENT ≠ NEGATIVE: undefined admin state never claims "No admin". */}
+            {org.has_admin === undefined
+              ? "Admin status unknown"
+              : org.has_admin
+                ? "Has admin"
+                : "No admin"}
           </span>
         </div>
       </div>
@@ -145,7 +152,9 @@ export default async function OrgDetailPage({
             </span>
           </DetailRow>
           <DetailRow label="Active admin">
-            <span className="text-xs text-sky-950">{org.has_admin ? "Yes" : "No"}</span>
+            <span className="text-xs text-sky-950">
+              {org.has_admin === undefined ? "Unknown" : org.has_admin ? "Yes" : "No"}
+            </span>
           </DetailRow>
           <DetailRow label="Auth policy">
             <span className="text-xs text-sky-950">
@@ -174,7 +183,26 @@ export default async function OrgDetailPage({
           <p className="text-sm font-semibold text-sky-950">Administrator status</p>
         </div>
         <div className="px-6 py-5 space-y-3">
-          {org.has_admin ? (
+          {org.has_admin === undefined ? (
+            // ABSENT ≠ NEGATIVE (PHANTOM-NO-ADMIN): the backend did not emit
+            // admin state. Say exactly that — never "No active administrator",
+            // and never an Assign affordance from unknown state.
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-200 text-stone-500 text-[10px] font-bold">
+                ?
+              </span>
+              <div>
+                <p className="text-xs font-semibold text-stone-600">
+                  Administrator status unavailable
+                </p>
+                <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">
+                  The administrator state for this organization could not be determined. This is a
+                  reporting gap, not a statement that no administrator exists. Recovery delegation
+                  is not offered from an unknown state.
+                </p>
+              </div>
+            </div>
+          ) : org.has_admin ? (
             <>
               <div className="flex items-start gap-3">
                 <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">
@@ -451,6 +479,7 @@ const ADMIN_STATE_DOT: Record<AdminState, string> = {
   "expired-pending": "bg-amber-400",
   "no-admin": "bg-amber-400",
   suspended: "bg-stone-300",
+  unknown: "bg-stone-300",
 };
 
 function OperationalStatusCard({ org, id }: { org: OrgDetail; id: string }) {

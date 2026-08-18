@@ -89,8 +89,14 @@ export interface ValidateResponse {
  * UI-safe subset of the IdP OrganizationInfo type.
  * Sanitized in idp-admin-client.ts before being passed to client components.
  * Does not include internal URLs, secrets, or mfa/auth policy details.
- * Note: has_admin maps to the IdP's is_claimed field, which the list handler
- * sets to true when the organization has at least one active org_admin.
+ * Note: has_admin maps to the IdP's is_claimed field, which the handlers
+ * compute as "at least one live org_admin row".
+ *
+ * ABSENT ≠ NEGATIVE (PHANTOM-NO-ADMIN): the backend emits is_claimed /
+ * can_assign_admin as pointer+omitempty — a backend that does not emit
+ * them (or could not compute them) yields `undefined` here, and the UI
+ * must render "status unavailable", never a false "No administrator".
+ * Coercing with Boolean() is exactly the bug this type change fences.
  */
 export interface OrgListItem {
   id: string;
@@ -99,14 +105,16 @@ export interface OrgListItem {
   slug: string;
   active: boolean;
   deleted: boolean;
-  has_admin: boolean;
+  /** True/false from the live count; undefined when the backend did not emit it. */
+  has_admin: boolean | undefined;
   /**
    * True when an org_admin exists but none are verified (the expired-pending
    * recovery state). NOT a complete "can assign" signal on its own — when no
    * admin row exists, this is false even though assignment is allowed.
-   * UI gates should use `!has_admin || can_assign_admin`.
+   * UI gates should use `has_admin === false || can_assign_admin === true`
+   * so an undefined state never yields an assignment affordance.
    */
-  can_assign_admin: boolean;
+  can_assign_admin: boolean | undefined;
   created_at: string;
   updated_at: string;
 }
@@ -128,14 +136,20 @@ export interface OrgDetail {
   deleted: boolean;
   auth_policy: string;
   mfa_policy: string;
-  has_admin: boolean;
+  /**
+   * True/false from the live count; undefined when the backend did not
+   * emit it (ABSENT ≠ NEGATIVE — render "status unavailable", never
+   * "No administrator").
+   */
+  has_admin: boolean | undefined;
   /**
    * True when an org_admin exists but none are verified (the expired-pending
    * recovery state). NOT a complete "can assign" signal on its own — when no
    * admin row exists, this is false even though assignment is allowed.
-   * UI gates should use `!has_admin || can_assign_admin`.
+   * UI gates should use `has_admin === false || can_assign_admin === true`
+   * so an undefined state never yields an assignment affordance.
    */
-  can_assign_admin: boolean;
+  can_assign_admin: boolean | undefined;
   /**
    * Organization-level invite policy projection (read-only for org_admin in
    * the current settings surface — write support is intentionally deferred

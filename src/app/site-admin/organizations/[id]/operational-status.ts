@@ -20,7 +20,7 @@
 
 export type LifecycleState = "active" | "inactive" | "deleted";
 
-export type AdminState = "operational" | "expired-pending" | "no-admin" | "suspended";
+export type AdminState = "operational" | "expired-pending" | "no-admin" | "suspended" | "unknown";
 
 export type NextAction =
   | "restore"
@@ -29,12 +29,20 @@ export type NextAction =
   | "reactivate-and-assign"
   | "none";
 
-/** Minimal input shape. Mirrors the four `OrgDetail` fields the card needs. */
+/**
+ * Minimal input shape. Mirrors the four `OrgDetail` fields the card needs.
+ *
+ * ABSENT ≠ NEGATIVE (PHANTOM-NO-ADMIN): the two admin flags are
+ * `boolean | undefined`. `undefined` means the backend did not emit admin
+ * state; it derives the `unknown` admin state ("Administrator status
+ * unavailable") and NEVER `no-admin`, and never yields an assignment
+ * affordance.
+ */
 export interface OperationalStatusInput {
   active: boolean;
   deleted: boolean;
-  has_admin: boolean;
-  can_assign_admin: boolean;
+  has_admin: boolean | undefined;
+  can_assign_admin: boolean | undefined;
 }
 
 export interface OperationalStatus {
@@ -67,6 +75,11 @@ export interface OperationalStatus {
  *   - `has_admin=false` always allows assignment (no admin exists, so
  *     delegation cannot conflict with an existing one). adminState is
  *     `no-admin` regardless of `can_assign_admin`.
+ *   - `has_admin=undefined` (or `can_assign_admin=undefined`) is the
+ *     ABSENT state: the backend did not emit admin state. It derives
+ *     `unknown` — NEVER `no-admin` — and never allows assignment
+ *     (offering delegation from unknown state would be a false
+ *     affordance the backend would refuse anyway).
  *   - Inactive orgs (`!active && !deleted`) need Reactivate; when they
  *     also need an admin the nextAction is the combined
  *     `reactivate-and-assign` so the operator sees both CTAs.
@@ -74,18 +87,22 @@ export interface OperationalStatus {
 export function deriveOperationalStatus(org: OperationalStatusInput): OperationalStatus {
   const lifecycle: LifecycleState = org.deleted ? "deleted" : org.active ? "active" : "inactive";
 
+  const adminStateUnknown = org.has_admin === undefined || org.can_assign_admin === undefined;
+
   const adminState: AdminState = org.deleted
     ? "suspended"
-    : org.has_admin && !org.can_assign_admin
-      ? "operational"
-      : org.has_admin && org.can_assign_admin
-        ? "expired-pending"
-        : "no-admin";
+    : adminStateUnknown
+      ? "unknown"
+      : org.has_admin && !org.can_assign_admin
+        ? "operational"
+        : org.has_admin && org.can_assign_admin
+          ? "expired-pending"
+          : "no-admin";
 
   // Assignment is allowed when no verified admin blocks delegation —
-  // i.e. either no admin at all, or only unverified admins (the
-  // can_assign_admin recovery state).
-  const assignmentAllowed = !org.has_admin || org.can_assign_admin;
+  // i.e. either provably no admin at all, or only unverified admins (the
+  // can_assign_admin recovery state). Unknown state never allows it.
+  const assignmentAllowed = org.has_admin === false || org.can_assign_admin === true;
 
   const nextAction: NextAction = org.deleted
     ? "restore"
@@ -138,6 +155,10 @@ export const ADMIN_STATE_COPY: Record<AdminState, { label: string; body: string 
   suspended: {
     label: "Admin management suspended",
     body: "Restore the organization to resume administrator management.",
+  },
+  unknown: {
+    label: "Administrator status unavailable",
+    body: "The administrator state for this organization could not be determined. This is a reporting gap, not a statement that no administrator exists; recovery delegation is not offered from an unknown state.",
   },
 };
 
@@ -223,7 +244,9 @@ export type OrganizationAction =
  *     archive` and optionally `assign-admin`.
  *   - `assign-admin` is included iff `assignmentAllowed` is true AND
  *     deleted=false. Assignment is allowed when no verified admin
- *     blocks delegation: `!has_admin || can_assign_admin`.
+ *     PROVABLY blocks delegation: `has_admin === false ||
+ *     can_assign_admin === true`. Undefined admin state (ABSENT ≠
+ *     NEGATIVE) never yields the affordance.
  *   - Tenant-internal admin surfaces (tenant users, OAuth clients, API
  *     resources, org roles, IDPs) are NOT representable in this enum.
  *
@@ -248,7 +271,7 @@ export function deriveOrganizationActions(org: OperationalStatusInput): Organiza
   } else {
     out.push("reactivate");
   }
-  const assignmentAllowed = !org.has_admin || org.can_assign_admin;
+  const assignmentAllowed = org.has_admin === false || org.can_assign_admin === true;
   if (assignmentAllowed) {
     out.push("assign-admin");
   }
