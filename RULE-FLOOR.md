@@ -1,4 +1,5 @@
-FLOOR: 45
+FLOOR: 46
+RED-PROOFS: 1
 
 | ID | one-sentence rule | enforced-by | check | red-proof | hash |
 |---|---|---|---|---|---|
@@ -47,3 +48,4 @@ FLOOR: 45
 | OBS-PASSIVE-1 | Observability pages render passively and never expose environment internals. | playwright | e2e/site-admin-observability.spec.ts @ e2e-run | - | 07ba5173ad64 |
 | NOLEAK-LOGIN-1 | The /login page body never contains WebAuthn credential material or other credential terms. | playwright | e2e/login.spec.ts @ chromium | - | c2e1e78b4f5e |
 | RUNTIME-NOLEAK-2 | /api/runtime never contains secret, password, or private_key material. | playwright | e2e/platform-status.spec.ts @ chromium | - | b5e9cb6c43bc |
+| WIRE-READ-ORG-1 | The org mappers read only the pinned wire-contract keys and never Boolean()-coerce a tri-state field. | vitest | src/__tests__/phantom-no-admin-mapping.test.ts @ vitest | mutation red-proved 2026-08-18: Boolean(o.is_claimed) coercion reintroduced in all three mappers, watched FAIL at the tri-state regex, restored byte-identical, watched PASS | 1afa9c92992c |
