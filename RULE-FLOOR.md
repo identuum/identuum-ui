@@ -1,5 +1,5 @@
-FLOOR: 46
-RED-PROOFS: 41
+FLOOR: 47
+RED-PROOFS: 42
 
 | ID | one-sentence rule | enforced-by | check | red-proof | hash |
 |---|---|---|---|---|---|
@@ -49,3 +49,4 @@ RED-PROOFS: 41
 | NOLEAK-LOGIN-1 | The /login page body never contains WebAuthn credential material or other credential terms. | playwright | e2e/login.spec.ts @ chromium | 2026-08-18 mutated src/app/login/page.tsx: injected hidden span text allowCredentials; NOLEAK-LOGIN-1 test FAIL 'page body matched forbidden allowCredentials'; restored byte-identical, green | c2e1e78b4f5e |
 | RUNTIME-NOLEAK-2 | /api/runtime never contains secret, password, or private_key material. | playwright | e2e/platform-status.spec.ts @ chromium | 2026-08-18 mutated src/app/api/runtime/route.ts: response spread with added secret field; RUNTIME-NOLEAK-2 test FAIL 'response contained secret'; restored byte-identical, green | b5e9cb6c43bc |
 | WIRE-READ-ORG-1 | The org mappers read only the pinned wire-contract keys and never Boolean()-coerce a tri-state field. | vitest | src/__tests__/phantom-no-admin-mapping.test.ts @ vitest | mutation red-proved 2026-08-18: Boolean(o.is_claimed) coercion reintroduced in all three mappers, watched FAIL at the tri-state regex, restored byte-identical, watched PASS | 1afa9c92992c |
+| WIZARD-COMPLETE-COPY-1 | The setup wizard success screen states the pinned site_admin login identity to sign in as. | vitest | src/__tests__/setup-wizard-source-invariants.test.ts @ vitest | 2026-08-19 mutated src/app/setup/setup-wizard.tsx: success sign-in hint login changed from site_admin@system.local to {adminEmail}; WIZARD-COMPLETE-COPY-1 vitest FAIL 'block toContain site_admin@system.local'; restored byte-identical, green | 11fb5230cb71 |

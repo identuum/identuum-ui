@@ -274,3 +274,26 @@ describe("setup wizard form has the expected inputs", () => {
     expect(wizardSource).toMatch(/data-testid="setup-create-tenant-org"/);
   });
 });
+
+// ── WIZARD-COMPLETE-COPY-1 — the completion screen states the login identity ──
+//
+// WIZARD-SPLIT-BRAIN-1: the wizard used to complete without ever telling the
+// operator WHO to log in as — and because the login is the pinned
+// site_admin@system.local (not the address they typed), that gap sent them to
+// the login page with the wrong identity. The success screen must state the
+// pinned login verbatim so the next sign-in uses the right account.
+describe("setup wizard completion — states the login identity", () => {
+  it("the success screen names the pinned site_admin login to sign in as [WIZARD-COMPLETE-COPY-1]", () => {
+    // Scope the assertion to the success sign-in hint BLOCK (from its
+    // data-testid to the end of that paragraph) so a form-chip occurrence of
+    // the login elsewhere cannot satisfy it — the COMPLETION copy itself must
+    // name the pinned login, with the "Sign in as" guidance lead-in.
+    const hint = wizardSource.match(
+      /data-testid="setup-success-signin-hint"[\s\S]*?<\/p>/
+    );
+    expect(hint, "the success sign-in hint block must exist").not.toBeNull();
+    const block = hint?.[0] ?? "";
+    expect(block).toMatch(/Sign in as/);
+    expect(block).toContain("site_admin@system.local");
+  });
+});
