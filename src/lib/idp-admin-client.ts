@@ -2774,19 +2774,23 @@ export interface AdminSessionItem {
 
 export type ListAdminSessionsResult =
   | { ok: true; sessions: AdminSessionItem[]; total_count: number }
-  | { ok: false; status: number; forbidden: boolean };
+  | { ok: false; status: number; forbidden: boolean; featureUnavailable: boolean };
 
 export async function listAdminSessions(): Promise<ListAdminSessionsResult> {
   const cfg = loadRuntimeConfig();
-  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, forbidden: false };
+  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/system/sessions`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
     });
-    if (res.status === 403) return { ok: false, status: 403, forbidden: true };
-    if (!res.ok) return { ok: false, status: res.status, forbidden: false };
+    // EDITION-SURFACE-1: /api/v1/system/sessions is a commercial-only route;
+    // an OSS backend serves no such route and answers 404. Classify that as
+    // featureUnavailable (edition boundary) — the SAME mechanism verifyAuditChain
+    // / getAnomalyStats already use — so the page renders honest edition copy
+    // instead of a fake outage.
+    if (!res.ok) return { ok: false, ...(await classifyAdminReadFailure(res)) };
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
     const d: any = await res.json();
     const rawList = Array.isArray(d?.sessions) ? d.sessions : [];
@@ -2808,7 +2812,7 @@ export async function listAdminSessions(): Promise<ListAdminSessionsResult> {
       total_count: typeof d?.total_count === "number" ? d.total_count : sessions.length,
     };
   } catch {
-    return { ok: false, status: 0, forbidden: false };
+    return { ok: false, status: 0, forbidden: false, featureUnavailable: false };
   }
 }
 

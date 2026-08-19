@@ -7,6 +7,7 @@
  * selector value is read or surfaced. The wire helper's projection
  * drops the IDP's masked-token field for defence-in-depth.
  */
+import { FeatureBoundaryPanel } from "@/components/shared/feature-boundary-panel";
 import { listAdminSessions } from "@/lib/idp-admin-client";
 import type { Metadata } from "next";
 
@@ -53,7 +54,18 @@ export default async function SiteAdminSystemSessionsPage() {
           body="Your session does not have permission to view system sessions."
         />
       )}
-      {!result.ok && !result.forbidden && <ErrorPanel title="Could not load system sessions" />}
+      {/* EDITION-SURFACE-1: /api/v1/system/sessions is a commercial-only route
+          (identuum-idp-oss serves no such route and answers 404). Show the
+          honest edition boundary — never the outage panel. */}
+      {!result.ok && !result.forbidden && result.featureUnavailable && (
+        <FeatureBoundaryPanel
+          title="Admin sessions require Enterprise/CE"
+          body="System admin-session listing depends on the commercial /api/v1/system/sessions route. In IDP OSS, direct access shows this boundary instead of treating the page as a supported Starter feature."
+        />
+      )}
+      {!result.ok && !result.forbidden && !result.featureUnavailable && (
+        <ErrorPanel title="Could not load system sessions" />
+      )}
 
       {result.ok && result.sessions.length === 0 && (
         <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm px-6 py-10 text-center">
