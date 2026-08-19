@@ -106,11 +106,17 @@ pnpm rulefloor    # verify the RULE-FLOOR.md rule ledger (see below)
 ### Rule ledger (RULE-FLOOR.md)
 
 `pnpm rulefloor` verifies the machine-checked rule ledger at the repo
-root with the sibling `../rulefloor` CLI (the ledger's only writer).
-Bootstrap: clone the `rulefloor` repo next to this checkout; the script
-builds the binary on first use (`go build`, stdlib-only Go). A missing
-sibling or a failed tool build fails the script loudly — there is no
-skip, and no flag lowers the check's strictness.
+root with the sibling `../rulefloor` CLI. Bootstrap: clone the
+`rulefloor` repo next to this checkout; the script builds the binary on
+first use (`go build`, stdlib-only Go). A missing sibling or a failed
+tool build fails the script loudly — there is no skip.
+
+How the ledger works is the tool's documentation
+(`../rulefloor/README.md`). What this project's profile names mean
+(`chromium`, `e2e-run`, `e2e-dynamic`, the named runs), the red-proof
+text format we write, and the burndown method are project POLICY —
+canonical in `../identuum-idp-oss/docs/RULE-FLOOR-CONVENTIONS.md`
+(pointer: [docs/RULE-FLOOR-CONVENTIONS.md](docs/RULE-FLOOR-CONVENTIONS.md)).
 
 ## Runtime configuration
 
