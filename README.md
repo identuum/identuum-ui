@@ -106,10 +106,12 @@ pnpm rulefloor    # verify the RULE-FLOOR.md rule ledger (see below)
 ### Rule ledger (RULE-FLOOR.md)
 
 `pnpm rulefloor` verifies the machine-checked rule ledger at the repo
-root with the sibling `../rulefloor` CLI. Bootstrap: clone the
-`rulefloor` repo next to this checkout; the script builds the binary on
-first use (`go build`, stdlib-only Go). A missing sibling or a failed
-tool build fails the script loudly — there is no skip.
+root with the rulefloor CLI, resolved in order: `$RULEFLOOR_BIN` if
+set, `rulefloor` on PATH (`brew install rulefloor`), then building the
+sibling `../rulefloor` checkout as last resort
+(`scripts/rulefloor-gate.sh`). Binaries older than v0.2.0 are refused —
+they cannot read RED-PROOFS ledgers (`brew upgrade rulefloor`). No
+resolvable binary fails the script loudly — there is no skip.
 
 How the ledger works is the tool's documentation
 (`../rulefloor/README.md`). What this project's profile names mean

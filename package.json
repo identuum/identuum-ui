@@ -13,7 +13,7 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
-    "rulefloor": "(test -x ../rulefloor/rulefloor || (cd ../rulefloor && go build -o rulefloor .)) && ../rulefloor/rulefloor check --repo .",
+    "rulefloor": "bash scripts/rulefloor-gate.sh",
     "test": "vitest run",
     "e2e": "playwright test",
     "e2e:install": "playwright install chromium",
