@@ -118,17 +118,23 @@ test.describe("/site-admin observability pages — read-only smoke", () => {
     }
   });
 
-  test("System / audit-chain page renders in IDLE state (no auto-verify)", async ({ page }) => {
+  test("System / audit-chain page renders the edition boundary on OSS (no verify invite)", async ({
+    page,
+  }) => {
     await page.goto("/site-admin/system/audit-chain");
     await page.waitForLoadState("networkidle");
     expect(await page.title()).not.toMatch(/500|404|internal error|application error|not found/i);
     await expect(page.getByRole("heading", { name: "Audit chain verify" })).toBeVisible();
-    // Idle-state copy is visible; the operator must click the link
-    // to navigate to ?verify=true. This test never clicks it — the
-    // audit chain walk is bounded but could be expensive on a busy
-    // deployment.
-    await expect(page.getByText(/Ready to verify/i)).toBeVisible();
-    await expect(page.getByRole("link", { name: /^Verify audit chain$/ })).toBeVisible();
+    // AUDIT-CHAIN-INVITE-1: the OSS appliance reports audit_chain=false, so
+    // the page pre-gates the verification invitation — the FeatureBoundaryPanel
+    // renders directly and the "Ready to verify" invite + Verify button never
+    // mount. (Before the pre-gate this smoke asserted the invite; that
+    // expectation went stale when the gate deliberately removed it on OSS.)
+    await expect(
+      page.getByText(/Audit chain verification requires Enterprise\/CE/i)
+    ).toBeVisible();
+    await expect(page.getByText(/Ready to verify/i)).not.toBeVisible();
+    await expect(page.getByRole("link", { name: /^Verify audit chain$/ })).not.toBeVisible();
   });
 
   test("System / info page renders WITHOUT exposing DB URLs / Redis URLs / env vars [OBS-PASSIVE-1]", async ({
