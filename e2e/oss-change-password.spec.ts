@@ -123,15 +123,17 @@ async function submitChangePassword(page: Page, current: string, next: string): 
     .first()
     .click();
   // Success state pinned by the form source — "Password changed successfully."
-  // + "All sessions have been revoked."
+  // R2 (session revocation on password change) is an OPEN backend decision:
+  // the old "All sessions have been revoked" copy was removed as untrue, and
+  // this helper asserts the revocation claim is ABSENT until R2 lands.
   await expect(
     page.getByText("Password changed successfully."),
     "form must render the success panel after a valid rotation"
   ).toBeVisible({ timeout: 15_000 });
   await expect(
     page.getByText(/All sessions have been revoked/i),
-    "form must surface the all-sessions-revoked notice (the load-bearing product behavior)"
-  ).toBeVisible({ timeout: 5_000 });
+    "the success panel must NOT claim session revocation while R2 is undecided"
+  ).not.toBeVisible();
 }
 
 test.describe("/account/settings — change password (rotate + rotate-back)", () => {
