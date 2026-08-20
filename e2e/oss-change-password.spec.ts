@@ -78,22 +78,32 @@ import { expect, test } from "@playwright/test";
 const CHANGE_PW_ENABLED = process.env.IDENTUUM_E2E_OSS_CHANGE_PASSWORD === "1";
 
 async function loginViaForm(page: Page, email: string, password: string): Promise<boolean> {
+  // Two-step login (email → Continue → password), matching the current login
+  // UI and helpers/login.ts. The old single-page fill stalled forever waiting
+  // for a password input that only mounts after Continue.
   await page.goto("/login");
-  await page.locator('input[name="email"]').fill(email);
-  await page.locator('input[name="password"]').fill(password);
+  await page.getByLabel("Email or domain").fill(email);
+  await page.getByRole("button", { name: "Continue" }).click();
+  const passwordInput = page.getByLabel("Password");
+  await passwordInput.waitFor({ state: "visible" });
+  await passwordInput.fill(password);
   await page
     .getByRole("button", { name: /Sign in|Log in|Continue/i })
     .first()
     .click();
   // Race the success path (any navigation away from /login) against a
-  // visible inline error. Either resolves within ~10s.
+  // visible inline error. Either resolves within ~10s. The error branch
+  // requires a NON-EMPTY alert: an empty aria-live placeholder can be
+  // "visible" instantly and must not win the race against a login that is
+  // still navigating.
   const outcome = await Promise.race([
     page
       .waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 10_000 })
       .then(() => "ok" as const)
       .catch(() => "timeout" as const),
     page
-      .getByRole("alert")
+      .locator('[role="alert"]')
+      .filter({ hasText: /\S/ })
       .first()
       .waitFor({ state: "visible", timeout: 10_000 })
       .then(() => "error" as const)
