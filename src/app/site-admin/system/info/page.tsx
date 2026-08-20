@@ -13,6 +13,7 @@
  * of those are returned by the backend handler, but the projection
  * is explicit so a regression cannot leak through).
  */
+import { FeatureBoundaryPanel } from "@/components/shared/feature-boundary-panel";
 import { getSystemInfo } from "@/lib/idp-admin-client";
 import type { Metadata } from "next";
 
@@ -45,7 +46,18 @@ export default async function SiteAdminSystemInfoPage() {
           body="Your session does not have permission to view runtime info."
         />
       )}
-      {!result.ok && !result.forbidden && <ErrorPanel title="Could not load runtime info" />}
+      {/* THE-HEALTH-DETAILS: Runtime info IS an OSS feature, so a 404 means a
+          STALE or non-IDP backend that does not serve the route — an honest
+          boundary, never a fake outage. */}
+      {!result.ok && !result.forbidden && result.featureUnavailable && (
+        <FeatureBoundaryPanel
+          title="Runtime info not served by this backend"
+          body="This IDP backend does not serve GET /api/v1/health/details (an older build, or a non-IDP backend). Runtime info is a supported OSS feature on a current backend — this boundary is shown instead of treating the page as an outage."
+        />
+      )}
+      {!result.ok && !result.forbidden && !result.featureUnavailable && (
+        <ErrorPanel title="Could not load runtime info" />
+      )}
 
       {result.ok && (
         <section
@@ -58,14 +70,20 @@ export default async function SiteAdminSystemInfoPage() {
             </h2>
           </div>
           <dl className="px-6 py-4 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-3 text-xs">
+            {/* THE-HEALTH-DETAILS tri-state: an ABSENT field (the backend
+                omitted it) renders "unknown", NEVER a zero-faked value. */}
             <Row label="Status" value={result.info.status || "—"} />
             <Row label="Version" value={result.info.version || "—"} mono />
-            <Row label="Database" value={result.info.database_status || "—"} mono />
+            <Row label="Database" value={result.info.database_status ?? "unknown"} mono />
             <Row
               label="Audit queue"
-              value={`${result.info.audit_system_status || "—"} (${result.info.audit_queue_depth} queued)`}
+              value={`${result.info.audit_system_status ?? "unknown"} (${
+                result.info.audit_queue_depth ?? "unknown"
+              } queued)`}
             />
-            {result.info.redis_status && (
+            {/* Redis is a dependency OSS does not have; the backend omits it, so
+                the row is absent rather than a misleading "unknown". */}
+            {result.info.redis_status !== undefined && (
               <Row label="Redis" value={result.info.redis_status} mono />
             )}
           </dl>

@@ -1,5 +1,5 @@
-FLOOR: 48
-RED-PROOFS: 43
+FLOOR: 49
+RED-PROOFS: 44
 
 | ID | one-sentence rule | enforced-by | check | red-proof | hash |
 |---|---|---|---|---|---|
@@ -51,3 +51,4 @@ RED-PROOFS: 43
 | WIRE-READ-ORG-1 | The org mappers read only the pinned wire-contract keys and never Boolean()-coerce a tri-state field. | vitest | src/__tests__/phantom-no-admin-mapping.test.ts @ vitest | mutation red-proved 2026-08-18: Boolean(o.is_claimed) coercion reintroduced in all three mappers, watched FAIL at the tri-state regex, restored byte-identical, watched PASS | 1afa9c92992c |
 | WIZARD-COMPLETE-COPY-1 | The setup wizard success screen states the pinned site_admin login identity to sign in as. | vitest | src/__tests__/setup-wizard-source-invariants.test.ts @ vitest | 2026-08-19 mutated src/app/setup/setup-wizard.tsx: success sign-in hint login changed from site_admin@system.local to {adminEmail}; WIZARD-COMPLETE-COPY-1 vitest FAIL 'block toContain site_admin@system.local'; restored byte-identical, green | 11fb5230cb71 |
 | EDITION-GATE-1 | OSS commercial-only site-admin surfaces map absence to an edition boundary (never an outage) and the System index consults the capability source. | vitest | src/__tests__/edition-surface-source-invariants.test.ts @ vitest | 2026-08-19 mutated src/lib/idp-admin-client.ts listAdminSessions: non-ok branch reverted to the outage-swallowing 'status/forbidden:false/featureUnavailable:false' instead of classifyAdminReadFailure; edition-surface vitest FAIL 'listAdminSessions fn toContain classifyAdminReadFailure(res)'; restored via edit, green | 36b6da36b65b |
+| HEALTH-DETAILS-UI-1 | The UI treats runtime info as an OSS feature: getSystemInfo classifies failures (404 to featureUnavailable), tri-states absent fields as unknown, and renders an honest boundary not an outage. | vitest | src/__tests__/health-details-source-invariants.test.ts @ vitest | 2026-08-20 mutated src/app/site-admin/system/info/page.tsx: Database value zero-faked back to a dash default instead of the tri-state unknown; HEALTH-DETAILS-UI-1 vitest FAIL on the 'database_status ?? unknown' pin; restored via edit, green | c67d63c29f40 |

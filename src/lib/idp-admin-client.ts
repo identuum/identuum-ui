@@ -2903,27 +2903,35 @@ export async function verifyAuditChain(): Promise<VerifyAuditChainResult> {
 export interface SystemInfo {
   status: string;
   version: string;
-  database_status: string;
-  audit_system_status: string;
-  audit_queue_depth: number;
-  redis_status: string | null;
+  // Tri-state (THE-HEALTH-DETAILS): a field is `undefined` when the backend
+  // OMITS it (the honest ABSENT signal — OSS omits `redis`, and an audit
+  // subsystem with no queue omits `queue_depth`), rendered as "unknown" by the
+  // page. It is NEVER zero-faked to "" / 0 / null.
+  database_status?: string;
+  audit_system_status?: string;
+  audit_queue_depth?: number;
+  redis_status?: string;
 }
 
 export type GetSystemInfoResult =
   | { ok: true; info: SystemInfo }
-  | { ok: false; status: number; forbidden: boolean };
+  | { ok: false; status: number; forbidden: boolean; featureUnavailable: boolean };
 
 export async function getSystemInfo(): Promise<GetSystemInfoResult> {
   const cfg = loadRuntimeConfig();
-  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, forbidden: false };
+  if (!cfg || !cfg.idp.enabled)
+    return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/health/details`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
     });
-    if (res.status === 403) return { ok: false, status: 403, forbidden: true };
-    if (!res.ok) return { ok: false, status: res.status, forbidden: false };
+    // Runtime info IS an OSS feature (owner ruling). A 404 here means a STALE
+    // or non-IDP backend that does not serve the route — classify it as
+    // featureUnavailable (the SAME mechanism the other admin reads use) so the
+    // page shows an honest "not served" boundary, never a fake outage.
+    if (!res.ok) return { ok: false, ...(await classifyAdminReadFailure(res)) };
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
     const d: any = await res.json();
     // Project ONLY the documented safe fields. The backend response
@@ -2933,22 +2941,27 @@ export async function getSystemInfo(): Promise<GetSystemInfoResult> {
     // values / license private fields by construction (verified
     // during the slice's discovery phase against handler_health.go),
     // but the projection is explicit defence-in-depth.
-    const db = (d?.database ?? {}) as Record<string, unknown>;
-    const audit = (d?.audit_system ?? {}) as Record<string, unknown>;
-    const redis = (d?.redis ?? null) as Record<string, unknown> | null;
+    // Tri-state projection (THE-HEALTH-DETAILS): an ABSENT component or field
+    // stays `undefined` — the page renders it "unknown" — rather than being
+    // zero-faked to "" / 0 / null. A present component with a non-string /
+    // non-number value is also treated as absent (defensive).
+    const db = d?.database as Record<string, unknown> | undefined;
+    const audit = d?.audit_system as Record<string, unknown> | undefined;
+    const redis = d?.redis as Record<string, unknown> | undefined;
     return {
       ok: true,
       info: {
         status: typeof d?.status === "string" ? d.status : "",
         version: typeof d?.version === "string" ? d.version : "",
-        database_status: typeof db.status === "string" ? db.status : "",
-        audit_system_status: typeof audit.status === "string" ? audit.status : "",
-        audit_queue_depth: typeof audit.queue_depth === "number" ? audit.queue_depth : 0,
-        redis_status: redis && typeof redis.status === "string" ? redis.status : null,
+        database_status: db && typeof db.status === "string" ? db.status : undefined,
+        audit_system_status: audit && typeof audit.status === "string" ? audit.status : undefined,
+        audit_queue_depth:
+          audit && typeof audit.queue_depth === "number" ? audit.queue_depth : undefined,
+        redis_status: redis && typeof redis.status === "string" ? redis.status : undefined,
       },
     };
   } catch {
-    return { ok: false, status: 0, forbidden: false };
+    return { ok: false, status: 0, forbidden: false, featureUnavailable: false };
   }
 }
 
