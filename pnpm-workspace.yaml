@@ -9,3 +9,8 @@ allowBuilds:
   '@biomejs/biome': true
   esbuild: true
   sharp: true
+
+# Force the libvips-fix release of sharp (GHSA-f88m-g3jw-g9cj): next 16.2.x
+# still ranges on 0.34.x. Remove when next's own dependency moves to >=0.35.
+overrides:
+  sharp: 0.35.0

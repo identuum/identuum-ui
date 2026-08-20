@@ -1,0 +1,87 @@
+# Changelog — identuum-ui
+
+All notable changes to `identuum-ui` are recorded here, starting from the
+first published image. Format roughly follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
+[Semantic Versioning](https://semver.org/). The published artifact is the
+container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
+
+## `v0.2.0`
+
+First refresh since `v0.1.0` (built 2026-06-13 from `5158f0b`). Measured
+delta `v0.1.0..HEAD` at preparation: 64 commits, 358 files changed,
++53325/−4943 — plus this release-prep commit. The UI now speaks the
+RELEASED OSS backend contract end to end and ships with a machine-checked
+rule ledger.
+
+### Security (this release's image hardening)
+
+- **Next.js 16.2.6 → 16.2.11** — closes 4 HIGH advisories including an
+  authentication bypass (CVE-2026-64642) and SSRF/DoS fixes
+  (CVE-2026-64641/-64645/-64649).
+- **sharp → 0.35.0** (pnpm override) — inherits the libvips fixes
+  (GHSA-f88m-g3jw-g9cj).
+- **npm/npx/corepack removed from the runtime image stage** — the
+  standalone runner only ever executes `node server.js`; npm's vendored
+  node_modules carried 7 HIGH/CRITICAL findings (node-tar CRITICAL among
+  them) that have no business shipping. Image size 442→392MB.
+- Verified with the publish-gate-shape scan
+  (`trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1`):
+  exit 0, zero findings across all targets.
+
+### Added
+
+- **Bearer BFF transport** — the server-only BFF modules and the `/api/idp`
+  browser proxy lift the caller's own httpOnly token into an
+  `Authorization: Bearer` header on the server→IdP hop; the token never
+  reaches browser JS. This matches the released OSS principal model
+  (bearer-only resource APIs) — before this, admin shells rendered while
+  every data panel 401'd.
+- **Released-contract readers** across organizations, users, service
+  accounts, domains, audit events, identity providers, and health — the UI
+  reads only keys the released OSS wire actually emits (WIRE-READ pins).
+- **Admin state without phantoms** — organization admin status renders from
+  the backend's live-count fields (`is_claimed` / `can_assign_admin`) with
+  a true tri-state: absence renders "status unavailable", never a false
+  "no administrator", and unknown state never yields an Assign affordance.
+- **Edition boundaries, not fake outages** — commercial-only surfaces
+  (admin sessions, audit-chain verification, anomaly, reports) consult the
+  discovered capabilities and render an honest Enterprise/CE boundary
+  panel; the audit-chain page pre-gates its Verify invitation so OSS
+  operators are never invited to a click the backend refuses.
+- **Audit event details** — the audit views project the full measured OSS
+  wire contract (outcome, actor/subject identifiers, user agent,
+  request/correlation ids, metadata) with a per-event read-only expandable
+  details view; the invented always-empty `summary` field is gone.
+- **Runtime info & health details** — the System pages classify failures,
+  tri-state absent fields as "unknown", and render the OSS
+  `/api/v1/health/details` payload honestly.
+- **Setup wizard truthfulness** — the completion screen states the pinned
+  `site_admin@system.local` sign-in identity (never the operator-typed
+  contact address), matching the backend's adopt-and-reset semantics.
+- **Absence is not failure** — AG/IdP backend absence renders a shared
+  "backend not configured" notice instead of error panels, swept across
+  every state surface.
+- **Machine-checked rule ledger** — `RULE-FLOOR.md` with 51 armed rules
+  (Playwright/vitest-backed, red-proved to the runnable frontier) enforced
+  by `pnpm rulefloor` locally and a static floor in CI.
+
+### Changed
+
+- Login is a two-step ceremony (email → Continue → password) with
+  mount-gated WebAuthn probing (fixes the login-page hydration mismatch).
+- Logout expires its own cookies and re-login self-heals a stale cookie
+  lift; SSO enforcement stays server-side.
+- Passkey flows run against the released login/logout endpoints (finish
+  envelope has no `success` flag; UI origin follows the deployment's base
+  URL).
+- The e2e appliance suite runs against the PUBLISHED OSS image
+  (`v0.3.5`, digest-pinned default) with API-minted disposable fixtures;
+  183 tests, 153 green / 30 condition-gated skips at this release.
+
+### Known gaps (recorded, backend-pending)
+
+- Account-settings change-password calls
+  `POST /api/v1/auth/change-password`, which the OSS backend does not yet
+  serve (approved as the backend's v0.3.6 slice); the surface renders but
+  rotation fails against OSS until then.

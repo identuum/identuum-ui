@@ -51,6 +51,17 @@ COPY --from=builder --chown=nonroot:nonroot /app/public ./public
 # Config volume mount point (written by identuum-ui-setup)
 RUN mkdir -p /app/config && chown nonroot:nonroot /app/config
 
+# The base image bundles the npm CLI, which this standalone runner never
+# executes (`node server.js` is the only entrypoint) — but npm's vendored
+# node_modules (tar, sigstore, ip-address, brace-expansion, picomatch)
+# carry vulnerability findings that would stop a HIGH/CRITICAL image gate.
+# Remove npm/npx/corepack from the runtime stage entirely: measured 7 of 13
+# HIGH/CRITICAL findings (incl. the one CRITICAL) lived under
+# /usr/local/lib/node_modules/npm in the 2026-08-20 scan. Build stages keep
+# their toolchains; only the shipped layer loses them.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+
 USER nonroot
 
 EXPOSE 7104
