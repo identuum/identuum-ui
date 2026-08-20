@@ -479,9 +479,6 @@ function ApplicationRecentActivityRow({
         <div className="min-w-0 space-y-0.5">
           <p className="text-xs font-medium text-sky-950">{label}</p>
           <p className="text-[10px] font-mono text-stone-400 leading-tight">{event.event_type}</p>
-          {event.summary && (
-            <p className="text-[10px] text-stone-400 leading-tight">{event.summary}</p>
-          )}
           {actorLabel && (
             <p className="text-[10px] text-stone-400 leading-tight">
               <span>Actor:</span> <span>{actorLabel}</span>

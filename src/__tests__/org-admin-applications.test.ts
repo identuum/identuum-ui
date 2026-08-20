@@ -1934,7 +1934,7 @@ describe("/org-admin/applications/[id]/page.tsx — SecuritySection mount above 
 // (subject_type = "oauth_client"). The application detail page now
 // surfaces a compact Recent activity card mounted between DetailCard
 // and SecuritySection. Compact rows render the safe operator-facing
-// label + the raw event_type + optional safe summary + actor + the
+// label + the raw event_type + actor + the
 // timestamp — NEVER ip_address / user_agent / raw metadata / JSON.stringify
 // / client_secret / secret_hash / private_key / token / cookie /
 // session-id fields.

@@ -266,9 +266,6 @@ function AuditTable({
               </td>
               <td className="px-4 py-3">
                 <span className="text-xs font-mono text-sky-950">{e.event_type}</span>
-                {e.summary && (
-                  <p className="text-[10px] text-stone-400 mt-0.5 leading-tight">{e.summary}</p>
-                )}
               </td>
               <td className="px-4 py-3 max-w-[180px]">
                 <AuditIdentityCell value={e.actor_email} fallback={e.actor_type} />

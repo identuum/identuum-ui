@@ -16,8 +16,12 @@ import { FeatureBoundaryPanel } from "@/components/shared/feature-boundary-panel
  *     ?window, ?start_date, ?end_date, ?sort, ?page.
  *
  * Security:
- *   - Metadata fields are excluded.
- *   - Raw UUIDs, user_agent, request_id, correlation_id are not shown.
+ *   - Each event carries an expandable, read-only Details view (AuditEventDetails)
+ *     surfacing the measured wire-contract fields the backend already ships:
+ *     outcome, actor_id, actor_organization_id, user_agent, request_id,
+ *     correlation_id, event id, and metadata (rendered via JSON.stringify).
+ *     The backend's own redaction owns what enters audit rows — the UI reads
+ *     only contract keys and invents nothing (AUDIT-DETAILS-1).
  *   - All filters are validated/sanitized server-side before forwarding to backend.
  *   - Backend enforces all authorization — no client-side filtering.
  */
@@ -291,9 +295,11 @@ function AuditTable({
               </td>
               <td className="px-4 py-3">
                 <span className="text-xs font-mono text-sky-950">{e.event_type}</span>
-                {e.summary && (
-                  <p className="text-[10px] text-stone-400 mt-0.5 leading-tight">{e.summary}</p>
-                )}
+                {/* AUDIT-DETAILS-1: per-event read-only expandable details —
+                    the fields the backend already ships (outcome, actor/request/
+                    correlation ids, user agent, metadata) that the log used to
+                    drop. No mutation; no navigation off the page. */}
+                <AuditEventDetails event={e} />
               </td>
               <td className="px-4 py-3 max-w-[180px]">
                 <AuditIdentityCell value={e.actor_email} fallback={e.actor_type} />
@@ -332,6 +338,48 @@ function AuditTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+// AUDIT-DETAILS-1: a read-only expandable view of the per-event details the
+// backend already ships (outcome, actor/request/correlation ids, user agent,
+// metadata). It renders nothing when the event carries none of them, so
+// self-explanatory events stay uncluttered. No mutation, no navigation.
+function AuditEventDetails({ event }: { event: AuditEventItem }) {
+  const rows: Array<[string, string | null]> = [
+    ["Outcome", event.outcome],
+    ["Actor ID", event.actor_id],
+    ["Actor org", event.actor_organization_id],
+    ["User agent", event.user_agent],
+    ["Request ID", event.request_id],
+    ["Correlation ID", event.correlation_id],
+    ["Event ID", event.id],
+  ];
+  const shown = rows.filter(([, v]) => v);
+  const hasMetadata = event.metadata != null && Object.keys(event.metadata).length > 0;
+  if (shown.length === 0 && !hasMetadata) return null;
+  return (
+    <details className="mt-1">
+      <summary className="text-[10px] text-sky-600 cursor-pointer select-none hover:text-sky-800">
+        Details
+      </summary>
+      <dl className="mt-1 space-y-0.5 text-[10px]">
+        {shown.map(([label, value]) => (
+          <div key={label} className="flex gap-1.5">
+            <dt className="font-medium text-stone-400 shrink-0">{label}:</dt>
+            <dd className="font-mono break-all text-stone-600">{value}</dd>
+          </div>
+        ))}
+        {hasMetadata && (
+          <div className="flex gap-1.5">
+            <dt className="font-medium text-stone-400 shrink-0">Metadata:</dt>
+            <dd className="font-mono break-all whitespace-pre-wrap text-stone-600">
+              {JSON.stringify(event.metadata)}
+            </dd>
+          </div>
+        )}
+      </dl>
+    </details>
   );
 }
 

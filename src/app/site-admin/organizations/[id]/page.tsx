@@ -382,9 +382,6 @@ export default async function OrgDetailPage({
               <div key={i} className="px-6 py-3 flex items-start justify-between gap-4">
                 <div className="min-w-0 space-y-0.5">
                   <span className="text-xs font-mono text-sky-950">{e.event_type}</span>
-                  {e.summary && (
-                    <p className="text-[10px] text-stone-400 leading-tight">{e.summary}</p>
-                  )}
                   {(e.actor_email || e.actor_type) && (
                     <div className="flex items-center gap-1 text-[10px] text-stone-400">
                       <span>by</span>

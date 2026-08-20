@@ -753,10 +753,10 @@ describe("api-resources detail page — Recent activity card wiring", () => {
       expect(body.toLowerCase()).not.toContain(forbidden.toLowerCase());
     }
     // The row MUST render the safe fields (label / event_type token /
-    // optional summary / optional actor / timestamp).
+    // optional actor / timestamp). AUDIT-DETAILS-1 removed the invented
+    // `summary` (the OSS wire never carried it), so it is no longer asserted.
     expect(body).toMatch(/getApiResourceAuditEventLabel/);
     expect(body).toMatch(/event\.event_type/);
-    expect(body).toMatch(/event\.summary/);
     expect(body).toMatch(/event\.actor_email/);
     expect(body).toMatch(/event\.actor_type/);
     expect(body).toMatch(/formatAuditDate\(event\.created_at\)/);

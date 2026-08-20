@@ -1142,25 +1142,35 @@ export async function revokeOwnSession(sessionId: string): Promise<RevokeSession
 // ── Audit log (read-only) ─────────────────────────────────────────────────────
 
 /**
- * Safe subset of an audit event for UI display.
- * Excludes: metadata (may contain sensitive keys), raw UUIDs, user_agent (verbose),
- * request_id, correlation_id, agent_session_id.
- * Backend: GET /api/v1/audit — Enterprise/CE commercial capability, site_admin/org_admin only.
+ * An audit event projected from the OSS wire (GET /api/v1/audit/events).
+ * AUDIT-DETAILS-1: the mapper reads ONLY the backend's contract keys — no
+ * invented `summary` (the wire never carried one; it was always null) — and
+ * surfaces the details the backend already ships (outcome, actor/request/
+ * correlation ids, user_agent, metadata) for the read-only expandable view.
+ * The backend's own redaction owns what enters an audit row; the UI carries no
+ * token / cookie / session material because the wire does not.
+ *
+ * Absent (omitempty) columns are `null`, never zero-faked.
  */
 export interface AuditEventItem {
+  id: string | null;
   created_at: string;
   event_type: string;
-  /** Safe human-readable summary computed server-side (e.g. "User list viewed"). Nil for self-explanatory events. */
-  summary: string | null;
+  outcome: string | null;
+  actor_id: string | null;
   actor_email: string | null;
   actor_type: string;
   actor_role: string | null;
-  /** UUID of the subject (user, organization, etc.). Opaque — only used as a routing key, not displayed as text. */
+  actor_organization_id: string | null;
   subject_id: string | null;
   subject_email: string | null;
   subject_type: string | null;
   ip_address: string | null;
+  user_agent: string | null;
+  request_id: string | null;
+  correlation_id: string | null;
   priority: string;
+  metadata: Record<string, unknown> | null;
 }
 
 export type ListAuditEventsResult =
@@ -1228,18 +1238,28 @@ export async function listAuditEvents(opts?: {
       ? body.events.filter(isRecord)
       : [];
 
+    // AUDIT-DETAILS-1: project ONLY the backend's contract keys (auditEventView
+    // in internal/handlers/audit_events.go). No invented `summary`. Absent
+    // omitempty columns map to null, never zero-faked.
     const events: AuditEventItem[] = raw.map((e) => ({
+      id: e.id ? String(e.id) : null,
       created_at: String(e.created_at ?? ""),
       event_type: String(e.event_type ?? ""),
-      summary: e.summary ? String(e.summary) : null,
+      outcome: e.outcome ? String(e.outcome) : null,
+      actor_id: e.actor_id ? String(e.actor_id) : null,
       actor_email: e.actor_email ? String(e.actor_email) : null,
       actor_type: String(e.actor_type ?? ""),
       actor_role: e.actor_role ? String(e.actor_role) : null,
+      actor_organization_id: e.actor_organization_id ? String(e.actor_organization_id) : null,
       subject_id: e.subject_id ? String(e.subject_id) : null,
       subject_email: e.subject_email ? String(e.subject_email) : null,
       subject_type: e.subject_type ? String(e.subject_type) : null,
       ip_address: e.ip_address ? String(e.ip_address) : null,
+      user_agent: e.user_agent ? String(e.user_agent) : null,
+      request_id: e.request_id ? String(e.request_id) : null,
+      correlation_id: e.correlation_id ? String(e.correlation_id) : null,
       priority: String(e.priority ?? "normal"),
+      metadata: isRecord(e.metadata) ? e.metadata : null,
     }));
 
     return {

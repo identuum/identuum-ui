@@ -637,7 +637,12 @@ describe("/site-admin/system/audit-chain page — opt-in verify", () => {
     expect(SRC).toMatch(
       /import\s*\{\s*verifyAuditChain\s*\}\s*from\s+["']@\/lib\/idp-admin-client["']/
     );
-    expect(SRC).toMatch(/const\s+shouldVerify\s*=\s*params\.verify\s*===\s*"true"/);
+    // AUDIT-CHAIN-INVITE-1 pre-gates the verify path on the discovered
+    // audit_chain capability, so shouldVerify is ANDed with auditChainSupported
+    // (a hand-typed ?verify=true cannot reach verifyAuditChain() on OSS).
+    expect(SRC).toMatch(
+      /const\s+shouldVerify\s*=\s*auditChainSupported\s*&&\s*params\.verify\s*===\s*"true"/
+    );
     expect(SRC).toMatch(
       /const\s+result\s*=\s*shouldVerify\s*\?\s*await\s+verifyAuditChain\(\)\s*:\s*null/
     );

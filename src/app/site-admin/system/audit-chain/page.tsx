@@ -24,6 +24,7 @@
  */
 import { FeatureBoundaryPanel } from "@/components/shared/feature-boundary-panel";
 import { verifyAuditChain } from "@/lib/idp-admin-client";
+import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -36,7 +37,14 @@ export default async function SiteAdminAuditChainPage({
   searchParams?: Promise<{ verify?: string }>;
 }) {
   const params = (await searchParams) ?? {};
-  const shouldVerify = params.verify === "true";
+  // AUDIT-CHAIN-INVITE-1: pre-gate on the discovered capability (the same
+  // source the System index consults). When the edition does not support audit
+  // chain verification (audit_chain === false on OSS), the invitation must not
+  // render — the boundary shows directly and the Verify button never mounts, so
+  // the operator is never invited to a click the backend answers with 404.
+  const runtimeState = await getServerRuntimeState();
+  const auditChainSupported = runtimeState?.components.idp.capabilities?.audit_chain !== false;
+  const shouldVerify = auditChainSupported && params.verify === "true";
   const result = shouldVerify ? await verifyAuditChain() : null;
 
   return (
@@ -55,7 +63,10 @@ export default async function SiteAdminAuditChainPage({
         </p>
       </div>
 
-      {!shouldVerify && (
+      {/* AUDIT-CHAIN-INVITE-1: unsupported edition → boundary only; no invite. */}
+      {!auditChainSupported && <FeatureUnavailablePanel />}
+
+      {auditChainSupported && !shouldVerify && (
         <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm px-6 py-6 space-y-4">
           <div>
             <p className="text-sm font-semibold text-sky-950">Ready to verify</p>

@@ -393,9 +393,6 @@ export default async function OrgAdminUserDetailPage({
                   >
                     <div className="min-w-0 space-y-0.5">
                       <span className="text-xs font-mono text-sky-950">{e.event_type}</span>
-                      {e.summary && (
-                        <p className="text-[10px] text-stone-400 leading-tight">{e.summary}</p>
-                      )}
                       {actorLabel && (
                         <div className="flex items-center gap-1 text-[10px] text-stone-400">
                           <span>Actor:</span>

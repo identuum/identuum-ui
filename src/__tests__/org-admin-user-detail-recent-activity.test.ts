@@ -455,7 +455,7 @@ describe("Recent activity card — per-row clickable links", () => {
     expect(cls, "row anchor must carry a focus-visible ring class").toMatch(/focus-visible:ring-2/);
   });
 
-  it("compact rows render ONLY event_type / safe summary / actor display / formatted timestamp — no raw metadata", () => {
+  it("compact rows render ONLY event_type / actor display / formatted timestamp — no raw metadata", () => {
     // Find the per-row JSX block (between the `<li key={i}>` line
     // and the next `</li>` closer at the row level) and assert it
     // does NOT reference any sensitive payload field.
