@@ -28,7 +28,8 @@ import {
  * PRESPLIT + SEEDED-COUPLING): no /app/identuum probe, no /e2e-auth bind mount,
  * no `make local-restart`, no owner-seeded credentials. From NOTHING, a fresh
  * clone with Docker reaches an authenticated green run — the appliance is the
- * published ghcr.io/identuum/identuum-idp-oss:v0.3.0 image on a throwaway DB
+ * published ghcr.io/identuum/identuum-idp-oss image the compose file pins
+ * (digest-pinned default) on a throwaway DB
  * (e2e/docker-compose.e2e.yml), and every credential is minted by this setup
  * against the released API and written to the fixture envelope the specs
  * already consume.
@@ -133,7 +134,7 @@ async function orchestrateReleasedApplianceFixture(): Promise<void> {
   // Fresh appliance when we must rebuild. The appliance is STATEFUL, so `down`
   // (no -v) then `up` gives a guaranteed setup_required appliance; the
   // volume-less Postgres means a fresh DB WITHOUT `down -v`.
-  process.stdout.write("[e2e setup] (re)creating a fresh released appliance (v0.3.0)...\n");
+  process.stdout.write("[e2e setup] (re)creating a fresh released appliance (compose-default image)...\n");
   try {
     execFileSync(prog, [...pre, "down"], { stdio: ["ignore", "inherit", "inherit"] });
     execFileSync(prog, [...pre, "up", "-d"], { stdio: ["ignore", "inherit", "inherit"] });

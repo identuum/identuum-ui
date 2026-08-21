@@ -12,9 +12,9 @@
  *      default).
  *   3. Fills the change-password form with current → runtime-
  *      generated temp password; submits. The form's success panel
- *      reads "Password changed successfully." and "All sessions have
- *      been revoked" — the auto-redirect at +2.5s navigates the
- *      browser to `/login`.
+ *      reads "Password changed successfully." and "All other sessions
+ *      have been signed out." (R2: the changing session stays valid) —
+ *      the auto-redirect at +2.5s navigates the browser to `/login`.
  *   4. Re-logs in with the TEMP password (proves the new credential
  *      took effect).
  *   5. (Optional verification) Logs out, attempts login with the OLD
