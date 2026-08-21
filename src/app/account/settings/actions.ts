@@ -11,9 +11,10 @@
  *   - The target user is derived from the authenticated session cookie, not from
  *     form data — no user ID spoofing is possible.
  *   - Passwords are never logged, returned in state, or included in error messages.
- *   - R2 (session revocation on password change) is an OPEN backend decision —
- *     the OSS IdP does NOT revoke sessions on this path today. The client
- *     component still redirects to /login as a UX convention.
+ *   - R2 (ruled 2026-08-21): after a successful change the IdP revokes every
+ *     OTHER session and all refresh tokens; the session making the change
+ *     stays valid. The client component still redirects to /login as a UX
+ *     convention.
  *
  * Backend endpoint: POST /api/v1/auth/change-password
  * Role check at backend: any authenticated non-M2M user (DenyM2MClients middleware).

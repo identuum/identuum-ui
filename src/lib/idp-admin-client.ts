@@ -625,8 +625,8 @@ export type ChangePasswordResult = { ok: true } | { ok: false; status: number; m
  * Works for any authenticated human session (site_admin, org_admin, org_user).
  * Forwards session cookies server-side so the IdP can authenticate the request.
  * The IdP derives the target user from the session — the caller never submits a
- * user ID. R2 (session revocation on password change) is an OPEN backend
- * decision — the OSS IdP does NOT revoke sessions on this path today.
+ * user ID. R2 (ruled 2026-08-21): after a successful change the IdP revokes
+ * every OTHER session and all refresh tokens; the changing session stays valid.
  *
  * Security:
  *   - Passwords are never logged.

@@ -39,10 +39,10 @@ export function ChangePasswordForm() {
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4">
           <p className="text-sm font-semibold text-emerald-700">Password changed successfully.</p>
           <p className="text-xs text-stone-500 mt-1">
-            {/* R2 (session revocation on password change) is an OPEN backend
-                decision — the OSS IdP does not revoke sessions here, so this
-                copy must not claim it does. */}
-            Use your new password the next time you sign in. Redirecting…
+            {/* R2 (ruled 2026-08-21): the IdP revokes every OTHER session and
+                all refresh tokens; the session that made this change stays
+                valid until you sign out. */}
+            All other sessions have been signed out. Redirecting…
           </p>
         </div>
         <a

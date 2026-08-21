@@ -123,17 +123,17 @@ async function submitChangePassword(page: Page, current: string, next: string): 
     .first()
     .click();
   // Success state pinned by the form source — "Password changed successfully."
-  // R2 (session revocation on password change) is an OPEN backend decision:
-  // the old "All sessions have been revoked" copy was removed as untrue, and
-  // this helper asserts the revocation claim is ABSENT until R2 lands.
+  // R2 (ruled 2026-08-21): every OTHER session is revoked and the changing
+  // session stays valid, so the success panel now truthfully states it and
+  // this helper asserts the claim is PRESENT.
   await expect(
     page.getByText("Password changed successfully."),
     "form must render the success panel after a valid rotation"
   ).toBeVisible({ timeout: 15_000 });
   await expect(
-    page.getByText(/All sessions have been revoked/i),
-    "the success panel must NOT claim session revocation while R2 is undecided"
-  ).not.toBeVisible();
+    page.getByText(/All other sessions have been signed out/i),
+    "the success panel must state the R2 other-sessions revocation"
+  ).toBeVisible({ timeout: 5_000 });
 }
 
 test.describe("/account/settings — change password (rotate + rotate-back)", () => {
@@ -147,6 +147,7 @@ test.describe("/account/settings — change password (rotate + rotate-back)", ()
 
   test("rotate → temp login → old login fails [PASSWORD-ROTATE-1] → rotate back → original login works", async ({
     page,
+    browser,
   }) => {
     test.setTimeout(120_000);
 
@@ -178,10 +179,26 @@ test.describe("/account/settings — change password (rotate + rotate-back)", ()
         "initial login with the operator-supplied original password must succeed"
       ).toBe(true);
 
+      // 1b. R2 witness: mint a SECOND pre-existing session in a fresh
+      //     browser context — the session the change must kill.
+      const otherCtx = await browser.newContext();
+      const otherPage = await otherCtx.newPage();
+      const okOther = await loginViaForm(otherPage, email, originalPassword);
+      expect(
+        okOther,
+        "the second (to-be-revoked) session must log in before the change"
+      ).toBe(true);
+
       // 2. Rotate: original → temp.
       await submitChangePassword(page, originalPassword, tempPassword);
       rotatedToTemp = true;
       passwordKnownToWork = tempPassword;
+
+      // 2b. R2 (ruled 2026-08-21): the second session must be DEAD — a
+      //     protected page bounces the revoked context back to /login.
+      await otherPage.goto("/account/settings");
+      await otherPage.waitForURL(/\/login/, { timeout: 10_000 });
+      await otherCtx.close();
 
       // 3. Sessions are revoked — log in with the temp password.
       const okTemp = await loginViaForm(page, email, tempPassword);
