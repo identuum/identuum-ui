@@ -40,14 +40,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Activate pnpm via corepack BEFORE setup-node so the
       # `cache: pnpm` option in setup-node finds the binary.
       - name: Enable corepack (pnpm)
         run: corepack enable
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # Node version sourced from package.json#engines.node
           # ("node": ">=22.15.0"). Pin to 22.x so the runner reliably
@@ -79,9 +79,14 @@ jobs:
       # The Go toolchain here exists solely to `go install` the pinned
       # ledger tool; bump the pin deliberately, never implicitly.
       - name: Set up Go (for the ledger tool)
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
+          # No go.mod in this repo — the default dependency cache has
+          # nothing to key on and only emits a "Restore cache failed"
+          # warning (measured, run 32577553874). This Go exists solely
+          # to `go install` the pinned ledger tool.
+          cache: false
       - name: Rule ledger check (rulefloor)
         run: |
           go install github.com/ozgurcd/rulefloor@v0.3.0
