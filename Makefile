@@ -35,10 +35,19 @@ wiki-fresh:
 		bash "$(WIKI_DIR)/tools/wiki-freshness.sh" --repo identuum-ui --strict; \
 	fi
 
+## verify: THE UI gate set — biome + typecheck + vitest + rulefloor, all
+## four, every slice (THE-UI-FORMAT-FLOOR). Slices run THIS target, never
+## an ad-hoc subset: format drift accumulated invisibly across several
+## slices because they ran rulefloor + vitest + typecheck directly while
+## CI's first step (biome) was never exercised locally — CI run
+## 32576361791 then failed at biome with 17 format errors, 16 of them in
+## armed ledger bodies. The ledger gate joined this target the same day
+## (it was previously only `pnpm rulefloor`, easy to leave behind).
 verify:
 	@$(MAKE) --no-print-directory wiki-fresh
 	@$(MAKE) --no-print-directory image-base-check
 	@$(MAKE) --no-print-directory image-base-parity
+	pnpm rulefloor
 	pnpm exec biome check . --reporter=json --max-diagnostics=none
 	pnpm exec tsc --noEmit
 	pnpm exec vitest run

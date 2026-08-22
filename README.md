@@ -98,9 +98,11 @@ host-side dev workflow and the containerized demo work side by side.
 ```sh
 pnpm install
 pnpm dev          # http://localhost:7104 with hot reload
-pnpm typecheck
+make verify       # THE gate set: rulefloor + biome + typecheck + vitest
+                  # (plus wiki-fresh and the image-base gates) — run this,
+                  # not an ad-hoc subset; it is what CI mirrors
 pnpm build
-pnpm rulefloor    # verify the RULE-FLOOR.md rule ledger (see below)
+pnpm rulefloor    # the ledger gate alone (see below); included in verify
 ```
 
 ### Rule ledger (RULE-FLOOR.md)

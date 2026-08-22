@@ -35,7 +35,8 @@
       "test-results",
       ".playwright",
       ".gograph",
-      ".tsgraph"
+      ".tsgraph",
+      "config/ui-runtime.json"
     ]
   }
 }

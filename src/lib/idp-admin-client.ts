@@ -2798,7 +2798,8 @@ export type ListAdminSessionsResult =
 
 export async function listAdminSessions(): Promise<ListAdminSessionsResult> {
   const cfg = loadRuntimeConfig();
-  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
+  if (!cfg || !cfg.idp.enabled)
+    return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/system/sessions`, {
       method: "GET",

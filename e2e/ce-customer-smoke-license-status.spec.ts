@@ -174,7 +174,9 @@ test.describe("CE customer-smoke M2 — backend license-status agreement (no-sec
     }
   });
 
-  test("invariant #12 [LICENSE-AGREE-1] — /api/setup/license and /api/v1/component agree", async ({ request }) => {
+  test("invariant #12 [LICENSE-AGREE-1] — /api/setup/license and /api/v1/component agree", async ({
+    request,
+  }) => {
     const setupRes = await request.get(`${IDP_BASE_URL}/api/setup/license`);
     const componentRes = await request.get(`${IDP_BASE_URL}/api/v1/component`);
     expect(setupRes.status()).toBe(200);

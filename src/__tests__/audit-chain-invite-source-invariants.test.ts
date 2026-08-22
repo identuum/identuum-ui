@@ -40,9 +40,7 @@ describe("AUDIT-CHAIN-INVITE-1 — audit-chain verification is invited only wher
     // false hides the invite, and an ABSENT capability (undefined) is treated
     // as supported so a mis-shaped payload never silently hides an editon that
     // DOES serve it. Absence is load-bearing — never Boolean()-coerced.
-    expect(auditChainPage).toMatch(
-      /const auditChainSupported =[\s\S]*?audit_chain\s*!==\s*false/
-    );
+    expect(auditChainPage).toMatch(/const auditChainSupported =[\s\S]*?audit_chain\s*!==\s*false/);
     expect(auditChainPage).not.toMatch(/Boolean\(\s*[^)]*\.audit_chain\s*\)/);
 
     // (3) The verify path is ANDed with the capability — a hand-typed

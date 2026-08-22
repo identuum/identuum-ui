@@ -1,3 +1,4 @@
+import { getServerRuntimeState } from "@/lib/server-runtime-state";
 /**
  * Site-admin System landing — index of the three read-only system
  * observability sub-pages: sessions, audit chain verification,
@@ -14,7 +15,6 @@
  * operator is not sent to a page that reads as an outage.
  */
 import type { ComponentCapabilities } from "@/lib/types";
-import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {

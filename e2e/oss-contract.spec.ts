@@ -109,7 +109,9 @@ test.describe("OSS runtime contract — the OAuth surface is SERVED", () => {
     );
   });
 
-  test("token_endpoint is client-auth-gated (401, not 404) [CONTRACT-CLIENT-AUTH-1]", async ({ request }) => {
+  test("token_endpoint is client-auth-gated (401, not 404) [CONTRACT-CLIENT-AUTH-1]", async ({
+    request,
+  }) => {
     const { token_endpoint } = await discovery(request);
     expect(token_endpoint).toBeTruthy();
     const res = await request.post(token_endpoint as string, {

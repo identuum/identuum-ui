@@ -107,7 +107,9 @@ test.describe("D-IDP-INSTALL-26 fresh M1 setup — backend gate enforcement", ()
     );
   });
 
-  test("T1 — POST /api/setup/complete refuses without MFA fields [CE-SETUP-MFA-1]", async ({ request }) => {
+  test("T1 — POST /api/setup/complete refuses without MFA fields [CE-SETUP-MFA-1]", async ({
+    request,
+  }) => {
     const setupToken = readSetupTokenFromContainer();
     const res = await request.post(`${IDP_BASE}/api/setup/complete`, {
       data: {

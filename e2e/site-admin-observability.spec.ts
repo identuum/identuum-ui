@@ -130,9 +130,7 @@ test.describe("/site-admin observability pages — read-only smoke", () => {
     // renders directly and the "Ready to verify" invite + Verify button never
     // mount. (Before the pre-gate this smoke asserted the invite; that
     // expectation went stale when the gate deliberately removed it on OSS.)
-    await expect(
-      page.getByText(/Audit chain verification requires Enterprise\/CE/i)
-    ).toBeVisible();
+    await expect(page.getByText(/Audit chain verification requires Enterprise\/CE/i)).toBeVisible();
     await expect(page.getByText(/Ready to verify/i)).not.toBeVisible();
     await expect(page.getByRole("link", { name: /^Verify audit chain$/ })).not.toBeVisible();
   });

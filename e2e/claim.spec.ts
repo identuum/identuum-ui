@@ -33,7 +33,9 @@ test.describe("/claim page — safe states", () => {
     await expect(page.getByRole("heading", { name: "Link invalid or expired" })).not.toBeVisible();
   });
 
-  test("renders invalid-link state for an unrecognised token [CLAIM-INVALID-1]", async ({ page }) => {
+  test("renders invalid-link state for an unrecognised token [CLAIM-INVALID-1]", async ({
+    page,
+  }) => {
     await page.goto("/claim?token=invalid_e2e_test_token_claim");
 
     await expect(page.getByRole("heading", { name: "Link invalid or expired" })).toBeVisible();

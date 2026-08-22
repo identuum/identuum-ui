@@ -68,7 +68,9 @@ test.describe("/dashboard — authenticated org_user (password + TOTP)", () => {
     expect(body).not.toContain("site_admin");
   });
 
-  test("org_user is fenced OUT of /org-admin and /site-admin [ROLE-ORGUSER-FENCE-1]", async ({ page }) => {
+  test("org_user is fenced OUT of /org-admin and /site-admin [ROLE-ORGUSER-FENCE-1]", async ({
+    page,
+  }) => {
     for (const admin of ["/org-admin", "/site-admin"]) {
       await page.goto(admin);
       // The guard must redirect an org_user away from every admin area — either

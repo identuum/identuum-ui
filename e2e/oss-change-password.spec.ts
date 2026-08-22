@@ -184,10 +184,9 @@ test.describe("/account/settings — change password (rotate + rotate-back)", ()
       const otherCtx = await browser.newContext();
       const otherPage = await otherCtx.newPage();
       const okOther = await loginViaForm(otherPage, email, originalPassword);
-      expect(
-        okOther,
-        "the second (to-be-revoked) session must log in before the change"
-      ).toBe(true);
+      expect(okOther, "the second (to-be-revoked) session must log in before the change").toBe(
+        true
+      );
 
       // 2. Rotate: original → temp.
       await submitChangePassword(page, originalPassword, tempPassword);

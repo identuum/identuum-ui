@@ -302,7 +302,9 @@ test.describe("/login — MFA enrollment flow (mocked backend)", () => {
     await expect(page.getByText("Set up two-factor authentication")).not.toBeVisible();
   });
 
-  test("mfa_required with session_id (OSS 401) shows MFA verify form [LOGIN-MFA-VERIFY-1]", async ({ page }) => {
+  test("mfa_required with session_id (OSS 401) shows MFA verify form [LOGIN-MFA-VERIFY-1]", async ({
+    page,
+  }) => {
     await page.addInitScript(`
       (function() {
         var _orig = window.fetch.bind(window);

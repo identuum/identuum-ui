@@ -55,7 +55,9 @@ test.describe("/platform-status — page structure", () => {
   // Unavailable; that permutation is covered by the unit suite, see
   // src/__tests__/absent-backend-not-failure.test.ts.)
   test.describe("not-enabled AG is absent, not failing", () => {
-    test("AG backend card is ABSENT and the mode reads Identity Only [ABSENT-AG-1]", async ({ page }) => {
+    test("AG backend card is ABSENT and the mode reads Identity Only [ABSENT-AG-1]", async ({
+      page,
+    }) => {
       await page.goto("/platform-status");
       // The identity-only vocabulary is the positive signal…
       await expect(page.getByText("Identity Only")).toBeVisible();
@@ -89,7 +91,10 @@ test.describe("/platform-status — page structure", () => {
 });
 
 test.describe("/platform-status — mode badge matches /api/runtime", () => {
-  test("live mode badge label corresponds to /api/runtime mode [RUNTIME-BADGE-1]", async ({ page, request }) => {
+  test("live mode badge label corresponds to /api/runtime mode [RUNTIME-BADGE-1]", async ({
+    page,
+    request,
+  }) => {
     // Fetch the live runtime mode from the JSON API.
     const apiRes = await request.get("/api/runtime");
     expect(apiRes.status()).toBe(200);
@@ -155,7 +160,9 @@ test.describe("/api/runtime — JSON contract", () => {
     expect(text).not.toContain("internal_base_url");
   });
 
-  test("response never contains secret, password, or private_key [RUNTIME-NOLEAK-2]", async ({ request }) => {
+  test("response never contains secret, password, or private_key [RUNTIME-NOLEAK-2]", async ({
+    request,
+  }) => {
     const res = await request.get("/api/runtime");
     const text = await res.text();
     expect(text).not.toContain("password");

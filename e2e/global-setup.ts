@@ -134,7 +134,9 @@ async function orchestrateReleasedApplianceFixture(): Promise<void> {
   // Fresh appliance when we must rebuild. The appliance is STATEFUL, so `down`
   // (no -v) then `up` gives a guaranteed setup_required appliance; the
   // volume-less Postgres means a fresh DB WITHOUT `down -v`.
-  process.stdout.write("[e2e setup] (re)creating a fresh released appliance (compose-default image)...\n");
+  process.stdout.write(
+    "[e2e setup] (re)creating a fresh released appliance (compose-default image)...\n"
+  );
   try {
     execFileSync(prog, [...pre, "down"], { stdio: ["ignore", "inherit", "inherit"] });
     execFileSync(prog, [...pre, "up", "-d"], { stdio: ["ignore", "inherit", "inherit"] });

@@ -82,9 +82,10 @@ describe("AUDIT-DETAILS-1 — audit-event details are the measured contract, pro
     // (WIRE-READ) Every `e.<key>` the mapper reads is a real contract key —
     // catches a reintroduced `e.summary` or any fabricated field.
     const reads = new Set([...span.matchAll(/\be\.([a-z_][a-z0-9_]*)/g)].map((m) => m[1]));
-    expect(reads.size, "no e.<key> reads found — span extraction broke, fix the pin").toBeGreaterThan(
-      8
-    );
+    expect(
+      reads.size,
+      "no e.<key> reads found — span extraction broke, fix the pin"
+    ).toBeGreaterThan(8);
     for (const k of reads) {
       expect(allowed.has(k), `listAuditEvents reads non-contract wire key e.${k}`).toBe(true);
     }
@@ -105,7 +106,14 @@ describe("AUDIT-DETAILS-1 — audit-event details are the measured contract, pro
     expect(page).toContain("function AuditEventDetails");
     expect(page).toMatch(/<AuditEventDetails event=\{e\}/);
     // The scalar detail fields are read off the event by their contract names.
-    for (const k of ["outcome", "actor_id", "actor_organization_id", "user_agent", "request_id", "correlation_id"]) {
+    for (const k of [
+      "outcome",
+      "actor_id",
+      "actor_organization_id",
+      "user_agent",
+      "request_id",
+      "correlation_id",
+    ]) {
       expect(page, `AuditEventDetails must surface event.${k}`).toMatch(
         new RegExp(`event\\.${k}\\b`)
       );

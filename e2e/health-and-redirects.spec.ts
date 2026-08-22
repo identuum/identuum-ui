@@ -61,7 +61,9 @@ test.describe("local-demo: route shape pins", () => {
     expect(await page.title()).not.toMatch(/500|internal error|application error/i);
   });
 
-  test("/site-admin/login is NOT a real route and must stay 404 [GUARD-404-LOGIN-1]", async ({ request }) => {
+  test("/site-admin/login is NOT a real route and must stay 404 [GUARD-404-LOGIN-1]", async ({
+    request,
+  }) => {
     // Operators sometimes type /site-admin/login by analogy with /site-admin/*.
     // The correct login URL is /login. /site-admin/login has never been a real
     // route. If it ever starts 200-ing or redirecting we want to know.

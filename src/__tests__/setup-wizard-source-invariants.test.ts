@@ -288,9 +288,7 @@ describe("setup wizard completion — states the login identity", () => {
     // data-testid to the end of that paragraph) so a form-chip occurrence of
     // the login elsewhere cannot satisfy it — the COMPLETION copy itself must
     // name the pinned login, with the "Sign in as" guidance lead-in.
-    const hint = wizardSource.match(
-      /data-testid="setup-success-signin-hint"[\s\S]*?<\/p>/
-    );
+    const hint = wizardSource.match(/data-testid="setup-success-signin-hint"[\s\S]*?<\/p>/);
     expect(hint, "the success sign-in hint block must exist").not.toBeNull();
     const block = hint?.[0] ?? "";
     expect(block).toMatch(/Sign in as/);
