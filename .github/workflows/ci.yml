@@ -71,12 +71,18 @@ jobs:
       - name: Unit tests (vitest run)
         run: pnpm exec vitest run
 
-      # THE-STANDING-FLOOR: the IN-REPO static ledger floor. The full
-      # `pnpm rulefloor` check is sibling-coupled (../rulefloor) and cannot
-      # run in this one-repo checkout; this deliberate subset (no hashes —
-      # see the script header) can. The selftest red-proves every failure
-      # mode before the live check runs.
-      - name: Rule ledger static floor
+      # THE-TOOLING-UPGRADE: CI runs the REAL rulefloor check through the
+      # same scripts/rulefloor-gate.sh developers run — hashes,
+      # extractor-owned discovery, orphan scan. The homegrown
+      # scripts/rulefloor-static.mjs subset is DELETED: it reimplemented
+      # extraction with pre-v0.3.0 semantics and never verified hashes.
+      # The Go toolchain here exists solely to `go install` the pinned
+      # ledger tool; bump the pin deliberately, never implicitly.
+      - name: Set up Go (for the ledger tool)
+        uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - name: Rule ledger check (rulefloor)
         run: |
-          node scripts/rulefloor-static.mjs --selftest
-          node scripts/rulefloor-static.mjs
+          go install github.com/ozgurcd/rulefloor@v0.3.0
+          RULEFLOOR_BIN="$(go env GOPATH)/bin/rulefloor" bash scripts/rulefloor-gate.sh
