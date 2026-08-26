@@ -143,6 +143,7 @@ export async function listOrganizations(opts?: {
   offset?: number;
   limit?: number;
   deleted?: "false" | "true" | "all";
+  active?: "true" | "false" | "all";
 }): Promise<OrgListResult | null> {
   const cfg = loadRuntimeConfig();
   if (!cfg || !cfg.idp.enabled) return null;
@@ -151,10 +152,19 @@ export async function listOrganizations(opts?: {
   const offset = Math.max(0, Math.floor(opts?.offset ?? 0));
   const limit = Math.min(100, Math.max(1, Math.floor(opts?.limit ?? 25)));
 
+  // THE WIRE SPEAKS page/page_size (1-based) — the released backend reads
+  // ONLY those and ignores offset/limit (sending offset silently served
+  // page 1). The offset-shaped signature stays for the callers; it is
+  // translated here, at the one place that owns the wire.
+  const page = Math.floor(offset / limit) + 1;
+
   const params = new URLSearchParams();
-  params.set("offset", String(offset));
-  params.set("limit", String(limit));
+  params.set("page", String(page));
+  params.set("page_size", String(limit));
   params.set("deleted", opts?.deleted ?? "false");
+  // The lifecycle axis: without it the backend defaults to active-only and
+  // a deactivated organization is invisible (and unrecoverable) here.
+  params.set("active", opts?.active ?? "true");
 
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/organizations?${params.toString()}`, {

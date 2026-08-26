@@ -2,27 +2,27 @@
 
 import type { OrgListItem, OrgListResult } from "@/lib/types";
 
-type DeletedFilter = "false" | "true" | "all";
+type StateFilter = "current" | "deactivated" | "deleted" | "all";
 
 interface OrganizationsClientProps {
   initialData: OrgListResult | null;
   /** Current 1-based page number (validated server-side). */
   page: number;
-  /** Validated server-side deleted filter: "false" | "true" | "all". */
-  deletedFilter: DeletedFilter;
+  /** Validated server-side lifecycle state filter. */
+  stateFilter: StateFilter;
 }
 
 export function OrganizationsClient({
   initialData,
   page,
-  deletedFilter,
+  stateFilter,
 }: OrganizationsClientProps) {
   const hasPrev = page > 1;
   const hasNext =
     initialData !== null && initialData.offset + initialData.count < initialData.total_count;
 
   function pageHref(p: number) {
-    return `/site-admin/organizations?page=${p}&deleted=${deletedFilter}`;
+    return `/site-admin/organizations?page=${p}&state=${stateFilter}`;
   }
 
   return (
@@ -44,7 +44,7 @@ export function OrganizationsClient({
       </div>
 
       {/* Filter tabs */}
-      <FilterTabs current={deletedFilter} />
+      <FilterTabs current={stateFilter} />
 
       {/* Count summary */}
       <p className="text-xs text-stone-400">{countSummary(initialData)}</p>
@@ -53,7 +53,7 @@ export function OrganizationsClient({
       {initialData === null ? (
         <ErrorState />
       ) : initialData.organizations.length === 0 ? (
-        <EmptyState deletedFilter={deletedFilter} />
+        <EmptyState stateFilter={stateFilter} />
       ) : (
         <OrgTable orgs={initialData.organizations} />
       )}
@@ -78,10 +78,11 @@ export function OrganizationsClient({
   );
 }
 
-function FilterTabs({ current }: { current: DeletedFilter }) {
-  const tabs: Array<{ label: string; value: DeletedFilter }> = [
-    { label: "Current", value: "false" },
-    { label: "Deleted", value: "true" },
+function FilterTabs({ current }: { current: StateFilter }) {
+  const tabs: Array<{ label: string; value: StateFilter }> = [
+    { label: "Current", value: "current" },
+    { label: "Deactivated", value: "deactivated" },
+    { label: "Deleted", value: "deleted" },
     { label: "All", value: "all" },
   ];
   return (
@@ -91,7 +92,7 @@ function FilterTabs({ current }: { current: DeletedFilter }) {
         return (
           <a
             key={value}
-            href={`/site-admin/organizations?deleted=${value}`}
+            href={`/site-admin/organizations?state=${value}`}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
               isActive
                 ? "bg-sky-50 text-sky-700 border border-sky-200"
@@ -362,13 +363,15 @@ function formatDate(iso: string): string {
   }
 }
 
-function EmptyState({ deletedFilter }: { deletedFilter: DeletedFilter }) {
+function EmptyState({ stateFilter }: { stateFilter: StateFilter }) {
   const message =
-    deletedFilter === "true"
+    stateFilter === "deleted"
       ? "No deleted organizations."
-      : deletedFilter === "all"
-        ? "No organizations found."
-        : "No active organizations found.";
+      : stateFilter === "deactivated"
+        ? "No deactivated organizations."
+        : stateFilter === "all"
+          ? "No organizations found."
+          : "No active organizations found.";
   return (
     <div className="bg-white border border-stone-200 rounded-[1.5rem] px-6 py-12 text-center shadow-sm">
       <p className="text-sm font-medium text-stone-400">{message}</p>

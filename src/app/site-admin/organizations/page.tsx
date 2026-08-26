@@ -9,7 +9,9 @@
  * cookie values are never included in props passed to OrganizationsClient.
  *
  * Pagination: ?page=N (1-based). Malformed/missing values fall back to page 1.
- * Deleted filter: ?deleted=false (default) | deleted=true | deleted=all.
+ * Lifecycle filter: ?state=current (default) | deactivated | deleted | all,
+ * mapped onto the backend's two tri-state axes (?active=, ?deleted=).
+ * Legacy ?deleted=true|all links are honored as state aliases.
  *
  * Create is at /site-admin/organizations/new.
  * Edit is at /site-admin/organizations/[id]/edit.
@@ -33,11 +35,42 @@ function parsePage(raw: string | string[] | undefined): number {
   return n;
 }
 
-/** Parses ?deleted= and returns a backend-safe value. Falls back to "false". */
-function parseDeletedFilter(raw: string | string[] | undefined): "false" | "true" | "all" {
-  const str = Array.isArray(raw) ? (raw[0] ?? "") : (raw ?? "");
-  if (str === "true" || str === "all") return str;
-  return "false";
+export type LifecycleStateFilter = "current" | "deactivated" | "deleted" | "all";
+
+/**
+ * The four lifecycle states an organization can actually be in, mapped onto
+ * the backend's two tri-state axes (?active=, ?deleted=). One combined
+ * control instead of two selects: the operator thinks in STATES, not axis
+ * combinations, and no invalid combination is expressible. DELETED widens
+ * the active axis on purpose — an org deactivated before deletion must not
+ * hide from the deleted list.
+ */
+const STATE_QUERY: Record<
+  LifecycleStateFilter,
+  { active: "true" | "false" | "all"; deleted: "false" | "true" | "all" }
+> = {
+  current: { active: "true", deleted: "false" },
+  deactivated: { active: "false", deleted: "false" },
+  deleted: { active: "all", deleted: "true" },
+  all: { active: "all", deleted: "all" },
+};
+
+/**
+ * Parses ?state= (current | deactivated | deleted | all), honoring the
+ * legacy ?deleted=true|all links as aliases. Falls back to "current".
+ */
+function parseStateFilter(
+  rawState: string | string[] | undefined,
+  legacyDeleted: string | string[] | undefined
+): LifecycleStateFilter {
+  const state = Array.isArray(rawState) ? (rawState[0] ?? "") : (rawState ?? "");
+  if (state === "current" || state === "deactivated" || state === "deleted" || state === "all") {
+    return state;
+  }
+  const legacy = Array.isArray(legacyDeleted) ? (legacyDeleted[0] ?? "") : (legacyDeleted ?? "");
+  if (legacy === "true") return "deleted";
+  if (legacy === "all") return "all";
+  return "current";
 }
 
 export default async function OrganizationsPage({
@@ -47,11 +80,17 @@ export default async function OrganizationsPage({
 }) {
   const params = await searchParams;
   const page = parsePage(params.page);
-  const deletedFilter = parseDeletedFilter(params.deleted);
+  const stateFilter = parseStateFilter(params.state, params.deleted);
+  const query = STATE_QUERY[stateFilter];
   const pageSize = DEFAULT_PAGE_SIZE;
   const offset = (page - 1) * pageSize;
 
-  const result = await listOrganizations({ offset, limit: pageSize, deleted: deletedFilter });
+  const result = await listOrganizations({
+    offset,
+    limit: pageSize,
+    deleted: query.deleted,
+    active: query.active,
+  });
 
-  return <OrganizationsClient initialData={result} page={page} deletedFilter={deletedFilter} />;
+  return <OrganizationsClient initialData={result} page={page} stateFilter={stateFilter} />;
 }
