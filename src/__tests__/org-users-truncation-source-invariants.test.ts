@@ -13,8 +13,12 @@
  *   1. The client speaks the real wire contract: page/page_size (the
  *      backend's cap is 200), and never the inert limit/sort/order.
  *   2. The client carries the backend's `total` to the caller.
- *   3. TRUNCATION IS VISIBLE: when total exceeds the rows held, the users
- *      page says so — a partial list is never rendered as complete.
+ *   3. THE WINDOW IS NEVER PRESENTED AS THE WHOLE: since THE-THREE-PARKED
+ *      every user is reachable by paging (ORG-USERS-PAGINATION-1), so the
+ *      amber truncation notice retired; what remains load-bearing is that
+ *      the page derives a multi-page flag from total vs page size and
+ *      labels the status-filter counts page-scoped whenever more than one
+ *      page exists.
  *
  * Source-invariant style (no React render, no network).
  */
@@ -50,15 +54,19 @@ describe("org users list — wire contract and visible truncation", () => {
     ).toMatch(/total:\s*Number\(data\.total/);
   });
 
-  it("the users page makes truncation VISIBLE when total exceeds the rows held", () => {
+  it("the users page never presents the window as the whole", () => {
     const page = src("app/org-admin/users/page.tsx");
     expect(
       page,
-      "the page must derive a truncation flag from total vs rows held"
-    ).toMatch(/totalUsers\s*>\s*users\.length/);
+      "the page must derive the page count from the backend's total and the page size"
+    ).toMatch(/totalPages\s*=\s*Math\.max\(1,\s*Math\.ceil\(totalUsers\s*\/\s*USERS_PAGE_SIZE\)\)/);
     expect(
       page,
-      "the truncation notice must state the partial window to the operator"
-    ).toMatch(/Showing the first \{users\?\.length\} of \{totalUsers\} users/);
+      "the multi-page flag must come from the derived page count"
+    ).toMatch(/paginated\s*=\s*users\s*!==\s*null\s*&&\s*totalPages\s*>\s*1/);
+    expect(
+      page,
+      "status-filter counts must be labeled page-scoped whenever more than one page exists"
+    ).toMatch(/\{paginated\s*&&[\s\S]{0,200}?counts reflect this page/);
   });
 });

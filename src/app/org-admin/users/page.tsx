@@ -48,12 +48,21 @@ function computeStatus(
   return "active";
 }
 
+const USERS_PAGE_SIZE = 200;
+
+function parseUsersPage(raw: string | undefined): number {
+  const n = Number(raw ?? "");
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1 || n > 65536) return 1;
+  return n;
+}
+
 export default async function OrgAdminUsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   const params = await searchParams;
+  const page = parseUsersPage(params.page);
   const rawFilter = params.status ?? "all";
   const filter: StatusFilter = [
     "all",
@@ -65,13 +74,15 @@ export default async function OrgAdminUsersPage({
     ? (rawFilter as StatusFilter)
     : "all";
 
-  const listResult = await listOrgUsers();
+  const listResult = await listOrgUsers({ page });
   const users = listResult?.users ?? null;
-  // TRUNCATION IS VISIBLE, never silent: the client fetches one 200-row
-  // window; when the backend's total exceeds what we hold, the page says so
-  // instead of presenting a partial list as complete.
+  // Every user is REACHABLE BY PAGING on the backend's 1-based
+  // page/page_size contract; the window is never presented as the whole —
+  // when more than one page exists, the counts are labeled page-scoped and
+  // pagination controls expose the rest.
   const totalUsers = listResult?.total ?? 0;
-  const truncated = users !== null && totalUsers > users.length;
+  const totalPages = Math.max(1, Math.ceil(totalUsers / USERS_PAGE_SIZE));
+  const paginated = users !== null && totalPages > 1;
 
   // Count active org_admins to know if the sole admin protection applies
   const activeAdminCount =
@@ -106,18 +117,14 @@ export default async function OrgAdminUsersPage({
         <BulkInviteSection />
       </div>
 
-      {truncated && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-          <p className="text-sm font-medium text-amber-800">
-            Showing the first {users?.length} of {totalUsers} users. The remaining users exist but
-            are not displayed on this page — status counts below cover only the loaded window.
-          </p>
-        </div>
-      )}
-
       {/* Filter tabs */}
       {totalByStatus && (
         <div className="flex items-center gap-1 flex-wrap">
+          {paginated && (
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-stone-400 mr-1">
+              counts reflect this page
+            </span>
+          )}
           {(
             [
               { key: "all", label: "All", count: totalByStatus.all },
@@ -164,7 +171,66 @@ export default async function OrgAdminUsersPage({
       ) : (
         <UsersTable users={displayUsers} activeAdminCount={activeAdminCount} />
       )}
+
+      {paginated && (
+        <PaginationControls
+          page={page}
+          totalPages={totalPages}
+          totalUsers={totalUsers}
+          filter={filter}
+        />
+      )}
     </div>
+  );
+}
+
+function usersPageHref(page: number, filter: StatusFilter): string {
+  const qs = new URLSearchParams();
+  if (page > 1) qs.set("page", String(page));
+  if (filter !== "all") qs.set("status", filter);
+  const s = qs.toString();
+  return s ? `/org-admin/users?${s}` : "/org-admin/users";
+}
+
+function PaginationControls({
+  page,
+  totalPages,
+  totalUsers,
+  filter,
+}: {
+  page: number;
+  totalPages: number;
+  totalUsers: number;
+  filter: StatusFilter;
+}) {
+  const prevHref = page > 1 ? usersPageHref(page - 1, filter) : null;
+  const nextHref = page < totalPages ? usersPageHref(page + 1, filter) : null;
+  const linkClass =
+    "inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-medium bg-stone-100 text-stone-600 hover:bg-stone-200 transition-colors";
+  const disabledClass =
+    "inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-medium bg-stone-50 text-stone-300 cursor-default";
+  return (
+    <nav aria-label="Users pagination" className="flex items-center justify-between">
+      <span className="text-xs text-stone-500">
+        Page {page} of {totalPages} · {totalUsers} users
+      </span>
+      <div className="flex items-center gap-1.5">
+        {prevHref ? (
+          <a href={prevHref} className={linkClass}>
+            Previous
+          </a>
+        ) : (
+          <span className={disabledClass}>Previous</span>
+        )}
+        {nextHref ? (
+          <a href={nextHref} className={linkClass}>
+            Next
+          </a>
+        ) : (
+          <span className={disabledClass}>Next</span>
+        )}
+      </div>
+    </nav>
   );
 }
 

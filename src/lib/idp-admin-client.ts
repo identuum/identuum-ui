@@ -833,12 +833,17 @@ export async function getOwnProfile(): Promise<UserProfile | null> {
  * on that server default; if the server default ever changes, this list
  * reorders with it.
  */
-export async function listOrgUsers(): Promise<{ users: OrgUserItem[]; total: number } | null> {
+export async function listOrgUsers(opts?: {
+  /** 1-based page, matching the backend's pagination. Defaults to 1. */
+  page?: number;
+}): Promise<{ users: OrgUserItem[]; total: number } | null> {
   const cfg = loadRuntimeConfig();
   if (!cfg || !cfg.idp.enabled) return null;
 
+  const page = Math.min(65536, Math.max(1, Math.floor(opts?.page ?? 1)));
+
   const params = new URLSearchParams();
-  params.set("page", "1");
+  params.set("page", String(page));
   params.set("page_size", "200");
 
   try {
