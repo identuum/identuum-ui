@@ -82,6 +82,17 @@ Durable env mode is the fallback path for org_admin authentication and
 the only supported path for `site_admin` authentication. It uses
 long-lived credentials kept in `.env.playwright.idp-oss.local`.
 
+> **Staleness warning:** an appliance-side credential reset invalidates
+> these values in place. In particular `recover-site-admin` (see
+> identuum-idp-oss `docs/OPERATOR-GUIDE.md` → "Reset the site_admin
+> password" → "What this invalidates") rewrites the password AND wipes
+> the MFA enrolment — `IDENTUUM_TEST_SITE_ADMIN_PASSWORD` and
+> `IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET` are both wrong the moment it
+> returns, and the new TOTP seed is shown once, at the forced
+> re-enrolment on the next login. Update this file before the next
+> Playwright run, or site_admin specs fail (and repeated wrong attempts
+> can trip the login lockout).
+
 ### 1. Create `.env.playwright.idp-oss.local`
 
 Create `.env.playwright.idp-oss.local` at this repository's root

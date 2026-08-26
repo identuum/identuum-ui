@@ -52,5 +52,14 @@ IDENTUUM_TEST_ORG_ADMIN_PASSWORD=...
 IDENTUUM_TEST_ORG_ADMIN_TOTP_SECRET=...   # optional; omit when MFA not enrolled
 ```
 
+> **Staleness warning:** these are live credentials, not fixtures — an
+> appliance-side reset invalidates them in place. `recover-site-admin`
+> (identuum-idp-oss `docs/OPERATOR-GUIDE.md` → "Reset the site_admin
+> password" → "What this invalidates") rewrites the site_admin password
+> and wipes its MFA enrolment: `IDENTUUM_TEST_SITE_ADMIN_PASSWORD` and
+> `IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET` go stale the moment it returns.
+> Capture the new TOTP seed at the forced re-enrolment on the next login
+> (shown once) and update this file before running site_admin specs.
+
 Authenticated specs self-skip when the required credentials are absent from
 both the dynamic envelope and these env vars.
