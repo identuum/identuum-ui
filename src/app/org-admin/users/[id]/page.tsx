@@ -110,7 +110,7 @@ export default async function OrgAdminUserDetailPage({
   // && user.active, which still surfaces the explanatory copy and lets the
   // backend enforce the final guard on submission.
   const activeAdminCount =
-    allUsers?.filter((u) => u.role === "org_admin" && u.active && !u.deleted).length ?? 0;
+    allUsers?.users.filter((u) => u.role === "org_admin" && u.active && !u.deleted).length ?? 0;
   const status = computeOrgUserStatus(user);
   const { actions, soleActiveAdmin: isSoleActiveAdmin } = deriveOrgAdminUserActions(
     user,

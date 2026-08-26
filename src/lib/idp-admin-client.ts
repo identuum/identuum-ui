@@ -822,14 +822,27 @@ export async function getOwnProfile(): Promise<UserProfile | null> {
  * Returns null when the IdP is unavailable or the request fails.
  *
  * The response is sanitized to OrgUserItem[] — no password hashes, MFA
- * secrets, recovery codes, or internal fields are included.
+ * secrets, recovery codes, or internal fields are included. `total` is the
+ * backend's full count: when it exceeds users.length the page received a
+ * TRUNCATED window and must say so — never render silence as completeness.
+ *
+ * Wire contract: the backend reads page/page_size (page_size caps at 200)
+ * and paginates 1-based. Sort is DELIBERATELY not sent: the backend
+ * hardcodes created_at descending and reads no sort/order params — sending
+ * them was inert. Cost accepted: the display order now explicitly depends
+ * on that server default; if the server default ever changes, this list
+ * reorders with it.
  */
-export async function listOrgUsers(): Promise<OrgUserItem[] | null> {
+export async function listOrgUsers(): Promise<{ users: OrgUserItem[]; total: number } | null> {
   const cfg = loadRuntimeConfig();
   if (!cfg || !cfg.idp.enabled) return null;
 
+  const params = new URLSearchParams();
+  params.set("page", "1");
+  params.set("page_size", "200");
+
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/users?limit=200&sort=created_at&order=asc`, {
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/users?${params.toString()}`, {
       headers: await idpAuthHeaders(),
       cache: "no-store",
     });
@@ -839,7 +852,7 @@ export async function listOrgUsers(): Promise<OrgUserItem[] | null> {
     const data: any = await res.json();
     const users = Array.isArray(data.users) ? data.users : [];
 
-    return users.map(
+    const mapped = users.map(
       // biome-ignore lint/suspicious/noExplicitAny: raw API response item
       (u: any): OrgUserItem => ({
         id: String(u.id ?? ""),
@@ -857,6 +870,7 @@ export async function listOrgUsers(): Promise<OrgUserItem[] | null> {
         banned: Boolean(u.banned),
       })
     );
+    return { users: mapped, total: Number(data.total ?? mapped.length) };
   } catch {
     return null;
   }

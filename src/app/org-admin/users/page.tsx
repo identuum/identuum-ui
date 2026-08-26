@@ -65,7 +65,13 @@ export default async function OrgAdminUsersPage({
     ? (rawFilter as StatusFilter)
     : "all";
 
-  const users = await listOrgUsers();
+  const listResult = await listOrgUsers();
+  const users = listResult?.users ?? null;
+  // TRUNCATION IS VISIBLE, never silent: the client fetches one 200-row
+  // window; when the backend's total exceeds what we hold, the page says so
+  // instead of presenting a partial list as complete.
+  const totalUsers = listResult?.total ?? 0;
+  const truncated = users !== null && totalUsers > users.length;
 
   // Count active org_admins to know if the sole admin protection applies
   const activeAdminCount =
@@ -99,6 +105,15 @@ export default async function OrgAdminUsersPage({
         <InviteUserSection />
         <BulkInviteSection />
       </div>
+
+      {truncated && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <p className="text-sm font-medium text-amber-800">
+            Showing the first {users?.length} of {totalUsers} users. The remaining users exist but
+            are not displayed on this page — status counts below cover only the loaded window.
+          </p>
+        </div>
+      )}
 
       {/* Filter tabs */}
       {totalByStatus && (
