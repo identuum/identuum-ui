@@ -89,5 +89,5 @@ jobs:
           cache: false
       - name: Rule ledger check (rulefloor)
         run: |
-          go install github.com/ozgurcd/rulefloor@v0.3.0
+          go install github.com/ozgurcd/rulefloor@v0.6.0
           RULEFLOOR_BIN="$(go env GOPATH)/bin/rulefloor" bash scripts/rulefloor-gate.sh
