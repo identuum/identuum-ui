@@ -528,60 +528,50 @@ export async function restoreOrganization(id: string): Promise<RestoreOrgResult>
   }
 }
 
-// ── Assign first org_admin via claim/invitation ───────────────────────────────
+// ── Assign/re-issue the pending org_admin's activation token ─────────────────
 
 export interface AssignOrgAdminOptions {
   /** Organization UUID */
   orgId: string;
-  /**
-   * Email of the prospective org_admin. Optional.
-   * When non-empty the token is bound to this address and the link is emailed
-   * if SMTP is configured. When empty the token is not email-bound; the
-   * site_admin delivers the link out-of-band and the claimant enters any
-   * valid email on the claim page.
-   */
-  recipientEmail: string;
 }
 
 export type AssignOrgAdminResult =
   | {
       ok: true;
       /**
-       * One-time claim URL the prospective org_admin must open.
-       * Always returned by the backend (not limited to air-gapped mode).
+       * One-time activation token for the org's PENDING org_admin.
        * Do NOT put this in query params, localStorage, or sessionStorage.
        * Show only in the immediate success panel and discard on navigation.
        */
-      claimUrl: string;
-      /** ISO timestamp when the claim URL expires (48 h from creation). */
+      activationToken: string;
+      /** The pending org_admin the token re-activates (backend-resolved). */
+      adminEmail: string;
+      /** ISO timestamp when the token expires. */
       expiresAt: string;
-      /** true if the backend successfully emailed the claim URL to the recipient. */
-      emailSent: boolean;
     }
   | {
       ok: false;
       status: number;
-      /** 404 – org not found or soft-deleted */
+      /** 404 – org not found, soft-deleted, or has NO pending org_admin to activate */
       notFound: boolean;
-      /** 409 – org already has at least one active org_admin */
+      /** 409 – org is already active (its admin already claimed) */
       alreadyHasAdmin: boolean;
     };
 
 /**
- * Generates a one-time claim/invitation URL for the first org_admin of an
- * organization that currently has no active org_admin.
+ * Re-issues the one-time activation token for an organization's pending
+ * org_admin (THE-TWELVE, 2026-08-26).
  *
- * Backend endpoint: POST /api/v1/organizations/:id/invitations
- * Requires: site_admin session, org must exist, org must have no active admin.
+ * Backend endpoint: POST /api/v1/organizations/:id/resend-activation
+ * Requires: site_admin session; the org must be INACTIVE and carry a
+ * pending org_admin (created via the create-with-admin_email flow).
  *
- * The backend always returns the claim URL in the response body. It also
- * attempts to email the URL to recipient_email if SMTP is configured.
- * Email failure is non-fatal — the claim URL is always available in the response.
- *
- * The claim URL is in the format {idpBaseURL}/claim?token={token}.
- * Note: this URL pattern may be a browser-facing endpoint on the IdP; the UI
- * shows it as a copyable value for the site_admin to deliver out-of-band when
- * email is not configured.
+ * This REPLACED POST /api/v1/organizations/:id/invitations, which is not
+ * mounted on identuum-idp-oss and 404'd on every click. The OSS endpoint
+ * takes NO body — the recipient is the org's existing pending admin,
+ * resolved server-side and echoed back as admin_email. The backend also
+ * re-emails the activation link when SMTP is configured; the token is
+ * always in the response for out-of-band delivery.
  */
 export async function assignOrgAdmin(opts: AssignOrgAdminOptions): Promise<AssignOrgAdminResult> {
   const cfg = loadRuntimeConfig();
@@ -590,14 +580,10 @@ export async function assignOrgAdmin(opts: AssignOrgAdminOptions): Promise<Assig
 
   try {
     const res = await fetch(
-      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(opts.orgId)}/invitations`,
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(opts.orgId)}/resend-activation`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(await idpAuthHeaders()),
-        },
-        body: JSON.stringify({ recipient_email: opts.recipientEmail.toLowerCase().trim() }),
+        headers: await idpAuthHeaders(),
         cache: "no-store",
       }
     );
@@ -616,9 +602,9 @@ export async function assignOrgAdmin(opts: AssignOrgAdminOptions): Promise<Assig
     // Return only the UI-safe fields — never raw token strings in error paths.
     return {
       ok: true,
-      claimUrl: String(data.claim_url ?? ""),
+      activationToken: String(data.activation_token ?? ""),
+      adminEmail: String(data.admin_email ?? ""),
       expiresAt: String(data.expires_at ?? ""),
-      emailSent: Boolean(data.email_sent),
     };
   } catch {
     return { ok: false, status: 0, notFound: false, alreadyHasAdmin: false };
@@ -899,8 +885,11 @@ export async function resetUserMFA(
     return { ok: false, status: 503, message: "IdP is not configured." };
   }
   try {
+    // THE-TWELVE (2026-08-26): the mounted OSS route is
+    // /recovery/reset-mfa; the old /mfa/reset path never existed on
+    // identuum-idp-oss and 404'd on every click.
     const res = await fetch(
-      `${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/mfa/reset`,
+      `${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/recovery/reset-mfa`,
       {
         method: "POST",
         headers: await idpAuthHeaders(),

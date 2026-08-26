@@ -8,31 +8,23 @@ import { z } from "zod";
 
 const schema = z.object({
   org_id: z.string().uuid("Invalid organization ID"),
-  recipient_email: z
-    .string()
-    .max(255, "Email must be 255 characters or fewer")
-    .transform((e) => e.toLowerCase().trim())
-    .refine((e) => e === "" || z.string().email().safeParse(e).success, {
-      message: "Enter a valid email address",
-    }),
 });
 
 export interface AssignAdminSuccess {
   orgId: string;
-  recipientEmail: string;
+  /** The pending org_admin the token re-activates (backend-resolved). */
+  adminEmail: string;
   /**
-   * One-time claim URL for the prospective org_admin.
+   * One-time activation token for the pending org_admin.
    * Kept in server-action state only — not placed in URL, localStorage, or sessionStorage.
    * Do NOT log this value.
    */
-  claimUrl: string;
+  activationToken: string;
   expiresAt: string;
-  emailSent: boolean;
 }
 
 export interface AssignAdminActionState {
   error?: string;
-  fieldErrors?: Partial<Record<"recipient_email", string>>;
   success?: AssignAdminSuccess;
 }
 
@@ -52,50 +44,43 @@ export async function assignAdminAction(
 
   const raw = {
     org_id: ((formData.get("org_id") as string | null) ?? "").trim(),
-    recipient_email: ((formData.get("recipient_email") as string | null) ?? "").trim(),
   };
 
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
-    const flat = parsed.error.flatten().fieldErrors;
-    return {
-      fieldErrors: {
-        recipient_email: flat.recipient_email?.[0],
-      },
-    };
+    return { error: "Invalid organization ID." };
   }
 
-  const result = await assignOrgAdmin({
-    orgId: parsed.data.org_id,
-    recipientEmail: parsed.data.recipient_email, // may be empty string (no-email mode)
-  });
+  const result = await assignOrgAdmin({ orgId: parsed.data.org_id });
 
   if (!result.ok) {
     if (result.notFound) {
-      return { error: "Organization not found. It may have been deleted." };
+      return {
+        error:
+          "No pending administrator to activate. The organization may have been deleted, or it was created without an admin email — recreate it with one, or it has no activation to re-issue.",
+      };
     }
     if (result.alreadyHasAdmin) {
       return {
         error:
-          "This organization already has at least one active administrator. Claim links can only be issued to organizations with no active admin.",
+          "This organization is already active — its administrator has completed activation. Nothing to re-issue.",
       };
     }
     if (result.status === 403) {
       redirect("/login?reason=unauthorized");
     }
     return {
-      error: "Could not generate the admin setup link. The backend returned an error. Try again.",
+      error: "Could not re-issue the activation token. The backend returned an error. Try again.",
     };
   }
 
-  // Do NOT redirect — the claim URL is one-time state that must be shown immediately.
+  // Do NOT redirect — the activation token is one-time state that must be shown immediately.
   return {
     success: {
       orgId: parsed.data.org_id,
-      recipientEmail: parsed.data.recipient_email, // may be "" for no-email mode
-      claimUrl: result.claimUrl,
+      adminEmail: result.adminEmail,
+      activationToken: result.activationToken,
       expiresAt: result.expiresAt,
-      emailSent: result.emailSent,
     },
   };
 }
