@@ -27,8 +27,8 @@
  *     are intentionally NOT editable — see actions.ts comment.
  */
 
-import { Button } from "@/components/ui/button";
 import { useActionState } from "react";
+import { Button } from "@/components/ui/button";
 import { type UpdateApplicationState, updateApplicationAction } from "../../actions";
 
 const initialState: UpdateApplicationState = { phase: "idle" };

@@ -22,6 +22,8 @@
  *     usable client_credentials grant must link the service account
  *     to an OAuth client via a separate (future) backend slice.
  */
+
+import type { Metadata } from "next";
 import {
   type AuthorizationServerPageBoundary,
   getAuthorizationServerPageBoundary,
@@ -29,7 +31,6 @@ import {
 import { getOwnOrganization, listServiceAccounts } from "@/lib/idp-admin-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { OrgServiceAccountItem } from "@/lib/types";
-import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Service accounts — Identuum Org Admin",

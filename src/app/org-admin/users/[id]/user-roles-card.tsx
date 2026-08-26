@@ -16,12 +16,12 @@
  * manage the role catalog from /org-admin/settings.
  */
 
-import type { OrgRoleItem } from "@/lib/idp-admin-client";
 import { useActionState } from "react";
+import type { OrgRoleItem } from "@/lib/idp-admin-client";
 import {
   type AssignUserRoleState,
-  type RemoveUserRoleState,
   assignUserRoleAction,
+  type RemoveUserRoleState,
   removeUserRoleAction,
 } from "../actions";
 import { USER_ROLES_CARD_COPY } from "./user-detail-actions";

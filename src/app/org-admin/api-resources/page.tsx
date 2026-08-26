@@ -19,6 +19,8 @@
  *   - The Create page surfaces the one-time secret returned by the
  *     create endpoint; rotation is intentionally NOT on this slice.
  */
+
+import type { Metadata } from "next";
 import {
   type AuthorizationServerPageBoundary,
   getAuthorizationServerPageBoundary,
@@ -26,7 +28,6 @@ import {
 import { listApiResources } from "@/lib/idp-admin-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { OrgAPIResourceItem } from "@/lib/types";
-import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "API resources — Identuum Org Admin",

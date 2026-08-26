@@ -13,10 +13,11 @@
  * Security: no authentication required (returns only non-sensitive metadata).
  * No secrets, tokens, keys, or internal URLs appear in the response.
  */
+
+import { NextResponse } from "next/server";
 import { discoverRuntime } from "@/lib/runtime-composition";
 import { agBaseUrl, idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 import type { RuntimeState } from "@/lib/types";
-import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 

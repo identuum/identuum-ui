@@ -1,15 +1,15 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { orgLookup } from "@/lib/idp-client";
-import { IDP_PATHS } from "@/lib/idp-paths";
-import type { OrgConfig, PublicIDPInfo, UserRole } from "@/lib/types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ChevronRight, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { orgLookup } from "@/lib/idp-client";
+import { IDP_PATHS } from "@/lib/idp-paths";
+import type { OrgConfig, PublicIDPInfo, UserRole } from "@/lib/types";
 import { MFAEnrollForm } from "./mfa-enroll-form";
 import { MFAForm } from "./mfa-form";
 import { PasswordForm } from "./password-form";

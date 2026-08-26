@@ -29,13 +29,13 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  ORG_ADMIN_USER_ACTION_META,
-  type OrgAdminUserActionInput,
-  SOLE_ACTIVE_ADMIN_COPY,
   computeOrgUserStatus,
   deriveOrgAdminUserActions,
   getOrgAdminUserActionLabel,
   isNoEmailSentinel,
+  ORG_ADMIN_USER_ACTION_META,
+  type OrgAdminUserActionInput,
+  SOLE_ACTIVE_ADMIN_COPY,
 } from "../app/org-admin/users/[id]/user-detail-actions";
 
 // Synthetic fixture builder. Defaults to an active org_user with MFA

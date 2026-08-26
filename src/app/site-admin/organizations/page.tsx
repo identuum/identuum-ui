@@ -19,8 +19,9 @@
  * Restore is at /site-admin/organizations/[id]/restore.
  * Assign-admin remains deferred.
  */
-import { listOrganizations } from "@/lib/idp-admin-client";
+
 import type { Metadata } from "next";
+import { listOrganizations } from "@/lib/idp-admin-client";
 import { OrganizationsClient } from "./client";
 
 export const metadata: Metadata = { title: "Organizations — Identuum Admin" };

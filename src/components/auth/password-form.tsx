@@ -1,15 +1,15 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { login } from "@/lib/idp-client";
-import type { UserRole } from "@/lib/types";
-import { ApiError } from "@/lib/ui-api";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Lock } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { login } from "@/lib/idp-client";
+import type { UserRole } from "@/lib/types";
+import { ApiError } from "@/lib/ui-api";
 
 const schema = z.object({
   password: z.string().min(1, "Password is required"),

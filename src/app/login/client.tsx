@@ -1,9 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { LoginFlow } from "@/components/auth/login-flow";
 import { roleToPath } from "@/lib/role-routing";
 import type { PublicRuntimeConfig, UserRole } from "@/lib/types";
-import { useRouter } from "next/navigation";
 
 interface LoginPageClientProps {
   config: PublicRuntimeConfig;

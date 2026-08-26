@@ -12,8 +12,9 @@
  *   - Internal AG backend URLs are never returned or exposed to browsers.
  *   - The redirect destination uses ag.identity_base_url (public URL only).
  */
-import { agIdentityPublicUrl, loadRuntimeConfig } from "@/lib/runtime-config";
+
 import { type NextRequest, NextResponse } from "next/server";
+import { agIdentityPublicUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 

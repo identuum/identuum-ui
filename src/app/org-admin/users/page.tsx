@@ -13,9 +13,10 @@
  * The sentinel-email heuristic (noemail+...@no-email.internal) is kept as a
  * defensive fallback for any API response that pre-dates invitation_pending.
  */
+
+import type { Metadata } from "next";
 import { listOrgUsers } from "@/lib/idp-admin-client";
 import type { OrgUserItem } from "@/lib/types";
-import type { Metadata } from "next";
 import { BulkInviteSection } from "./bulk-invite-section";
 import { InviteUserSection } from "./invite-section";
 import { RegenerateInviteLink, UserRowActions } from "./user-row-actions";
@@ -274,13 +275,7 @@ function UsersTable({
   );
 }
 
-function UserRow({
-  user,
-  activeAdminCount,
-}: {
-  user: OrgUserItem;
-  activeAdminCount: number;
-}) {
+function UserRow({ user, activeAdminCount }: { user: OrgUserItem; activeAdminCount: number }) {
   const status = computeStatus(user);
 
   const statusBadge: Record<typeof status, { label: string; cls: string }> = {

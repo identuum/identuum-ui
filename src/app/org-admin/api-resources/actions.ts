@@ -21,6 +21,8 @@
  *     a backend resource-subject migration would be required first).
  */
 
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import {
   createApiResource,
   deleteApiResource,
@@ -29,8 +31,6 @@ import {
 } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { parseScopeLines } from "./scope-parser";
 
 // ── Shared parsers ──────────────────────────────────────────────────────────

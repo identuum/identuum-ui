@@ -51,7 +51,7 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { loadOrgAdminFixture, loadOrgAdminFixtureOrgId } from "./helpers/fixture";
-import { SKIP_AUTH_MSG, loginAsSiteAdmin, skipAuthTests } from "./helpers/login";
+import { loginAsSiteAdmin, SKIP_AUTH_MSG, skipAuthTests } from "./helpers/login";
 
 // Neutral placeholder defaults. Operators with a different local fixture
 // MUST set IDENTUUM_TEST_ORG_ID and IDENTUUM_TEST_ORG_ADMIN_EMAIL in their

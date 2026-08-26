@@ -36,8 +36,8 @@
 import { useActionState, useState } from "react";
 import {
   type DisableSAState,
-  type EnableSAState,
   disableServiceAccountAction,
+  type EnableSAState,
   enableServiceAccountAction,
 } from "../actions";
 
@@ -87,6 +87,7 @@ function StatusBadge({ active }: { active: boolean }) {
   if (active) {
     return (
       <span
+        role="status"
         aria-label="Service account status: Active"
         className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700"
       >
@@ -96,6 +97,7 @@ function StatusBadge({ active }: { active: boolean }) {
   }
   return (
     <span
+      role="status"
       aria-label="Service account status: Disabled"
       className="inline-flex items-center rounded-full border border-stone-200 bg-stone-100 px-2.5 py-0.5 text-xs font-semibold text-stone-600"
     >

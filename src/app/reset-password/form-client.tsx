@@ -17,7 +17,7 @@
  */
 
 import { useActionState } from "react";
-import { type ResetPasswordState, consumeResetTokenAction } from "./actions";
+import { consumeResetTokenAction, type ResetPasswordState } from "./actions";
 
 const initialState: ResetPasswordState = { phase: "form" };
 

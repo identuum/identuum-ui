@@ -12,11 +12,11 @@
  *     component redirects to /login after the action succeeds.
  */
 
-import { listOwnSessions, revokeSessionById } from "@/lib/idp-account-client";
-import { getServerSession } from "@/lib/server-session";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { listOwnSessions, revokeSessionById } from "@/lib/idp-account-client";
+import { getServerSession } from "@/lib/server-session";
 
 const confirmByAction = {
   revoke_current: "CURRENT",

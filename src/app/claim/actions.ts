@@ -22,8 +22,8 @@
  *     not used here — those are for browser-side code only (see idp-client.ts).
  */
 
-import { idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 import { z } from "zod";
+import { idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

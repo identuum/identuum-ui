@@ -8,6 +8,7 @@
  * from the session, so no org ID is ever sent from the browser.
  */
 
+import { useActionState } from "react";
 import {
   type MFAPolicy,
   type UpdateMFAPolicyState,
@@ -18,7 +19,6 @@ import {
   ORG_ADMIN_MFA_POLICY_OPTIONS,
 } from "@/app/org-admin/settings/settings-helpers";
 import { Button } from "@/components/ui/button";
-import { useActionState } from "react";
 
 interface MFAPolicyFormProps {
   currentPolicy: string;

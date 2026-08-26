@@ -39,7 +39,7 @@ import type { ValidateResponse } from "./types";
  */
 export const getServerSession = cache(async (): Promise<ValidateResponse | null> => {
   const cfg = loadRuntimeConfig();
-  if (!cfg || !cfg.idp.enabled) return null;
+  if (!cfg?.idp.enabled) return null;
 
   const cookieStore = await cookies();
   const cookieHeader = cookieStore

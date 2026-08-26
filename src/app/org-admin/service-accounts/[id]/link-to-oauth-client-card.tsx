@@ -29,13 +29,13 @@
  *     secret flow remains on the Applications detail page.
  */
 
+import { useActionState, useState } from "react";
 import type { LinkedOAuthClientForServiceAccount } from "@/lib/idp-admin-client";
 import type { OrgClientItem } from "@/lib/types";
-import { useActionState, useState } from "react";
 import {
   type LinkSAToOAuthClientState,
-  type UnlinkSAFromOAuthClientState,
   linkServiceAccountToOAuthClientAction,
+  type UnlinkSAFromOAuthClientState,
   unlinkServiceAccountFromOAuthClientAction,
 } from "../actions";
 

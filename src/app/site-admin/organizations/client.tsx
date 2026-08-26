@@ -12,11 +12,7 @@ interface OrganizationsClientProps {
   stateFilter: StateFilter;
 }
 
-export function OrganizationsClient({
-  initialData,
-  page,
-  stateFilter,
-}: OrganizationsClientProps) {
+export function OrganizationsClient({ initialData, page, stateFilter }: OrganizationsClientProps) {
   const hasPrev = page > 1;
   const hasNext =
     initialData !== null && initialData.offset + initialData.count < initialData.total_count;

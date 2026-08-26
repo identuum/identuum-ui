@@ -11,6 +11,8 @@
  * Security: no internal backend URLs, tokens, session data, or stack
  * traces are rendered. Only public metadata from each backend is shown.
  */
+
+import type { Metadata } from "next";
 import { AGCEOrgLinkAvailabilityCard } from "@/components/shared/ag-ce-org-link-availability-card";
 import { fetchAgAuthProviders } from "@/lib/ag-auth-providers";
 import { getCapabilityAvailability } from "@/lib/runtime-composition";
@@ -23,7 +25,6 @@ import type {
   ComponentLicenseInfo,
   PlatformMode,
 } from "@/lib/types";
-import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Platform Status — Identuum" };

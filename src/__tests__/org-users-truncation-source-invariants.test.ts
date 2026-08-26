@@ -48,10 +48,9 @@ describe("org users list — wire contract and visible truncation", () => {
   });
 
   it("listOrgUsers carries the backend's total to the caller", () => {
-    expect(
-      clientChunk(),
-      "without total the page cannot know it truncated"
-    ).toMatch(/total:\s*Number\(data\.total/);
+    expect(clientChunk(), "without total the page cannot know it truncated").toMatch(
+      /total:\s*Number\(data\.total/
+    );
   });
 
   it("the users page never presents the window as the whole", () => {
@@ -60,10 +59,9 @@ describe("org users list — wire contract and visible truncation", () => {
       page,
       "the page must derive the page count from the backend's total and the page size"
     ).toMatch(/totalPages\s*=\s*Math\.max\(1,\s*Math\.ceil\(totalUsers\s*\/\s*USERS_PAGE_SIZE\)\)/);
-    expect(
-      page,
-      "the multi-page flag must come from the derived page count"
-    ).toMatch(/paginated\s*=\s*users\s*!==\s*null\s*&&\s*totalPages\s*>\s*1/);
+    expect(page, "the multi-page flag must come from the derived page count").toMatch(
+      /paginated\s*=\s*users\s*!==\s*null\s*&&\s*totalPages\s*>\s*1/
+    );
     expect(
       page,
       "status-filter counts must be labeled page-scoped whenever more than one page exists"

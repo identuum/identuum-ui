@@ -36,13 +36,18 @@ const clientChunk = (): string => {
 describe("org users list — every user reachable by paging", () => {
   it("listOrgUsers sends the caller's 1-based page, not a hardcoded first window [ORG-USERS-PAGINATION-1]", () => {
     const fn = clientChunk();
-    expect(fn, "the client must accept a page option").toMatch(/opts\?:\s*\{[\s\S]{0,120}?page\?:\s*number/);
-    expect(
-      fn,
-      "the sent page must be the caller's, clamped to an integer >= 1"
-    ).toMatch(/Math\.max\(1,\s*Math\.floor\(opts\?\.page\s*\?\?\s*1\)\)/);
-    expect(fn, "the clamped page goes on the wire").toMatch(/params\.set\("page",\s*String\(page\)\)/);
-    expect(fn, "a hardcoded first page would sever every later page").not.toMatch(/params\.set\("page",\s*"1"\)/);
+    expect(fn, "the client must accept a page option").toMatch(
+      /opts\?:\s*\{[\s\S]{0,120}?page\?:\s*number/
+    );
+    expect(fn, "the sent page must be the caller's, clamped to an integer >= 1").toMatch(
+      /Math\.max\(1,\s*Math\.floor\(opts\?\.page\s*\?\?\s*1\)\)/
+    );
+    expect(fn, "the clamped page goes on the wire").toMatch(
+      /params\.set\("page",\s*String\(page\)\)/
+    );
+    expect(fn, "a hardcoded first page would sever every later page").not.toMatch(
+      /params\.set\("page",\s*"1"\)/
+    );
   });
 
   it("the users page parses ?page= strictly and passes it to the client", () => {
@@ -51,19 +56,21 @@ describe("org users list — every user reachable by paging", () => {
       page,
       "?page= must parse to an integer >= 1 with fallback 1 — never NaN into the wire"
     ).toMatch(/!Number\.isFinite\(n\)\s*\|\|\s*!Number\.isInteger\(n\)\s*\|\|\s*n\s*<\s*1/);
-    expect(page, "the parsed page must reach the client call").toMatch(/listOrgUsers\(\{\s*page\s*\}\)/);
+    expect(page, "the parsed page must reach the client call").toMatch(
+      /listOrgUsers\(\{\s*page\s*\}\)/
+    );
   });
 
   it("Prev/Next controls bind to the derived page count and preserve the status filter", () => {
     const page = src("app/org-admin/users/page.tsx");
-    expect(page, "Prev exists only above page 1").toMatch(/page\s*>\s*1\s*\?\s*usersPageHref\(page\s*-\s*1,\s*filter\)/);
-    expect(
-      page,
-      "Next exists only below the derived page count"
-    ).toMatch(/page\s*<\s*totalPages\s*\?\s*usersPageHref\(page\s*\+\s*1,\s*filter\)/);
-    expect(
-      page,
-      "page moves must not drop an active status filter"
-    ).toMatch(/if\s*\(filter\s*!==\s*"all"\)\s*qs\.set\("status",\s*filter\)/);
+    expect(page, "Prev exists only above page 1").toMatch(
+      /page\s*>\s*1\s*\?\s*usersPageHref\(page\s*-\s*1,\s*filter\)/
+    );
+    expect(page, "Next exists only below the derived page count").toMatch(
+      /page\s*<\s*totalPages\s*\?\s*usersPageHref\(page\s*\+\s*1,\s*filter\)/
+    );
+    expect(page, "page moves must not drop an active status filter").toMatch(
+      /if\s*\(filter\s*!==\s*"all"\)\s*qs\.set\("status",\s*filter\)/
+    );
   });
 });

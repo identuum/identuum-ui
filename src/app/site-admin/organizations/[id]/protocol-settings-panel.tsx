@@ -1,8 +1,8 @@
 "use client";
 
+import { useActionState, useEffect, useState } from "react";
 import type { AuthorizationServerPageBoundary } from "@/lib/capability-affordances";
 import type { GetOrgProtocolSettingsResult, OrgProtocolSettings } from "@/lib/types";
-import { useActionState, useEffect, useState } from "react";
 import {
   type UpdateProtocolSettingsActionState,
   updateProtocolSettingsAction,

@@ -1,11 +1,11 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { useActionState, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   type DisableMfaState,
-  type RegenerateRecoveryCodesState,
   disableMfaAction,
+  type RegenerateRecoveryCodesState,
   regenerateRecoveryCodesAction,
 } from "./mfa-actions";
 

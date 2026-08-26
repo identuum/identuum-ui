@@ -1,8 +1,8 @@
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { upgradeStateNeedsWizard } from "@/lib/runtime-composition";
 import { loadRuntimeConfig, toPublicConfig } from "@/lib/runtime-config";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
-import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { LoginPageClient } from "./client";
 
 export const dynamic = "force-dynamic";

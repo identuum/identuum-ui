@@ -22,20 +22,20 @@
  *     (the wire type excludes it).
  */
 
+import { useActionState } from "react";
 import {
   type AddOrganizationDomainState,
-  type DeleteOrganizationDomainState,
-  type SetPrimaryOrganizationDomainState,
-  type VerifyOrganizationDomainState,
   addOrganizationDomainAction,
+  type DeleteOrganizationDomainState,
   deleteOrganizationDomainAction,
+  type SetPrimaryOrganizationDomainState,
   setPrimaryOrganizationDomainAction,
+  type VerifyOrganizationDomainState,
   verifyOrganizationDomainAction,
 } from "@/app/org-admin/settings/domains-actions";
 import { ORG_ADMIN_DOMAINS_CARD_COPY } from "@/app/org-admin/settings/settings-helpers";
 import { Button } from "@/components/ui/button";
 import type { OrganizationDomainInfo } from "@/lib/types";
-import { useActionState } from "react";
 
 interface DomainsCardProps {
   domains: OrganizationDomainInfo[];

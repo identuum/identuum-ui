@@ -11,8 +11,9 @@
  *
  * Delete, restore, and assign-admin are intentionally not implemented here.
  */
-import { getOrganization } from "@/lib/idp-admin-client";
+
 import type { Metadata } from "next";
+import { getOrganization } from "@/lib/idp-admin-client";
 import { EditOrgForm } from "./form-client";
 
 export const metadata: Metadata = { title: "Edit Organization — Identuum Admin" };

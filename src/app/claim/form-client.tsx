@@ -21,10 +21,10 @@
  *     login attempt.
  */
 
-import { MFAEnrollForm } from "@/components/auth/mfa-enroll-form";
-import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useActionState, useState } from "react";
+import { MFAEnrollForm } from "@/components/auth/mfa-enroll-form";
+import { Button } from "@/components/ui/button";
 import { type ConsumeClaimState, consumeClaimAction } from "./actions";
 
 interface ClaimFormClientProps {

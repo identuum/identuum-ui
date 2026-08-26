@@ -1,8 +1,10 @@
-import { AuditFilterPanel } from "@/components/shared/audit-filter-panel";
+import type { Metadata } from "next";
 import type { AuditFilterValues } from "@/components/shared/audit-filter-panel";
+import { AuditFilterPanel } from "@/components/shared/audit-filter-panel";
 import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
 import { AuditIPAddressCell } from "@/components/shared/audit-ip-address-cell";
 import { FeatureBoundaryPanel } from "@/components/shared/feature-boundary-panel";
+import type { AuditEventItem } from "@/lib/idp-admin-client";
 /**
  * Audit log viewer — site_admin only (read-only).
  *
@@ -25,9 +27,7 @@ import { FeatureBoundaryPanel } from "@/components/shared/feature-boundary-panel
  *   - All filters are validated/sanitized server-side before forwarding to backend.
  *   - Backend enforces all authorization — no client-side filtering.
  */
-import { listAuditEventTypes, listAuditEvents } from "@/lib/idp-admin-client";
-import type { AuditEventItem } from "@/lib/idp-admin-client";
-import type { Metadata } from "next";
+import { listAuditEvents, listAuditEventTypes } from "@/lib/idp-admin-client";
 
 export const metadata: Metadata = { title: "Audit Log — Identuum Admin" };
 
@@ -445,7 +445,11 @@ function PaginationLink({
   href,
   label,
   disabled,
-}: { href?: string; label: string; disabled: boolean }) {
+}: {
+  href?: string;
+  label: string;
+  disabled: boolean;
+}) {
   if (disabled || !href)
     return (
       <span className="text-xs text-stone-300 px-3 py-1.5 rounded-lg cursor-not-allowed select-none">

@@ -13,9 +13,10 @@
  *     because it requires structured JSON input; a dedicated editor can be
  *     added in a future task.
  */
-import { agRequest } from "@/lib/ag-client";
+
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { agRequest } from "@/lib/ag-client";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Register Agent — Identuum AG" };

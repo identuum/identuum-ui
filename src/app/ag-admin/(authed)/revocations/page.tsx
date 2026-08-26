@@ -12,9 +12,10 @@
  *   - Long reason text is clamped in list rows.
  *   - No write/undo actions on this page.
  */
-import { agRequest } from "@/lib/ag-client";
+
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { agRequest } from "@/lib/ag-client";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Revocations — Identuum AG" };
@@ -341,7 +342,11 @@ function SummaryCard({
   label,
   value,
   href,
-}: { label: string; value: number | null; href: string }) {
+}: {
+  label: string;
+  value: number | null;
+  href: string;
+}) {
   return (
     <a
       href={href}

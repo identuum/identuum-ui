@@ -22,8 +22,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  PASSKEY_ENROLLMENT_ERROR_COPY,
   classifyPasskeyEnrollmentError,
+  PASSKEY_ENROLLMENT_ERROR_COPY,
 } from "../components/ui/passkey-enrollment-errors";
 
 // ── Begin-registration HTTP failure ────────────────────────────────────────

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { AGCEOrgLinkAvailabilityCard } from "@/components/shared/ag-ce-org-link-availability-card";
 /**
  * /site-admin/org-link/readiness
@@ -21,9 +22,9 @@ import { AGCEOrgLinkAvailabilityCard } from "@/components/shared/ag-ce-org-link-
  */
 import { BackendNotConfiguredNotice } from "@/components/shared/backend-not-configured-notice";
 import {
-  type OrgExportFetchResult,
-  type OrganizationCandidateMatch,
   deriveOrganizationCandidateMatches,
+  type OrganizationCandidateMatch,
+  type OrgExportFetchResult,
 } from "@/lib/org-export-candidates";
 import {
   fetchAGOrganizationExportCandidates,
@@ -31,18 +32,17 @@ import {
 } from "@/lib/org-export-candidates-client";
 import { dryRunImportIDPOrganizationToAG } from "@/lib/org-import-dry-run-client";
 import {
-  type LinkingPrerequisite,
   deriveOrganizationLinkingReadiness,
+  type LinkingPrerequisite,
 } from "@/lib/org-linking-readiness";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type {
   BackendComponentState,
   ComponentCapabilities,
-  OrgImportDryRunResult,
   OrganizationExportCandidate,
+  OrgImportDryRunResult,
 } from "@/lib/types";
-import type { Metadata } from "next";
 import { executeOrganizationImportFormAction } from "./actions";
 
 /** Maximum dry-run previews to issue per render. Bounded to keep the page snappy. */

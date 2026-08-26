@@ -18,8 +18,8 @@
  *     the URL, storage, or cookies.
  */
 
-import type { OrgAPIResourceScope } from "@/lib/types";
 import { useActionState } from "react";
+import type { OrgAPIResourceScope } from "@/lib/types";
 import { type UpdateAPIResourceState, updateApiResourceAction } from "../../actions";
 
 const initialState: UpdateAPIResourceState = { phase: "idle" };

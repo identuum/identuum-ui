@@ -11,9 +11,10 @@
  *   - Internal AG URLs, tokens, cookies never surfaced.
  *   - On 401/403 redirects to /ag-admin/login.
  */
-import { agRequest } from "@/lib/ag-client";
+
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { agRequest } from "@/lib/ag-client";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Agent Detail — Identuum AG" };
@@ -555,7 +556,10 @@ const ACR_LABELS: Record<string, string> = {
 function GovernanceCard({
   ceiling,
   agentId,
-}: { ceiling?: CapabilityCeiling | null; agentId: string }) {
+}: {
+  ceiling?: CapabilityCeiling | null;
+  agentId: string;
+}) {
   const hitl = ceiling?.hitl;
   return (
     <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">

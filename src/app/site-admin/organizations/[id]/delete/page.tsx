@@ -4,8 +4,9 @@
  * Mutations are handled by the server action in actions.ts.
  * Delete is soft-delete only; hard delete is not implemented.
  */
-import { getOrganization } from "@/lib/idp-admin-client";
+
 import type { Metadata } from "next";
+import { getOrganization } from "@/lib/idp-admin-client";
 import { DeleteOrgForm } from "./form-client";
 
 export const metadata: Metadata = { title: "Delete Organization — Identuum Admin" };

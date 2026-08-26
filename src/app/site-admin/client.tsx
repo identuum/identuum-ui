@@ -1,9 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import type { CurrentUser, PublicRuntimeConfig, StatusResponse, UserRole } from "@/lib/types";
 import { fetchRuntimeConfig, fetchStatus } from "@/lib/ui-api";
-import { useEffect, useState } from "react";
 
 interface SiteAdminOverviewClientProps {
   initialUser: CurrentUser | null;

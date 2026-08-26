@@ -28,9 +28,9 @@
 import type { BrowserContext, CDPSession, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import {
+  loginAsSiteAdminMFAOptional,
   SITE_ADMIN_EMAIL,
   SKIP_AUTH_MSG,
-  loginAsSiteAdminMFAOptional,
   skipAuthTests,
 } from "./helpers/login";
 

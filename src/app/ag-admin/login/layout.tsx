@@ -8,10 +8,6 @@
  * This layout sits inside /ag-admin/layout.tsx (config guard) but outside the
  * (authed) route group, so no AG Governance sidebar is rendered.
  */
-export default function AgAdminLoginLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function AgAdminLoginLayout({ children }: { children: React.ReactNode }) {
   return <div className="min-h-screen bg-stone-50">{children}</div>;
 }

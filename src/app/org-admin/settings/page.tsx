@@ -6,27 +6,28 @@
  *
  * Personal account settings (passkeys, etc.) live at /account/settings.
  */
+
+import type { Metadata } from "next";
 import { ProtocolSettingsPanel } from "@/app/site-admin/organizations/[id]/protocol-settings-panel";
 import { DomainsCard } from "@/components/org-admin/domains-card";
 import { getAuthorizationServerPageBoundary } from "@/lib/capability-affordances";
 import {
   getOrgProtocolSettings,
   getOwnOrganization,
-  listOrgRoles,
   listOrganizationDomains,
   listOrganizationIdentityProviders,
   listOrganizationWebhooks,
+  listOrgRoles,
   listScopeTemplates,
 } from "@/lib/idp-admin-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
-import type { Metadata } from "next";
 import {
+  deriveOrgAdminInvitePolicyMode,
   ORG_ADMIN_DOMAINS_CARD_COPY,
   ORG_ADMIN_INVITE_POLICY_MODE_COPY,
   ORG_ADMIN_SETTINGS_PAGE_COPY,
-  ORG_ADMIN_SETTINGS_PLACEHOLDERS,
   ORG_ADMIN_SETTINGS_PLACEHOLDER_BADGE,
-  deriveOrgAdminInvitePolicyMode,
+  ORG_ADMIN_SETTINGS_PLACEHOLDERS,
 } from "./settings-helpers";
 import {
   IdentityProvidersReadOnlySection,

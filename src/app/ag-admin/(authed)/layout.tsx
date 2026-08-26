@@ -14,18 +14,15 @@
  * Security: no token value or credential is passed to client components.
  * The sidebar exposes only public route paths.
  */
+
+import { redirect } from "next/navigation";
 import { AgAdminNav } from "@/components/ag-admin/ag-admin-nav";
 import { PlatformLicenseWarnings } from "@/components/shared/platform-license-warnings";
 import { hasAgSession } from "@/lib/ag-client";
-import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function AgAdminAuthedLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function AgAdminAuthedLayout({ children }: { children: React.ReactNode }) {
   const authenticated = await hasAgSession();
   if (!authenticated) {
     redirect("/ag-admin/login");

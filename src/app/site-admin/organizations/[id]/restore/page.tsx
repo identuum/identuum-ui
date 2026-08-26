@@ -3,8 +3,9 @@
  * Fetches org details server-side. Shows a simple confirm button.
  * Only soft-deleted organizations can be restored here.
  */
-import { getOrganization } from "@/lib/idp-admin-client";
+
 import type { Metadata } from "next";
+import { getOrganization } from "@/lib/idp-admin-client";
 import { RestoreOrgForm } from "./form-client";
 
 export const metadata: Metadata = { title: "Restore Organization — Identuum Admin" };

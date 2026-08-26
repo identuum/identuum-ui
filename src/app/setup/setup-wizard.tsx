@@ -1,11 +1,11 @@
 "use client";
 
-import type { LicenseStatusBody } from "@/lib/idp-license-client";
-import { type CompleteSetupInput, completeSetup, verifySetupToken } from "@/lib/idp-setup-client";
-import { initiateSetupMFA, verifySetupMFA } from "@/lib/idp-setup-mfa-client";
 import { AlertCircle, CheckCircle2, KeyRound, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
+import type { LicenseStatusBody } from "@/lib/idp-license-client";
+import { type CompleteSetupInput, completeSetup, verifySetupToken } from "@/lib/idp-setup-client";
+import { initiateSetupMFA, verifySetupMFA } from "@/lib/idp-setup-mfa-client";
 import { LicenseStep } from "./license-step";
 
 interface InitialStatus {

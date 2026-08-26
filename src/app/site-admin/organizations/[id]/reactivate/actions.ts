@@ -6,11 +6,11 @@
  * Uses PUT /api/v1/organizations/:id with { active: true }.
  */
 
+import { redirect } from "next/navigation";
+import { z } from "zod";
 import { updateOrganization } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
-import { redirect } from "next/navigation";
-import { z } from "zod";
 
 const schema = z.object({
   org_id: z.string().uuid("Invalid organization ID"),

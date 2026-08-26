@@ -14,8 +14,8 @@
  * primitive — never stored or logged.
  */
 
-import { SetupLinkPanel } from "@/components/shared/setup-link-panel";
 import { useActionState } from "react";
+import { SetupLinkPanel } from "@/components/shared/setup-link-panel";
 import { type ApproveRegistrationState, approveRegistrationAction } from "../actions";
 import { APPROVE_REGISTRATION_COPY } from "./user-detail-actions";
 

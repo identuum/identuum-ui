@@ -1,7 +1,7 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { useActionState } from "react";
+import { Button } from "@/components/ui/button";
 import { type ReactivateOrgActionState, reactivateOrgAction } from "./actions";
 
 interface ReactivateOrgFormProps {

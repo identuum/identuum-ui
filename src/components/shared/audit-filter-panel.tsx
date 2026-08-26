@@ -11,8 +11,8 @@
 
 import {
   AUDIT_EVENT_TYPE_GROUPS,
-  KNOWN_AUDIT_EVENT_TYPES,
   humanizeEventType,
+  KNOWN_AUDIT_EVENT_TYPES,
 } from "@/lib/audit-event-types";
 import type { AuditEventTypeGroupFromAPI } from "@/lib/idp-admin-client";
 

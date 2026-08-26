@@ -10,9 +10,9 @@
  *     useEffect triggers a redirect to /login so the user re-authenticates.
  */
 
-import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
 import { type ChangePasswordState, changePasswordAction } from "./actions";
 
 const initialState: ChangePasswordState = { phase: "idle" };

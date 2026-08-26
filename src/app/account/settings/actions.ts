@@ -20,9 +20,9 @@
  * Role check at backend: any authenticated non-M2M user (DenyM2MClients middleware).
  */
 
+import { redirect } from "next/navigation";
 import { changeOwnPassword } from "@/lib/idp-admin-client";
 import { getServerSession } from "@/lib/server-session";
-import { redirect } from "next/navigation";
 
 export type ChangePasswordState =
   | { phase: "idle" }

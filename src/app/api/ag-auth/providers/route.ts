@@ -12,10 +12,11 @@
  *   - Raw AG errors, stack traces, tokens, and secrets are never returned.
  *   - The endpoint is unauthenticated (returns only public login-flow metadata).
  */
+
+import { NextResponse } from "next/server";
 import { fetchAgAuthProviders } from "@/lib/ag-auth-providers";
 import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 import type { AgAuthProviderDiscoveryState } from "@/lib/types";
-import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 

@@ -13,12 +13,13 @@
  *   - Requires an active AG operator session (ag_access_token cookie).
  *   - Organization-only: never writes users, admins, credentials, MFA, or roles.
  */
+
+import { type NextRequest, NextResponse } from "next/server";
 import {
   isValidUUID,
   linkAGOrganizationToIDPOrg,
   unlinkAGOrganizationFromIDPOrg,
 } from "@/lib/ag-org-link-write-client";
-import { type NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 

@@ -17,9 +17,10 @@
  *   - Internal AG URLs are never surfaced to the browser.
  *   - No write operations on this page.
  */
-import { agRequest } from "@/lib/ag-client";
+
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { agRequest } from "@/lib/ag-client";
 
 export const metadata: Metadata = { title: "Agent Sessions — Identuum AG" };
 export const dynamic = "force-dynamic";

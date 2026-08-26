@@ -1,7 +1,7 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { useActionState } from "react";
+import { Button } from "@/components/ui/button";
 import { type ConsumeInvitationState, consumeInvitationAction } from "./actions";
 
 interface InvitationFormClientProps {

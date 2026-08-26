@@ -42,8 +42,8 @@
  *     after rotation. The wire helper does not return it.
  */
 
-import { Button } from "@/components/ui/button";
 import { useActionState, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { type RotateAPIResourceSecretState, rotateApiResourceSecretAction } from "../actions";
 
 const initialState: RotateAPIResourceSecretState = { phase: "idle" };

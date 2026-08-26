@@ -47,8 +47,8 @@
  *     or any other secret-shaped form field.
  */
 
-import { Button } from "@/components/ui/button";
 import { useActionState, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { type RotateApplicationSecretState, rotateApplicationSecretAction } from "../actions";
 
 const initialState: RotateApplicationSecretState = { phase: "idle" };

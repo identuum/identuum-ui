@@ -25,6 +25,8 @@
  *     leaking the secret (the list endpoint never returns it).
  */
 
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import {
   createOrganizationClient,
   deleteOrganizationClient,
@@ -33,8 +35,6 @@ import {
 } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 export type CreateApplicationState =
   | { phase: "idle" }

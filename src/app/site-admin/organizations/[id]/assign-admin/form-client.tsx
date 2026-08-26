@@ -1,7 +1,7 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { useActionState } from "react";
+import { Button } from "@/components/ui/button";
 import { type AssignAdminActionState, assignAdminAction } from "./actions";
 
 interface AssignAdminFormProps {
@@ -100,8 +100,8 @@ function SuccessPanel({
           {activationToken}
         </pre>
         <p className="text-xs text-amber-600 leading-relaxed">
-          ⚠ Copy this token now. It will not be shown again after you leave this page. Deliver it
-          to <span className="font-mono">{adminEmail}</span> through a secure channel. It expires{" "}
+          ⚠ Copy this token now. It will not be shown again after you leave this page. Deliver it to{" "}
+          <span className="font-mono">{adminEmail}</span> through a secure channel. It expires{" "}
           {expiryDisplay}.
         </p>
       </div>

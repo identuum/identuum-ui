@@ -19,8 +19,8 @@
  *     documented createApiResourceAction input.
  */
 
-import { SetupLinkPanel } from "@/components/shared/setup-link-panel";
 import { useActionState } from "react";
+import { SetupLinkPanel } from "@/components/shared/setup-link-panel";
 import { type CreateAPIResourceState, createApiResourceAction } from "../actions";
 
 const initialState: CreateAPIResourceState = { phase: "idle" };

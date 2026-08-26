@@ -14,12 +14,13 @@
  *   - The form does NOT carry organization_id, secret, or any field
  *     outside the documented Create input shape.
  */
+
+import type { Metadata } from "next";
 import {
   type AuthorizationServerPageBoundary,
   getAuthorizationServerPageBoundary,
 } from "@/lib/capability-affordances";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
-import type { Metadata } from "next";
 import { CreateApiResourceForm } from "./create-api-resource-form";
 
 export const metadata: Metadata = {

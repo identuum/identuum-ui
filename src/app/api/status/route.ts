@@ -1,8 +1,8 @@
-import { deriveProductLabel } from "@/lib/backend-product-labels";
+import { NextResponse } from "next/server";
 import type { BackendDomain } from "@/lib/backend-product-labels";
+import { deriveProductLabel } from "@/lib/backend-product-labels";
 import { agBaseUrl, idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 import type { StatusResponse } from "@/lib/types";
-import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 

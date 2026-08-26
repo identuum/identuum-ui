@@ -24,12 +24,12 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { MFAPolicy } from "../app/org-admin/settings/actions";
 import {
+  getOrgAdminMfaPolicyLabel,
   ORG_ADMIN_MFA_FORM_COPY,
   ORG_ADMIN_MFA_POLICY_OPTIONS,
   ORG_ADMIN_SETTINGS_PAGE_COPY,
-  ORG_ADMIN_SETTINGS_PLACEHOLDERS,
   ORG_ADMIN_SETTINGS_PLACEHOLDER_BADGE,
-  getOrgAdminMfaPolicyLabel,
+  ORG_ADMIN_SETTINGS_PLACEHOLDERS,
 } from "../app/org-admin/settings/settings-helpers";
 
 // ── MFA policy options ───────────────────────────────────────────────────────

@@ -18,9 +18,10 @@
  *   - Each link uses target="_blank" + rel="noreferrer" so a malformed
  *     report payload cannot navigate the operator's audit-page tab.
  */
+
+import type { Metadata } from "next";
 import { FeatureBoundaryPanel } from "@/components/shared/feature-boundary-panel";
 import { type ReportLink, SITE_ADMIN_REPORT_FAMILIES } from "@/lib/idp-admin-client";
-import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Reports — Identuum Site Admin",

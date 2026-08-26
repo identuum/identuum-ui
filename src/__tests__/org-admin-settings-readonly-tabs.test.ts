@@ -422,12 +422,33 @@ describe("settings-readonly-sections.tsx — cross-section invariants", () => {
 
 describe("/org-admin/settings/page.tsx — Promise.all + section mounts", () => {
   it("imports the four new wire helpers and the four new section components", () => {
-    expect(PAGE_SRC).toMatch(
-      /import\s*\{[\s\S]*?listOrgRoles[\s\S]*?listOrganizationIdentityProviders[\s\S]*?listOrganizationWebhooks[\s\S]*?listScopeTemplates[\s\S]*?\}\s*from\s+["']@\/lib\/idp-admin-client["']/
-    );
-    expect(PAGE_SRC).toMatch(
-      /import\s*\{[\s\S]*?IdentityProvidersReadOnlySection[\s\S]*?OrgRolesReadOnlySection[\s\S]*?ScopeTemplatesReadOnlySection[\s\S]*?WebhooksReadOnlySection[\s\S]*?\}\s*from\s+["']\.\/settings-readonly-sections["']/
-    );
+    // Order-independent since Biome 2's import sorting (THE-TS-SEVEN): the
+    // invariant is that each name is imported from the right module, not
+    // the formatter's ordering of the day.
+    const clientImport = PAGE_SRC.match(
+      /import\s*\{[\s\S]*?\}\s*from\s+["']@\/lib\/idp-admin-client["']/
+    )?.[0];
+    expect(clientImport, "the idp-admin-client import must exist").toBeTruthy();
+    for (const name of [
+      "listOrgRoles",
+      "listOrganizationIdentityProviders",
+      "listOrganizationWebhooks",
+      "listScopeTemplates",
+    ]) {
+      expect(clientImport, `${name} must be imported from idp-admin-client`).toContain(name);
+    }
+    const sectionsImport = PAGE_SRC.match(
+      /import\s*\{[\s\S]*?\}\s*from\s+["']\.\/settings-readonly-sections["']/
+    )?.[0];
+    expect(sectionsImport, "the sections import must exist").toBeTruthy();
+    for (const name of [
+      "IdentityProvidersReadOnlySection",
+      "OrgRolesReadOnlySection",
+      "ScopeTemplatesReadOnlySection",
+      "WebhooksReadOnlySection",
+    ]) {
+      expect(sectionsImport, `${name} must be imported from the sections module`).toContain(name);
+    }
   });
 
   it("fetches the resources in parallel via Promise.all (includes protocol settings)", () => {

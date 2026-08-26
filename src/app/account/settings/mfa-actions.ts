@@ -9,11 +9,11 @@
  * the client component can render them transiently.
  */
 
-import { disableOwnMfa, regenerateOwnMfaRecoveryCodes } from "@/lib/idp-account-client";
-import { getServerSession } from "@/lib/server-session";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { disableOwnMfa, regenerateOwnMfaRecoveryCodes } from "@/lib/idp-account-client";
+import { getServerSession } from "@/lib/server-session";
 
 const HUMAN_ROLES = new Set(["site_admin", "org_admin", "org_user"]);
 

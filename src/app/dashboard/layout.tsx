@@ -18,12 +18,12 @@
  *   - Authenticated org_user       → render shell + children
  */
 
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { AccountMenu } from "@/components/shared/account-menu";
 import { roleToPath } from "@/lib/role-routing";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
 import { getServerSession } from "@/lib/server-session";
-import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
 // force-dynamic propagates to every child route within this segment.
 // Session state must never be statically cached.

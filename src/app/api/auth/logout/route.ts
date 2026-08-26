@@ -25,8 +25,9 @@
  * Tokens remain cookie-only. This route forwards cookies server-side and
  * never exposes them to JavaScript.
  */
-import { idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
+
 import { type NextRequest, NextResponse } from "next/server";
+import { idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 

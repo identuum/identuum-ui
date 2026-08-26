@@ -1,8 +1,8 @@
 "use client";
 
+import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import type { OrgDetail } from "@/lib/types";
-import { useActionState } from "react";
 import { type UpdateOrgActionState, updateOrgAction } from "./actions";
 
 interface EditOrgFormProps {

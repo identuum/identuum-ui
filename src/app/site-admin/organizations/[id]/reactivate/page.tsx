@@ -3,8 +3,9 @@
  * Fetches org details server-side. Shows a simple confirm button.
  * Only inactive, non-deleted organizations can be reactivated here.
  */
-import { getOrganization } from "@/lib/idp-admin-client";
+
 import type { Metadata } from "next";
+import { getOrganization } from "@/lib/idp-admin-client";
 import { ReactivateOrgForm } from "./form-client";
 
 export const metadata: Metadata = { title: "Reactivate Organization — Identuum Admin" };

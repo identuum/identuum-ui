@@ -19,8 +19,8 @@
  *   - No localStorage/sessionStorage usage.
  */
 
-import { idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 import { z } from "zod";
+import { idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

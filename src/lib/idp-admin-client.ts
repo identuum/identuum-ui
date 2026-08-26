@@ -11,14 +11,21 @@ import "server-only";
 
 import { cookies } from "next/headers";
 import { classifyDomainVerifyErrorKind } from "./domain-verification-errors";
-import { type IDPStatusClassification, type IDPStatusKind, classifyIDPStatus } from "./idp-status";
+import { classifyIDPStatus, type IDPStatusClassification, type IDPStatusKind } from "./idp-status";
 import { idpBaseUrl, loadRuntimeConfig } from "./runtime-config";
 import type {
-  CreateOrgClientOptions,
   CreatedOrgClient,
+  CreateOrgClientOptions,
   GetOrgProtocolSettingsResult,
   OrgAPIResourceItem,
   OrgAPIResourceScope,
+  OrganizationDomainChallenge,
+  OrganizationDomainChallengeResponse,
+  OrganizationDomainDeleteResponse,
+  OrganizationDomainInfo,
+  OrganizationDomainListResponse,
+  OrganizationDomainResponse,
+  OrganizationDomainSetPrimaryResponse,
   OrgClientItem,
   OrgClientListResult,
   OrgDetail,
@@ -27,13 +34,6 @@ import type {
   OrgProtocolSettings,
   OrgServiceAccountItem,
   OrgUserItem,
-  OrganizationDomainChallenge,
-  OrganizationDomainChallengeResponse,
-  OrganizationDomainDeleteResponse,
-  OrganizationDomainInfo,
-  OrganizationDomainListResponse,
-  OrganizationDomainResponse,
-  OrganizationDomainSetPrimaryResponse,
   UpdateOrgClientOptions,
   UserProfile,
   UserRole,
@@ -872,9 +872,10 @@ export async function listOrgUsers(opts?: {
 /**
  * Clears a same-org org_user's TOTP/MFA enrollment and revokes all their sessions.
  *
- * Backend: POST /api/v1/users/:id/mfa/reset
- * Auth: org_admin session; M2M denied.
- * Policy: target must be org_user in same org; org_admin and site_admin targets blocked.
+ * Backend: POST /api/v1/users/:id/recovery/reset-mfa
+ * Auth: site_admin or org_admin session; M2M denied.
+ * Policy (per the mounted handler's docs): site_admin may reset any target;
+ * org_admin requires the users:mfa:revoke scope and same-org targets only.
  * Effect: MFA enrollment cleared, sessions revoked. No credential material in response.
  */
 export async function resetUserMFA(

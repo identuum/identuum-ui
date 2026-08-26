@@ -18,14 +18,14 @@
  * no-persist + no-direct-URL + no-eval-framing rules.
  */
 
+import { useCallback, useState } from "react";
 import {
   type AdminLicenseStatusResult,
   type AdminUploadLicenseResult,
-  type LicenseStatusBody,
   adminGetLicenseStatus,
   adminUploadLicense,
+  type LicenseStatusBody,
 } from "@/lib/idp-license-client";
-import { useCallback, useState } from "react";
 
 type AnyResult = AdminLicenseStatusResult | AdminUploadLicenseResult;
 

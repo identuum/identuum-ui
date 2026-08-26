@@ -26,8 +26,8 @@
  *     account-state hint.
  */
 
-import { idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 import { z } from "zod";
+import { idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 
 export interface ForgotPasswordState {
   /**

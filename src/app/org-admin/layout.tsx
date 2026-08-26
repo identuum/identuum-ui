@@ -16,14 +16,15 @@
  *   - Wrong role                   → redirect to roleToPath(role)
  *   - Authenticated org_admin      → render shell + children
  */
+
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { OrgAdminNav } from "@/components/org-admin/org-admin-nav";
 import { AccountMenu } from "@/components/shared/account-menu";
 import { roleToPath } from "@/lib/role-routing";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { getServerSession } from "@/lib/server-session";
-import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
 // force-dynamic propagates to every child route within this segment.
 // Session state must never be statically cached.

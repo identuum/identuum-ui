@@ -25,9 +25,9 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  defaultFixturePath,
   E2E_FIXTURE_MARKER,
   E2E_FIXTURE_SCHEMA_VERSION,
-  defaultFixturePath,
   fixtureDirectory,
   isDynamicFixtureModeRequested,
   loadOrgAdminFixture,

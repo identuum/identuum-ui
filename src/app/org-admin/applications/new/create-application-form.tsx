@@ -25,8 +25,8 @@
  *     warning so the operator knows the value is single-shot.
  */
 
-import { Button } from "@/components/ui/button";
 import { useActionState } from "react";
+import { Button } from "@/components/ui/button";
 import { type CreateApplicationState, createApplicationAction } from "../actions";
 
 const initialState: CreateApplicationState = { phase: "idle" };
@@ -202,7 +202,9 @@ function Form({
 
 function SuccessPanel({
   created,
-}: { created: NonNullable<Extract<CreateApplicationState, { phase: "success" }>>["created"] }) {
+}: {
+  created: NonNullable<Extract<CreateApplicationState, { phase: "success" }>>["created"];
+}) {
   const hasSecret = created.client_secret.length > 0;
   return (
     <div className="space-y-5">

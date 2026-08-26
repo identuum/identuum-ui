@@ -61,10 +61,9 @@ describe("organization lifecycle axis — client wire contract", () => {
 describe("organization lifecycle axis — the list page's state filter", () => {
   it("the four lifecycle states exist and DEACTIVATED maps to active=false&deleted=false", () => {
     const page = listPage();
-    expect(
-      page,
-      "the list page must map the deactivated state onto the two backend axes"
-    ).toMatch(/deactivated:\s*\{\s*active:\s*"false",\s*deleted:\s*"false"\s*\}/);
+    expect(page, "the list page must map the deactivated state onto the two backend axes").toMatch(
+      /deactivated:\s*\{\s*active:\s*"false",\s*deleted:\s*"false"\s*\}/
+    );
     expect(page).toMatch(/current:\s*\{\s*active:\s*"true",\s*deleted:\s*"false"\s*\}/);
     expect(page).toMatch(/all:\s*\{\s*active:\s*"all",\s*deleted:\s*"all"\s*\}/);
     // The control surfaces all four states to the operator.

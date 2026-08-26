@@ -27,9 +27,9 @@
  */
 import type { AuthorizationServerPageBoundary } from "@/lib/capability-affordances";
 import type {
-  ListOrgRolesResult,
   ListOrganizationIdentityProvidersResult,
   ListOrganizationWebhooksResult,
+  ListOrgRolesResult,
   ListScopeTemplatesResult,
 } from "@/lib/idp-admin-client";
 
@@ -100,11 +100,7 @@ export function IdentityProvidersReadOnlySection({
 
 // ── Webhooks section ───────────────────────────────────────────────────────
 
-export function WebhooksReadOnlySection({
-  result,
-}: {
-  result: ListOrganizationWebhooksResult;
-}) {
+export function WebhooksReadOnlySection({ result }: { result: ListOrganizationWebhooksResult }) {
   return (
     <Card
       headingId="webhooks-heading"

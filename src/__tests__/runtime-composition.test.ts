@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  EXPECTED_AG_COMPONENT,
-  EXPECTED_IDP_COMPONENT,
   computePlatformMode,
   discoverRuntime,
+  EXPECTED_AG_COMPONENT,
+  EXPECTED_IDP_COMPONENT,
   extractCapabilities,
   getCapabilityAvailability,
 } from "../lib/runtime-composition";

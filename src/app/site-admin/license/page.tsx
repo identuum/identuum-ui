@@ -32,8 +32,9 @@
  * Auth + role enforced by /site-admin/layout.tsx; this page does NOT
  * repeat the guard.
  */
-import { licenseBadge, loadLicenseStatus } from "@/lib/license-status";
+
 import type { Metadata } from "next";
+import { licenseBadge, loadLicenseStatus } from "@/lib/license-status";
 import { LicenseManager } from "./license-manager";
 
 export const metadata: Metadata = {

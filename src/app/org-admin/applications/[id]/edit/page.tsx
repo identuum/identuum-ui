@@ -31,13 +31,14 @@
  *     the top so the operator can navigate out without using the
  *     browser back button.
  */
+
+import type { Metadata } from "next";
 import {
   type AuthorizationServerPageBoundary,
   getAuthorizationServerPageBoundary,
 } from "@/lib/capability-affordances";
 import { getOrganizationClientById } from "@/lib/idp-admin-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
-import type { Metadata } from "next";
 import { EditApplicationForm } from "./edit-application-form";
 
 export const metadata: Metadata = {

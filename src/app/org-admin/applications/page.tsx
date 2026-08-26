@@ -28,6 +28,8 @@
  *     URIs, allowed audiences, scope, JWKS URI). No token, no
  *     credential.
  */
+
+import type { Metadata } from "next";
 import {
   type AuthorizationServerPageBoundary,
   getAuthorizationServerPageBoundary,
@@ -35,7 +37,6 @@ import {
 import { listOwnOrganizationClients } from "@/lib/idp-admin-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { OrgClientItem } from "@/lib/types";
-import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Applications — Identuum Org Admin",

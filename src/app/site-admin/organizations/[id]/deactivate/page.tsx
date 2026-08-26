@@ -4,8 +4,9 @@
  * Only active, non-deleted organizations can be deactivated.
  * Mutations are handled by the server action in actions.ts.
  */
-import { getOrganization } from "@/lib/idp-admin-client";
+
 import type { Metadata } from "next";
+import { getOrganization } from "@/lib/idp-admin-client";
 import { DeactivateOrgForm } from "./form-client";
 
 export const metadata: Metadata = { title: "Deactivate Organization — Identuum Admin" };

@@ -18,8 +18,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  type DomainVerifyFailureClassification,
   classifyDomainVerifyErrorKind,
+  type DomainVerifyFailureClassification,
 } from "../lib/domain-verification-errors";
 
 // ── Happy-path mapping ──────────────────────────────────────────────────────

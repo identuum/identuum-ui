@@ -13,6 +13,7 @@
  *   - Session validation is handled by ag-client.ts (ag_access_token cookie).
  */
 
+import { revalidatePath } from "next/cache";
 import { fetchAGOrgLinkPlan } from "@/lib/ag-org-client";
 import {
   importAGOrganization,
@@ -23,7 +24,6 @@ import {
 import { listOrganizations } from "@/lib/idp-admin-client";
 import type { ImportAllBatchResult, OrgLinkWriteResult } from "@/lib/org-link-types";
 import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
-import { revalidatePath } from "next/cache";
 
 export async function linkOrgAction(
   agOrgId: string,

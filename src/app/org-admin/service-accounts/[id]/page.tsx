@@ -22,16 +22,18 @@
  *     identuum-20260530-org-admin-service-account-recent-activity-ui).
  *   - DangerZone (two-step expand + type-to-confirm delete).
  */
+
+import type { Metadata } from "next";
 import {
   type AuthorizationServerPageBoundary,
   getAuthorizationServerPageBoundary,
 } from "@/lib/capability-affordances";
 import {
   type AuditEventItem,
+  getOwnOrganization,
   type LinkedOAuthClientForServiceAccount,
   type ListAuditEventsResult,
   type ListServiceAccountOAuthClientsResult,
-  getOwnOrganization,
   listAuditEvents,
   listOwnOrganizationClients,
   listServiceAccountOAuthClients,
@@ -39,15 +41,14 @@ import {
 } from "@/lib/idp-admin-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { OrgClientItem } from "@/lib/types";
-import type { Metadata } from "next";
 import { DangerZone } from "./danger-zone";
 import { EditDetailsCard } from "./edit-details-card";
 import { LifecycleCard } from "./lifecycle-card";
 import { LinkToOAuthClientCard } from "./link-to-oauth-client-card";
 import {
-  SERVICE_ACCOUNT_RECENT_ACTIVITY_COPY,
   buildOrgAdminServiceAccountAuditHref,
   getServiceAccountAuditEventLabel,
+  SERVICE_ACCOUNT_RECENT_ACTIVITY_COPY,
 } from "./service-account-detail-audit";
 
 export const metadata: Metadata = {
@@ -267,13 +268,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function DetailRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="px-6 py-3 flex items-start justify-between gap-4">
       <dt className="text-xs font-medium text-stone-500 shrink-0 w-32">{label}</dt>

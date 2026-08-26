@@ -13,13 +13,14 @@
  *
  * Security: no internal backend URLs, no tokens, no credentials are rendered.
  */
+
+import type { Metadata } from "next";
 import { BackendNotConfiguredNotice } from "@/components/shared/backend-not-configured-notice";
 import { hasAgSession } from "@/lib/ag-client";
 import { fetchAGOrgLinkPlan } from "@/lib/ag-org-client";
 import { listOrganizations } from "@/lib/idp-admin-client";
 import type { IDPOrgSummaryForLink } from "@/lib/org-link-types";
 import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
-import type { Metadata } from "next";
 import { IDPImportSection, OrgLinkActions } from "./org-link-actions";
 
 export const dynamic = "force-dynamic";

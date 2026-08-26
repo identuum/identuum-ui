@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
+import type { OrgAdminRecoveryCandidate } from "@/lib/idp-admin-client";
 /**
  * Organization detail page — site_admin only, read-only.
  *
@@ -9,24 +11,22 @@ import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
  * Sanitized to OrgDetail — no secrets, internal URLs, or credential material.
  */
 import {
-  getOrgProtocolSettings,
   getOrganization,
+  getOrgProtocolSettings,
   listAuditEvents,
   listOrgAdminsForRecovery,
 } from "@/lib/idp-admin-client";
-import type { OrgAdminRecoveryCandidate } from "@/lib/idp-admin-client";
 import type { OrgDetail } from "@/lib/types";
-import type { Metadata } from "next";
 import {
   ADMIN_STATE_COPY,
   type AdminState,
   BOUNDARY_COPY,
-  LIFECYCLE_COPY,
-  type LifecycleState,
   deriveOperationalStatus,
   deriveOrganizationActions,
   getOrganizationActionHref,
   getOrganizationActionLabel,
+  LIFECYCLE_COPY,
+  type LifecycleState,
 } from "./operational-status";
 import { ProtocolSettingsPanel } from "./protocol-settings-panel";
 import { ResetAdminMFAButton } from "./reset-admin-mfa-button";
@@ -35,11 +35,7 @@ export const metadata: Metadata = { title: "Organization — Identuum Admin" };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export default async function OrgDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function OrgDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   if (!UUID_RE.test(id)) {

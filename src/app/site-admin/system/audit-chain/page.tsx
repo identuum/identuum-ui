@@ -22,10 +22,11 @@
  *     operator scanning the page. The UI surfaces only the summary
  *     counts + per-shard pass/fail status.
  */
+
+import type { Metadata } from "next";
 import { FeatureBoundaryPanel } from "@/components/shared/feature-boundary-panel";
 import { verifyAuditChain } from "@/lib/idp-admin-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
-import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Audit chain verify — Identuum Site Admin",

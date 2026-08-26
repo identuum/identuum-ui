@@ -14,7 +14,9 @@
  *   - No passwords, tokens, MFA secrets, session IDs, or WebAuthn data are shown.
  */
 
+import type { Metadata } from "next";
 import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
+import type { OrgRoleItem } from "@/lib/idp-admin-client";
 import {
   getOrgUserById,
   getOwnOrganization,
@@ -23,18 +25,16 @@ import {
   listOrgUsers,
   listUserRoles,
 } from "@/lib/idp-admin-client";
-import type { OrgRoleItem } from "@/lib/idp-admin-client";
-import type { Metadata } from "next";
 import { RegenerateInviteLink, ResetMFAButton, UserRowActions } from "../user-row-actions";
 import { ApproveButton } from "./approve-button";
 import {
   APPROVE_REGISTRATION_COPY,
-  RECENT_ACTIVITY_COPY,
-  SOLE_ACTIVE_ADMIN_COPY,
   buildOrgAdminUserAuditHref,
   computeOrgUserStatus,
   deriveOrgAdminUserActions,
   isNoEmailSentinel,
+  RECENT_ACTIVITY_COPY,
+  SOLE_ACTIVE_ADMIN_COPY,
 } from "./user-detail-actions";
 import { UserRolesCard } from "./user-roles-card";
 
@@ -422,13 +422,7 @@ export default async function OrgAdminUserDetailPage({
   );
 }
 
-function DetailRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="px-6 py-3 flex items-start justify-between gap-4">
       <dt className="text-xs font-medium text-stone-500 shrink-0 w-32">{label}</dt>

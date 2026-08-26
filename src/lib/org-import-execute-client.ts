@@ -32,7 +32,7 @@ import { agRequest, getAgOperatorToken } from "./ag-client";
 import { parseOrgImportExecuteResponse } from "./org-import-execute";
 import { loadRuntimeConfig } from "./runtime-config";
 import { getServerRuntimeState } from "./server-runtime-state";
-import type { OrgImportExecuteResult, OrganizationExportCandidate } from "./types";
+import type { OrganizationExportCandidate, OrgImportExecuteResult } from "./types";
 
 const AG_TIMEOUT_MS = 10_000;
 

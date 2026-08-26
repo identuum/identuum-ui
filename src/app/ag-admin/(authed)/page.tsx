@@ -11,10 +11,11 @@
  * browser. Individual panel failures degrade gracefully without breaking the
  * rest of the page.
  */
-import { agRequest } from "@/lib/ag-client";
-import { agBaseUrl, loadRuntimeConfig, runtimeMode } from "@/lib/runtime-config";
+
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { agRequest } from "@/lib/ag-client";
+import { agBaseUrl, loadRuntimeConfig, runtimeMode } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "AG Dashboard — Identuum" };
@@ -473,7 +474,11 @@ function GovernanceCard({
   title,
   description,
   href,
-}: { title: string; description: string; href: string }) {
+}: {
+  title: string;
+  description: string;
+  href: string;
+}) {
   return (
     <a
       href={href}

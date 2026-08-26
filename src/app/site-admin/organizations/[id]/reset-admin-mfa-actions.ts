@@ -1,11 +1,11 @@
 "use server";
 
-import { resetOrgAdminMFA } from "@/lib/idp-admin-client";
-import { roleToPath } from "@/lib/role-routing";
-import { getServerSession } from "@/lib/server-session";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { resetOrgAdminMFA } from "@/lib/idp-admin-client";
+import { roleToPath } from "@/lib/role-routing";
+import { getServerSession } from "@/lib/server-session";
 
 /**
  * Server action that wraps the site_admin → org_admin MFA-reset

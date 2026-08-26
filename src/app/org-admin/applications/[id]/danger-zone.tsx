@@ -38,8 +38,8 @@
  *     it back to the page.
  */
 
-import { Button } from "@/components/ui/button";
 import { useActionState, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { type DeleteApplicationState, deleteApplicationAction } from "../actions";
 
 const initialState: DeleteApplicationState = { phase: "idle" };

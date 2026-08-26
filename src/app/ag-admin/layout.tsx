@@ -9,8 +9,9 @@
  * Security: no tokens, credentials, or internal URLs are passed to client
  * components.
  */
-import { loadRuntimeConfig } from "@/lib/runtime-config";
+
 import type { Metadata } from "next";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 

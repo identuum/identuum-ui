@@ -18,9 +18,10 @@
  *   - Internal AG URLs never surfaced.
  *   - On 401/403 redirects to /ag-admin/login.
  */
-import { agRequest } from "@/lib/ag-client";
+
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { agRequest } from "@/lib/ag-client";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Session Detail — Identuum AG" };

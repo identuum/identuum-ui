@@ -15,11 +15,12 @@
  *     is public and returns only non-sensitive org metadata).
  *   - Raw backend errors are never forwarded; safe error codes only.
  */
+
+import { NextResponse } from "next/server";
 import { fetchAGOrgLinkPlan } from "@/lib/ag-org-client";
 import { listOrganizations } from "@/lib/idp-admin-client";
 import type { IDPOrgSummaryForLink, OrgLinkPlanState } from "@/lib/org-link-types";
 import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
-import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 

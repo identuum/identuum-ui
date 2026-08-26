@@ -620,10 +620,10 @@ describe("detail page — LinkToOAuthClientCard mounted between Configuration an
 // ── Recent activity card pins (slice identuum-20260530-org-admin-service-account-recent-activity-ui) ──
 
 import {
-  SERVICE_ACCOUNT_AUDIT_EVENT_LABELS,
-  SERVICE_ACCOUNT_RECENT_ACTIVITY_COPY,
   buildOrgAdminServiceAccountAuditHref,
   getServiceAccountAuditEventLabel,
+  SERVICE_ACCOUNT_AUDIT_EVENT_LABELS,
+  SERVICE_ACCOUNT_RECENT_ACTIVITY_COPY,
 } from "@/app/org-admin/service-accounts/[id]/service-account-detail-audit";
 
 describe("service-account-detail-audit.ts — label map + helpers", () => {

@@ -53,7 +53,7 @@
 
 import type { BrowserContext } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { SKIP_AUTH_MSG, loginAsSiteAdmin, skipAuthTests } from "./helpers/login";
+import { loginAsSiteAdmin, SKIP_AUTH_MSG, skipAuthTests } from "./helpers/login";
 
 const CRUD_ENABLED = process.env.IDENTUUM_E2E_ORGS_CRUD === "1";
 

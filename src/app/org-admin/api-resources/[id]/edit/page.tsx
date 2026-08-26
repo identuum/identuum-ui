@@ -21,13 +21,14 @@
  *     server-side). The form does not POST audience.
  *   - No secret/hash/JWKS/private-key field is rendered or accepted.
  */
+
+import type { Metadata } from "next";
 import {
   type AuthorizationServerPageBoundary,
   getAuthorizationServerPageBoundary,
 } from "@/lib/capability-affordances";
 import { getApiResource } from "@/lib/idp-admin-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
-import type { Metadata } from "next";
 import { EditApiResourceForm } from "./edit-api-resource-form";
 
 export const metadata: Metadata = {

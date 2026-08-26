@@ -1,8 +1,8 @@
+import type { Metadata } from "next";
 import { PasskeySection } from "@/components/ui/passkey-section";
 import { getOwnMfaStatus, listOwnSessions } from "@/lib/idp-account-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { getServerSession } from "@/lib/server-session";
-import type { Metadata } from "next";
 import { ChangePasswordForm } from "./change-password-form";
 import { MfaSection } from "./mfa-section";
 import { SessionsSection } from "./sessions-section";

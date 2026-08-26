@@ -95,7 +95,7 @@
  */
 
 import { expect, test } from "@playwright/test";
-import { SKIP_AUTH_MSG, loginAsSiteAdminMFAOptional, skipAuthTests } from "./helpers/login";
+import { loginAsSiteAdminMFAOptional, SKIP_AUTH_MSG, skipAuthTests } from "./helpers/login";
 
 const IDP_BASE_URL = process.env.IDP_BASE_URL ?? "http://127.0.0.1:7123";
 const CE_LICENSE_GATE_PREPARED = process.env.IDENTUUM_E2E_CE_LICENSE_GATE_PREPARED ?? "";

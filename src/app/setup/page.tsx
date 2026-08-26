@@ -1,9 +1,9 @@
-import { type LicenseStatusBody, getLicenseStatus } from "@/lib/idp-license-client";
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { getLicenseStatus, type LicenseStatusBody } from "@/lib/idp-license-client";
 import { getSetupStatus } from "@/lib/idp-setup-client";
 import { idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
-import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { SetupWizard } from "./setup-wizard";
 
 /**

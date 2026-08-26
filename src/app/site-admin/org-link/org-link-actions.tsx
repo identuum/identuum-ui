@@ -8,13 +8,13 @@
  * Organization-only: renders org names only, no user/admin/credential data.
  */
 
+import { useActionState } from "react";
 import type {
   AGOrgSummaryWithLink,
   IDPOrgSummaryForLink,
   ImportAllBatchResult,
   OrgLinkWriteResult,
 } from "@/lib/org-link-types";
-import { useActionState } from "react";
 import { importAllOrgsAction, importOrgAction, linkOrgAction, unlinkOrgAction } from "./actions";
 
 interface OrgLinkActionsProps {
@@ -189,13 +189,7 @@ export function OrgLinkActions({ agOrgs, idpOrgs, canAct }: OrgLinkActionsProps)
   );
 }
 
-function ImportForm({
-  idpOrg,
-  disabled,
-}: {
-  idpOrg: IDPOrgSummaryForLink;
-  disabled: boolean;
-}) {
+function ImportForm({ idpOrg, disabled }: { idpOrg: IDPOrgSummaryForLink; disabled: boolean }) {
   const [state, action, pending] = useActionState(
     async (_prev: OrgLinkWriteResult, formData: FormData) => {
       const name = (formData.get("ag_name") as string) || idpOrg.name;

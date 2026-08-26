@@ -25,10 +25,11 @@
  *     surface and never sees the AG access_token (HttpOnly cookie only).
  *   - No sidebar shown; unauthenticated layout.
  */
+
+import type { Metadata } from "next";
 import { fetchAgAuthProviders } from "@/lib/ag-auth-providers";
 import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 import type { AgAuthProvider, AgAuthProviderDiscoveryState } from "@/lib/types";
-import type { Metadata } from "next";
 import { AgAdminLoginForm } from "./form-client";
 
 export const dynamic = "force-dynamic";

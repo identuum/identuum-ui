@@ -21,7 +21,7 @@
  */
 
 import { expect, test } from "@playwright/test";
-import { SKIP_AUTH_MSG, loginAsSiteAdmin, skipAuthTests } from "./helpers/login";
+import { loginAsSiteAdmin, SKIP_AUTH_MSG, skipAuthTests } from "./helpers/login";
 
 const BODY_BANNED_PATTERNS: RegExp[] = [
   /\bclient_secret\b/i,

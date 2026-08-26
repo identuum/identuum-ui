@@ -20,17 +20,17 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  ORG_ADMIN_INVITE_POLICY_CARD_COPY,
-  ORG_ADMIN_INVITE_POLICY_FORM_COPY,
-  ORG_ADMIN_INVITE_POLICY_MODE_COPY,
-  type OrgAdminInvitePolicyInput,
-  type OrgAdminInvitePolicyMode,
   deriveOrgAdminInvitePolicyMode,
   getOrgAdminInvitePolicyModeCopy,
   invitePolicyFlagsFromMode,
   invitePolicyModeFromFlags,
   invitePolicyModeLabel,
   isValidInvitePolicyFlags,
+  ORG_ADMIN_INVITE_POLICY_CARD_COPY,
+  ORG_ADMIN_INVITE_POLICY_FORM_COPY,
+  ORG_ADMIN_INVITE_POLICY_MODE_COPY,
+  type OrgAdminInvitePolicyInput,
+  type OrgAdminInvitePolicyMode,
 } from "../app/org-admin/settings/settings-helpers";
 
 // ── Mode derivation ──────────────────────────────────────────────────────────

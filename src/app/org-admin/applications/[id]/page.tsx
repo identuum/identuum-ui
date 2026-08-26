@@ -26,19 +26,20 @@
  *     operator can navigate out without using the browser back
  *     button.
  */
+
+import type { Metadata } from "next";
 import {
   type AuthorizationServerPageBoundary,
   getAuthorizationServerPageBoundary,
 } from "@/lib/capability-affordances";
 import {
   type AuditEventItem,
-  type ListAuditEventsResult,
   getOrganizationClientById,
+  type ListAuditEventsResult,
   listAuditEvents,
 } from "@/lib/idp-admin-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { OrgClientItem } from "@/lib/types";
-import type { Metadata } from "next";
 import {
   APPLICATION_RECENT_ACTIVITY_COPY,
   buildOrgAdminApplicationAuditHref,

@@ -9,9 +9,9 @@
  * the profile call is unavailable. No client-side session validation needed.
  */
 
+import type { Metadata } from "next";
 import { getOwnProfile } from "@/lib/idp-admin-client";
 import { getServerSession } from "@/lib/server-session";
-import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Dashboard — Identuum" };
 
@@ -110,13 +110,7 @@ export default async function DashboardPage() {
   );
 }
 
-function InfoRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3">
       <span className="w-32 shrink-0 text-xs text-stone-400">{label}</span>

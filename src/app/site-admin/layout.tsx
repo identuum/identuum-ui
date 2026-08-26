@@ -16,6 +16,9 @@
  *   - Wrong role                   → redirect to roleToPath(role)
  *   - Authenticated site_admin     → render shell + children
  */
+
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { AccountMenu } from "@/components/shared/account-menu";
 import { PlatformLicenseWarnings } from "@/components/shared/platform-license-warnings";
 import { SiteAdminNav } from "@/components/site-admin/site-admin-nav";
@@ -23,8 +26,6 @@ import { roleToPath } from "@/lib/role-routing";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { getServerSession } from "@/lib/server-session";
-import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
 // force-dynamic propagates to every child route within this segment.
 // Session state must never be statically cached.

@@ -1,5 +1,10 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
+import { QRCodeSVG } from "qrcode.react";
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -8,11 +13,6 @@ import {
   accountMfaSetupInitiate,
 } from "@/lib/idp-client";
 import { ApiError } from "@/lib/ui-api";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
 
 /**
  * AccountMFAEnrollForm — authenticated, in-place TOTP enrollment surface

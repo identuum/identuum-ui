@@ -22,11 +22,11 @@
  *   - Token is shown once in the success panel; navigating away discards it.
  */
 
+import { redirect } from "next/navigation";
+import { z } from "zod";
 import { createOrganization } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
-import { redirect } from "next/navigation";
-import { z } from "zod";
 
 const schema = z.object({
   name: z.string().min(1, "Name is required").max(255, "Name must be 255 characters or fewer"),

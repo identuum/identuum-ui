@@ -14,8 +14,9 @@
  * `qi`, `k`) are NEVER read from the wire response and NEVER reach
  * this page.
  */
-import { listSigningKeys } from "@/lib/idp-admin-client";
+
 import type { Metadata } from "next";
+import { listSigningKeys } from "@/lib/idp-admin-client";
 
 export const metadata: Metadata = {
   title: "Signing keys — Identuum Site Admin",

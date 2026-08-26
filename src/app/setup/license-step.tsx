@@ -26,9 +26,9 @@
  *     not generate or mutate it.
  */
 
-import { type LicenseStatusBody, uploadLicense } from "@/lib/idp-license-client";
 import { AlertCircle, CheckCircle2, FileUp, Loader2, ShieldCheck } from "lucide-react";
 import { type ChangeEvent, type FormEvent, useState } from "react";
+import { type LicenseStatusBody, uploadLicense } from "@/lib/idp-license-client";
 
 interface Props {
   /**

@@ -14,9 +14,10 @@
  *   - Raw backend errors are not forwarded to the browser.
  *   - No write/undo/delete actions on this page.
  */
-import { agRequest } from "@/lib/ag-client";
+
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { agRequest } from "@/lib/ag-client";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Audit / Activity — Identuum AG" };

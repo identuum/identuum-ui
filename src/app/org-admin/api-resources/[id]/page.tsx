@@ -11,18 +11,19 @@
  *     today; a backend resource-subject migration would be required to
  *     mirror the OAuth client recent-activity pattern).
  */
+
+import type { Metadata } from "next";
 import {
   type AuthorizationServerPageBoundary,
   getAuthorizationServerPageBoundary,
 } from "@/lib/capability-affordances";
 import {
   type AuditEventItem,
-  type ListAuditEventsResult,
   getApiResource,
+  type ListAuditEventsResult,
   listAuditEvents,
 } from "@/lib/idp-admin-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
-import type { Metadata } from "next";
 import {
   API_RESOURCE_RECENT_ACTIVITY_COPY,
   buildOrgAdminApiResourceAuditHref,
@@ -244,13 +245,7 @@ function Shell({ id, children }: { id: string; children: React.ReactNode }) {
   );
 }
 
-function DetailRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="px-6 py-3 flex items-start justify-between gap-4">
       <dt className="text-xs font-medium text-stone-500 shrink-0 w-32">{label}</dt>

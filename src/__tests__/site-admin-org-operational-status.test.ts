@@ -20,9 +20,9 @@
 import { describe, expect, it } from "vitest";
 import {
   ADMIN_STATE_COPY,
+  deriveOperationalStatus,
   LIFECYCLE_COPY,
   type OperationalStatusInput,
-  deriveOperationalStatus,
 } from "../app/site-admin/organizations/[id]/operational-status";
 
 // Helper: cheap fixture builder. Defaults to "happy path" (active org

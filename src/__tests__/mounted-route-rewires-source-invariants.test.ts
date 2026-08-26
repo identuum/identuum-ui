@@ -36,15 +36,24 @@ const fnChunk = (src: string, name: string): string => {
 describe("clicked admin surfaces call only mounted OSS routes", () => {
   it("assignOrgAdmin re-issues activation via the mounted route, bodiless [MOUNTED-ROUTE-1]", () => {
     const fn = fnChunk(client(), "assignOrgAdmin");
-    expect(fn, "the mounted OSS route").toMatch(/\/api\/v1\/organizations\/\$\{encodeURIComponent\(opts\.orgId\)\}\/resend-activation/);
+    expect(fn, "the mounted OSS route").toMatch(
+      /\/api\/v1\/organizations\/\$\{encodeURIComponent\(opts\.orgId\)\}\/resend-activation/
+    );
     expect(fn, "the unmounted pre-split route must not return").not.toMatch(/\/invitations/);
-    expect(fn, "the OSS endpoint takes NO body — recipient_email was silently unacceptable").not.toMatch(/body:/);
-    expect(fn, "the response's admin email is surfaced, not requested").toMatch(/adminEmail:\s*String\(data\.admin_email/);
+    expect(
+      fn,
+      "the OSS endpoint takes NO body — recipient_email was silently unacceptable"
+    ).not.toMatch(/body:/);
+    expect(fn, "the response's admin email is surfaced, not requested").toMatch(
+      /adminEmail:\s*String\(data\.admin_email/
+    );
   });
 
   it("resetUserMFA calls the mounted recovery route", () => {
     const fn = fnChunk(client(), "resetUserMFA");
-    expect(fn, "the mounted OSS route").toMatch(/\/api\/v1\/users\/\$\{encodeURIComponent\(userId\)\}\/recovery\/reset-mfa/);
+    expect(fn, "the mounted OSS route").toMatch(
+      /\/api\/v1\/users\/\$\{encodeURIComponent\(userId\)\}\/recovery\/reset-mfa/
+    );
     expect(fn, "the unmounted path must not return").not.toMatch(/\/mfa\/reset`/);
   });
 });

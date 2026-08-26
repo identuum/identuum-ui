@@ -33,7 +33,7 @@ import type { BrowserContext } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { E2E_FIXTURE_MARKER, resolveFixturePath } from "./helpers/fixture";
 import { ensureExpiredPendingOrgFixture } from "./helpers/fixture-expired-org";
-import { SKIP_AUTH_MSG, loginAsSiteAdmin, skipAuthTests } from "./helpers/login";
+import { loginAsSiteAdmin, SKIP_AUTH_MSG, skipAuthTests } from "./helpers/login";
 
 /**
  * Reads ONLY the organization block from the dynamic-fixture envelope —

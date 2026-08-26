@@ -26,7 +26,7 @@
 
 import type { BrowserContext } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { SKIP_AUTH_MSG, loginAsSiteAdmin, skipAuthTests } from "./helpers/login";
+import { loginAsSiteAdmin, SKIP_AUTH_MSG, skipAuthTests } from "./helpers/login";
 
 test.describe("/account/settings route guard", () => {
   test("unauthenticated request redirects to /login?reason=session_expired", async ({ page }) => {

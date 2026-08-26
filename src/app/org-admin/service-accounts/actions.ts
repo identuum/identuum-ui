@@ -25,6 +25,8 @@
  *     403 on this surface). Defence-in-depth UI gate matches.
  */
 
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import {
   createServiceAccount,
   deleteServiceAccount,
@@ -37,8 +39,6 @@ import {
 } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 const NAME_MAX = 255;
 const DESCRIPTION_MAX = 1024;

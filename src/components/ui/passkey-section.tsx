@@ -18,8 +18,8 @@
  *   - Nickname is a display-only label; the server sanitizes it before storage.
  */
 
-import { IDP_PATHS } from "@/lib/idp-paths";
 import { useEffect, useRef, useState } from "react";
+import { IDP_PATHS } from "@/lib/idp-paths";
 import { Button } from "./button";
 import { arrayBufferToBase64url, base64urlToArrayBuffer } from "./passkey-base64url";
 import { classifyPasskeyEnrollmentError } from "./passkey-enrollment-errors";

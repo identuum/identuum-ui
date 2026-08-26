@@ -12,11 +12,11 @@
  *   - mfa_policy validated server-side; values outside the allowed enum fail closed.
  */
 
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { getOwnOrganization, updateOrganization } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 const VALID_MFA_POLICIES = ["optional", "required"] as const;
 export type MFAPolicy = (typeof VALID_MFA_POLICIES)[number];

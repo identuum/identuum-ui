@@ -1,16 +1,16 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { mfaEnrollComplete, mfaEnrollInitiate } from "@/lib/idp-client";
-import type { UserRole } from "@/lib/types";
-import { ApiError } from "@/lib/ui-api";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { mfaEnrollComplete, mfaEnrollInitiate } from "@/lib/idp-client";
+import type { UserRole } from "@/lib/types";
+import { ApiError } from "@/lib/ui-api";
 
 const schema = z.object({
   code: z

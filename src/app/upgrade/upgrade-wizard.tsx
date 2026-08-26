@@ -26,22 +26,6 @@
  */
 
 import {
-  type BackupAvailabilityBody,
-  type BackupCreateBody,
-  type BackupMetadataBody,
-  type CreateBackupFailure,
-  type PruneBackupFailure,
-  type UpgradeApplyBody,
-  type UpgradePreflightBody,
-  type UpgradeState,
-  applyUpgrade,
-  createBackup,
-  getBackupStatus,
-  getUpgradePreflight,
-  getUpgradeStatus,
-  pruneBackup,
-} from "@/lib/idp-upgrade-client";
-import {
   AlertCircle,
   Archive,
   CheckCircle2,
@@ -55,6 +39,22 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import {
+  applyUpgrade,
+  type BackupAvailabilityBody,
+  type BackupCreateBody,
+  type BackupMetadataBody,
+  type CreateBackupFailure,
+  createBackup,
+  getBackupStatus,
+  getUpgradePreflight,
+  getUpgradeStatus,
+  type PruneBackupFailure,
+  pruneBackup,
+  type UpgradeApplyBody,
+  type UpgradePreflightBody,
+  type UpgradeState,
+} from "@/lib/idp-upgrade-client";
 
 interface InitialStatus {
   state: UpgradeState;

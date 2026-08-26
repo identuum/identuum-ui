@@ -14,14 +14,15 @@
  *   - Health checks AND the license-status probe are performed server-side; no
  *     internal URLs reach the browser.
  */
+
+import type { Metadata } from "next";
 import {
   type LicenseProbeOutcome,
-  type SafeLicenseStatus,
   licenseBadge,
   loadLicenseStatus,
+  type SafeLicenseStatus,
 } from "@/lib/license-status";
 import { agBaseUrl, idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
-import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Settings — Identuum Admin" };
 

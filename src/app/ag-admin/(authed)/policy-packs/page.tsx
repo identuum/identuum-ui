@@ -12,9 +12,10 @@
  *     panel degrades gracefully without crashing.
  *   - No credential material is passed to client components.
  */
-import { getAgPolicyPackSettings } from "@/lib/ag-policy-pack-client";
+
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { getAgPolicyPackSettings } from "@/lib/ag-policy-pack-client";
 import { PolicyPackSettingsPanel } from "./policy-pack-settings-panel";
 
 export const dynamic = "force-dynamic";

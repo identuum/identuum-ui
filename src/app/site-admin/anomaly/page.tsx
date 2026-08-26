@@ -12,9 +12,10 @@
  * UI does not need and could be confused for credentials by an
  * operator scanning the page. No mutation control is rendered.
  */
+
+import type { Metadata } from "next";
 import { FeatureBoundaryPanel } from "@/components/shared/feature-boundary-panel";
 import { getAnomalyStats, listAnomalyEvents } from "@/lib/idp-admin-client";
-import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Anomaly — Identuum Site Admin",
@@ -53,11 +54,7 @@ export default async function SiteAdminAnomalyPage() {
   );
 }
 
-function StatsCard({
-  result,
-}: {
-  result: Awaited<ReturnType<typeof getAnomalyStats>>;
-}) {
+function StatsCard({ result }: { result: Awaited<ReturnType<typeof getAnomalyStats>> }) {
   if (!result.ok && result.forbidden) {
     return (
       <ForbiddenPanel

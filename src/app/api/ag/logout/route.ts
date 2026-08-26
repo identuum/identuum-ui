@@ -5,9 +5,10 @@
  * No AG backend call is made — the cookie deletion is sufficient for
  * the UI session; the AG token will expire naturally.
  */
-import { AG_COOKIE_NAME } from "@/lib/ag-client";
+
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { AG_COOKIE_NAME } from "@/lib/ag-client";
 
 export const dynamic = "force-dynamic";
 

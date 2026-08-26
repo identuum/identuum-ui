@@ -20,12 +20,13 @@
  *     A future "back to list" affordance lives inside the form's
  *     success panel.
  */
+
+import type { Metadata } from "next";
 import {
   type AuthorizationServerPageBoundary,
   getAuthorizationServerPageBoundary,
 } from "@/lib/capability-affordances";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
-import type { Metadata } from "next";
 import { CreateApplicationForm } from "./create-application-form";
 
 export const metadata: Metadata = {

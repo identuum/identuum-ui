@@ -7,9 +7,10 @@
  * selector value is read or surfaced. The wire helper's projection
  * drops the IDP's masked-token field for defence-in-depth.
  */
+
+import type { Metadata } from "next";
 import { FeatureBoundaryPanel } from "@/components/shared/feature-boundary-panel";
 import { listAdminSessions } from "@/lib/idp-admin-client";
-import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Admin sessions — Identuum Site Admin",

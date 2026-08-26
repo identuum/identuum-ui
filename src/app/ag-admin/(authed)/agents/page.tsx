@@ -19,9 +19,10 @@
  *   - Internal AG URLs are never surfaced to the browser.
  *   - No write operations on this page.
  */
-import { agRequest } from "@/lib/ag-client";
+
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { agRequest } from "@/lib/ag-client";
 
 export const metadata: Metadata = { title: "Agent Registry — Identuum AG" };
 export const dynamic = "force-dynamic";
@@ -306,7 +307,11 @@ function PageHeader({
   total,
   query,
   rawArray,
-}: { total?: number; query?: string; rawArray?: boolean }) {
+}: {
+  total?: number;
+  query?: string;
+  rawArray?: boolean;
+}) {
   return (
     <div className="flex items-center justify-between">
       <div>

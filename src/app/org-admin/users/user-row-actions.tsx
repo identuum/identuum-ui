@@ -18,9 +18,9 @@ import { SetupLinkPanel } from "@/components/shared/setup-link-panel";
 import {
   type RegenerateInviteState,
   type ResetMFAState,
-  type SetUserActiveState,
   regenerateInviteAction,
   resetMFAAction,
+  type SetUserActiveState,
   setUserActiveAction,
 } from "./actions";
 

@@ -1,13 +1,13 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import {
   type CapabilityAffordance,
-  type PrimaryNavUnavailableBehavior,
   getCapabilityAffordance,
   getPrimaryNavCapabilityDecision,
+  type PrimaryNavUnavailableBehavior,
 } from "@/lib/capability-affordances";
 import type { ComponentCapabilities } from "@/lib/types";
-import { usePathname } from "next/navigation";
 
 interface NavLink {
   label: string;

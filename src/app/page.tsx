@@ -1,6 +1,6 @@
+import { redirect } from "next/navigation";
 import { upgradeStateNeedsWizard } from "@/lib/runtime-composition";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
-import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 

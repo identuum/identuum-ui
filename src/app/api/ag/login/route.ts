@@ -13,10 +13,11 @@
  *   - Credentials are proxied server-to-server; the browser never calls AG.
  *   - The token value is not logged.
  */
-import { AG_COOKIE_NAME } from "@/lib/ag-client";
-import { agIdentityBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
+
 import { cookies } from "next/headers";
 import { type NextRequest, NextResponse } from "next/server";
+import { AG_COOKIE_NAME } from "@/lib/ag-client";
+import { agIdentityBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 

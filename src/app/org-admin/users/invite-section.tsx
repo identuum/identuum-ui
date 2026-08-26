@@ -1,7 +1,7 @@
 "use client";
 
-import { SetupLinkPanel } from "@/components/shared/setup-link-panel";
 import { useActionState, useState } from "react";
+import { SetupLinkPanel } from "@/components/shared/setup-link-panel";
 import { type InviteUserState, inviteOrgUserAction } from "./actions";
 
 const initialState: InviteUserState = { phase: "form" };

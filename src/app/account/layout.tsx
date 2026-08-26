@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { OrgAdminNav } from "@/components/org-admin/org-admin-nav";
 /**
  * Account route segment guard.
@@ -37,8 +39,6 @@ import { SiteAdminNav } from "@/components/site-admin/site-admin-nav";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { getServerSession } from "@/lib/server-session";
-import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 

@@ -20,12 +20,12 @@
  * copy button to copy each link.
  */
 
-import { SetupLinkPanel } from "@/components/shared/setup-link-panel";
 import { useActionState, useState } from "react";
+import { SetupLinkPanel } from "@/components/shared/setup-link-panel";
 import {
   type BulkInviteState,
-  type RefreshBulkJobState,
   bulkInviteUsersAction,
+  type RefreshBulkJobState,
   refreshBulkJobAction,
 } from "./actions";
 

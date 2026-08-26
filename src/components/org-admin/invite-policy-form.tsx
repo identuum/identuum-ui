@@ -14,22 +14,22 @@
  * banner explaining that choosing any mode below will repair the row.
  */
 
+import Link from "next/link";
+import { useActionState, useEffect, useState } from "react";
 import {
   type UpdateInvitePolicyState,
   updateInvitePolicyAction,
 } from "@/app/org-admin/settings/actions";
 import {
+  deriveOrgAdminInvitePolicyMode,
+  isValidInvitePolicyFlags,
   ORG_ADMIN_INVITE_POLICY_CARD_COPY,
   ORG_ADMIN_INVITE_POLICY_FORM_COPY,
   ORG_ADMIN_INVITE_POLICY_MODE_COPY,
   type OrgAdminInvitePolicyInput,
   type OrgAdminInvitePolicyMode,
-  deriveOrgAdminInvitePolicyMode,
-  isValidInvitePolicyFlags,
 } from "@/app/org-admin/settings/settings-helpers";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
-import { useActionState, useEffect, useState } from "react";
 
 interface InvitePolicyFormProps {
   policy: OrgAdminInvitePolicyInput;

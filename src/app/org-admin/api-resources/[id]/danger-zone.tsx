@@ -26,8 +26,8 @@
  *     React state for the lifetime of the page.
  */
 
-import { Button } from "@/components/ui/button";
 import { useActionState, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { type DeleteAPIResourceState, deleteApiResourceAction } from "../actions";
 
 const initialState: DeleteAPIResourceState = { phase: "idle" };

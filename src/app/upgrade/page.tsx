@@ -1,7 +1,7 @@
-import { getUpgradeStatus } from "@/lib/idp-upgrade-client";
-import { loadRuntimeConfig } from "@/lib/runtime-config";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { getUpgradeStatus } from "@/lib/idp-upgrade-client";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 import { UpgradeWizard } from "./upgrade-wizard";
 
 export const dynamic = "force-dynamic";

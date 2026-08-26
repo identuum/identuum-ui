@@ -16,12 +16,13 @@
  * Security: no internal backend URLs, tokens, or raw AG error messages
  * are rendered.
  */
+
+import type { Metadata } from "next";
 import {
   type AGOrgLinkPlanOSS,
   type AGOrgLinkPlanOSSResult,
   fetchAGOrgLinkPlanOSS,
 } from "@/lib/ag-org-link-plan-oss-client";
-import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "AG Org-Link Plan — Identuum" };

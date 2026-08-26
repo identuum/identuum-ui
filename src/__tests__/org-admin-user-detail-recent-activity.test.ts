@@ -25,8 +25,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  RECENT_ACTIVITY_COPY,
   buildOrgAdminUserAuditHref,
+  RECENT_ACTIVITY_COPY,
 } from "../app/org-admin/users/[id]/user-detail-actions";
 
 // Synthetic UUID-shaped fixtures. The `0000...0001` shape makes the

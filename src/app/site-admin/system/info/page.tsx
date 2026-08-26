@@ -13,9 +13,10 @@
  * of those are returned by the backend handler, but the projection
  * is explicit so a regression cannot leak through).
  */
+
+import type { Metadata } from "next";
 import { FeatureBoundaryPanel } from "@/components/shared/feature-boundary-panel";
 import { getSystemInfo } from "@/lib/idp-admin-client";
-import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Runtime info — Identuum Site Admin",

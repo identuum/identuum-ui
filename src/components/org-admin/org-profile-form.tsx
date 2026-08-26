@@ -8,6 +8,7 @@
  * not currently supported by the self-service flow.
  */
 
+import { useActionState } from "react";
 import {
   type UpdateOrgProfileState,
   updateOrgProfileAction,
@@ -17,7 +18,6 @@ import {
   ORG_ADMIN_PROFILE_NAME_FIELD,
 } from "@/app/org-admin/settings/settings-helpers";
 import { Button } from "@/components/ui/button";
-import { useActionState } from "react";
 
 interface OrgProfileFormProps {
   currentName: string;

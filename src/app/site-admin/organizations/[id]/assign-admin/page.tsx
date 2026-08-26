@@ -12,19 +12,16 @@
  * Auth is enforced by the parent /site-admin layout guard.
  * The server action in actions.ts independently revalidates site_admin.
  */
-import { getOrganization } from "@/lib/idp-admin-client";
+
 import type { Metadata } from "next";
+import { getOrganization } from "@/lib/idp-admin-client";
 import { AssignAdminForm } from "./form-client";
 
 export const metadata: Metadata = { title: "Assign Admin — Identuum Admin" };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export default async function AssignAdminPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function AssignAdminPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   if (!UUID_RE.test(id)) {

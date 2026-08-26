@@ -1,5 +1,5 @@
-import { loadRuntimeConfig, toPublicConfig } from "@/lib/runtime-config";
 import { NextResponse } from "next/server";
+import { loadRuntimeConfig, toPublicConfig } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
 

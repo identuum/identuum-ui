@@ -12,7 +12,7 @@
  */
 import "server-only";
 
-import { type LicenseWarning, deriveLicenseWarnings } from "@/lib/license-warnings";
+import { deriveLicenseWarnings, type LicenseWarning } from "@/lib/license-warnings";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 
 export async function PlatformLicenseWarnings() {

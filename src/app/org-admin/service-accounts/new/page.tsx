@@ -10,12 +10,13 @@
  * list endpoint. This page therefore does NOT render a copy-once
  * credential panel — there is no one-time credential to show.
  */
+
+import type { Metadata } from "next";
 import {
   type AuthorizationServerPageBoundary,
   getAuthorizationServerPageBoundary,
 } from "@/lib/capability-affordances";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
-import type { Metadata } from "next";
 import { CreateServiceAccountForm } from "./create-service-account-form";
 
 export const metadata: Metadata = {

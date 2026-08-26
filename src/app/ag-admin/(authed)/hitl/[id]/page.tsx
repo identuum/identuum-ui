@@ -18,9 +18,10 @@
  *   - No cookies, internal URLs, or private keys are rendered.
  *   - Approve/deny forms use Server Actions; token remains server-side.
  */
-import { agRequest } from "@/lib/ag-client";
+
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { agRequest } from "@/lib/ag-client";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Review Intervention — Identuum AG" };

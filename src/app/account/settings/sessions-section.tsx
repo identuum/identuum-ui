@@ -8,9 +8,9 @@
  * session IDs; revoke actions derive identity from the current principal.
  */
 
+import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { SessionItem } from "@/lib/idp-account-client";
-import { useActionState, useEffect, useState } from "react";
 import { revokeSessionAction } from "./session-actions";
 import { formatDate, selectActiveSessions } from "./sessions-helpers";
 
@@ -77,8 +77,8 @@ export function SessionsSection({ sessions, unavailable, error }: SessionsSectio
       </div>
 
       <div className="divide-y divide-stone-100">
-        {activeSessions.map((s, index) => (
-          <SessionRow key={`${s.created_at}-${s.expires_at}-${index}`} session={s} />
+        {activeSessions.map((s) => (
+          <SessionRow key={s.id} session={s} />
         ))}
       </div>
     </div>
