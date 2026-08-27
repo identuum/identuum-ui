@@ -279,7 +279,12 @@ async function openPendingMFAEnrollmentSession(
       body: JSON.stringify({ email, password }),
       cache: "no-store",
     });
-    if (!res.ok) return "";
+    // MEASURED (THE-DEAD-ACTIVATE-LINK, proven live): an enrollment-required
+    // login answers HTTP 401 {"error":"mfa_enrollment_required",
+    // mfa_required:true, session_id} — the pending session rides on a 401,
+    // not a 200. Requiring res.ok here silently dropped the MFA chaining
+    // and dumped the user at manual login.
+    if (!res.ok && res.status !== 401) return "";
     // biome-ignore lint/suspicious/noExplicitAny: raw API response
     const body: any = await res.json();
     if (body?.mfa_required === true && typeof body.session_id === "string" && body.session_id) {
