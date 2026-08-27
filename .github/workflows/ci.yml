@@ -34,6 +34,14 @@ on:
 permissions:
   contents: read
 
+env:
+  # THE-SECOND-INSTALL: the ONE declared rulefloor version for the WHOLE
+  # workflow — any job that installs rulefloor derives URL tag, tarball
+  # directory, ldflags stamp, and version assert from this pair. Bump
+  # both lines together.
+  RULEFLOOR_VERSION: v0.7.0
+  RULEFLOOR_SHA256: a0b6ef8a212c64378a8aae9785bd8a589efa71daa42af3ce792827c70c4dc6c6
+
 jobs:
   build-and-test:
     name: Build & Unit Tests (node ${{ matrix.node }})
@@ -105,14 +113,11 @@ jobs:
         # chain, no version stamp (self-reports "dev"). The printed
         # version must match the pin — a version nobody prints is a
         # version nobody can check.
-        # THE-UNBOUND-STAMP: RULEFLOOR_VERSION is declared ONCE below —
-        # the URL tag, tarball directory, ldflags stamp, and the assert
-        # all derive from it, mirroring brew's v#{version}-from-url. A
-        # bump edits exactly two lines (version + sha); no pair can
-        # diverge silently.
-        env:
-          RULEFLOOR_VERSION: v0.7.0
-          RULEFLOOR_SHA256: a0b6ef8a212c64378a8aae9785bd8a589efa71daa42af3ce792827c70c4dc6c6
+        # THE-UNBOUND-STAMP/THE-SECOND-INSTALL: RULEFLOOR_VERSION is
+        # declared ONCE, at the WORKFLOW env — URL tag, tarball directory,
+        # ldflags stamp, and the assert all derive from it, mirroring
+        # brew's v#{version}-from-url. A bump edits exactly two lines
+        # (version + sha); no pair can diverge silently.
         run: |
           curl -sSfL -o rulefloor.tar.gz "https://github.com/ozgurcd/rulefloor/archive/refs/tags/${RULEFLOOR_VERSION}.tar.gz"
           echo "${RULEFLOOR_SHA256}  rulefloor.tar.gz" | sha256sum -c -
