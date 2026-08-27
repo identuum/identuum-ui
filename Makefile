@@ -54,14 +54,20 @@ tool-versions:
 	@printf 'rulefloor  %s  %s\n' "$$(rulefloor version --json 2>/dev/null)" "$$(command -v rulefloor || echo MISSING)"
 
 verify:
-	@$(MAKE) --no-print-directory tool-versions
-	@$(MAKE) --no-print-directory wiki-fresh
-	@$(MAKE) --no-print-directory image-base-check
-	@$(MAKE) --no-print-directory image-base-parity
-	pnpm rulefloor
-	pnpm exec biome check . --reporter=json --max-diagnostics=none
-	pnpm exec tsc --noEmit
-	pnpm exec vitest run
+	# THE-UNWITNESSED-GREEN: the same targets as before, driven through
+	# scripts/gate-witness.sh so the run leaves a committed record
+	# (GATE-RUN.txt): per-target exit codes, the tool versions, the tools'
+	# own count lines, and a digest of the tree the run saw (minus the
+	# record itself). A run that stops early reads INCOMPLETE, never green.
+	@bash scripts/gate-witness.sh run GATE-RUN.txt "identuum-ui make verify" \
+		'tool-versions=$(MAKE) --no-print-directory tool-versions' \
+		'wiki-fresh=$(MAKE) --no-print-directory wiki-fresh' \
+		'image-base-check=$(MAKE) --no-print-directory image-base-check' \
+		'image-base-parity=$(MAKE) --no-print-directory image-base-parity' \
+		'rulefloor=pnpm rulefloor' \
+		'biome=pnpm exec biome check . --reporter=json --max-diagnostics=none' \
+		'tsc=pnpm exec tsc --noEmit' \
+		'vitest=pnpm exec vitest run'
 
 ## image-base-check: fail if any Dockerfile builds FROM an Alpine base.
 ##
