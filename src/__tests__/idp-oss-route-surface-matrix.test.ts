@@ -71,9 +71,10 @@ const IDP_ROUTE_SURFACE_MATRIX: SurfaceMatrixRow[] = [
     signals: ["LoginPageClient", "mfa_enrollment_required", "sessionId: string | null"],
   },
   {
-    route: "/claim + /invitation + password recovery + /verify-email",
+    route: "/claim + /invitation + /activate + password recovery + /verify-email",
     classification: "OSS-supported",
     coveredRoutes: [
+      "/activate",
       "/claim",
       "/forgot-password",
       "/invitation",
@@ -81,13 +82,19 @@ const IDP_ROUTE_SURFACE_MATRIX: SurfaceMatrixRow[] = [
       "/verify-email",
     ],
     files: [
+      "app/activate/page.tsx",
       "app/claim/page.tsx",
       "app/forgot-password/page.tsx",
       "app/invitation/page.tsx",
       "app/reset-password/page.tsx",
       "app/verify-email/page.tsx",
     ],
-    signals: ["/api/v1/auth/claim", "/api/v1/auth/verify-email", "ResetPasswordForm"],
+    signals: [
+      "/api/v1/auth/claim",
+      "/api/v1/auth/organizations/activate",
+      "/api/v1/auth/verify-email",
+      "ResetPasswordForm",
+    ],
   },
   {
     route: "/dashboard + /dashboard/security",
@@ -315,7 +322,7 @@ describe("IDP OSS route/surface matrix", () => {
       "/setup appliance first-run wizard",
       "/account/settings",
       "/login + MFA session handling",
-      "/claim + /invitation + password recovery + /verify-email",
+      "/claim + /invitation + /activate + password recovery + /verify-email",
       "/dashboard + /dashboard/security",
       "/org-admin overview + users",
       "/org-admin/settings",
