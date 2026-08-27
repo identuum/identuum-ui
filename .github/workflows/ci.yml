@@ -49,10 +49,12 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          # Node version sourced from package.json#engines.node
-          # ("node": ">=22.15.0"). Pin to 22.x so the runner reliably
-          # selects the documented major.
-          node-version: '22'
+          # THE-SAME-BINARY (2026-08-27): pinned to the major the local
+          # toolchain actually runs (node 24 — also tessera's floor in
+          # the sibling wiki gate). engines.node ">=22.15.0" remains the
+          # declared FLOOR; CI tracks the local major so the suite runs
+          # under the same runtime that green-lights closes.
+          node-version: '24'
           # Use pnpm's content-addressed store for cross-run reuse.
           # Cache key is auto-derived from pnpm-lock.yaml.
           cache: pnpm
@@ -76,18 +78,33 @@ jobs:
       # extractor-owned discovery, orphan scan. The homegrown
       # scripts/rulefloor-static.mjs subset is DELETED: it reimplemented
       # extraction with pre-v0.3.0 semantics and never verified hashes.
-      # The Go toolchain here exists solely to `go install` the pinned
-      # ledger tool; bump the pin deliberately, never implicitly.
+      # The Go toolchain here exists solely to BUILD the pinned ledger
+      # tool from its release tarball.
       - name: Set up Go (for the ledger tool)
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: stable
+          # Pinned to the toolchain the sibling repo's go.mod resolves
+          # (THE-SAME-BINARY) — `stable` was a rolling pin.
+          go-version: '1.27.0'
           # No go.mod in this repo — the default dependency cache has
           # nothing to key on and only emits a "Restore cache failed"
           # warning (measured, run 32577553874). This Go exists solely
-          # to `go install` the pinned ledger tool.
+          # to build the pinned ledger tool.
           cache: false
-      - name: Rule ledger check (rulefloor)
+      - name: Rule ledger check (rulefloor, brew-identical build)
+        # THE-SAME-BINARY (2026-08-27): CI builds rulefloor from the SAME
+        # immutable source artifact local brew builds — tag tarball +
+        # sha256 lifted from the tap formula — with brew's exact ldflags
+        # version stamp. `go install` is banned: module-proxy artifact
+        # chain, no version stamp (self-reports "dev"). The printed
+        # version must match the pin — a version nobody prints is a
+        # version nobody can check. Bump TAG and SHA256 together.
         run: |
-          go install github.com/ozgurcd/rulefloor@v0.6.0
+          curl -sSfL -o rulefloor.tar.gz https://github.com/ozgurcd/rulefloor/archive/refs/tags/v0.7.0.tar.gz
+          echo "a0b6ef8a212c64378a8aae9785bd8a589efa71daa42af3ce792827c70c4dc6c6  rulefloor.tar.gz" | sha256sum -c -
+          tar -xzf rulefloor.tar.gz
+          (cd rulefloor-0.7.0 && go build -ldflags "-X main.version=v0.7.0" -o "$(go env GOPATH)/bin/rulefloor" .)
+          rm -rf rulefloor.tar.gz rulefloor-0.7.0
+          "$(go env GOPATH)/bin/rulefloor" version --json
+          "$(go env GOPATH)/bin/rulefloor" version --json | grep -F '"version":"v0.7.0"'
           RULEFLOOR_BIN="$(go env GOPATH)/bin/rulefloor" bash scripts/rulefloor-gate.sh

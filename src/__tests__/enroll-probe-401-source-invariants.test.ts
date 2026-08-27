@@ -41,9 +41,14 @@ describe("pending-MFA-enrollment login probes accept the measured 401 shape", ()
     }
 
     const { execFileSync } = await import("node:child_process");
+    // Census pathspec is src/app: probes live in the app router. The
+    // original "src" pathspec matched THIS tracked test file's own
+    // regex text — latent while the file was untracked at arm time
+    // (git grep sees tracked files only), red on the first post-commit
+    // run (THE-SAME-BINARY close caught it).
     const copies = execFileSync(
       "git",
-      ["grep", "-l", "async function openPendingMFAEnrollmentSession", "--", "src"],
+      ["grep", "-l", "async function openPendingMFAEnrollmentSession", "--", "src/app"],
       { cwd: resolve(ROOT, ".."), encoding: "utf8" }
     )
       .trim()
