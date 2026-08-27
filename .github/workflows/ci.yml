@@ -41,6 +41,13 @@ env:
   # both lines together.
   RULEFLOOR_VERSION: v0.7.0
   RULEFLOOR_SHA256: a0b6ef8a212c64378a8aae9785bd8a589efa71daa42af3ce792827c70c4dc6c6
+  # THE-UNWATCHED-FOUR: one declaration per tool, every use derived,
+  # every version printed and asserted. GO_VERSION drives setup-go for
+  # the ledger-tool build; the vendored install gate's digest must match
+  # the shared master (the wiki-side check holds all three copies and
+  # this pin identical).
+  GO_VERSION: "1.27.0"
+  RULEFLOOR_GATE_SHA256: "db2a505d1c1f2fb55b34632a5098ef658dd6fbab1671e58de2c41788a63f37a6"
 
 jobs:
   build-and-test:
@@ -61,6 +68,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Verify the install gate is the shared master
+        # THE-UNWATCHED-FOUR: a weakened vendored copy would pass CI with
+        # a gate that no longer gates.
+        run: echo "${RULEFLOOR_GATE_SHA256}  scripts/rulefloor-install-gate.sh" | sha256sum -c -
+
       - name: Reject undeclared rulefloor install routes
         # Vendored at scripts/rulefloor-install-gate.sh because this
         # single-repo CI checkout has no ../wiki sibling. Scanning the full
@@ -78,6 +90,13 @@ jobs:
           # Use pnpm's content-addressed store for cross-run reuse.
           # Cache key is auto-derived from pnpm-lock.yaml.
           cache: pnpm
+
+      - name: Prove the node version
+        # THE-UNWATCHED-FOUR: print and assert the runtime actually
+        # resolved for this matrix leg.
+        run: |
+          node --version
+          node --version | grep -E "^v${{ matrix.node }}\."
 
       - name: Install dependencies (frozen lockfile)
         # --frozen-lockfile fails the run if pnpm-lock.yaml is out of
@@ -103,14 +122,19 @@ jobs:
       - name: Set up Go (for the ledger tool)
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          # Pinned to the toolchain the sibling repo's go.mod resolves
-          # (THE-SAME-BINARY) — `stable` was a rolling pin.
-          go-version: '1.27.0'
+          # Derived from the ONE workflow-env declaration
+          # (THE-UNWATCHED-FOUR) — previously a hardcoded literal here.
+          go-version: ${{ env.GO_VERSION }}
           # No go.mod in this repo — the default dependency cache has
           # nothing to key on and only emits a "Restore cache failed"
           # warning (measured, run 32577553874). This Go exists solely
           # to build the pinned ledger tool.
           cache: false
+
+      - name: Prove the Go toolchain version
+        run: |
+          go version
+          go version | grep -F "go${GO_VERSION} "
       - name: Rule ledger check (rulefloor, brew-identical build)
         # THE-SAME-BINARY (2026-08-27): CI builds rulefloor from the SAME
         # immutable source artifact local brew builds — tag tarball +

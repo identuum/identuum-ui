@@ -11,7 +11,7 @@ DEV_PLATFORM_STATUS_URL ?= http://127.0.0.1:7104/platform-status
 # 127.0.0.1:7315 instead of the monolith on 7215.
 AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 
-.PHONY: verify wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity
+.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
 .PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
 
@@ -43,7 +43,18 @@ wiki-fresh:
 ## 32576361791 then failed at biome with 17 format errors, 16 of them in
 ## armed ledger bodies. The ledger gate joined this target the same day
 ## (it was previously only `pnpm rulefloor`, easy to leave behind).
+# tool-versions: print this repo's gate-set tools — version AND path
+# (THE-UNWATCHED-FOUR: a shadowed binary made "the local brew version"
+# a fiction in two reports; print-only, skew made visible every close).
+# biome/tsc/vitest ride the frozen lockfile and are printed by their own
+# steps' output; the three below are the machine-resolved ones.
+tool-versions:
+	@printf 'node       %s  %s\n' "$$(node --version 2>/dev/null)" "$$(command -v node || echo MISSING)"
+	@printf 'pnpm       %s  %s\n' "$$(pnpm --version 2>/dev/null)" "$$(command -v pnpm || echo MISSING)"
+	@printf 'rulefloor  %s  %s\n' "$$(rulefloor version --json 2>/dev/null)" "$$(command -v rulefloor || echo MISSING)"
+
 verify:
+	@$(MAKE) --no-print-directory tool-versions
 	@$(MAKE) --no-print-directory wiki-fresh
 	@$(MAKE) --no-print-directory image-base-check
 	@$(MAKE) --no-print-directory image-base-parity

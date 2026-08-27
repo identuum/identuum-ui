@@ -48,7 +48,14 @@ describe("pending-MFA-enrollment login probes accept the measured 401 shape", ()
     // excluded: this test file's own regex text lives in src/__tests__.
     const copies = execFileSync(
       "git",
-      ["grep", "-l", "async function openPendingMFAEnrollmentSession", "--", "src", ":!src/__tests__"],
+      [
+        "grep",
+        "-l",
+        "async function openPendingMFAEnrollmentSession",
+        "--",
+        "src",
+        ":!src/__tests__",
+      ],
       { cwd: resolve(ROOT, ".."), encoding: "utf8" }
     )
       .trim()
