@@ -273,9 +273,12 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
     });
     expect(badJson.status(), "non-JSON DCR body → 400").toBe(400);
 
-    // ROW GET + POST /oauth/consent (SR/SM): browser-cookie gated — over
-    // plain HTTP no identuum_session cookie returns, so login_required 401 is
-    // the only reachable outcome (happy consent screen env-unreachable).
+    // ROW GET + POST /oauth/consent (SR/SM): browser-session gated. A request
+    // with no identuum_session → login_required 401 (asserted here). The happy
+    // consent screen needs an authenticated browser session; THE-LAST-DEFECT's
+    // CSRF fix makes browser-login mint that session (see auth-sweep), so this
+    // branch is no longer env-blocked — the full authorize→consent ceremony is
+    // a follow-up pin, not a dead branch.
     const getConsent = await request.get(
       `${IDP_BASE}/api/v1/oauth/consent?client_id=x&redirect_uri=${encodeURIComponent("https://ui.example.test/cb")}`,
       { failOnStatusCode: false, maxRedirects: 0 }

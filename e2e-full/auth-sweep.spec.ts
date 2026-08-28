@@ -9,10 +9,10 @@
  * live measurement.
  *
  * Measured behaviors deliberately pinned (wiki: disposable-harness batch 2):
- *  - browser-login submit → 403 csrf_failed ALWAYS over plain HTTP: the
- *    CSRF cookie is issued with Secure=!AllowPlainHTTP and nothing wires
- *    AllowPlainHTTP, so the cookie never returns on http:// — the happy
- *    path is unreachable on the dev appliance (queued finding).
+ *  - browser-login submit: the honest CSRF chain now SUCCEEDS (303 → /, sets
+ *    identuum_session) since THE-LAST-DEFECT made the CSRF cookie's Secure
+ *    flag transport-adaptive (CSRF-COOKIE-TRANSPORT-SECURE-1); a JSON submit
+ *    with no CSRF token/cookie still 403s csrf_failed.
  *  - refresh-token reuse WITHIN 10s → 200 with the current session's tokens
  *    (sessionRotationGraceWindow: deliberate double-click tolerance);
  *    reuse AFTER the window → theft response.
@@ -112,7 +112,7 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
     expect(uv.status).toBe(200);
   });
 
-  test("browser-login: form renders, submit is CSRF-dead over plain HTTP", async ({ request }) => {
+  test("browser-login: form renders, honest CSRF submit logs in", async ({ request }) => {
     // ROW GET /auth/browser-login (SR): anonymous form. MEASURED: always
     // 200 — no non-2xx is reachable on this row (static anonymous form).
     const form = await request.get(`${IDP_BASE}/api/v1/auth/browser-login`, {
@@ -123,16 +123,25 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
     const csrf = html.match(/name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i);
     expect(csrf, "the form embeds a CSRF token field").toBeTruthy();
 
-    // ROW POST /auth/browser-login (SM). MEASURED: even the honest chain
-    // (parsed token + cookie jar) is refused — the CSRF cookie is Secure
-    // and never returns over http://, so 403 csrf_failed is the ONLY
-    // reachable outcome on the dev appliance (BROWSER-LOGIN-PLAINHTTP-1).
+    // ROW POST /auth/browser-login (SM). The honest CSRF chain (parsed token
+    // + the cookie the GET set, both carried by the request context's jar)
+    // now SUCCEEDS: since THE-LAST-DEFECT the CSRF cookie is Secure=false over
+    // http://localhost (CSRF-COOKIE-TRANSPORT-SECURE-1), so it returns on the
+    // POST and the double-submit verify passes — the row's happy path,
+    // previously environment-unreachable (BROWSER-LOGIN-PLAINHTTP-1 FIXED).
     const submit = await request.post(`${IDP_BASE}/api/v1/auth/browser-login`, {
       failOnStatusCode: false,
       maxRedirects: 0,
       form: { email: userEmail, password: userPw, [csrf?.[1] ?? "csrf_token"]: csrf?.[2] ?? "" },
     });
-    expect(submit.status(), "honest CSRF chain over plain HTTP → 403").toBe(403);
+    expect(submit.status(), "honest CSRF chain → 303 (login established)").toBe(303);
+    expect(submit.headers().location, "…redirecting to the app root").toBe("/");
+    expect(
+      submit.headers()["set-cookie"] ?? "",
+      "…and planting the identuum_session cookie"
+    ).toContain("identuum_session=");
+    // A JSON submit carries NO CSRF token/cookie → still 403 csrf_failed (the
+    // refusal branch that stays reachable).
     const noCsrf = await api(IDP_BASE, "POST", "/api/v1/auth/browser-login", {
       email: userEmail,
       password: userPw,
