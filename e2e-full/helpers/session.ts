@@ -5,7 +5,7 @@
  * enrolment is one-shot: the FIRST spec file to log in enrolls and captures
  * the server-minted secret; every later file must go through the
  * already-enrolled MFA-verify path with that same secret. This helper owns
- * that handoff via a run-local secret file under e2e/.auth (gitignored) —
+ * that handoff via a run-local secret file under e2e-full/.auth (gitignored, owned by THIS suite) —
  * written on enrolment, read by every subsequent login, always overwritten
  * by a fresh enrolment so a stale file from a previous run can never win.
  *
@@ -17,7 +17,7 @@ import { dirname, resolve } from "node:path";
 import { api, firstLoginBearerAsync } from "../../e2e/helpers/appliance-fixture";
 import { generateTOTP } from "../../e2e/helpers/totp";
 
-const SECRET_FILE = resolve(__dirname, "..", "..", "e2e", ".auth", "full-site-admin-totp");
+const SECRET_FILE = resolve(__dirname, "..", ".auth", "full-site-admin-totp");
 
 export async function siteAdminSession(
   base: string,

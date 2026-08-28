@@ -51,6 +51,9 @@ coverage/
 # Never committed. (Was the pre-split `identuum --e2e-create-org-admin-fixture`
 # CLI, retired in THE-RELEASED-CONTRACT.)
 e2e/.auth/
+# e2e-full owns its own run-local state (THE-AUTH-SWEEP): the disposable
+# suite must not depend on a path the dev-loop suite owns.
+/e2e-full/.auth/
 
 # local agent instructions — local-only development-agent guidance,
 # must not be committed

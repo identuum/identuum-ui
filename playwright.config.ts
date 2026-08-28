@@ -221,41 +221,52 @@ export default defineConfig({
         ]
       : []),
   ],
-  webServer: {
-    command: `pnpm exec next dev --port ${e2ePort}`,
-    // Probe the running server via 127.0.0.1 (NOT `localhost`) and the
-    // /api/health endpoint, NOT the e2eBaseURL root.
-    //
-    // Why 127.0.0.1 rather than localhost: macOS resolves `localhost`
-    // to IPv6 ::1 first; the Docker UI container publishes
-    // `127.0.0.1:7104->7104/tcp` (IPv4 only). Playwright's
-    // reuseExistingServer probe hitting http://localhost:7104 lands on
-    // ::1, gets connection-refused, and falls through to spawning
-    // `pnpm exec next dev --port 7104` — which then cannot bind
-    // because the port is held by the container, and the spawn times
-    // out at 60s. Probing the IPv4 literal avoids the resolution
-    // ambiguity entirely.
-    //
-    // Why /api/health rather than the root: the UI's root path
-    // 307-redirects to /login. The /api/health endpoint returns a
-    // deterministic 200 with a tiny JSON body — a more reliable
-    // existing-server signal that does not depend on session-cookie
-    // semantics or auth state.
-    //
-    // baseURL (used by page.goto in specs) remains e2eBaseURL so
-    // existing string assertions like
-    //   expect(...).toBe('http://localhost:7104/callback')
-    // continue to match unchanged.
-    url: `http://127.0.0.1:${e2ePort}/api/health`,
-    // Local: reuse an already-running server (Compose stack or manual pnpm dev).
-    // CI: always start fresh to avoid stale state between test runs. In dynamic
-    // mode DO NOT reuse — a standing dev server carries the operator's
-    // host.docker.internal config; force a fresh spawn that reads the isolated
-    // e2e config below.
-    reuseExistingServer: !process.env.CI && !dynamicFixtureMode,
-    timeout: 60_000,
-    // Hand the spawned `next dev` the isolated config from birth (see above);
-    // globalSetup runs too late to influence it.
-    ...(e2eConfigFile ? { env: { IDENTUUM_UI_CONFIG_FILE: e2eConfigFile } } : {}),
-  },
+  // THE-AUTH-SWEEP: the e2e-full harness is API-only against the appliance
+  // and never navigates the UI, so under IDENTUUM_E2E_FULL=1 the webServer
+  // is omitted entirely — measured twice: a next-dev orphan from a previous
+  // run holds the .next/dev lock while listening IPv6-only, the IPv4 reuse
+  // probe misses it, the fresh spawn refuses, and the harness dies before
+  // its first request. No webServer, no flake class, faster runs. The
+  // dev-loop path (flag unset) is byte-identical to before.
+  ...(process.env.IDENTUUM_E2E_FULL === "1"
+    ? {}
+    : {
+        webServer: {
+          command: `pnpm exec next dev --port ${e2ePort}`,
+          // Probe the running server via 127.0.0.1 (NOT `localhost`) and the
+          // /api/health endpoint, NOT the e2eBaseURL root.
+          //
+          // Why 127.0.0.1 rather than localhost: macOS resolves `localhost`
+          // to IPv6 ::1 first; the Docker UI container publishes
+          // `127.0.0.1:7104->7104/tcp` (IPv4 only). Playwright's
+          // reuseExistingServer probe hitting http://localhost:7104 lands on
+          // ::1, gets connection-refused, and falls through to spawning
+          // `pnpm exec next dev --port 7104` — which then cannot bind
+          // because the port is held by the container, and the spawn times
+          // out at 60s. Probing the IPv4 literal avoids the resolution
+          // ambiguity entirely.
+          //
+          // Why /api/health rather than the root: the UI's root path
+          // 307-redirects to /login. The /api/health endpoint returns a
+          // deterministic 200 with a tiny JSON body — a more reliable
+          // existing-server signal that does not depend on session-cookie
+          // semantics or auth state.
+          //
+          // baseURL (used by page.goto in specs) remains e2eBaseURL so
+          // existing string assertions like
+          //   expect(...).toBe('http://localhost:7104/callback')
+          // continue to match unchanged.
+          url: `http://127.0.0.1:${e2ePort}/api/health`,
+          // Local: reuse an already-running server (Compose stack or manual pnpm dev).
+          // CI: always start fresh to avoid stale state between test runs. In dynamic
+          // mode DO NOT reuse — a standing dev server carries the operator's
+          // host.docker.internal config; force a fresh spawn that reads the isolated
+          // e2e config below.
+          reuseExistingServer: !process.env.CI && !dynamicFixtureMode,
+          timeout: 60_000,
+          // Hand the spawned `next dev` the isolated config from birth (see above);
+          // globalSetup runs too late to influence it.
+          ...(e2eConfigFile ? { env: { IDENTUUM_UI_CONFIG_FILE: e2eConfigFile } } : {}),
+        },
+      }),
 });
