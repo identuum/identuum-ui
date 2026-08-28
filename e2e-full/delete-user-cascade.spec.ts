@@ -5,10 +5,12 @@
  * partition NEITHER in wiki/platform/behavioral-census.md: reached by no
  * Playwright spec and no Go e2e test. Chosen because one flow exercises the
  * unreached destructive row THREE ways the census says nobody does:
- *   1. the destructive action itself (soft-delete, 200 {"deleted": id}),
+ *   1. the destructive action itself — an org_admin soft-deletes their own
+ *      org's user (200 {"deleted": id}); since THE-GUARDED-DELETE the route
+ *      uses the scoped guard, so this is the actor the model empowers,
  *   2. its OWN error branch — a second DELETE of the same user returns 404
  *      (HandleDeleteUser collapses every non-forbidden service error to
- *      "not found"; this is the 403-surfacing-as-404 family's home turf),
+ *      "not found"),
  *   3. the cascade it promises — the deleted user's live bearer must be
  *      rejected (401) on the very next request, and a fresh login with the
  *      deleted user's credentials must be refused (401).
@@ -129,25 +131,20 @@ test.describe("delete-user cascade (census row: DELETE /api/v1/users/:id)", () =
     expect(preDelete.status, "victim bearer valid pre-delete → 200").toBe(200);
 
     // ── THE ROW: DELETE /api/v1/users/:id ────────────────────────────────
-    // The 403 branch FIRST, from the actor the census's 403-family worries
-    // about. MEASURED (run 5): the route is mounted behind
-    // mw.RequireSiteAdmin(), so an org_admin deleting their OWN org's user
-    // gets 403 from the MIDDLEWARE — while the service layer
-    // (DeleteUserForActor) carries an org_admin same-org branch that HTTP
-    // can therefore never reach. That divergence is recorded in the wiki;
-    // this assertion pins today's live behavior.
-    const delAsOrgAdmin = await api(
+    // The org_admin destroys their OWN org's user — the actor
+    // AdminPermissionsModel.md empowers with day-to-day user control
+    // (USERS-DELETE-ORGADMIN-SCOPED-1, THE-GUARDED-DELETE). The route now
+    // uses the scoped guard, so this reaches DeleteUserForActor's org_admin
+    // same-org branch that was previously unreachable dead code. The
+    // cross-org refusal is pinned in the idp-oss Go teeth test.
+    const del = await api(
       IDP_BASE,
       "DELETE",
       `/api/v1/users/${victimId}`,
       undefined,
       orgAdmin.bearer
     );
-    expect(delAsOrgAdmin.status, "org_admin delete refused by route guard → 403").toBe(403);
-
-    // The destruction, by the actor the route admits.
-    const del = await api(IDP_BASE, "DELETE", `/api/v1/users/${victimId}`, undefined, site.bearer);
-    expect(del.status, "site_admin soft-delete → 200").toBe(200);
+    expect(del.status, "org_admin soft-delete of a same-org user → 200").toBe(200);
     expect(del.json.deleted, "response names the deleted id").toBe(victimId);
 
     // Its OWN error branch: deleting the already-deleted user is NOT 2xx.
