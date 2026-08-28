@@ -450,4 +450,8 @@ export function readSetupCode(compose: string[], service: string): string {
   }
 }
 
-export { firstLoginBearerAsync };
+// `api` is additionally exported for the e2e-full disposable suite
+// (THE-DISPOSABLE-HARNESS): the two suites SHARE this HTTP helper rather
+// than fork it — forking is how suites drift apart. Additive export only;
+// no dev-loop behavior changes.
+export { api, firstLoginBearerAsync };

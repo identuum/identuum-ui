@@ -14,6 +14,7 @@ AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 .PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
 .PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
+.PHONY: e2e-full
 
 ## wiki-fresh: WIKI-1 gate — fail verify when this repo's wiki page is BEHIND.
 ## Runs wiki-freshness.sh --repo identuum-ui --strict against the sibling wiki
@@ -52,6 +53,15 @@ tool-versions:
 	@printf 'node       %s  %s\n' "$$(node --version 2>/dev/null)" "$$(command -v node || echo MISSING)"
 	@printf 'pnpm       %s  %s\n' "$$(pnpm --version 2>/dev/null)" "$$(command -v pnpm || echo MISSING)"
 	@printf 'rulefloor  %s  %s\n' "$$(rulefloor version --json 2>/dev/null)" "$$(command -v rulefloor || echo MISSING)"
+
+## e2e-full: the DISPOSABLE full-behavior suite (THE-DISPOSABLE-HARNESS).
+## DESTROYS the OSS dev stack's postgres volume, rebuilds the appliance from
+## the sibling working tree, bootstraps a run-local site_admin, runs the
+## e2e-full Playwright project serially (--workers=1, TOTP physics), then
+## fast-cleans again. OPT-IN ONLY — never wired into verify, wiki make
+## check, or CI: fired by accident it eats the local dev database.
+e2e-full:
+	@bash e2e-full/scripts/full-run.sh
 
 verify:
 	# THE-UNWITNESSED-GREEN: the same targets as before, driven through

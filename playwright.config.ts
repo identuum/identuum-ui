@@ -203,6 +203,23 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
     },
+    // THE-DISPOSABLE-HARNESS: the e2e-full suite — a SECOND suite, not a
+    // wider first one. Its specs destroy their own environment (the OSS dev
+    // stack, volume included), so the project is registered ONLY when the
+    // harness entry point (e2e-full/scripts/full-run.sh via `make e2e-full`)
+    // sets IDENTUUM_E2E_FULL=1. A plain `pnpm e2e` never sees it; the specs
+    // additionally self-skip without the flag. Serial by physics: the
+    // harness passes --workers=1 because TOTP replay protection rejects
+    // concurrent logins minting the same 30-second code.
+    ...(process.env.IDENTUUM_E2E_FULL === "1"
+      ? [
+          {
+            name: "oss-full",
+            testDir: "./e2e-full",
+            use: { ...devices["Desktop Chrome"] },
+          },
+        ]
+      : []),
   ],
   webServer: {
     command: `pnpm exec next dev --port ${e2ePort}`,
