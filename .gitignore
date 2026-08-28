@@ -63,3 +63,8 @@ CLAUDE.md
 # identuum-idp-oss/.gitignore.
 .mcp.json
 src/.tsgraph
+
+# CI witness record (THE-UNWITNESSED-MIRROR): written step-by-step by the CI
+# job and uploaded as an artifact; never committed — a local write must not
+# read as an edit to the committed GATE-RUN.txt record's tree digest.
+/GATE-RUN.ci.txt
