@@ -13,14 +13,14 @@
  *
  * MEASURED behaviors pinned (findings recorded in the wiki, suite stays
  * green — a defect is a queue row, never a red spec):
- *  - user restore ALWAYS 404s: the user repo's GetByID filters
- *    `deleted_at IS NULL`, so a soft-deleted user is invisible to
- *    RestoreUserForActor — restore is structurally unreachable
- *    (USER-RESTORE-DEAD-1). Contrast: org restore works.
- *  - approve + reset-mfa on a NONEXISTENT user id → 500, not 404 (the
- *    repo's not-found error is unmapped in those two handlers'
- *    switch); the cross-tenant case correctly 404s
- *    (USER-APPROVE-RESETMFA-GHOST-500-1).
+ *  - user restore RECOVERS a soft-deleted user (200 {"restored": id}) —
+ *    RestoreUserForActor now reads through the deleted-inclusive admin
+ *    lookup (USER-RESTORE-DEAD-1 FIXED, rule RESTORE-RECOVERS-DELETED-1).
+ *    The route stays site_admin-only; cross-tenant refusal is pinned in the
+ *    Go teeth test.
+ *  - approve + reset-mfa on a NONEXISTENT user id → 404 (the repo not-found
+ *    now maps to the service sentinel; USER-APPROVE-RESETMFA-GHOST-500-1
+ *    FIXED, rule USER-NOTFOUND-MAPPING-1). The cross-tenant case still 404s.
  *  - role unassign authorizes on the ROLE, not the user: a cross-tenant
  *    user id is a harmless 200 no-op (the binding can't cross tenants);
  *    role ASSIGN checks the user's tenant and 403s — an asymmetry, not a
@@ -236,8 +236,8 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
     const ghost = await api(IDP_BASE, "POST", `/api/v1/users/${GHOST}/approve`, {}, A.bearer);
     expect(
       ghost.status,
-      "approve a nonexistent user → 500 (unmapped not-found, USER-APPROVE-RESETMFA-GHOST-500-1)"
-    ).toBe(500);
+      "approve a nonexistent user → 404 (repo not-found now maps to the service sentinel, USER-NOTFOUND-MAPPING-1)"
+    ).toBe(404);
   });
 
   test("users/:id/recovery/reset-mfa — happy, ghost-500, cross-tenant", async () => {
@@ -259,17 +259,24 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       {},
       A.bearer
     );
-    expect(ghost.status, "reset-mfa on a nonexistent user → 500 (same defect)").toBe(500);
+    expect(
+      ghost.status,
+      "reset-mfa on a nonexistent user → 404 (same fix, USER-NOTFOUND-MAPPING-1)"
+    ).toBe(404);
   });
 
-  test("users/:id/restore — dead: GetByID excludes soft-deleted", async () => {
-    // ROW POST /users/:id/restore (D). Soft-delete the user, then MEASURE:
-    // restore 404s because the repo's GetByID filters deleted_at IS NULL,
-    // so RestoreUserForActor can never see the row (USER-RESTORE-DEAD-1).
+  test("users/:id/restore — recovers a soft-deleted user (RESTORE-RECOVERS-DELETED-1)", async () => {
+    // ROW POST /users/:id/restore (D). Soft-delete the user, then restore:
+    // the fix reads through the deleted-inclusive admin lookup, so restore
+    // now recovers the row (happy path 200 {"restored": <id>}). Authorization
+    // is unchanged — the route stays site_admin-only (org_admin → 403), and
+    // the service-level cross-tenant refusal is pinned in the Go teeth test
+    // TestRestoreUserForActor_CrossTenantStillRefused.
     const del = await api(IDP_BASE, "DELETE", `/api/v1/users/${uId}`, undefined, site.bearer);
     expect(del.status, "soft-delete → 200").toBe(200);
     const restore = await api(IDP_BASE, "POST", `/api/v1/users/${uId}/restore`, {}, site.bearer);
-    expect(restore.status, "restore of a soft-deleted user → 404 (dead code)").toBe(404);
+    expect(restore.status, "restore of a soft-deleted user → 200 (recovered)").toBe(200);
+    expect(restore.json.restored, "response names the restored id").toBe(uId);
     const ghost = await api(IDP_BASE, "POST", `/api/v1/users/${GHOST}/restore`, {}, site.bearer);
     expect(ghost.status, "restore of a nonexistent user → 404").toBe(404);
     const orgAdmin = await api(IDP_BASE, "POST", `/api/v1/users/${uId}/restore`, {}, A.bearer);
