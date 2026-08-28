@@ -27,6 +27,7 @@
  */
 import { expect, test } from "@playwright/test";
 import { api, firstLoginBearerAsync } from "../e2e/helpers/appliance-fixture";
+import { siteAdminSession } from "./helpers/session";
 
 const IDP_BASE = process.env.IDENTUUM_E2E_FULL_IDP_BASE ?? "http://127.0.0.1:7113";
 const SITE_ADMIN_EMAIL = process.env.IDENTUUM_IDP_BOOTSTRAP_EMAIL ?? "site_admin@system.local";
@@ -45,7 +46,7 @@ test.describe("delete-user cascade (census row: DELETE /api/v1/users/:id)", () =
     ).toBeGreaterThan(0);
 
     // site_admin: fresh DB, so this is always a first login → TOTP enrolment.
-    const site = await firstLoginBearerAsync(IDP_BASE, SITE_ADMIN_EMAIL, adminPassword);
+    const site = await siteAdminSession(IDP_BASE, SITE_ADMIN_EMAIL, adminPassword);
 
     // Tenant org + pending org_admin in one request (201 + activation_token).
     const runId = `full-${Date.now().toString(36)}`;
