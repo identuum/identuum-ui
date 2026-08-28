@@ -1,8 +1,8 @@
 schema: gate-run.v1
 gate: identuum-ui make verify
 note: evidence lines are the tools' own summary lines; a summary format this script does not match is recorded only as an exit code
-repo-head: 8312e16 (dirty)
-started: 2026-08-28T15:24:56Z
+repo-head: 87cd73b (dirty)
+started: 2026-08-28T16:08:46Z
 plan: tool-versions wiki-fresh image-base-check image-base-parity rulefloor biome tsc vitest
 tool: node       v24.18.0  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/node
 tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/pnpm
@@ -19,6 +19,6 @@ target: tsc exit=0
 evidence: [vitest]  Test Files  121 passed (121)
 evidence: [vitest]       Tests  3460 passed (3460)
 target: vitest exit=0
-finished: 2026-08-28T15:25:00Z
-tree: sha256=ff747f1a1c67a9ce3a43951e29e151fe2be94a522541df66a49c05695444f083
+finished: 2026-08-28T16:08:49Z
+tree: sha256=9d19e199bdf4ea3c29306bc2264f3df1fee0381312ad1a8c51d326bb38df2e43
 result: green
