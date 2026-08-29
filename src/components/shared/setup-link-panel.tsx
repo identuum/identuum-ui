@@ -4,7 +4,8 @@
  * SetupLinkPanel — displays a one-time invitation setup link with a copy button.
  *
  * Used for:
- *   - Regenerated setup link in RegenerateInviteLink
+ *   - Approve-registration setup link (air-gapped deployments)
+ *   - One-time API-resource secret display
  *
  * Security:
  *   - The link is rendered in a readonly field only; never logged or put in URLs.
