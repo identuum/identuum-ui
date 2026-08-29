@@ -28,7 +28,7 @@
  * then to inventory patterns before printing).
  */
 import { execFileSync } from "node:child_process";
-import { readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -162,4 +162,30 @@ console.log(`check OK: navigated-not-rendered ${navOnly.length}: ${navOnly.join(
 if (tracePaths.length === 0) {
   console.error("coverage-from-run: no traces found for passed tests — was --trace on set?");
   process.exit(1);
+}
+
+// ── THE-COVERAGE-FLOOR ratchet ───────────────────────────────────────────────
+// The committed floor is the reference; the OBSERVED number above came from
+// THIS run's traces. A drop below the floor FAILS the coverage phase — the
+// witnessed record reads red and `make e2e-full` exits non-zero — so route
+// coverage cannot silently rot. Raising the floor is a deliberate committed
+// act after a higher green run; the script never auto-raises.
+const floorFile = join(UI_DIR, "e2e-full", "coverage-floor.json");
+const floorRaw = JSON.parse(readFileSync(floorFile, "utf8"));
+const floor = floorRaw.routes_content_reached_floor;
+if (!Number.isInteger(floor) || floor < 1) {
+  console.error(`coverage-from-run: coverage-floor.json carries no valid floor (${floor})`);
+  process.exit(2);
+}
+if (reached.size < floor) {
+  console.error(
+    `coverage-from-run: COVERAGE FLOOR VIOLATION — routes-content-reached ${reached.size} < floor ${floor}. A previously-lit route went dark; fix the regression, never lower the floor.`
+  );
+  process.exit(1);
+}
+console.log(`check OK: coverage-floor ${floor} held (observed ${reached.size})`);
+if (reached.size > floor) {
+  console.log(
+    `coverage-from-run: observed ${reached.size} exceeds the floor ${floor} — consider ratcheting coverage-floor.json up in a commit.`
+  );
 }
