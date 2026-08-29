@@ -26,6 +26,19 @@ import { describe, expect, it } from "vitest";
 const REPO = resolve(__dirname, "..", "..");
 const read = (p: string): string => readFileSync(resolve(REPO, p), "utf8");
 
+/**
+ * Strip //-line and block comments so a COMMENTED-OUT enforcement block can
+ * never satisfy the pins below — the exact mutation class that survived the
+ * first red-proof attempt (the neutralized line kept the text in a trailing
+ * comment). Crude by design: it does not parse strings, but the enforcement
+ * shapes asserted here never appear inside string literals in the script.
+ */
+const stripComments = (src: string): string =>
+  src
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "")
+    .replace(/\s\/\/[^\n]*/g, "");
+
 describe("the coverage floor is committed and enforced in the harness [COVERAGE-FLOOR-1]", () => {
   it("coverage-floor.json carries a positive integer floor", () => {
     const parsed = JSON.parse(read("e2e-full/coverage-floor.json")) as {
@@ -37,11 +50,12 @@ describe("the coverage floor is committed and enforced in the harness [COVERAGE-
   });
 
   it("coverage-from-run.mjs reads the floor, compares the observed value, and fails on a drop [COVERAGE-FLOOR-1]", () => {
-    const mjs = read("e2e-full/scripts/coverage-from-run.mjs");
+    // COMMENT-STRIPPED source: a commented-out enforcement block cannot
+    // satisfy any pin below (THE-FRESH-APPLIANCE-PHASE hardening — the
+    // owner's review showed the un-stripped regexes still matched the same
+    // lines commented out).
+    const mjs = stripComments(read("e2e-full/scripts/coverage-from-run.mjs"));
     expect(mjs, "reads the committed floor file").toContain("coverage-floor.json");
-    // The ENFORCING shape, not a substring a comment could satisfy (a first
-    // red-proof attempt survived exactly that way — the mutated line kept the
-    // text in a trailing comment).
     expect(mjs, "compares the run-derived observation against the floor").toMatch(
       /if \(reached\.size < floor\)/
     );

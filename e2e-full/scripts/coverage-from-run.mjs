@@ -33,10 +33,13 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const UI_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const reportPath = process.argv[2];
-const uiOrigin = process.argv[3] ?? "";
-if (!reportPath || !uiOrigin) {
-  console.error("usage: coverage-from-run.mjs <pw-json-report> <ui-origin>");
+// THE-FRESH-APPLIANCE-PHASE: coverage now spans MULTIPLE phases (the
+// fresh-appliance phase + the provisioned dev-loop run), so the origin comes
+// first and every following argument is one phase's JSON report.
+const uiOrigin = process.argv[2] ?? "";
+const reportPaths = process.argv.slice(3);
+if (!uiOrigin || reportPaths.length === 0) {
+  console.error("usage: coverage-from-run.mjs <ui-origin> <pw-json-report>...");
   process.exit(2);
 }
 
@@ -86,23 +89,25 @@ function matchRoute(pathname) {
 }
 
 // ── 2. Traces of PASSED tests → reached routes ───────────────────────────────
-const report = JSON.parse(
-  execFileSync("cat", [reportPath], { maxBuffer: 64 * 1024 * 1024 }).toString()
-);
 const tracePaths = [];
-(function walk(s) {
-  (s.suites ?? []).forEach(walk);
-  for (const spec of s.specs ?? []) {
-    for (const t of spec.tests ?? []) {
-      for (const r of t.results ?? []) {
-        if (r.status !== "passed") continue;
-        for (const a of r.attachments ?? []) {
-          if (a.name === "trace" && a.path) tracePaths.push(a.path);
+for (const reportPath of reportPaths) {
+  const report = JSON.parse(
+    execFileSync("cat", [reportPath], { maxBuffer: 64 * 1024 * 1024 }).toString()
+  );
+  (function walk(s) {
+    (s.suites ?? []).forEach(walk);
+    for (const spec of s.specs ?? []) {
+      for (const t of spec.tests ?? []) {
+        for (const r of t.results ?? []) {
+          if (r.status !== "passed") continue;
+          for (const a of r.attachments ?? []) {
+            if (a.name === "trace" && a.path) tracePaths.push(a.path);
+          }
         }
       }
     }
-  }
-})({ suites: report.suites ?? [] });
+  })({ suites: report.suites ?? [] });
+}
 
 const reached = new Set();
 const navigated = new Set();

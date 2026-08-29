@@ -73,27 +73,6 @@ done
 echo "e2e-full: dev-smoke (stale-binary refusal)"
 make -C "$IDP_DIR" dev-smoke
 
-echo "e2e-full: bootstrapping site_admin (run-local password, never printed)"
-# Prefix satisfies the strict bootstrap policy (upper+lower+digit+special);
-# the entropy is the random hex tail.
-IDENTUUM_IDP_BOOTSTRAP_PASSWORD="E2eFull!$(openssl rand -hex 16)"
-export IDENTUUM_IDP_BOOTSTRAP_PASSWORD
-# NOT `make oss-bootstrap`: that target wraps the call in `sh -c` and the
-# runtime image ships no shell (measured: OCI exec "sh": executable file not
-# found — recorded as an idp-oss follow-up; the repo is read-only for this
-# slice). Same binary, same argv, no shell: the DSN is read host-side from
-# the running container's env and passed as a plain argument. It is a local
-# dev DSN and is never printed.
-OSS_DB_DSN=$(docker inspect identuum-idp-oss \
-	--format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^IDENTUUM_IDP_OSS_DB=//p')
-if [ -z "$OSS_DB_DSN" ]; then
-	echo "e2e-full: could not resolve the container's DB DSN" >&2
-	exit 1
-fi
-(cd "$IDP_DIR" && docker compose -f deployment/docker-compose.dev.yml --profile app \
-	exec -T -e IDENTUUM_IDP_BOOTSTRAP_PASSWORD app \
-	/app/identuum-idp bootstrap "$OSS_DB_DSN")
-
 # ── THE-WITNESSED-COVERAGE: every suite phase runs as a gate-witness STEP, so
 # GATE-RUN.e2e-full.txt carries per-phase exits plus "check OK:" evidence lines
 # derived from each run's OWN Playwright JSON report (pw-phase.sh) and, for
@@ -154,12 +133,44 @@ GW="scripts/gate-witness.sh"
 
 # The plan is fixed at init; the optional MEASURE baseline joins it only when
 # requested, so an absent baseline is a declared subtraction, never INCOMPLETE.
-PLAN=(api-suite)
+PLAN=(fresh-appliance api-suite)
 [ "${IDENTUUM_E2E_MEASURE:-}" = "1" ] && PLAN+=(plain-baseline)
 PLAN+=(provisioner devloop-provisioned coverage)
 bash "$GW" init "$RECORD" "identuum-ui make e2e-full" "${PLAN[@]}"
 
 rc=0
+
+# ── THE-FRESH-APPLIANCE-PHASE: the appliance is STILL setup_required here
+# (oss-up brought it up fresh; the bootstrap runs AFTER this phase) — the one
+# window where / routes to first-run setup and /setup renders the wizard
+# shell. The phase is assert-only: setup completion stays with the single
+# CLI bootstrap below (UI-PROVISIONER-1 pins exactly one such path), so the
+# stack is never left half-built and no second setup path exists. Traces go
+# to a dedicated output dir because every later Playwright invocation wipes
+# the default test-results/ — coverage needs these traces at the end.
+echo "e2e-full: fresh-appliance phase (setup_required window: / and /setup)"
+bash "$GW" step "$RECORD" 'fresh-appliance=IDENTUUM_E2E_FRESH_PHASE=1 IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh fresh-appliance e2e/.auth/pw-fresh.json -- --project=chromium --workers=1 --trace on --output=e2e/.auth/fresh-results e2e/fresh-appliance.spec.ts' || rc=1
+
+echo "e2e-full: bootstrapping site_admin (run-local password, never printed)"
+# Prefix satisfies the strict bootstrap policy (upper+lower+digit+special);
+# the entropy is the random hex tail.
+IDENTUUM_IDP_BOOTSTRAP_PASSWORD="E2eFull!$(openssl rand -hex 16)"
+export IDENTUUM_IDP_BOOTSTRAP_PASSWORD
+# NOT `make oss-bootstrap`: that target wraps the call in `sh -c` and the
+# runtime image ships no shell (measured: OCI exec "sh": executable file not
+# found — recorded as an idp-oss follow-up; the repo is read-only for this
+# slice). Same binary, same argv, no shell: the DSN is read host-side from
+# the running container's env and passed as a plain argument. It is a local
+# dev DSN and is never printed.
+OSS_DB_DSN=$(docker inspect identuum-idp-oss \
+	--format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^IDENTUUM_IDP_OSS_DB=//p')
+if [ -z "$OSS_DB_DSN" ]; then
+	echo "e2e-full: could not resolve the container's DB DSN" >&2
+	exit 1
+fi
+(cd "$IDP_DIR" && docker compose -f deployment/docker-compose.dev.yml --profile app \
+	exec -T -e IDENTUUM_IDP_BOOTSTRAP_PASSWORD app \
+	/app/identuum-idp bootstrap "$OSS_DB_DSN")
 
 echo "e2e-full: API suite (oss-full)"
 bash "$GW" step "$RECORD" 'api-suite=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh api-suite e2e/.auth/pw-api-suite.json -- --project=oss-full --workers=1' || rc=1
@@ -203,7 +214,7 @@ bash "$GW" step "$RECORD" 'devloop-provisioned=IDENTUUM_E2E_PORT='"$E2E_UI_PORT"
 # src/app/**/page.tsx and the reached set from the traces of tests the JSON
 # report marks passed. No hand-maintained list anywhere.
 echo "e2e-full: deriving route coverage from the provisioned run"
-bash "$GW" step "$RECORD" 'coverage=node e2e-full/scripts/coverage-from-run.mjs e2e/.auth/pw-devloop.json "$IDENTUUM_E2E_BASE_URL"' || rc=1
+bash "$GW" step "$RECORD" 'coverage=node e2e-full/scripts/coverage-from-run.mjs "$IDENTUUM_E2E_BASE_URL" e2e/.auth/pw-devloop.json e2e/.auth/pw-fresh.json' || rc=1
 
 bash "$GW" finalize "$RECORD" || rc=1
 
