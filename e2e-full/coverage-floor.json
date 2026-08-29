@@ -1,4 +1,4 @@
 {
   "_comment": "THE-COVERAGE-FLOOR ratchet marker. coverage-from-run.mjs FAILS the harness coverage phase when the run-derived routes-content-reached drops below this floor. Raise it only after a green witnessed run measures higher; never lower it to make a run pass — a drop is a regression to fix.",
-  "routes_content_reached_floor": 48
+  "routes_content_reached_floor": 50
 }

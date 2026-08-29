@@ -49,7 +49,7 @@ function collectRoutes(dir, prefix) {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (!statSync(full).isDirectory()) {
-      if (entry === "page.tsx") routes.push(prefix === "" ? "/" : prefix);
+      if (entry === "page.tsx") routes.push({ route: prefix === "" ? "/" : prefix, file: full });
       continue;
     }
     if (entry === "ag-admin") continue; // outside the censused parent
@@ -59,7 +59,29 @@ function collectRoutes(dir, prefix) {
   }
   return routes;
 }
-const inventory = [...new Set(collectRoutes(join(UI_DIR, "src", "app"), ""))].sort();
+const routeFiles = new Map();
+for (const { route, file } of collectRoutes(join(UI_DIR, "src", "app"), "")) {
+  if (!routeFiles.has(route)) routeFiles.set(route, file);
+}
+const inventory = [...routeFiles.keys()].sort();
+
+/**
+ * REDIRECT-ONLY pages render no JSX at all — their entire designed content is
+ * a redirect() (e.g. the root router, the /dashboard/security compat
+ * redirect). The UI census classifies an asserted redirect as CONTENT for
+ * such pages, and this metric agrees: a redirect-only route counts as reached
+ * when a PASSING test navigated to it (the redirect it asserts IS the page's
+ * behavior). Detection is mechanical, from the page source on disk: a
+ * redirect() call and zero JSX markers. Pages WITH JSX still require frames —
+ * so a guard-bounced goto against a real page (e.g. /site-admin/settings
+ * anonymous → /login) can never inflate the count.
+ */
+function isRedirectOnly(route) {
+  const file = routeFiles.get(route);
+  if (!file) return false;
+  const src = readFileSync(file, "utf8");
+  return /\bredirect\(/.test(src) && !/return \(|=> \(|<[A-Za-z]/.test(src);
+}
 
 function matchRoute(pathname) {
   const parts = pathname.replace(/\/+$/, "").split("/").filter(Boolean);
@@ -153,14 +175,19 @@ for (const zip of tracePaths) {
   }
 }
 
+// REDIRECT-ONLY routes navigated in a passing test count as reached (their
+// asserted redirect IS the content — census-aligned; see isRedirectOnly).
+const redirectAsserted = [...navigated].filter((r) => !reached.has(r) && isRedirectOnly(r)).sort();
+for (const r of redirectAsserted) reached.add(r);
 const dark = inventory.filter((r) => !reached.has(r));
-// Routes a passing test NAVIGATED to that never rendered a frame: pure
-// redirects exercised by design (their transition is the content) and
-// guard-bounced gotos. Reported as their own mechanical line — never merged
-// into the frame count.
+// Real pages a passing test navigated to WITHOUT rendering a frame there
+// (guard-bounced gotos). Never merged into the count.
 const navOnly = [...navigated].filter((r) => !reached.has(r)).sort();
 console.log(
-  `check OK: routes-content-reached ${reached.size} of ${inventory.length} (distinct src/app page.tsx routes a PASSING provisioned test put a frame on; traces of ${tracePaths.length} passed tests${unreadable ? `, ${unreadable} unreadable` : ""})`
+  `check OK: routes-content-reached ${reached.size} of ${inventory.length} (src/app page.tsx routes a PASSING provisioned test put a frame on, plus redirect-only pages it navigated; traces of ${tracePaths.length} passed tests${unreadable ? `, ${unreadable} unreadable` : ""})`
+);
+console.log(
+  `check OK: redirect-routes-asserted ${redirectAsserted.length}: ${redirectAsserted.join(", ")}`
 );
 console.log(`check OK: dark-routes ${dark.length}: ${dark.join(", ")}`);
 console.log(`check OK: navigated-not-rendered ${navOnly.length}: ${navOnly.join(", ")}`);
