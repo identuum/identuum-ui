@@ -83,6 +83,31 @@ function isRedirectOnly(route) {
   return /\bredirect\(/.test(src) && !/return \(|=> \(|<[A-Za-z]/.test(src);
 }
 
+// ── THE-REDIRECT-PIN: the metric's definition output is COMMITTED ────────────
+// isRedirectOnly is a source heuristic re-run every time; unpinned, a page
+// refactored into a redirect would become "reached" for free — coverage
+// granted by a source edit, not by a test. The committed set is the
+// reference; the source-derived set must EQUAL it in both directions, or the
+// phase FAILS. Growing or shrinking the set is a deliberate commit, exactly
+// like a floor raise.
+const redirectPinFile = join(UI_DIR, "e2e-full", "redirect-only-routes.json");
+const committedRedirectSet = JSON.parse(readFileSync(redirectPinFile, "utf8")).routes;
+if (
+  !Array.isArray(committedRedirectSet) ||
+  committedRedirectSet.some((r) => typeof r !== "string")
+) {
+  console.error("coverage-from-run: redirect-only-routes.json carries no valid route list");
+  process.exit(2);
+}
+const derivedRedirectSet = inventory.filter((r) => isRedirectOnly(r)).sort();
+const committedSorted = [...committedRedirectSet].sort();
+if (JSON.stringify(derivedRedirectSet) !== JSON.stringify(committedSorted)) {
+  console.error(
+    `coverage-from-run: REDIRECT SET DRIFT — source-derived redirect-only set [${derivedRedirectSet.join(", ")}] does not equal the committed set [${committedSorted.join(", ")}]. A page's redirect-only status changed without a deliberate commit; update e2e-full/redirect-only-routes.json on purpose or fix the page.`
+  );
+  process.exit(1);
+}
+
 function matchRoute(pathname) {
   const parts = pathname.replace(/\/+$/, "").split("/").filter(Boolean);
   // A literal segment must OUTRANK a dynamic one: /api-resources/new belongs to
@@ -189,6 +214,7 @@ console.log(
 console.log(
   `check OK: redirect-routes-asserted ${redirectAsserted.length}: ${redirectAsserted.join(", ")}`
 );
+console.log(`check OK: redirect-only-set matched (${committedSorted.length} committed)`);
 console.log(`check OK: dark-routes ${dark.length}: ${dark.join(", ")}`);
 console.log(`check OK: navigated-not-rendered ${navOnly.length}: ${navOnly.join(", ")}`);
 if (tracePaths.length === 0) {

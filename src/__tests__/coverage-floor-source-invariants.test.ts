@@ -65,6 +65,33 @@ describe("the coverage floor is committed and enforced in the harness [COVERAGE-
     expect(mjs, "a held floor is recorded as evidence").toContain("check OK: coverage-floor");
   });
 
+  it("the redirect-only set is committed and drift fails the phase", () => {
+    // THE-REDIRECT-PIN: isRedirectOnly is a source heuristic; unpinned, a page
+    // refactored into a redirect would gain "reached" status from a source
+    // edit. The committed set is the reference and drift in EITHER direction
+    // must fail the phase.
+    const pin = JSON.parse(read("e2e-full/redirect-only-routes.json")) as { routes?: unknown };
+    expect(Array.isArray(pin.routes), "the committed set is a route array").toBe(true);
+    expect(
+      (pin.routes as unknown[]).every(
+        (r) => typeof r === "string" && (r as string).startsWith("/")
+      ),
+      "every committed entry is a route path"
+    ).toBe(true);
+
+    const mjs = stripComments(read("e2e-full/scripts/coverage-from-run.mjs"));
+    expect(mjs, "reads the committed redirect set").toContain("redirect-only-routes.json");
+    expect(mjs, "compares derived vs committed in both directions").toMatch(
+      /JSON\.stringify\(derivedRedirectSet\) !== JSON\.stringify\(committedSorted\)/
+    );
+    expect(mjs, "drift exits non-zero (fails the witnessed phase)").toMatch(
+      /REDIRECT SET DRIFT[\s\S]*?process\.exit\(1\)/
+    );
+    expect(mjs, "a matched set is recorded as evidence").toContain(
+      "check OK: redirect-only-set matched"
+    );
+  });
+
   it("full-run.sh executes the coverage script as a witnessed step", () => {
     const sh = read("e2e-full/scripts/full-run.sh");
     // Anchor on the INVOCATION (a header comment also mentions the script).

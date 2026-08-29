@@ -1,0 +1,4 @@
+{
+  "_comment": "THE-REDIRECT-PIN. The committed redirect-only route set — the ONLY pages the coverage metric may count via navigation instead of frames (their entire designed content is a redirect: a redirect() call and zero JSX). coverage-from-run.mjs FAILS the coverage phase when the source-derived set differs from this list IN EITHER DIRECTION: a page refactored into a redirect must not gain 'reached' status from a source edit (coverage is granted by tests, not edits), and a redirect page growing real content must lose its navigation-counting on purpose. Change this list only in a deliberate commit, exactly like a floor raise.",
+  "routes": ["/", "/dashboard/security"]
+}
