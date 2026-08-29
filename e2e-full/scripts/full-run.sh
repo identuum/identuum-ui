@@ -135,7 +135,7 @@ GW="scripts/gate-witness.sh"
 # requested, so an absent baseline is a declared subtraction, never INCOMPLETE.
 PLAN=(fresh-appliance api-suite)
 [ "${IDENTUUM_E2E_MEASURE:-}" = "1" ] && PLAN+=(plain-baseline)
-PLAN+=(provisioner devloop-provisioned coverage)
+PLAN+=(provisioner static-rows-sweep static-rows devloop-provisioned coverage)
 bash "$GW" init "$RECORD" "identuum-ui make e2e-full" "${PLAN[@]}"
 
 rc=0
@@ -201,6 +201,20 @@ if [ ! -f "$FIXTURE_FILE" ]; then
 	docker compose -f "$IDP_DIR/deployment/docker-compose.dev.yml" --profile app down --volumes
 	exit 1
 fi
+
+# THE-PROBES-THAT-STAY: re-assert, EVERY run, the status + shape each of the
+# census's 23 formerly-static-only rows measured when probed live — as its own
+# witnessed phase (needs the org_admin envelope, so it follows the
+# provisioner). The follow-up step enforces the committed row set + floor from
+# the phase's OWN JSON report, so a skipped or deleted row test reads STATIC
+# ROWS DRIFT, never green. Mutation note: [ROW 21] really rotates the fixture
+# org_admin's recovery codes — confined to this disposable appliance (torn
+# down at run end; no harness login uses recovery codes).
+echo "e2e-full: static census rows sweep (the probes that stay)"
+bash "$GW" step "$RECORD" 'static-rows-sweep=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_STATIC_ROWS=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh static-rows-sweep e2e/.auth/pw-static-rows.json -- --project=oss-full --workers=1 static-rows-sweep' || rc=1
+
+echo "e2e-full: enforcing the static-rows committed set + floor"
+bash "$GW" step "$RECORD" 'static-rows=node e2e-full/scripts/static-rows-from-run.mjs e2e/.auth/pw-static-rows.json' || rc=1
 
 # Run the dev-loop suite PROVISIONED: the envelope is present and
 # dynamic-fixture mode is on, so global-setup's fast path REUSES this running
