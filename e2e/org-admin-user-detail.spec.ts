@@ -222,11 +222,12 @@ test.describe("/org-admin/users — bulk invite affordance (safe-state)", () => 
     try {
       await page.goto("/org-admin/users");
       await expect(page.getByRole("button", { name: /^Bulk invite$/ })).toBeVisible();
-      // The Invite-user button is still rendered alongside Bulk invite.
-      // The "+" glyph in front of the label is rendered inside an
-      // aria-hidden="true" span; Playwright excludes that from the
-      // accessible name, so the matcher uses just the label text.
-      await expect(page.getByRole("button", { name: /^Invite user$/ })).toBeVisible();
+      // THE-INVITE-BUTTON (2026-08-29): the single-invite affordance was
+      // REMOVED — measured live, both its shapes (manual link and email)
+      // failed with "Could not create invitation." because the OSS backend's
+      // POST /api/v1/users refuses password-less creates. This pin holds the
+      // affordance absent until a backend that can honor it exists.
+      await expect(page.getByRole("button", { name: /^Invite user$/ })).toHaveCount(0);
     } finally {
       await page.close();
     }

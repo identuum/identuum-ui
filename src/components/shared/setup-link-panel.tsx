@@ -4,7 +4,6 @@
  * SetupLinkPanel — displays a one-time invitation setup link with a copy button.
  *
  * Used for:
- *   - Initial invite success in InviteUserSection
  *   - Regenerated setup link in RegenerateInviteLink
  *
  * Security:

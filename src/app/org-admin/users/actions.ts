@@ -19,7 +19,6 @@ import {
   type BulkJobStatus,
   bulkCreateUsers,
   getBulkJobStatus,
-  inviteOrgUser,
   regenerateInvitation,
   removeUserRole,
   resetUserMFA,
@@ -28,51 +27,6 @@ import {
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
 import { parseBulkInviteEntries } from "./bulk-invite-parser";
-
-// ── Invite user ───────────────────────────────────────────────────────────────
-
-export interface InviteUserState {
-  phase: "form" | "success" | "error";
-  setupUrl?: string;
-  /** true when the invite was created without an email (manual delivery required) */
-  noEmail?: boolean;
-  error?: string;
-  fieldErrors?: Partial<Record<"email", string>>;
-}
-
-export async function inviteOrgUserAction(
-  _prev: InviteUserState,
-  formData: FormData
-): Promise<InviteUserState> {
-  const rawEmail = (formData.get("email") as string | null)?.trim() ?? "";
-  const rawName = (formData.get("name") as string | null)?.trim() ?? "";
-
-  // Basic email format check when provided
-  if (rawEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
-    return {
-      phase: "form",
-      fieldErrors: { email: "Enter a valid email address or leave it blank." },
-    };
-  }
-
-  const result = await inviteOrgUser({
-    email: rawEmail || undefined,
-    name: rawName || undefined,
-    role: "org_user",
-  });
-
-  if (result.ok) {
-    revalidatePath("/org-admin/users");
-    return {
-      phase: "success",
-      setupUrl: result.setupUrl || undefined,
-      noEmail: !rawEmail,
-    };
-  }
-
-  // Surface conflict (409) or other errors
-  return { phase: "error", error: result.message };
-}
 
 // ── Enable / Disable user ─────────────────────────────────────────────────────
 

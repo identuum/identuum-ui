@@ -18,7 +18,6 @@ import type { Metadata } from "next";
 import { listOrgUsers } from "@/lib/idp-admin-client";
 import type { OrgUserItem } from "@/lib/types";
 import { BulkInviteSection } from "./bulk-invite-section";
-import { InviteUserSection } from "./invite-section";
 import { RegenerateInviteLink, UserRowActions } from "./user-row-actions";
 
 export const metadata: Metadata = { title: "Users — Identuum Org Admin" };
@@ -114,7 +113,6 @@ export default async function OrgAdminUsersPage({
       </div>
 
       <div className="flex items-start gap-2 flex-wrap">
-        <InviteUserSection />
         <BulkInviteSection />
       </div>
 
