@@ -25,7 +25,7 @@ import {
   listOrgUsers,
   listUserRoles,
 } from "@/lib/idp-admin-client";
-import { RegenerateInviteLink, ResetMFAButton, UserRowActions } from "../user-row-actions";
+import { ResetMFAButton, UserRowActions } from "../user-row-actions";
 import { ApproveButton } from "./approve-button";
 import {
   APPROVE_REGISTRATION_COPY,
@@ -150,7 +150,6 @@ export default async function OrgAdminUserDetailPage({
   // local booleans below are kept as thin aliases so the JSX below
   // remains byte-identical; tests pin the underlying matrix.
   const showLifecycleActions = actions.includes("disable") || actions.includes("enable");
-  const showRegenerate = actions.includes("regenerate-invite");
   const showMFAReset = actions.includes("reset-mfa");
   const showApproveRegistration = actions.includes("approve-registration");
   // The Assigned-roles card is only meaningful for tenant users. site_admin
@@ -259,7 +258,7 @@ export default async function OrgAdminUserDetailPage({
       </div>
 
       {/* Actions card */}
-      {(showLifecycleActions || showRegenerate || showMFAReset || showApproveRegistration) && (
+      {(showLifecycleActions || showMFAReset || showApproveRegistration) && (
         <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-stone-100">
             <p className="text-sm font-semibold text-sky-950">Actions</p>
@@ -301,18 +300,6 @@ export default async function OrgAdminUserDetailPage({
                 </div>
               </div>
             ) : null}
-            {showRegenerate && (
-              <div className="space-y-1">
-                <p className="text-xs font-semibold text-stone-600">Setup link</p>
-                <p className="text-xs text-stone-400 leading-relaxed max-w-[280px]">
-                  Regenerate a new one-time setup link for this invitation. The previous link will
-                  be invalidated.
-                </p>
-                <div className="pt-1">
-                  <RegenerateInviteLink userId={user.id} />
-                </div>
-              </div>
-            )}
             {showMFAReset && (
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-stone-600">MFA enrollment</p>

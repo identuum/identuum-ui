@@ -17,8 +17,7 @@
 import type { Metadata } from "next";
 import { listOrgUsers } from "@/lib/idp-admin-client";
 import type { OrgUserItem } from "@/lib/types";
-import { BulkInviteSection } from "./bulk-invite-section";
-import { RegenerateInviteLink, UserRowActions } from "./user-row-actions";
+import { UserRowActions } from "./user-row-actions";
 
 export const metadata: Metadata = { title: "Users — Identuum Org Admin" };
 
@@ -110,10 +109,6 @@ export default async function OrgAdminUsersPage({
       <div>
         <h1 className="text-2xl font-extrabold tracking-tight text-sky-950">Users</h1>
         <p className="text-sm text-stone-500 mt-0.5">Members of your organization.</p>
-      </div>
-
-      <div className="flex items-start gap-2 flex-wrap">
-        <BulkInviteSection />
       </div>
 
       {/* Filter tabs */}
@@ -401,16 +396,12 @@ function UserRow({ user, activeAdminCount }: { user: OrgUserItem; activeAdminCou
           >
             Details
           </a>
-          {status === "pending" && !user.deleted && user.role !== "site_admin" ? (
-            <RegenerateInviteLink userId={user.id} />
-          ) : (
-            showActions && (
-              <UserRowActions
-                userId={user.id}
-                active={user.active}
-                disableDisable={isSoleActiveAdmin}
-              />
-            )
+          {status !== "pending" && showActions && (
+            <UserRowActions
+              userId={user.id}
+              active={user.active}
+              disableDisable={isSoleActiveAdmin}
+            />
           )}
         </div>
       </td>

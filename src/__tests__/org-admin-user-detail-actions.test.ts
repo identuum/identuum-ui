@@ -15,7 +15,8 @@
  *   - show the wrong lifecycle pair (disable+enable simultaneously)
  *   - show MFA reset on an admin row (admin MFA recovery is the
  *     site-admin path)
- *   - show regenerate-invite on a non-pending row
+ *   - surface any action on a pending row (regenerate-invite was removed:
+ *     its endpoint is unmounted on both backends)
  *   - fail the sole-active-admin protection
  *
  * SECURITY:
@@ -172,16 +173,16 @@ describe("deriveOrgAdminUserActions — site_admin authority boundary", () => {
 // ── deriveOrgAdminUserActions — pending invitations ──────────────────────────
 
 describe("deriveOrgAdminUserActions — pending invitations", () => {
-  it("email-bound pending → only regenerate-invite", () => {
+  it("email-bound pending → NO actions (regenerate-invite removed with its unmounted endpoint)", () => {
     const r = deriveOrgAdminUserActions(
       user({ invitation_pending: true, invitation_email_bound: true }),
       5
     );
     expect(r.status).toBe("pending");
-    expect(r.actions).toEqual(["regenerate-invite"]);
+    expect(r.actions).toEqual([]);
   });
 
-  it("manual-invite pending (no-email sentinel) → only regenerate-invite", () => {
+  it("manual-invite pending (no-email sentinel) → NO actions", () => {
     const r = deriveOrgAdminUserActions(
       user({
         invitation_pending: true,
@@ -192,7 +193,7 @@ describe("deriveOrgAdminUserActions — pending invitations", () => {
       5
     );
     expect(r.status).toBe("pending");
-    expect(r.actions).toEqual(["regenerate-invite"]);
+    expect(r.actions).toEqual([]);
   });
 
   it("pending users NEVER surface disable/enable/reset-mfa (account does not yet exist as a real session-bearing user)", () => {
@@ -321,23 +322,13 @@ describe("ORG_ADMIN_USER_ACTION_META + getOrgAdminUserActionLabel", () => {
     expect(getOrgAdminUserActionLabel("enable")).toBe("Restore access");
   });
 
-  it("regenerate-invite → 'Setup link'", () => {
-    expect(getOrgAdminUserActionLabel("regenerate-invite")).toBe("Setup link");
-  });
-
   it("reset-mfa → 'MFA enrollment'", () => {
     expect(getOrgAdminUserActionLabel("reset-mfa")).toBe("MFA enrollment");
   });
 
-  it("the metadata table has exactly the five known actions (allowlist key shape)", () => {
+  it("the metadata table has exactly the four known actions (allowlist key shape)", () => {
     const keys = Object.keys(ORG_ADMIN_USER_ACTION_META).sort();
-    expect(keys).toEqual([
-      "approve-registration",
-      "disable",
-      "enable",
-      "regenerate-invite",
-      "reset-mfa",
-    ]);
+    expect(keys).toEqual(["approve-registration", "disable", "enable", "reset-mfa"]);
   });
 });
 
@@ -348,13 +339,7 @@ describe("deriveOrgAdminUserActions — global allowlist + negative invariants",
   // the result never includes any action identifier outside the
   // five-element allowlist. Adding a new action would require a
   // matching enum entry in the helper, AND a test update here.
-  const KNOWN_ACTIONS = new Set([
-    "approve-registration",
-    "disable",
-    "enable",
-    "regenerate-invite",
-    "reset-mfa",
-  ]);
+  const KNOWN_ACTIONS = new Set(["approve-registration", "disable", "enable", "reset-mfa"]);
 
   // Forbidden action identifiers that would signal a tenant-internal
   // or cross-org surface leaked into the helper. These map to UI
@@ -855,8 +840,8 @@ describe("Helper module — file source pins for the new components", () => {
     expect(() => readFileSync(p, "utf-8")).not.toThrow();
   });
 
-  it("BulkInviteSection component exists", () => {
+  it("BulkInviteSection stays deleted (THE-REMAINING-CLICKS: measured broken on OSS, unmounted on CE)", () => {
     const p = resolve(__dirname, "..", "app", "org-admin", "users", "bulk-invite-section.tsx");
-    expect(() => readFileSync(p, "utf-8")).not.toThrow();
+    expect(() => readFileSync(p, "utf-8")).toThrow();
   });
 });

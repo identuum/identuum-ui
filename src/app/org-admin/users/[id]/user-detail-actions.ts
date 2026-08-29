@@ -40,12 +40,10 @@ import type { OrgUserItem } from "@/lib/types";
 
 export type OrgAdminUserStatus = "active" | "pending" | "pending_approval" | "disabled" | "deleted";
 
-export type OrgAdminUserAction =
-  | "disable"
-  | "enable"
-  | "regenerate-invite"
-  | "reset-mfa"
-  | "approve-registration";
+// "regenerate-invite" was REMOVED 2026-08-29 (THE-REMAINING-CLICKS): its
+// endpoint (POST /api/v1/users/:id/setup/resend) is not mounted on either
+// backend, so pending rows surface no action — status display only.
+export type OrgAdminUserAction = "disable" | "enable" | "reset-mfa" | "approve-registration";
 
 /**
  * Minimal subset of `OrgUserItem` needed to compute action visibility.
@@ -164,9 +162,9 @@ export function deriveOrgAdminUserActions(
 
   const actions: OrgAdminUserAction[] = [];
 
-  // Pending invitations: regenerate-invite only.
+  // Pending invitations: no actions (the regenerate affordance was removed —
+  // its backend endpoint is unmounted); the Pending badge is the surface.
   if (status === "pending") {
-    actions.push("regenerate-invite");
     return { status, actions, soleActiveAdmin: false };
   }
 
@@ -209,7 +207,6 @@ export interface OrgAdminUserActionMeta {
 export const ORG_ADMIN_USER_ACTION_META: Record<OrgAdminUserAction, OrgAdminUserActionMeta> = {
   disable: { sectionLabel: "Suspend access" },
   enable: { sectionLabel: "Restore access" },
-  "regenerate-invite": { sectionLabel: "Setup link" },
   "reset-mfa": { sectionLabel: "MFA enrollment" },
   "approve-registration": { sectionLabel: "Approve registration" },
 };

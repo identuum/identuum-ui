@@ -212,8 +212,8 @@ test.describe("/org-admin/users/[id] — Recent activity card", () => {
 // submit button, never assign or remove roles, never approve anyone, and
 // never type into the textarea. They are safe to run in any environment.
 
-test.describe("/org-admin/users — bulk invite affordance (safe-state)", () => {
-  test("the Bulk invite button is rendered on /org-admin/users", async () => {
+test.describe("/org-admin/users — removed invite affordances stay absent", () => {
+  test("neither Invite user nor Bulk invite is offered on /org-admin/users", async () => {
     if (skipOrgAdminTests) {
       test.skip(true, SKIP_MSG);
     }
@@ -221,33 +221,20 @@ test.describe("/org-admin/users — bulk invite affordance (safe-state)", () => 
     const page = await sharedCtx.newPage();
     try {
       await page.goto("/org-admin/users");
-      await expect(page.getByRole("button", { name: /^Bulk invite$/ })).toBeVisible();
-      // THE-INVITE-BUTTON (2026-08-29): the single-invite affordance was
-      // REMOVED — measured live, both its shapes (manual link and email)
-      // failed with "Could not create invitation." because the OSS backend's
-      // POST /api/v1/users refuses password-less creates. This pin holds the
-      // affordance absent until a backend that can honor it exists.
+      // Anchor: the page rendered (heading present) before asserting absences.
+      await expect(page.getByRole("heading", { name: "Users", level: 1 })).toBeVisible();
+      // THE-INVITE-BUTTON (2026-08-29): single invite removed — measured
+      // live, both shapes failed "Could not create invitation." (OSS
+      // POST /api/v1/users refuses password-less creates).
       await expect(page.getByRole("button", { name: /^Invite user$/ })).toHaveCount(0);
-    } finally {
-      await page.close();
-    }
-  });
-
-  test("the bulk drawer expands/collapses without submitting", async () => {
-    if (skipOrgAdminTests) {
-      test.skip(true, SKIP_MSG);
-    }
-    if (!sharedCtx) throw new Error("shared context not initialized");
-    const page = await sharedCtx.newPage();
-    try {
-      await page.goto("/org-admin/users");
-      await page.getByRole("button", { name: /^Bulk invite$/ }).click();
-      // The drawer surfaces the textarea, the Close button, and the Send invites button.
-      await expect(page.getByLabel(/Entries/)).toBeVisible();
-      await expect(page.getByRole("button", { name: /^Send invites$/ })).toBeVisible();
-      // Click Close — do NOT submit.
-      await page.getByRole("button", { name: /^Close$/ }).click();
-      await expect(page.getByLabel(/Entries/)).toBeHidden();
+      // THE-REMAINING-CLICKS (2026-08-29): bulk invite removed — measured
+      // live: the submit fails ("Could not enqueue the bulk invite job.":
+      // OSS answers 200 synchronous {created,failed}, never the async
+      // job_id the drawer's contract needs), every password-less row fails
+      // "invalid request" (created_count 0), and GET /api/v1/jobs/:id plus
+      // POST /api/v1/users/:id/setup/resend are unmounted (gin 404). These
+      // pins hold both affordances absent until a backend can honor them.
+      await expect(page.getByRole("button", { name: /^Bulk invite$/ })).toHaveCount(0);
     } finally {
       await page.close();
     }

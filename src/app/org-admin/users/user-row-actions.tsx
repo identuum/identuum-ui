@@ -6,19 +6,14 @@ import { useActionState, useState } from "react";
  * UserRowActions — per-row lifecycle actions for the org-admin Users table.
  *
  * - Active/Disabled users: Disable / Enable toggle.
- * - Pending (unclaimed invitation) users: "Regenerate setup link" button.
- *   On success, shows a one-time copyable setup URL inline in the row.
  *
  * Security: userId is included in the form POST body. The backend verifies
  * org scope, last-admin guard, and invitation_pending state on every call.
  * Setup URLs are never stored or logged by this component.
  */
 
-import { SetupLinkPanel } from "@/components/shared/setup-link-panel";
 import {
-  type RegenerateInviteState,
   type ResetMFAState,
-  regenerateInviteAction,
   resetMFAAction,
   type SetUserActiveState,
   setUserActiveAction,
@@ -60,48 +55,6 @@ export function UserRowActions({ userId, active, disableDisable = false }: UserR
 
       {state.phase === "error" && isThisRow && state.error && (
         <p className="text-[10px] text-red-500 leading-tight max-w-[120px]">{state.error}</p>
-      )}
-    </div>
-  );
-}
-
-// ── Regenerate setup link (pending users only) ────────────────────────────────
-
-interface RegenerateInviteLinkProps {
-  userId: string;
-}
-
-const initialRegenState: RegenerateInviteState = { phase: "idle" };
-
-export function RegenerateInviteLink({ userId }: RegenerateInviteLinkProps) {
-  const [state, formAction, isPending] = useActionState(regenerateInviteAction, initialRegenState);
-
-  if (state.phase === "success" && state.setupUrl) {
-    return (
-      <SetupLinkPanel
-        link={state.setupUrl}
-        title="New setup link"
-        description="Previous link is now invalid. This link expires in 24 hours."
-        compact
-      />
-    );
-  }
-
-  return (
-    <div className="space-y-1">
-      <form action={formAction}>
-        <input type="hidden" name="userId" value={userId} />
-        <button
-          type="submit"
-          disabled={isPending}
-          className="text-xs font-medium text-stone-400 hover:text-sky-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {isPending ? "…" : "Regenerate link"}
-        </button>
-      </form>
-
-      {state.phase === "error" && state.error && (
-        <p className="text-[10px] text-red-500 leading-tight max-w-[140px]">{state.error}</p>
       )}
     </div>
   );
