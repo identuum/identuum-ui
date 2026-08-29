@@ -71,21 +71,16 @@ const IDP_ROUTE_SURFACE_MATRIX: SurfaceMatrixRow[] = [
     signals: ["LoginPageClient", "mfa_enrollment_required", "sessionId: string | null"],
   },
   {
-    route: "/claim + /invitation + /activate + password recovery + /verify-email",
+    // /invitation DELETED 2026-08-29 (THE-DEAD-INVITATION, owner ruling):
+    // neither the OSS nor the CE backend mounts its mint/validate/consume
+    // flow — the page was dead on both. Removed, not mounted.
+    route: "/claim + /activate + password recovery + /verify-email",
     classification: "OSS-supported",
-    coveredRoutes: [
-      "/activate",
-      "/claim",
-      "/forgot-password",
-      "/invitation",
-      "/reset-password",
-      "/verify-email",
-    ],
+    coveredRoutes: ["/activate", "/claim", "/forgot-password", "/reset-password", "/verify-email"],
     files: [
       "app/activate/page.tsx",
       "app/claim/page.tsx",
       "app/forgot-password/page.tsx",
-      "app/invitation/page.tsx",
       "app/reset-password/page.tsx",
       "app/verify-email/page.tsx",
     ],
@@ -322,7 +317,7 @@ describe("IDP OSS route/surface matrix", () => {
       "/setup appliance first-run wizard",
       "/account/settings",
       "/login + MFA session handling",
-      "/claim + /invitation + /activate + password recovery + /verify-email",
+      "/claim + /activate + password recovery + /verify-email",
       "/dashboard + /dashboard/security",
       "/org-admin overview + users",
       "/org-admin/settings",

@@ -4,15 +4,14 @@
  * compat redirect's actual transition.
  *
  * Routes lit here: /setup-required, /forgot-password, /reset-password,
- * /activate, /invitation, /dashboard/security. Every test asserts rendered
+ * /activate, /dashboard/security. (/invitation was covered here until
+ * THE-DEAD-INVITATION deleted the page — dead on both backends, owner
+ * ruling: removed, not mounted.) Every test asserts rendered
  * content or a state transition, and each page's failure/missing state where
  * one exists. Tokens come from surfaces that ALREADY exist:
  *   - /activate: site_admin creates a disposable org and re-issues its
  *     activation token (POST /organizations/:id/resend-activation — the same
  *     surface the e2e-full sweeps use).
- *   - /invitation: the VALID path is backend-unreachable on OSS (the invite
- *     mint and the setup validate/consume routes are not mounted — named in
- *     the test); its missing + invalid states are asserted anonymously.
  * No mail catcher; the mail-only path (a REAL emailed reset token for
  * /reset-password's success phase) is out of scope by design — the page's
  * missing-token, weak-password (P0-9: policy is checked BEFORE token
@@ -186,24 +185,6 @@ test.describe("token-landing + static pages (NINE-DARK-PAGES)", () => {
     await expect(
       page.getByRole("heading", { name: /Link invalid or expired|Organization already activated/ })
     ).toBeVisible();
-  });
-
-  test("/invitation: missing and invalid states (the reachable OSS surface)", async ({ page }) => {
-    // The page's VALID path is backend-unreachable on OSS — named, not
-    // skipped (slice rule 1): the UI's invite wire (POST /api/v1/users with
-    // no password → activation_url) is refused with 400 password-required,
-    // and the page's own validate/consume endpoints
-    // (GET/POST /api/v1/auth/users/setup[/:token]) are NOT MOUNTED on the
-    // OSS appliance — the OSS-GAINS-IT invite-flow family the released-
-    // contract census dispositioned, now confirmed live. The missing and
-    // invalid states are the page's real, reachable OSS behavior: the
-    // server-side validate of any token fails, and the page renders its
-    // fail-closed states. Both are asserted anonymously, no gate.
-    await page.goto("/invitation");
-    await expect(page.getByRole("heading", { name: "No invitation link provided" })).toBeVisible();
-    await page.goto("/invitation?token=invalid_e2e_token_nine_dark_pages");
-    await expect(page.getByRole("heading", { name: "Link invalid or expired" })).toBeVisible();
-    await expect(page.getByText(/valid for 24 hours and can only be used once/)).toBeVisible();
   });
 
   test("/dashboard/security: the compat redirect lands an org_user on the passkeys tab", async ({
