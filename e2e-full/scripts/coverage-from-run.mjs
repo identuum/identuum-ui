@@ -105,6 +105,7 @@ const tracePaths = [];
 })({ suites: report.suites ?? [] });
 
 const reached = new Set();
+const navigated = new Set();
 let unreadable = 0;
 for (const zip of tracePaths) {
   let text = "";
@@ -116,8 +117,14 @@ for (const zip of tracePaths) {
     unreadable++;
     continue;
   }
-  // frameUrl (frame-snapshots) + params.url (navigation actions).
-  for (const m of text.matchAll(/"(?:frameUrl|url)":"(http[^"]+)"/g)) {
+  // FRAMES define "reached": frameUrl entries are pages that actually
+  // rendered inside the passing test. Navigation TARGETS (params.url, which
+  // can be relative) are collected separately below — a pure-server-redirect
+  // route (e.g. a compat redirect) never gets a frame of its own, and a
+  // guard-bounced goto never renders its target either; conflating the two
+  // with frames would make the frame-metric's words false (measured
+  // 2026-08-29: a guard test's bounced goto would have counted as content).
+  for (const m of text.matchAll(/"frameUrl":"(https?:\/\/[^"]+)"/g)) {
     let u;
     try {
       u = new URL(m[1]);
@@ -128,13 +135,30 @@ for (const zip of tracePaths) {
     const route = matchRoute(u.pathname);
     if (route) reached.add(route);
   }
+  for (const m of text.matchAll(/"url":"(https?:\/\/[^"]+|\/[^"]*)"/g)) {
+    let u;
+    try {
+      u = new URL(m[1], uiOrigin);
+    } catch {
+      continue;
+    }
+    if (u.origin !== uiOrigin) continue;
+    const route = matchRoute(u.pathname);
+    if (route) navigated.add(route);
+  }
 }
 
 const dark = inventory.filter((r) => !reached.has(r));
+// Routes a passing test NAVIGATED to that never rendered a frame: pure
+// redirects exercised by design (their transition is the content) and
+// guard-bounced gotos. Reported as their own mechanical line — never merged
+// into the frame count.
+const navOnly = [...navigated].filter((r) => !reached.has(r)).sort();
 console.log(
   `check OK: routes-content-reached ${reached.size} of ${inventory.length} (distinct src/app page.tsx routes a PASSING provisioned test put a frame on; traces of ${tracePaths.length} passed tests${unreadable ? `, ${unreadable} unreadable` : ""})`
 );
 console.log(`check OK: dark-routes ${dark.length}: ${dark.join(", ")}`);
+console.log(`check OK: navigated-not-rendered ${navOnly.length}: ${navOnly.join(", ")}`);
 if (tracePaths.length === 0) {
   console.error("coverage-from-run: no traces found for passed tests — was --trace on set?");
   process.exit(1);
