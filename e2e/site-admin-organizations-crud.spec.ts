@@ -120,8 +120,15 @@ test.describe("/site-admin/organizations — end-to-end CRUD", () => {
       // end-to-end.
       await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
-      // 2. Navigate to the default list — assert the new org appears.
-      await page.goto("/site-admin/organizations?deleted=false");
+      // 2. Assert the new org appears in the DEACTIVATED view. Measured
+      // against the shipped product (first live run of this formerly
+      // always-skipped spec): create WITH admin_email births the org
+      // INACTIVE by design (the create handler refuses active+admin_email
+      // — "active_conflicts_with_admin_email" — and the /new page copy
+      // says orgs stay inactive until the admin activates), and the
+      // default "current" list view is active-only, so the original
+      // "visible in the default list" premise could never hold.
+      await page.goto("/site-admin/organizations?state=deactivated");
       await expect(page.getByRole("heading", { name: /Organizations/i, level: 1 })).toBeVisible({
         timeout: 10_000,
       });
@@ -156,8 +163,9 @@ test.describe("/site-admin/organizations — end-to-end CRUD", () => {
       await page.getByRole("button", { name: /Save changes/i }).click();
       await page.waitForLoadState("networkidle", { timeout: 15_000 });
 
-      // 5. Default list now shows the edited name.
-      await page.goto("/site-admin/organizations?deleted=false");
+      // 5. The deactivated view (the org is still inactive) shows the
+      // edited name.
+      await page.goto("/site-admin/organizations?state=deactivated");
       await expect(page.locator(`tr:has-text("${editedName}")`).first()).toBeVisible({
         timeout: 10_000,
       });
@@ -176,14 +184,16 @@ test.describe("/site-admin/organizations — end-to-end CRUD", () => {
       // second delete.
       createdOrgId = null;
 
-      // 7. Default list no longer shows the (edited) org name.
-      await page.goto("/site-admin/organizations?deleted=false");
+      // 7. The deactivated view (where the org just lived) no longer
+      // shows it — the ORIGINAL default-list absence assert was vacuous
+      // for an org that was never in the active-only view.
+      await page.goto("/site-admin/organizations?state=deactivated");
       await expect(page.locator(`tr:has-text("${editedName}")`)).toHaveCount(0, {
         timeout: 10_000,
       });
 
-      // 8. Deleted filter DOES show it — the soft-delete contract.
-      await page.goto("/site-admin/organizations?deleted=true");
+      // 8. Deleted view DOES show it — the soft-delete contract.
+      await page.goto("/site-admin/organizations?state=deleted");
       await expect(page.locator(`tr:has-text("${editedName}")`).first()).toBeVisible({
         timeout: 10_000,
       });

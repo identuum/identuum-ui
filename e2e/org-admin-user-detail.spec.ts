@@ -116,24 +116,32 @@ test.describe("/org-admin/users/[id] — Recent activity card", () => {
 
       expect(await page.title()).not.toMatch(/500|internal error|application error/i);
 
-      // The Recent activity card renders only when the API returned
-      // at least one event. The fixture admin's recent login (which
-      // routed through CompleteMFALogin) should have produced at least
-      // one auth_success audit row where the admin is the subject —
-      // so the card is expected to appear. If the test environment's
-      // licence tier ever degrades to one without audit, this test
-      // would self-skip rather than fail; for now we assert the card.
+      // REPAIRED (THE-SKIPPED-THIRTY-TWO, 2026-08-29): the original premise
+      // was FALSE at source — OSS login events (completeMFALogin) set NO
+      // SubjectID (the user id lives only in Metadata.user_id), so the
+      // subject-filtered card could never render from a login and this test
+      // self-skipped in every harness run since it was written. The card is
+      // real product surface for events that DO carry a subject, so the test
+      // now SEEDS one first: POST /api/v1/me/sessions/revoke-others (mounted
+      // on OSS, auth-required, and its audit event carries the caller as
+      // subject) revokes only OTHER sessions of the fixture admin — the
+      // calling session survives; stale phase bearers are the casualties,
+      // harmless on the disposable appliance. Then the card MUST render —
+      // no skip path left.
+      const seeded = await getSharedContext().request.post(
+        "/api/idp/api/v1/me/sessions/revoke-others"
+      );
+      // 204 No Content — measured live in the first unskipped run (the
+      // bodiless revoke answers 204, not 200; asserting 200 here was this
+      // repair's own unproof-read assumption, caught by running it).
+      expect(seeded.status(), "revoke-others seeds a subject-bearing audit event").toBe(204);
+      await page.reload();
+      await page.waitForLoadState("networkidle");
+
       const cardHeading = page.getByText("Recent activity", { exact: true });
-      const cardVisible = await cardHeading
-        .waitFor({ state: "visible", timeout: 10_000 })
-        .then(() => true)
-        .catch(() => false);
-      if (!cardVisible) {
-        test.skip(
-          true,
-          "Recent activity card not rendered — license tier may not include audit; nothing to click"
-        );
-      }
+      await expect(cardHeading, "card renders once a subject-bearing event exists").toBeVisible({
+        timeout: 10_000,
+      });
 
       // Each row is now wrapped in an <a> with aria-label
       // "View audit event <event_type> for this user". Find the first

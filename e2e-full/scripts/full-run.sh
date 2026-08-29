@@ -221,8 +221,12 @@ bash "$GW" step "$RECORD" 'static-rows=node e2e-full/scripts/static-rows-from-ru
 # appliance (it validates the envelope's site_admin against :7113 and skips
 # any down/up) instead of standing up a second stack. --trace on feeds the
 # coverage phase: route coverage is derived from what the run actually did.
+# THE-SKIPPED-THIRTY-TWO: the orgs-CRUD ceremony (create -> edit -> soft-delete,
+# try/finally self-cleaning) is safe on THIS disposable appliance and the
+# dynamic fixture provides an MFA-enrolled site_admin, so it runs here
+# (IDENTUUM_E2E_ORGS_CRUD=1). A leak on failure dies with the appliance.
 echo "e2e-full: dev-loop suite PROVISIONED (the previously-dark specs now light)"
-bash "$GW" step "$RECORD" 'devloop-provisioned=IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-provisioned e2e/.auth/pw-devloop.json -- --project=chromium --workers=1 --trace on' || rc=1
+bash "$GW" step "$RECORD" 'devloop-provisioned=IDENTUUM_E2E_ORGS_CRUD=1 IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-provisioned e2e/.auth/pw-devloop.json -- --project=chromium --workers=1 --trace on' || rc=1
 
 # Route coverage, derived from THE RUN: the inventory is scanned from
 # src/app/**/page.tsx and the reached set from the traces of tests the JSON
