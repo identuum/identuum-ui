@@ -367,8 +367,13 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
       //       the backend started emitting real admin state; the previous
       //       expectation text here was stale and unreachable)
       //   (c) Deleted-org panel — when org.deleted=true
+      // THE-WITNESSED-COVERAGE (2026-08-29): the form's shipped submit copy is
+      // "Re-issue activation token" (assign-admin/form-client.tsx); the earlier
+      // /generate admin setup link/i regex matched NOTHING in src/ — a stale
+      // assertion that self-skipped in every environment (no can_assign_admin
+      // org existed) until the e2e-full provisioner created its precondition.
       const showsForm = await page
-        .getByRole("button", { name: /generate admin setup link/i })
+        .getByRole("button", { name: /re-issue activation token/i })
         .isVisible();
       const showsBlockedPanel = await page.getByText("Administrator already assigned").isVisible();
       const showsDeletedGuard = await page.getByText("Organization is deleted").isVisible();
@@ -402,9 +407,10 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
       // Must be on the assign-admin page
       expect(page.url()).toMatch(/\/site-admin\/organizations\/[0-9a-f-]{36}\/assign-admin$/i);
 
-      // Recovery form must be visible
+      // Recovery form must be visible — the shipped submit copy (see the
+      // stale-regex note in the sibling test above).
       await expect(page.getByRole("heading", { name: "Assign administrator" })).toBeVisible();
-      await expect(page.getByRole("button", { name: /generate admin setup link/i })).toBeVisible();
+      await expect(page.getByRole("button", { name: /re-issue activation token/i })).toBeVisible();
 
       // Stale copy must not appear
       await expect(page.getByText("Already has an active administrator")).not.toBeVisible();

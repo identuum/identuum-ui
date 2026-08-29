@@ -94,28 +94,25 @@ fi
 	exec -T -e IDENTUUM_IDP_BOOTSTRAP_PASSWORD app \
 	/app/identuum-idp bootstrap "$OSS_DB_DSN")
 
-rc=0
-(
-	cd "$UI_DIR"
-	IDENTUUM_E2E_FULL=1 \
-	IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" \
-	IDENTUUM_E2E_FULL_IDP_BASE="http://127.0.0.1:7113" \
-	pnpm exec playwright test --project=oss-full --workers=1
-) || rc=$?
-
-# ── THE-UI-PROVISIONER: after the API suite, seed real identities and run the
-# dev-loop e2e/ suite against THIS appliance. The dev-loop suite navigates the
-# UI, so it runs the "chromium" project WITHOUT IDENTUUM_E2E_FULL=1 (that flag
-# omits the webServer) — a fresh `next dev` on the dedicated dev-loop port starts
-# and the isolated config points it at the appliance on :7113. Everything below
-# is still reached
-# ONLY through this harness (make e2e-full → IDENTUUM_E2E_FULL=1 in the shell
-# that invoked us); a plain `pnpm e2e` never runs any of it, and the dev loop is
-# not slowed. --workers=1 for TOTP replay physics, same as the API suite.
-# E2E_UI_PORT is declared above (pre-appliance) so the WebAuthn origin export
-# could reference it; reused here for the dev-loop webServer + runtime config.
+# ── THE-WITNESSED-COVERAGE: every suite phase runs as a gate-witness STEP, so
+# GATE-RUN.e2e-full.txt carries per-phase exits plus "check OK:" evidence lines
+# derived from each run's OWN Playwright JSON report (pw-phase.sh) and, for
+# route coverage, from the provisioned run's traces (coverage-from-run.mjs).
+# The record is GITIGNORED for the same reason as GATE-RUN.ci.txt — a harness
+# run must not stale the committed verify record's digest — and stays
+# re-checkable on demand: `bash scripts/gate-witness.sh check . GATE-RUN.e2e-full.txt`.
+#
+# THE-UI-PROVISIONER phases inside the plan: after the API suite, seed real
+# identities and run the dev-loop e2e/ suite against THIS appliance. The
+# dev-loop suite navigates the UI, so it runs the "chromium" project WITHOUT
+# IDENTUUM_E2E_FULL=1 (that flag omits the webServer) — a fresh `next dev` on
+# the dedicated dev-loop port starts and the isolated config points it at the
+# appliance on :7113. Everything here is reached ONLY through this harness; a
+# plain `pnpm e2e` never runs any of it, and the dev loop is not slowed.
+# --workers=1 throughout for TOTP replay physics.
 E2E_UI_CFG="$UI_DIR/e2e/.auth/ui-runtime.provisioner.json"
 FIXTURE_FILE="$UI_DIR/e2e/.auth/e2e-org-admin-fixture.json"
+export E2E_UI_CFG FIXTURE_FILE
 mkdir -p "$(dirname "$E2E_UI_CFG")"
 # Non-secret runtime config: point the dev-loop UI at the running appliance.
 # Pretty-printed (2-space) because repo-wide biome format-checks this dir.
@@ -128,79 +125,91 @@ cat >"$E2E_UI_CFG" <<EOF
 }
 EOF
 
-devloop_rc=0
-(
-	cd "$UI_DIR"
+cd "$UI_DIR"
 
-	# The API suite is browser-less; the dev-loop suite drives a real browser, so
-	# ensure the Chromium binary exists (idempotent — a no-op once installed).
-	echo "e2e-full: ensuring the Chromium browser is installed for the dev-loop suite"
-	pnpm exec playwright install chromium >/dev/null 2>&1 || pnpm exec playwright install chromium
+# The API suite is browser-less; the dev-loop suite drives a real browser, so
+# ensure the Chromium binary exists (idempotent — a no-op once installed).
+# Environment prep, not a witnessed phase.
+echo "e2e-full: ensuring the Chromium browser is installed for the dev-loop suite"
+pnpm exec playwright install chromium >/dev/null 2>&1 || pnpm exec playwright install chromium
 
-	# CREDENTIAL ISOLATION (measured failure, 2026-08-29): playwright.config.ts
-	# auto-loads the operator's gitignored .env.playwright.idp-oss.local, whose
-	# IDENTUUM_TEST_* credentials belong to the operator's DEV stack — not this
-	# fresh appliance. Left inherited, the "plain" baseline logs in with a wrong
-	# password 18+ times, the LoginRiskService account counter (5 failures/15min)
-	# locks site_admin, lockout answers invalid_credentials by design (LOCKOUT-1),
-	# and every later login stalls at the password step. loadEnvFile never
-	# overwrites an ALREADY-SET env var, so exporting them EMPTY here makes the
-	# baseline honestly skip (skipAuthTests=true) and the provisioned run take its
-	# credentials from the envelope alone (which outranks env vars in login.ts).
-	export IDENTUUM_TEST_SITE_ADMIN_EMAIL="" IDENTUUM_TEST_SITE_ADMIN_PASSWORD="" \
-		IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET="" IDENTUUM_TEST_ORG_ADMIN_EMAIL="" \
-		IDENTUUM_TEST_ORG_ADMIN_PASSWORD="" IDENTUUM_TEST_ORG_ADMIN_TOTP_SECRET="" \
-		IDENTUUM_TEST_ORG_USER_EMAIL="" IDENTUUM_TEST_ORG_USER_PASSWORD="" \
-		IDENTUUM_TEST_ORG_USER_TOTP_SECRET="" IDENTUUM_TEST_ORG_ID=""
+# CREDENTIAL ISOLATION (measured failure, 2026-08-29): playwright.config.ts
+# auto-loads the operator's gitignored .env.playwright.idp-oss.local, whose
+# IDENTUUM_TEST_* credentials belong to the operator's DEV stack — not this
+# fresh appliance. Left inherited, the "plain" baseline logs in with a wrong
+# password 18+ times, the LoginRiskService account counter (5 failures/15min)
+# locks site_admin, lockout answers invalid_credentials by design (LOCKOUT-1),
+# and every later login stalls at the password step. loadEnvFile never
+# overwrites an ALREADY-SET env var, so exporting them EMPTY here makes the
+# baseline honestly skip (skipAuthTests=true) and the provisioned run take its
+# credentials from the envelope alone (which outranks env vars in login.ts).
+export IDENTUUM_TEST_SITE_ADMIN_EMAIL="" IDENTUUM_TEST_SITE_ADMIN_PASSWORD="" \
+	IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET="" IDENTUUM_TEST_ORG_ADMIN_EMAIL="" \
+	IDENTUUM_TEST_ORG_ADMIN_PASSWORD="" IDENTUUM_TEST_ORG_ADMIN_TOTP_SECRET="" \
+	IDENTUUM_TEST_ORG_USER_EMAIL="" IDENTUUM_TEST_ORG_USER_PASSWORD="" \
+	IDENTUUM_TEST_ORG_USER_TOTP_SECRET="" IDENTUUM_TEST_ORG_ID=""
 
-	# MEASUREMENT baseline (opt-in via IDENTUUM_E2E_MEASURE=1): the SAME dev-loop
-	# suite BEFORE provisioning — no envelope, no dynamic-fixture, no inherited
-	# credentials — so the credential-gated specs self-skip. This is the honest
-	# "plain run" number the provisioned run is compared against; it is never
-	# carried forward.
-	if [ "${IDENTUUM_E2E_MEASURE:-}" = "1" ]; then
-		echo "e2e-full: MEASURE baseline — dev-loop suite PLAIN (unprovisioned)"
-		rm -f "$FIXTURE_FILE"
-		IDENTUUM_E2E_PORT="$E2E_UI_PORT" \
-		IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" \
-		IDENTUUM_IDP_BASE_URL="http://127.0.0.1:7113" \
-			pnpm exec playwright test --project=chromium --workers=1 || true
-	fi
+RECORD="GATE-RUN.e2e-full.txt"
+GW="scripts/gate-witness.sh"
 
-	# Provision the dev-loop fixture from the ALREADY-bootstrapped site_admin (the
-	# API suite above enrolled its MFA; the provisioner reuses that captured
-	# secret — no second bootstrap path). Writes e2e/.auth/e2e-org-admin-fixture.json.
-	echo "e2e-full: provisioning the dev-loop fixture (opt-in specs light up)"
-	IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_PROVISION=1 \
-	IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" \
-	IDENTUUM_E2E_FULL_IDP_BASE="http://127.0.0.1:7113" \
-		pnpm exec playwright test --project=oss-full --workers=1 provision-fixture
+# The plan is fixed at init; the optional MEASURE baseline joins it only when
+# requested, so an absent baseline is a declared subtraction, never INCOMPLETE.
+PLAN=(api-suite)
+[ "${IDENTUUM_E2E_MEASURE:-}" = "1" ] && PLAN+=(plain-baseline)
+PLAN+=(provisioner devloop-provisioned coverage)
+bash "$GW" init "$RECORD" "identuum-ui make e2e-full" "${PLAN[@]}"
 
-	# FAIL LOUD if the provisioner did not seal the envelope: without it,
-	# global-setup's rebuild path would try to stand up ITS OWN appliance
-	# (docker-compose.e2e.yml) on the same :7113 the harness appliance holds —
-	# measured 2026-08-29 as a port-bind error after a silent fall-through.
-	if [ ! -f "$FIXTURE_FILE" ]; then
-		echo "e2e-full: provisioner did not write the fixture envelope — aborting the dev-loop run" >&2
-		exit 1
-	fi
+rc=0
 
-	# Run the dev-loop suite PROVISIONED: the envelope is present and
-	# dynamic-fixture mode is on, so global-setup's fast path REUSES this running
-	# appliance (it validates the envelope's site_admin against :7113 and skips
-	# any down/up) instead of standing up a second stack.
-	echo "e2e-full: dev-loop suite PROVISIONED (the previously-dark specs now light)"
-	IDENTUUM_E2E_PORT="$E2E_UI_PORT" \
-	IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true \
-	IDENTUUM_IDP_BASE_URL="http://127.0.0.1:7113" \
-	IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" \
-		pnpm exec playwright test --project=chromium --workers=1
-) || devloop_rc=$?
+echo "e2e-full: API suite (oss-full)"
+bash "$GW" step "$RECORD" 'api-suite=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh api-suite e2e/.auth/pw-api-suite.json -- --project=oss-full --workers=1' || rc=1
+
+# MEASUREMENT baseline (opt-in via IDENTUUM_E2E_MEASURE=1): the SAME dev-loop
+# suite BEFORE provisioning — no envelope, no dynamic-fixture, no inherited
+# credentials — so the credential-gated specs self-skip. The honest "plain"
+# number, measured in this run, never carried forward.
+if [ "${IDENTUUM_E2E_MEASURE:-}" = "1" ]; then
+	echo "e2e-full: MEASURE baseline — dev-loop suite PLAIN (unprovisioned)"
+	bash "$GW" step "$RECORD" 'plain-baseline=rm -f "$FIXTURE_FILE" && IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh plain-baseline e2e/.auth/pw-plain.json -- --project=chromium --workers=1' || rc=1
+fi
+
+# Provision the dev-loop fixture from the ALREADY-bootstrapped site_admin (the
+# API suite above enrolled its MFA; the provisioner reuses that captured
+# secret — no second bootstrap path). Writes e2e/.auth/e2e-org-admin-fixture.json.
+echo "e2e-full: provisioning the dev-loop fixture (opt-in specs light up)"
+bash "$GW" step "$RECORD" 'provisioner=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_PROVISION=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh provisioner e2e/.auth/pw-provisioner.json -- --project=oss-full --workers=1 provision-fixture' || rc=1
+
+# FAIL LOUD if the provisioner did not seal the envelope: without it,
+# global-setup's rebuild path would try to stand up ITS OWN appliance
+# (docker-compose.e2e.yml) on the same :7113 the harness appliance holds —
+# measured 2026-08-29 as a port-bind error after a silent fall-through. The
+# record is left un-finalized: the unrun planned steps read INCOMPLETE, which
+# is the truth.
+if [ ! -f "$FIXTURE_FILE" ]; then
+	echo "e2e-full: provisioner did not write the fixture envelope — aborting the dev-loop run" >&2
+	docker compose -f "$IDP_DIR/deployment/docker-compose.dev.yml" --profile app down --volumes
+	exit 1
+fi
+
+# Run the dev-loop suite PROVISIONED: the envelope is present and
+# dynamic-fixture mode is on, so global-setup's fast path REUSES this running
+# appliance (it validates the envelope's site_admin against :7113 and skips
+# any down/up) instead of standing up a second stack. --trace on feeds the
+# coverage phase: route coverage is derived from what the run actually did.
+echo "e2e-full: dev-loop suite PROVISIONED (the previously-dark specs now light)"
+bash "$GW" step "$RECORD" 'devloop-provisioned=IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-provisioned e2e/.auth/pw-devloop.json -- --project=chromium --workers=1 --trace on' || rc=1
+
+# Route coverage, derived from THE RUN: the inventory is scanned from
+# src/app/**/page.tsx and the reached set from the traces of tests the JSON
+# report marks passed. No hand-maintained list anywhere.
+echo "e2e-full: deriving route coverage from the provisioned run"
+bash "$GW" step "$RECORD" 'coverage=node e2e-full/scripts/coverage-from-run.mjs e2e/.auth/pw-devloop.json "$IDENTUUM_E2E_BASE_URL"' || rc=1
+
+bash "$GW" finalize "$RECORD" || rc=1
 
 echo "e2e-full: teardown (down --volumes, app profile included)"
 docker compose -f "$IDP_DIR/deployment/docker-compose.dev.yml" --profile app down --volumes
 
-# Surface either suite's failure: the harness is green only when BOTH the API
-# suite and the provisioned dev-loop suite pass.
-if [ "$rc" -eq 0 ]; then rc="$devloop_rc"; fi
+# Green only when EVERY witnessed phase recorded exit=0 (finalize enforces the
+# same condition inside the record itself).
 exit "$rc"

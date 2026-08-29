@@ -42,7 +42,13 @@
       "!**/.playwright",
       "!**/.gograph",
       "!**/.tsgraph",
-      "!**/config/ui-runtime.json"
+      "!**/config/ui-runtime.json",
+      // Run artifacts, machine-written and gitignored: the e2e credential
+      // envelopes plus the harness's Playwright JSON reports (minified by
+      // Playwright itself — not formattable source). THE-WITNESSED-COVERAGE:
+      // biome flagged the reports the moment the harness started writing them.
+      "!**/e2e/.auth",
+      "!**/e2e-full/.auth"
     ]
   }
 }

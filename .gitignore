@@ -71,3 +71,9 @@ src/.tsgraph
 # job and uploaded as an artifact; never committed — a local write must not
 # read as an edit to the committed GATE-RUN.txt record's tree digest.
 /GATE-RUN.ci.txt
+# The e2e-full harness's witnessed coverage record (THE-WITNESSED-COVERAGE):
+# gitignored for the SAME reason as the CI record — a harness run must not
+# stale the committed verify record's digest (and vice versa; two committed
+# records would each cover the other). `gate-witness check . GATE-RUN.e2e-full.txt`
+# still re-verifies it against the tree it ran on.
+/GATE-RUN.e2e-full.txt
