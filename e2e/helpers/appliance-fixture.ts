@@ -318,6 +318,22 @@ async function createClient(
 // delete their OWN SA (fixture-org CASCADE cleanup).
 
 /**
+ * The already-acquired site_admin a caller injects into
+ * seedFixtureFromSiteAdmin: an authenticated bearer plus the three credential
+ * fields that flow verbatim into the envelope's site_admin block. Lets a caller
+ * that ALREADY has a site_admin (e.g. the e2e-full harness's bootstrapped +
+ * MFA-enrolled site_admin, whose captured secret siteAdminSession retains) seed
+ * the fixture WITHOUT re-running the setup wizard — the disposable harness
+ * reuses its ONE bootstrap rather than adding a second.
+ */
+export interface AcquiredSiteAdmin {
+  bearer: string;
+  email: string;
+  password: string;
+  totpSecret: string;
+}
+
+/**
  * Builds the full fixture envelope against the released appliance at `base`.
  * `setupCode` is consulted only if the appliance is still setup_required.
  */
@@ -327,7 +343,29 @@ export async function buildFixtureEnvelope(
   setupCode: string
 ): Promise<FixtureEnvelope> {
   const siteAdmin = await ensureSetupAndSiteAdmin(base, setupCode);
-  const siteAdminBearer = siteAdmin.bearer;
+  return seedFixtureFromSiteAdmin(base, runId, {
+    bearer: siteAdmin.bearer,
+    email: SITE_ADMIN_EMAIL,
+    password: SITE_ADMIN_PASSWORD,
+    totpSecret: siteAdmin.totpSecret,
+  });
+}
+
+/**
+ * Seeds the org / org_admin / org_user / OAuth-client half of the fixture
+ * against an ALREADY-ACQUIRED site_admin, and assembles the envelope. Split out
+ * of buildFixtureEnvelope (byte-identical seeding steps) so a caller holding a
+ * pre-existing site_admin — the e2e-full harness reusing its bootstrap — can
+ * produce the SAME envelope every dev-loop spec consumes, without a second
+ * setup path. The site_admin credentials passed here flow verbatim into the
+ * envelope's site_admin block.
+ */
+export async function seedFixtureFromSiteAdmin(
+  base: string,
+  runId: string,
+  acquiredSiteAdmin: AcquiredSiteAdmin
+): Promise<FixtureEnvelope> {
+  const siteAdminBearer = acquiredSiteAdmin.bearer;
 
   const org = await createOrg(base, siteAdminBearer, runId);
   const orgAdminEmail = `admin@e2e-${runId}.test`;
@@ -389,9 +427,9 @@ export async function buildFixtureEnvelope(
     schema_version: E2E_FIXTURE_SCHEMA_VERSION,
     run_id: runId,
     site_admin: {
-      email: SITE_ADMIN_EMAIL,
-      password: SITE_ADMIN_PASSWORD,
-      totp_secret: siteAdmin.totpSecret,
+      email: acquiredSiteAdmin.email,
+      password: acquiredSiteAdmin.password,
+      totp_secret: acquiredSiteAdmin.totpSecret,
     },
     organization: { name: org.name, slug: org.slug, domain: org.domain, id: org.id },
     org_admin: {
