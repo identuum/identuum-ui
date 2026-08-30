@@ -103,11 +103,15 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     expect(r.json).toHaveProperty("totp_enrolled");
   });
 
-  test("[ROW 36] GET /clients — 200 paged list", async () => {
+  test("[ROW 36] GET /clients — 200 for org_admin (own org), 403 for site_admin (THE-CLIENTS-GUARD)", async () => {
     const r = await api(IDP_BASE, "GET", "/api/v1/clients", undefined, oa);
     expect(r.status).toBe(200);
     expect(Array.isArray(r.json.clients)).toBe(true);
     expect(r.json).toHaveProperty("total");
+    // THE-CLIENTS-GUARD (2026-08-30): site_admin had listed EVERY org's
+    // clients (unscoped) before the fix — now refused. Pinned every run.
+    const refused = await api(IDP_BASE, "GET", "/api/v1/clients", undefined, sa);
+    expect(refused.status).toBe(403);
   });
 
   test("[ROW 39] GET /clients/:id — 200 full client shape (real id)", async () => {

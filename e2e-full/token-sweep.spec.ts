@@ -314,12 +314,15 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
     // ROW GET /oidc/logout (D): bare → 204; a post_logout_redirect_uri not
     // registered to a REAL client → 400 (a nonexistent client_id just skips
     // redirect validation and 204s — the client must exist for the refusal).
+    // THE-CLIENTS-GUARD (2026-08-30): clients are the org's own org_admin's
+    // now — site_admin is refused (403). Create the logout client as the
+    // org_admin so it actually exists for the redirect-refusal below.
     const logoutClient = await api(
       IDP_BASE,
       "POST",
       "/api/v1/clients",
       { name: `lc-${runId}`, redirect_uris: ["https://ui.example.test/cb"] },
-      site.bearer
+      orgBearer
     );
     const logoutClientId = (logoutClient.json.client as { client_id?: string })?.client_id ?? "";
     const logoutBare = await request.get(`${IDP_BASE}/api/v1/oidc/logout`, {
