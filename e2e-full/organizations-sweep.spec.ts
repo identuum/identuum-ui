@@ -292,6 +292,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
   });
 
   test("org roles + scopes: full CRUD and error branches", async () => {
+    // THE-INVERTED-GUARD: api-resources answer to the org's own org_admin.
     const resource = await api(
       IDP_BASE,
       "POST",
@@ -303,7 +304,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
         token_ttl_secs: 3600,
         scopes: [{ Name: "read" }],
       },
-      site.bearer
+      orgAdmin.bearer
     );
     expect(resource.status, "api-resource for scope binding → 201").toBe(201);
     const resId = (resource.json.api_resource as { id?: string })?.id ?? "";

@@ -164,9 +164,12 @@ describe("idp-admin-client.ts — rotateApiResourceSecret wire safety", () => {
     );
     expect(fnMatch).not.toBeNull();
     const body = fnMatch?.[0] ?? "";
-    // The projection reads .id and .secret. No other property access.
-    expect(body).toMatch(/d\?\.id/);
-    expect(body).toMatch(/d\?\.secret\b/);
+    // The projection reads the OSS rotate envelope's api_resource.id and
+    // resource_secret (THE-INVERTED-GUARD: the old {id, secret} read was an
+    // envelope mismatch — the server never served those keys). No other
+    // property access.
+    expect(body).toMatch(/d\?\.api_resource\?\.id/);
+    expect(body).toMatch(/d\?\.resource_secret\b/);
     expect(body).not.toMatch(/d\?\.resource_secret_hash\b/);
     expect(body).not.toMatch(/d\?\.secret_hash\b/);
     expect(body).not.toMatch(/d\?\.private_key\b/);

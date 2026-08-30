@@ -55,10 +55,19 @@ export interface FixtureEnvelope {
   // FIXTURE-DEPTH (Order B) — tenant-owned OAuth clients the org_admin
   // [dynamic mode only] specs consume. Never carry secret material: the public
   // sample client has no secret, and the confidential client discards the
-  // one-time secret the create API returns. (No api_resource block: that admin
-  // surface is site_admin-gated on OSS — see the createClient note below.)
+  // one-time secret the create API returns.
   sample_client: { id: string; client_id: string; name: string; is_public: boolean };
   confidential_sample_client: { id: string; client_id: string; name: string; is_public: boolean };
+  // THE-INVERTED-GUARD (2026-08-30): the api-resources surface now answers
+  // to the org's own org_admin, so the producer seeds one AS the org_admin
+  // (the one-time resource_secret is discarded — never carried).
+  api_resource: {
+    id: string;
+    audience: string;
+    name: string;
+    active: boolean;
+    token_ttl_secs: number;
+  };
 }
 
 interface Json {
@@ -408,7 +417,6 @@ export async function seedFixtureFromSiteAdmin(
   // clients the org_admin [dynamic mode only] specs consume — a PUBLIC client
   // and a CONFIDENTIAL client — both created with the org_admin's OWN authority
   // over its OWN org (POST /api/v1/clients pins organization_id to the actor).
-  // API resources are NOT seeded (site_admin-gated on OSS; see the note above).
   const sampleClient = await createClient(
     base,
     orgAdmin.bearer,
@@ -421,6 +429,38 @@ export async function seedFixtureFromSiteAdmin(
     `E2E Confidential Application ${runId}`,
     false
   );
+
+  // THE-INVERTED-GUARD: seed the API resource the [dynamic] api-resources
+  // specs consume, AS the org_admin (the surface answers to the tenant's
+  // own admin now). The exact naming matches the loader's pins
+  // (loadOrgAdminFixtureApiResource). The one-time resource_secret in the
+  // response is deliberately never read.
+  const apiResourceCreate = await api(
+    base,
+    "POST",
+    "/api/v1/api-resources",
+    {
+      name: `E2E Sample API ${runId}`,
+      audience: `https://api.e2e-${runId}.test`,
+      active: true,
+      token_ttl_secs: 3600,
+      // Both scopes, with the exact descriptions the [dynamic] specs pin.
+      scopes: [
+        { name: "read", description: "Read fixture API resource" },
+        { name: "write", description: "Write fixture API resource" },
+      ],
+    },
+    orgAdmin.bearer
+  );
+  must(
+    apiResourceCreate.status >= 200 && apiResourceCreate.status < 300,
+    `create api resource → ${apiResourceCreate.status}`
+  );
+  const apiResourceBlock = apiResourceCreate.json.api_resource as {
+    id?: string;
+  } | null;
+  const apiResourceID = apiResourceBlock?.id ?? "";
+  must(apiResourceID.length > 0, "create api resource returned no id");
 
   return {
     fixture_marker: E2E_FIXTURE_MARKER,
@@ -446,6 +486,13 @@ export async function seedFixtureFromSiteAdmin(
     },
     sample_client: sampleClient,
     confidential_sample_client: confidentialClient,
+    api_resource: {
+      id: apiResourceID,
+      audience: `https://api.e2e-${runId}.test`,
+      name: `E2E Sample API ${runId}`,
+      active: true,
+      token_ttl_secs: 3600,
+    },
   };
 }
 

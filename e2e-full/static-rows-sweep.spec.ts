@@ -226,16 +226,25 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
   });
 
   // ── site_admin rows ──
-  test("[ROW 3] GET /api-resources — 200 paged list (site_admin)", async () => {
-    const r = await api(IDP_BASE, "GET", "/api/v1/api-resources", undefined, sa);
-    expect(r.status).toBe(200);
-    expect(Array.isArray(r.json.api_resources)).toBe(true);
+  // THE-INVERTED-GUARD (2026-08-30): rows 3/4 flipped WITH the guard. The
+  // api-resources surface answers to the org's own org_admin now;
+  // site_admin — the only role the old guard admitted — is 403-refused
+  // (AdminPermissionsModel.md). Both directions pinned per row.
+  test("[ROW 3] GET /api-resources — 200 for org_admin, 403 for site_admin (the inverted guard, fixed)", async () => {
+    const own = await api(IDP_BASE, "GET", "/api/v1/api-resources", undefined, oa);
+    expect(own.status).toBe(200);
+    expect(Array.isArray(own.json.api_resources)).toBe(true);
+    const refused = await api(IDP_BASE, "GET", "/api/v1/api-resources", undefined, sa);
+    expect(refused.status).toBe(403);
+    expect(refused.json).toHaveProperty("error");
   });
 
-  test("[ROW 4] POST /api-resources — 400 JSON on invalid body (validating; nothing created)", async () => {
-    const r = await api(IDP_BASE, "POST", "/api/v1/api-resources", {}, sa);
-    expect(r.status).toBe(400);
-    expect(r.json).toHaveProperty("error");
+  test("[ROW 4] POST /api-resources — 400 for org_admin invalid body (validating), 403 for site_admin (nothing created)", async () => {
+    const invalid = await api(IDP_BASE, "POST", "/api/v1/api-resources", {}, oa);
+    expect(invalid.status).toBe(400);
+    expect(invalid.json).toHaveProperty("error");
+    const refused = await api(IDP_BASE, "POST", "/api/v1/api-resources", {}, sa);
+    expect(refused.status).toBe(403);
   });
 
   test("[ROW 42] GET /keys — 200 {count,keys} (site_admin)", async () => {

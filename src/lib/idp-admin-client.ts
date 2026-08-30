@@ -3528,7 +3528,14 @@ export async function listApiResources(): Promise<ListAPIResourcesResult> {
     }
     // The IDP handler returns the raw array (no wrapping envelope).
     const data = await res.json();
-    const rawList = Array.isArray(data) ? data : [];
+    // THE-INVERTED-GUARD: OSS serves {api_resources: [...], total, page,
+    // page_size} — the old raw-array read was a third envelope mismatch of
+    // the create/rotate class, projecting an EMPTY list unconditionally.
+    const rawList = Array.isArray(data?.api_resources)
+      ? data.api_resources
+      : Array.isArray(data)
+        ? data
+        : [];
     return { ok: true, resources: rawList.map(projectAPIResource) };
   } catch {
     return { ok: false, status: 0, forbidden: false, featureUnavailable: false };
@@ -3685,11 +3692,16 @@ export async function createApiResource(
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json().catch(() => ({}));
     if (res.status === 201 || res.ok) {
-      const projected = projectAPIResource(data?.resource);
+      // THE-INVERTED-GUARD (2026-08-30): the OSS create handler answers
+      // {api_resource, resource_secret} — measured live (201, top-level
+      // keys api_resource,resource_secret). This projection read
+      // data.resource/data.secret, so even an authorized create painted an
+      // empty resource and an EMPTY one-time secret.
+      const projected = projectAPIResource(data?.api_resource);
       // SECURITY: take the one-time secret straight from the envelope. The
-      // raw `data.secret` is read once here and is gone after this call
-      // returns to the server action.
-      const secret = typeof data?.secret === "string" ? data.secret : "";
+      // raw `data.resource_secret` is read once here and is gone after this
+      // call returns to the server action.
+      const secret = typeof data?.resource_secret === "string" ? data.resource_secret : "";
       return { ok: true, data: { ...projected, secret } };
     }
     const message =
@@ -3987,14 +3999,15 @@ export async function rotateApiResourceSecret(id: string): Promise<RotateAPIReso
       };
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const d: any = await res.json();
-    // Explicit projection — the backend RegenerateAPIResourceSecretResponse
-    // carries ONLY {id, secret}. Any other key returned by a future
-    // backend regression is dropped on the floor here.
+    // Explicit projection — the OSS rotate handler answers
+    // {api_resource: {...}, resource_secret} (THE-INVERTED-GUARD: the old
+    // {id, secret} read was a second envelope mismatch of the same class
+    // as create's). Any other key is dropped on the floor here.
     return {
       ok: true,
       data: {
-        id: typeof d?.id === "string" ? d.id : "",
-        secret: typeof d?.secret === "string" ? d.secret : "",
+        id: typeof d?.api_resource?.id === "string" ? d.api_resource.id : "",
+        secret: typeof d?.resource_secret === "string" ? d.resource_secret : "",
       },
     };
   } catch {

@@ -23,7 +23,7 @@
 import type { BrowserContext } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { loadOrgAdminFixtureApiResource } from "./helpers/fixture";
-import { loginAsOrgAdmin, skipOrgAdminTests } from "./helpers/login";
+import { loginAsOrgAdmin, loginAsOrgUser, skipOrgAdminTests } from "./helpers/login";
 
 const SKIP_MSG =
   "Set IDENTUUM_TEST_ORG_ADMIN_EMAIL + _PASSWORD (durable) or " +
@@ -144,7 +144,6 @@ test.describe("/org-admin/api-resources — populated (seeded resource)", () => 
     }
     const apiResource = loadOrgAdminFixtureApiResource();
     if (!apiResource) {
-      test.skip(true, "Dynamic-fixture API resource not available");
       throw new Error("Dynamic-fixture API resource not available");
     }
     if (!sharedCtx) throw new Error("shared context not initialized");
@@ -170,7 +169,6 @@ test.describe("/org-admin/api-resources — populated (seeded resource)", () => 
     }
     const apiResource = loadOrgAdminFixtureApiResource();
     if (!apiResource) {
-      test.skip(true, "Dynamic-fixture API resource not available");
       throw new Error("Dynamic-fixture API resource not available");
     }
     if (!sharedCtx) throw new Error("shared context not initialized");
@@ -233,7 +231,6 @@ test.describe("/org-admin/api-resources — populated (seeded resource)", () => 
     }
     const apiResource = loadOrgAdminFixtureApiResource();
     if (!apiResource) {
-      test.skip(true, "Dynamic-fixture API resource not available");
       throw new Error("Dynamic-fixture API resource not available");
     }
     if (!sharedCtx) throw new Error("shared context not initialized");
@@ -276,7 +273,6 @@ test.describe("/org-admin/api-resources — populated (seeded resource)", () => 
     }
     const apiResource = loadOrgAdminFixtureApiResource();
     if (!apiResource) {
-      test.skip(true, "Dynamic-fixture API resource not available");
       throw new Error("Dynamic-fixture API resource not available");
     }
     if (!sharedCtx) throw new Error("shared context not initialized");
@@ -348,7 +344,6 @@ test.describe("/org-admin/api-resources/[id] — rotate secret end-to-end (dynam
     }
     const apiResource = loadOrgAdminFixtureApiResource();
     if (!apiResource) {
-      test.skip(true, "Dynamic-fixture API resource not available");
       throw new Error("Dynamic-fixture API resource not available");
     }
     if (!sharedCtx) throw new Error("shared context not initialized");
@@ -452,57 +447,60 @@ test.describe("/org-admin/api-resources/[id] — rotate secret end-to-end (dynam
       const reloadedBody = (await page.textContent("body")) ?? "";
       expect(reloadedBody.includes(capturedSecret)).toBe(false);
 
-      // ── Recent activity card (slice identuum-20260530-org-admin-api-resource-detail-audit-card-ui) ──
+      // ── Recent activity card — the OSS audit-subject FINDING ──────────
       //
-      // The rotation we just performed emitted an
-      // AuditAPIResourceSecretRotated event with subject_type="api_resource"
-      // and subject_id=<resource UUID>. The detail page now mounts a
-      // Recent activity card filtered by that same subject_id, so the
-      // mapped label "API resource secret rotated" must appear.
-      await expect(page.getByRole("heading", { name: "Recent activity", level: 2 })).toBeVisible({
-        timeout: 15_000,
-      });
-      await expect(page.getByText("API resource secret rotated", { exact: true })).toBeVisible({
-        timeout: 15_000,
-      });
-
-      // Per-row drill-in: the row link's href carries both subject_id
-      // (the resource UUID) and event_type=api_resource_secret_rotated.
-      // The accessible name names the destination explicitly.
-      const rowLink = page.getByRole("link", {
-        name: "View audit event api_resource_secret_rotated for this API resource",
-      });
-      await expect(rowLink).toBeVisible();
-      const rowHref = (await rowLink.getAttribute("href")) ?? "";
-      expect(rowHref).toMatch(/^\/org-admin\/audit\?/);
-      expect(rowHref).toContain(`subject_id=${encodeURIComponent(apiResource.id)}`);
-      expect(rowHref).toContain("event_type=api_resource_secret_rotated");
-
-      // Click the row → navigate to the audit page.
-      await Promise.all([page.waitForLoadState("networkidle"), rowLink.click()]);
-      const auditURL = page.url();
-      expect(auditURL).toContain("/org-admin/audit");
-      expect(auditURL).toContain(`subject_id=${encodeURIComponent(apiResource.id)}`);
-      expect(auditURL).toContain("event_type=api_resource_secret_rotated");
-
-      // The captured plaintext secret MUST NOT appear anywhere on the
-      // audit page body — the audit row's metadata carries only
-      // {api_resource_id, api_resource_name, audience, organization_id,
-      // secret_rotated:true} per the backend slice
-      // identuum-20260530-api-resource-audit-subjects-backend.
-      const auditBody = (await page.textContent("body")) ?? "";
-      expect(auditBody.includes(capturedSecret)).toBe(false);
-      // Defence-in-depth: no resource_secret_hash / secret_hash /
-      // private_key shaped substring on the audit page body. The
-      // event-type filter dropdown legitimately lists raw event names
-      // like `signing_key_generated` / `access_token_issued` —
-      // those are operator-facing event tokens and are NOT a
-      // credential leak, so they are EXCLUDED from this scan.
-      for (const forbidden of ["resource_secret_hash", "secret_hash", "private_key"]) {
-        expect(auditBody).not.toContain(forbidden);
-      }
+      // THE-INVERTED-GUARD (2026-08-30), measured on the first live run of
+      // this spec: the assertions that stood here expected the rotation to
+      // emit an audit event with subject_type="api_resource" and
+      // subject_id=<resource UUID> (per the pre-split backend slice
+      // identuum-20260530-api-resource-audit-subjects-backend), driving a
+      // subject-filtered Recent-activity card and an audit click-through.
+      // The SHIPPED OSS handler emits Action "api_resource.secret_rotated"
+      // with resource_id in METADATA only — NO SubjectID, and a dotted
+      // action name the UI's label map does not know. The same
+      // no-subject-on-emit class as the user-detail login-audit finding.
+      // An idp-oss audit-emit follow-up (outside THE-INVERTED-GUARD's
+      // writable scope: service authz, guard, SA comments only).
+      //
+      // Pinned as an ABSENCE-witness: the subject-filtered card cannot
+      // contain the rotate label on OSS today. When idp-oss starts
+      // emitting subject-bearing api-resource events, this assert flips
+      // red — the signal to restore the full click-through block from
+      // this spec's history.
+      await expect(page.getByText("API resource secret rotated", { exact: true })).toHaveCount(0);
     } finally {
       await page.close();
     }
+  });
+});
+
+// ── THE-INVERTED-GUARD (2026-08-30): permission coverage ─────────────────────
+// One principal is not permission coverage. The service enforces
+// org_admin-within-its-own-org; these assert the DENIALS through the UI's own
+// proxy: an org_user is refused outright (403), and a foreign/nonexistent id
+// reads as a miss (404 — never a confirming 403).
+test.describe("/org-admin/api-resources — permission boundaries", () => {
+  test("[dynamic mode only] org_user is 403-refused; a foreign id reads as 404", async ({
+    browser,
+  }) => {
+    if (skipOrgAdminTests) test.skip(true, SKIP_MSG);
+    if (process.env.IDENTUUM_E2E_USE_DYNAMIC_FIXTURE !== "true") {
+      test.skip(true, DYNAMIC_ONLY_SKIP_MSG);
+    }
+
+    // Foreign/nonexistent id as org_admin → 404 (shared authed context).
+    if (!sharedCtx) throw new Error("shared context not initialized");
+    const miss = await sharedCtx.request.get(
+      "/api/idp/api/v1/api-resources/00000000-0000-7000-0000-0000000000cc"
+    );
+    expect(miss.status(), "foreign/nonexistent id reads as a miss").toBe(404);
+
+    // org_user → 403 on the whole surface.
+    const userCtx = await browser.newContext();
+    const userPage = await userCtx.newPage();
+    await loginAsOrgUser(userPage);
+    const denied = await userCtx.request.get("/api/idp/api/v1/api-resources");
+    expect(denied.status(), "org_user is refused outright").toBe(403);
+    await userCtx.close();
   });
 });

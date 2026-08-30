@@ -136,6 +136,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
     expect(ucB.status).toBe(201);
     uIdB = ucB.json.id as string;
 
+    // THE-INVERTED-GUARD: api-resources answer to the org's own org_admin.
     const ar = await api(
       IDP_BASE,
       "POST",
@@ -147,7 +148,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
         token_ttl_secs: 3600,
         scopes: [{ Name: "read" }],
       },
-      site.bearer
+      A.bearer
     );
     expect(ar.status).toBe(201);
     resId = (ar.json.api_resource as { id?: string })?.id ?? "";
@@ -366,30 +367,36 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
     expect(badId.status, "malformed id → 400").toBe(400);
   });
 
-  test("api-resources — site_admin CRUD, org_admin 403 on every verb", async () => {
+  test("api-resources — org_admin CRUD in its own org; site_admin 403; cross-org reads as miss", async () => {
+    // THE-INVERTED-GUARD (2026-08-30): this test pinned the OLD world
+    // (site_admin CRUD, org_admin 403). AdminPermissionsModel.md is law:
+    // the surface answers to the org's own org_admin, site_admin is
+    // refused, and a foreign org's id is indistinguishable from a miss.
     // ROW GET /api-resources/:id (SR)
-    const get = await api(
+    const get = await api(IDP_BASE, "GET", `/api/v1/api-resources/${resId}`, undefined, A.bearer);
+    expect(get.status, "own org_admin get → 200").toBe(200);
+    const getSite = await api(
       IDP_BASE,
       "GET",
       `/api/v1/api-resources/${resId}`,
       undefined,
       site.bearer
     );
-    expect(get.status, "get → 200").toBe(200);
-    const getOrgAdmin = await api(
+    expect(getSite.status, "site_admin get (tenant-owned surface) → 403").toBe(403);
+    const getForeign = await api(
       IDP_BASE,
       "GET",
       `/api/v1/api-resources/${resId}`,
       undefined,
-      A.bearer
+      B.bearer
     );
-    expect(getOrgAdmin.status, "org_admin get (site_admin-only surface) → 403").toBe(403);
+    expect(getForeign.status, "ANOTHER org's admin → 404, never a confirming 403").toBe(404);
     const getGhost = await api(
       IDP_BASE,
       "GET",
       `/api/v1/api-resources/${GHOST}`,
       undefined,
-      site.bearer
+      A.bearer
     );
     expect(getGhost.status, "get nonexistent → 404").toBe(404);
 
@@ -399,15 +406,15 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       "PUT",
       `/api/v1/api-resources/${resId}`,
       { name: `res2-${runId}`, audience: `https://api.${runId}.test`, token_ttl_secs: 7200 },
-      site.bearer
+      A.bearer
     );
-    expect(put.status, "update → 200").toBe(200);
+    expect(put.status, "own update → 200").toBe(200);
     const putGhost = await api(
       IDP_BASE,
       "PUT",
       `/api/v1/api-resources/${GHOST}`,
       { name: "x", audience: "https://x.test", token_ttl_secs: 3600 },
-      site.bearer
+      A.bearer
     );
     expect(putGhost.status, "update nonexistent → 404").toBe(404);
 
@@ -417,41 +424,59 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       "POST",
       `/api/v1/api-resources/${resId}/secret/regenerate`,
       {},
-      site.bearer
+      A.bearer
     );
-    expect(regen.status, "secret rotate → 200").toBe(200);
+    expect(regen.status, "own secret rotate → 200").toBe(200);
     const regenGhost = await api(
       IDP_BASE,
       "POST",
       `/api/v1/api-resources/${GHOST}/secret/regenerate`,
       {},
-      site.bearer
+      A.bearer
     );
     expect(regenGhost.status, "rotate nonexistent → 404").toBe(404);
 
     // ROW DELETE /api-resources/:id (D)
-    const delOrgAdmin = await api(
+    const delSite = await api(
+      IDP_BASE,
+      "DELETE",
+      `/api/v1/api-resources/${resId}`,
+      undefined,
+      site.bearer
+    );
+    expect(delSite.status, "site_admin delete → 403").toBe(403);
+    // A FOREIGN org's admin gets the documented idempotent success — and
+    // the row SURVIVES: the org-scoped DELETE cannot match it.
+    const delForeign = await api(
+      IDP_BASE,
+      "DELETE",
+      `/api/v1/api-resources/${resId}`,
+      undefined,
+      B.bearer
+    );
+    expect(delForeign.status, "foreign delete → idempotent 200, confirms nothing").toBe(200);
+    const survived = await api(
+      IDP_BASE,
+      "GET",
+      `/api/v1/api-resources/${resId}`,
+      undefined,
+      A.bearer
+    );
+    expect(survived.status, "the row SURVIVES the foreign delete").toBe(200);
+    const del = await api(
       IDP_BASE,
       "DELETE",
       `/api/v1/api-resources/${resId}`,
       undefined,
       A.bearer
     );
-    expect(delOrgAdmin.status, "org_admin delete → 403").toBe(403);
-    const del = await api(
-      IDP_BASE,
-      "DELETE",
-      `/api/v1/api-resources/${resId}`,
-      undefined,
-      site.bearer
-    );
-    expect(del.status, "delete → 200").toBe(200);
+    expect(del.status, "own delete → 200").toBe(200);
     const badId = await api(
       IDP_BASE,
       "DELETE",
       "/api/v1/api-resources/not-a-uuid",
       undefined,
-      site.bearer
+      A.bearer
     );
     expect(badId.status, "malformed id → 400").toBe(400);
   });
