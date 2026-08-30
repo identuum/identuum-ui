@@ -74,21 +74,62 @@ interface Json {
   [k: string]: unknown;
 }
 
+/**
+ * THE-SESSION-REJECTIONS (2026-08-30): every api() call is recorded in a
+ * bounded ring (timestamp, method, path, status, server Date header, rtt) so
+ * that a mid-run session rejection is diagnosable from the failure output —
+ * the IdP answers an identical `{"error":"unauthorized"}` for a bad token, an
+ * expired session, a revoked jti, AND a fail-closed store error, and logs
+ * nothing server-side, so the client-side timeline is the only record.
+ * Values are never recorded — only names, statuses, and timings.
+ */
+const API_RING_MAX = 300;
+const apiRing: Array<{
+  t: number;
+  method: string;
+  path: string;
+  status: number;
+  date: string | null;
+  rtt: number;
+}> = [];
+
+/** Formatted tail of the api() call ring, newest last. */
+export function apiCallLog(last = 40): string {
+  return apiRing
+    .slice(-last)
+    .map(
+      (e) =>
+        `${new Date(e.t).toISOString()} ${e.method} ${e.path} -> ${e.status} rtt=${e.rtt}ms server-date=${e.date ?? "-"}`
+    )
+    .join("\n");
+}
+
 async function api(
   base: string,
   method: string,
   path: string,
   body?: Json,
   bearer?: string
-): Promise<{ status: number; json: Json }> {
+): Promise<{ status: number; json: Json; date: string | null }> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (bearer) headers.Authorization = `Bearer ${bearer}`;
+  const t0 = Date.now();
   const res = await fetch(`${base}${path}`, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await res.text();
+  const date = res.headers.get("date");
+  apiRing.push({
+    t: t0,
+    method,
+    path,
+    status: res.status,
+    date,
+    rtt: Date.now() - t0,
+  });
+  if (apiRing.length > API_RING_MAX) apiRing.splice(0, apiRing.length - API_RING_MAX);
   let json: Json = {};
   if (text.trim().length > 0) {
     try {
@@ -97,7 +138,7 @@ async function api(
       json = { _raw: text.slice(0, 200) };
     }
   }
-  return { status: res.status, json };
+  return { status: res.status, json, date };
 }
 
 function must(cond: boolean, msg: string): void {

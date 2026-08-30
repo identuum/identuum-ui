@@ -230,7 +230,31 @@ test.describe("/site-admin/organizations/[id] — admin recovery card (read-only
       await page.waitForLoadState("networkidle");
 
       // Fail fast if the session was rejected.
-      expect(new URL(page.url()).pathname).toBe(`/site-admin/organizations/${ORG_ID}`);
+      const landedPath = new URL(page.url()).pathname;
+      if (landedPath !== `/site-admin/organizations/${ORG_ID}`) {
+        // THE-SESSION-REJECTIONS diagnostic (incident 2026-08-30: this
+        // beforeAll-minted site_admin session bounced to /login mid-suite;
+        // the IdP answers one opaque `{"error":"unauthorized"}` for every
+        // rejection branch and logs nothing). Probe the SAME cookie jar
+        // right now: validate 200 means the session is alive and the bounce
+        // was a transient fail-closed rejection on the page's own call;
+        // validate 401 means the session is genuinely dead. Cookie values
+        // are never read — only the probe's status/body are logged. The
+        // assertion below still fails on the original landing.
+        const probe = await page.request.get("/api/idp/api/v1/validate");
+        let probeBody = "";
+        try {
+          probeBody = (await probe.text()).slice(0, 300);
+        } catch {
+          probeBody = "(unreadable)";
+        }
+        console.log(
+          `[SESSION-REJECTION DIAGNOSTIC] landed=${landedPath} ` +
+            `cookie-jar validate=${probe.status()} (200 = transient rejection on the page load; 401 = session dead) ` +
+            `body=${probeBody} server-date=${probe.headers().date ?? "-"} host=${new Date().toISOString()}`
+        );
+      }
+      expect(landedPath).toBe(`/site-admin/organizations/${ORG_ID}`);
 
       // Card heading is the wire-anchor for the recovery section.
       await expect(page.getByText("Organization administrators")).toBeVisible();
