@@ -8,7 +8,7 @@
  * row, recording WHICH status: a 404 hiding a 403 is the audi.de class).
  *
  * Auth scoping (docgen, verified): admin/*, api-resources/*,
- * scope-templates/*, users/restore are site_admin-only (org_admin → 403);
+ * scope-templates/* are the org-own org_admin’s (site_admin → 403, THE-SCOPE-TEMPLATES); users/restore is site_admin-only;
  * clients/* and users roles/approve/reset-mfa are site_admin|org_admin.
  *
  * MEASURED behaviors pinned (findings recorded in the wiki, suite stays
@@ -481,90 +481,108 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
     expect(badId.status, "malformed id → 400").toBe(400);
   });
 
-  test("scope-templates — site_admin CRUD, org_admin 403", async () => {
-    // ROW POST /scope-templates (SM)
+  test("scope-templates — org_admin CRUD in its own org; site_admin 403; cross-org 404; reserved prefix refused", async () => {
+    // THE-SCOPE-TEMPLATES (2026-08-30): owner ruling — scope templates are a
+    // tenant's own resource. org_admin manages its own; site_admin is refused;
+    // a foreign template reads as a miss; and the reserved-prefix bound
+    // (system:/keys:/backups:), unwired until this slice, is now enforced.
     const create = await api(
       IDP_BASE,
       "POST",
       "/api/v1/scope-templates",
       { name: `st-${runId}`, scopes: ["read", "write"] },
-      site.bearer
+      A.bearer
     );
-    expect(create.status, "create → 201").toBe(201);
+    expect(create.status, "own org_admin create -> 201").toBe(201);
     const stId = (create.json.id as string) ?? "";
     expect(stId.length).toBeGreaterThan(0);
-    const createOrgAdmin = await api(
+    const createSite = await api(
       IDP_BASE,
       "POST",
       "/api/v1/scope-templates",
-      { name: `sto-${runId}`, scopes: ["read"] },
-      A.bearer
-    );
-    expect(createOrgAdmin.status, "org_admin create → 403").toBe(403);
-    const createBad = await api(IDP_BASE, "POST", "/api/v1/scope-templates", {}, site.bearer);
-    expect(createBad.status, "empty body → 400").toBe(400);
-
-    // ROW GET /scope-templates/:id (SR)
-    const get = await api(
-      IDP_BASE,
-      "GET",
-      `/api/v1/scope-templates/${stId}`,
-      undefined,
+      { name: `sts-${runId}`, scopes: ["read"] },
       site.bearer
     );
-    expect(get.status, "get → 200").toBe(200);
+    expect(createSite.status, "site_admin create (tenant resource) -> 403").toBe(403);
+    const createReserved = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/scope-templates",
+      { name: `str-${runId}`, scopes: ["system:admin"] },
+      A.bearer
+    );
+    expect(createReserved.status, "org_admin reserved-prefix create -> 400").toBe(400);
+    const createBad = await api(IDP_BASE, "POST", "/api/v1/scope-templates", {}, A.bearer);
+    expect(createBad.status, "empty body -> 400").toBe(400);
+
+    const get = await api(IDP_BASE, "GET", `/api/v1/scope-templates/${stId}`, undefined, A.bearer);
+    expect(get.status, "own get -> 200").toBe(200);
     const getGhost = await api(
       IDP_BASE,
       "GET",
       `/api/v1/scope-templates/${GHOST}`,
       undefined,
-      site.bearer
+      A.bearer
     );
-    expect(getGhost.status, "get nonexistent → 404").toBe(404);
-    const getOrgAdmin = await api(
+    expect(getGhost.status, "get nonexistent -> 404").toBe(404);
+    const getForeign = await api(
       IDP_BASE,
       "GET",
       `/api/v1/scope-templates/${stId}`,
       undefined,
-      A.bearer
+      B.bearer
     );
-    expect(getOrgAdmin.status, "org_admin get → 403").toBe(403);
+    expect(getForeign.status, "ANOTHER org admin -> 404, never a confirming 403").toBe(404);
+    const getSite = await api(
+      IDP_BASE,
+      "GET",
+      `/api/v1/scope-templates/${stId}`,
+      undefined,
+      site.bearer
+    );
+    expect(getSite.status, "site_admin get (tenant resource) -> 403").toBe(403);
 
-    // ROW PUT /scope-templates/:id (SM)
     const put = await api(
       IDP_BASE,
       "PUT",
       `/api/v1/scope-templates/${stId}`,
       { name: `st2-${runId}`, scopes: ["read"] },
-      site.bearer
+      A.bearer
     );
-    expect(put.status, "update → 200").toBe(200);
+    expect(put.status, "own update -> 200").toBe(200);
+    const putReserved = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/scope-templates/${stId}`,
+      { scopes: ["keys:rotate"] },
+      A.bearer
+    );
+    expect(putReserved.status, "org_admin reserved-prefix update -> 400").toBe(400);
     const putGhost = await api(
       IDP_BASE,
       "PUT",
       `/api/v1/scope-templates/${GHOST}`,
       { name: "x", scopes: ["read"] },
-      site.bearer
+      A.bearer
     );
-    expect(putGhost.status, "update nonexistent → 404").toBe(404);
+    expect(putGhost.status, "update nonexistent -> 404").toBe(404);
 
-    // ROW DELETE /scope-templates/:id (D)
     const del = await api(
       IDP_BASE,
       "DELETE",
       `/api/v1/scope-templates/${stId}`,
       undefined,
-      site.bearer
+      A.bearer
     );
-    expect(del.status, "delete → 200").toBe(200);
+    expect(del.status, "own delete -> 200").toBe(200);
     const badId = await api(
       IDP_BASE,
       "DELETE",
       "/api/v1/scope-templates/not-a-uuid",
       undefined,
-      site.bearer
+      A.bearer
     );
-    expect(badId.status, "malformed id → 400").toBe(400);
+    expect(badId.status, "malformed id -> 400").toBe(400);
   });
 
   test("admin backchannel deliveries — list, get, replay (outbound unreachable)", async () => {

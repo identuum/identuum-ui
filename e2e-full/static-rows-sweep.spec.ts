@@ -160,10 +160,16 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     expect(refused.status).toBe(403);
   });
 
-  test("[ROW 94] GET /scope-templates — 403 for org_admin (fenced read, UI renders its designed panel)", async () => {
+  test("[ROW 94] GET /scope-templates — 200 org_admin, 403 site_admin (THE-SCOPE-TEMPLATES)", async () => {
+    // THE-SCOPE-TEMPLATES (2026-08-30): owner ruling flipped this from
+    // site_admin-only to the org's own org_admin. org_admin now READS its
+    // templates (200); site_admin — which used to be the only allowed role —
+    // is refused.
     const r = await api(IDP_BASE, "GET", "/api/v1/scope-templates", undefined, oa);
-    expect(r.status).toBe(403);
-    expect(r.json).toHaveProperty("error");
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.json.scope_templates)).toBe(true);
+    const refused = await api(IDP_BASE, "GET", "/api/v1/scope-templates", undefined, sa);
+    expect(refused.status).toBe(403);
   });
 
   test("[ROW 99] GET /organizations/:id/service-accounts — 200 org_admin, 403 site_admin (THE-REMAINING-FOUR)", async () => {
