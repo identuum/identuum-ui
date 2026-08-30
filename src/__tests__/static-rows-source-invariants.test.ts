@@ -10,8 +10,8 @@
  * direction) or a drop below the floor. These pins keep that enforcement from
  * being quietly unwired:
  *
- *   (a) the committed file exists, lists 24 distinct rows (the 23 census rows
- *       + [ROW 200], the THE-PER-VERB-SWEEP sentinel), and carries a positive
+ *   (a) the committed file exists, lists 25 distinct rows (the 23 census rows
+ *       + the [ROW 200]/[ROW 201] per-verb sentinels), and carries a positive
  *       integer floor equal to the list length;
  *   (b) the enforcement script READS the committed file, COMPARES the
  *       passed set, and EXITS NON-ZERO on drift and on a floor violation;
@@ -37,7 +37,7 @@ const stripComments = (src: string): string =>
     .replace(/\s\/\/[^\n]*/g, "");
 
 describe("the static census rows stay asserted every harness run [STATIC-ROWS-1]", () => {
-  it("static-rows.json commits 24 distinct rows and a floor equal to the list length", () => {
+  it("static-rows.json commits 25 distinct rows and a floor equal to the list length", () => {
     const parsed = JSON.parse(read("e2e-full/static-rows.json")) as {
       rows?: unknown;
       rows_asserted_floor?: unknown;
@@ -46,9 +46,11 @@ describe("the static census rows stay asserted every harness run [STATIC-ROWS-1]
     expect(Array.isArray(rows), "rows must be a list").toBe(true);
     const list = rows as number[];
     expect(new Set(list).size, "rows must be distinct").toBe(list.length);
-    // 23 formerly-static-only census rows + [ROW 200], the THE-PER-VERB-SWEEP
-    // sentinel that fires site_admin against all 45 tenant-resource verbs.
-    expect(list.length, "23 census rows + the per-verb sweep sentinel [ROW 200]").toBe(24);
+    // 23 formerly-static-only census rows + the two per-verb refusal
+    // sentinels: [ROW 200] (site_admin, THE-PER-VERB-SWEEP) and [ROW 201]
+    // (org_user, THE-ROLE-CENSUS T4-1) — both fire the identical 45-verb
+    // tenant-resource battery.
+    expect(list.length, "23 census rows + the two per-verb sentinels [ROW 200/201]").toBe(25);
     expect(parsed.rows_asserted_floor, "floor equals the committed list length").toBe(list.length);
   });
 

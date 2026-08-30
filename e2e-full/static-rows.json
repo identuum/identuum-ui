@@ -2,7 +2,7 @@
   "_comment": "THE-PROBES-THAT-STAY committed row set + floor. The behavioral census's 23 formerly-static-only rows (13 PAGE-LOAD + 10 INTERACTION, incl. the two THE-REMAINING-CLICKS opened) are asserted live by e2e-full/static-rows-sweep.spec.ts every harness run; static-rows-from-run.mjs FAILS the phase when the set of PASSED [ROW n] tests differs from this list IN EITHER DIRECTION (a skipped/deleted row test must never read green — the STALE-SPEC-COPY lesson) or when the count drops below the floor. Grow this list only in a deliberate commit, exactly like a floor raise. ROW 200 is the THE-PER-VERB-SWEEP sentinel (2026-08-30): one test that fires site_admin against all 45 tenant-resource verbs and asserts 403 on each; registering it here means deleting the per-verb block reads as STATIC ROWS DRIFT, and its in-test length assertion makes shrinking the 45-verb matrix fail too.",
   "rows": [
     3, 4, 9, 12, 20, 21, 22, 36, 39, 42, 61, 70, 75, 82, 84, 91, 94, 99, 102, 107, 118, 121, 126,
-    200
+    200, 201
   ],
-  "rows_asserted_floor": 24
+  "rows_asserted_floor": 25
 }

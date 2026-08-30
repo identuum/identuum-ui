@@ -24,7 +24,7 @@
 
 import { expect, test } from "@playwright/test";
 import { api } from "../e2e/helpers/appliance-fixture";
-import { loadOrgAdminFixture } from "../e2e/helpers/fixture";
+import { loadOrgAdminFixture, loadOrgUserFixture } from "../e2e/helpers/fixture";
 import { generateTOTP } from "../e2e/helpers/totp";
 import { siteAdminSession } from "./helpers/session";
 
@@ -61,6 +61,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
 
   let sa = "";
   let oa = "";
+  let ou = "";
   let orgId = "";
   let myId = "";
   let saId = "";
@@ -73,6 +74,13 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     const fx = loadOrgAdminFixture();
     if (!fx) throw new Error("org_admin envelope missing — phase must run after the provisioner");
     oa = await bearerFor(fx.email, fx.password, fx.totpSecret);
+
+    // THE-ROLE-CENSUS T4-1: the org_user is the third credential type the
+    // suite must cover — the fixture org's REQUIRED MFA policy means it is
+    // TOTP-enrolled like the admins, so the same login helper applies.
+    const ufx = loadOrgUserFixture();
+    if (!ufx) throw new Error("org_user envelope missing — phase must run after the provisioner");
+    ou = await bearerFor(ufx.email, ufx.password, ufx.totpSecret);
 
     const prof = await api(IDP_BASE, "GET", "/api/v1/profile", undefined, oa);
     if (prof.status !== 200) throw new Error(`profile bootstrap read: ${prof.status}`);
@@ -355,13 +363,19 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     saId = String((created.json as Json).id);
   });
 
-  test("[ROW 200] per-verb site_admin refusal sweep — 45 tenant-resource verbs, all 403 (THE-PER-VERB-SWEEP)", async () => {
-    type Probe = {
-      method: "GET" | "POST" | "PUT" | "DELETE";
-      path: string;
-      body?: Record<string, unknown>;
-    };
-    const probes: Probe[] = [
+  type Probe = {
+    method: "GET" | "POST" | "PUT" | "DELETE";
+    path: string;
+    body?: Record<string, unknown>;
+  };
+
+  // The 45-verb tenant-resource battery. ONE builder, consumed by BOTH
+  // refusal sweeps ([ROW 200] site_admin, [ROW 201] org_user) so the two
+  // principals are proven against the IDENTICAL verb surface — a verb added
+  // for one is automatically probed for the other. Built at test time
+  // because orgId/myId/saId resolve in beforeAll.
+  function tenantResourceProbes(): Probe[] {
+    return [
       // api-resources (6)
       { method: "GET", path: "/api/v1/api-resources" },
       { method: "GET", path: `/api/v1/api-resources/${RAND}` },
@@ -421,6 +435,10 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       { method: "PUT", path: `/api/v1/organizations/${orgId}/identity-provider`, body: {} },
       { method: "DELETE", path: `/api/v1/organizations/${orgId}/identity-provider` },
     ];
+  }
+
+  test("[ROW 200] per-verb site_admin refusal sweep — 45 tenant-resource verbs, all 403 (THE-PER-VERB-SWEEP)", async () => {
+    const probes = tenantResourceProbes();
     expect(probes.length, "the pinned verb surface is 45; changing it is a deliberate edit").toBe(
       45
     );
@@ -432,5 +450,31 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       if (res.status !== 403) admitted.push(`${pr.method} ${pr.path} → ${res.status}`);
     }
     expect(admitted, `site_admin was NOT refused (403) on: ${admitted.join("; ")}`).toEqual([]);
+  });
+
+  test("[ROW 201] per-verb org_user refusal sweep — the same 45 verbs, all 403 (THE-ROLE-CENSUS T4-1)", async () => {
+    // AdminPermissionsModel.md: org_user is self-service only — it cannot
+    // manage ANY organization resource. Every family refuses it before the
+    // operative branch: the handler/service gates require IsOrgAdminOnly
+    // (api-resources, clients, scope-templates, service-accounts — including
+    // the fetch-first ID-scoped SA verbs, where the REAL saId proves the 403
+    // is the authority refusal), and the route guards refuse non-org_admin
+    // outright (domains, protocol-settings, rbac, identity-provider). A
+    // denial that silently stops being enforced is the failure that matters
+    // — this pins the entire negative surface for the thinnest principal,
+    // every run, against the IDENTICAL battery [ROW 200] fires as
+    // site_admin.
+    const probes = tenantResourceProbes();
+    expect(probes.length, "the pinned verb surface is 45; changing it is a deliberate edit").toBe(
+      45
+    );
+    expect(ou, "the org_user bearer must have been minted in beforeAll").toBeTruthy();
+
+    const admitted: string[] = [];
+    for (const pr of probes) {
+      const res = await api(IDP_BASE, pr.method, pr.path, pr.body, ou);
+      if (res.status !== 403) admitted.push(`${pr.method} ${pr.path} → ${res.status}`);
+    }
+    expect(admitted, `org_user was NOT refused (403) on: ${admitted.join("; ")}`).toEqual([]);
   });
 });
