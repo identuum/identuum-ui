@@ -58,8 +58,10 @@ describe("the devloop skip count has an enforced ceiling [SKIP-CEILING-1]", () =
 
   it("full-run.sh runs the enforcement as a witnessed step in the plan", () => {
     const sh = stripComments(read("e2e-full/scripts/full-run.sh"));
+    // The plan tail grew when THE-ADMIN-RESET joined it (T-R2a) — the pin
+    // asserts skip-ceiling's PRESENCE in the plan, not the plan's tail.
     expect(sh, "skip-ceiling is a planned phase").toMatch(
-      /devloop-provisioned skip-ceiling coverage\)/
+      /devloop-provisioned skip-ceiling coverage/
     );
     expect(sh, "enforcement runs as its own witnessed step").toMatch(
       /step "\$RECORD" 'skip-ceiling=node e2e-full\/scripts\/skip-ceiling-from-run\.mjs/

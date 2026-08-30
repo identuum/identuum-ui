@@ -144,7 +144,7 @@ GW="scripts/gate-witness.sh"
 # requested, so an absent baseline is a declared subtraction, never INCOMPLETE.
 PLAN=(fresh-appliance api-suite)
 [ "${IDENTUUM_E2E_MEASURE:-}" = "1" ] && PLAN+=(plain-baseline)
-PLAN+=(provisioner static-rows-sweep static-rows role-matrix devloop-provisioned skip-ceiling coverage)
+PLAN+=(provisioner static-rows-sweep static-rows role-matrix devloop-provisioned skip-ceiling coverage admin-reset)
 bash "$GW" init "$RECORD" "identuum-ui make e2e-full" "${PLAN[@]}"
 
 rc=0
@@ -221,6 +221,14 @@ if [ ! -f "$FIXTURE_FILE" ]; then
 	exit 1
 fi
 
+# THE-ADMIN-RESET needs the tenant credentials AFTER the dev-loop suite,
+# whose global teardown deletes the envelope (removeLocalFixtureFiles — "no
+# trace left"). Keep a run-local copy for the last phase; same directory,
+# same gitignore, same 0600, gone with the run like the original.
+ADMIN_RESET_ENVELOPE="$UI_DIR/e2e/.auth/admin-reset-envelope.json"
+cp "$FIXTURE_FILE" "$ADMIN_RESET_ENVELOPE"
+chmod 600 "$ADMIN_RESET_ENVELOPE"
+
 # THE-PROBES-THAT-STAY: re-assert, EVERY run, the status + shape each of the
 # census's 23 formerly-static-only rows measured when probed live — as its own
 # witnessed phase (needs the org_admin envelope, so it follows the
@@ -269,6 +277,18 @@ bash "$GW" step "$RECORD" 'skip-ceiling=node e2e-full/scripts/skip-ceiling-from-
 # report marks passed. No hand-maintained list anywhere.
 echo "e2e-full: deriving route coverage from the provisioned run"
 bash "$GW" step "$RECORD" 'coverage=node e2e-full/scripts/coverage-from-run.mjs "$IDENTUUM_E2E_BASE_URL" e2e/.auth/pw-devloop.json e2e/.auth/pw-fresh.json' || rc=1
+
+# THE-ADMIN-RESET (T-R2a): the LAST phase, because it rotates site_admin's
+# credentials — nothing after it may depend on them. Proves TEST-spec R2's
+# "admin reset without customer data loss" live on the populated appliance:
+# recover-site-admin via the product CLI (run-local password, generated
+# below, never printed), old password refused, new password through the
+# first-login enrolment to working site_admin authority, every seeded tenant
+# resource still present by id, tenant logins unaffected.
+IDENTUUM_E2E_RECOVERED_ADMIN_PASSWORD="R3cover!$(openssl rand -hex 16)"
+export IDENTUUM_E2E_RECOVERED_ADMIN_PASSWORD
+echo "e2e-full: admin-reset scenario (rotates site_admin; run-local recovery password)"
+bash "$GW" step "$RECORD" 'admin-reset=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_ADMIN_RESET=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_IDP_DIR='"$IDP_DIR"' IDENTUUM_E2E_FIXTURE_FILE='"$ADMIN_RESET_ENVELOPE"' IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh admin-reset e2e/.auth/pw-admin-reset.json -- --project=oss-full --workers=1 admin-reset' || rc=1
 
 bash "$GW" finalize "$RECORD" || rc=1
 
