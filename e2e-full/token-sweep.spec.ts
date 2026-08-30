@@ -134,6 +134,9 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
     });
     userBearer = (ul.json.access_token as string) ?? "";
     expect(userBearer.length).toBeGreaterThan(0);
+    // THE-REMAINING-FOUR (2026-08-30): service accounts are the org's own
+    // org_admin's now — site_admin is refused, so the M2M bundle is minted by
+    // the org_admin.
     const bundle = await api(
       IDP_BASE,
       "POST",
@@ -142,7 +145,7 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
         service_account: { name: `m2m-${runId}` },
         client: { name: `m2mcl-${runId}`, allowed_audiences: [`https://api.${runId}.test`] },
       },
-      site.bearer
+      orgBearer
     );
     expect(bundle.status).toBe(201);
     m2mId = (bundle.json.client as { client_id?: string })?.client_id ?? "";
@@ -375,13 +378,36 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
     );
     expect(sa.status).toBe(201);
     const saId = (sa.json as { id?: string }).id ?? "";
+    // THE-REMAINING-FOUR (2026-08-30): service accounts are the org's own
+    // org_admin's — site_admin can no longer create org B's SA. Delegate an
+    // org_admin to the admin-less org B (site_admin's legitimate delegation
+    // exception) and mint org B's SA as that admin, so the cross-tenant
+    // refusals below have a REAL foreign SA to bounce off.
+    const adminBEmail = `admin@${runId}b.test`;
+    const adminBPw = `TokB!${runId}9kZ`;
+    const oaBC = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/users",
+      { email: adminBEmail, password: adminBPw, role: "org_admin", organization_id: orgB },
+      site.bearer
+    );
+    await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/users/${oaBC.json.id}`,
+      { email_verified: true },
+      site.bearer
+    );
+    const orgBearerB = await enrollBearer(adminBEmail, adminBPw);
     const saB = await api(
       IDP_BASE,
       "POST",
       `/api/v1/organizations/${orgB}/service-accounts`,
       { name: `sab-${runId}` },
-      site.bearer
+      orgBearerB
     );
+    expect(saB.status).toBe(201);
     const saIdB = (saB.json as { id?: string }).id ?? "";
 
     // ROW GET /service-accounts/:id (SR)

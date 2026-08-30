@@ -124,22 +124,40 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     expect(r.json).toHaveProperty("redirect_uris");
   });
 
-  test("[ROW 61] GET /organizations/:id/domains — 200", async () => {
+  test("[ROW 61] GET /organizations/:id/domains — 200 org_admin, 403 site_admin (THE-REMAINING-FOUR)", async () => {
     const r = await api(IDP_BASE, "GET", `/api/v1/organizations/${orgId}/domains`, undefined, oa);
     expect(r.status).toBe(200);
     expect(r.json).toHaveProperty("organization_domains");
+    const refused = await api(
+      IDP_BASE,
+      "GET",
+      `/api/v1/organizations/${orgId}/domains`,
+      undefined,
+      sa
+    );
+    expect(refused.status).toBe(403);
   });
 
-  test("[ROW 84] GET /organizations/:id/roles — 200", async () => {
+  test("[ROW 84] GET /organizations/:id/roles — 200 org_admin, 403 site_admin (THE-REMAINING-FOUR)", async () => {
     const r = await api(IDP_BASE, "GET", `/api/v1/organizations/${orgId}/roles`, undefined, oa);
     expect(r.status).toBe(200);
     expect(r.json).toHaveProperty("roles");
+    const refused = await api(
+      IDP_BASE,
+      "GET",
+      `/api/v1/organizations/${orgId}/roles`,
+      undefined,
+      sa
+    );
+    expect(refused.status).toBe(403);
   });
 
-  test("[ROW 91] GET /users/:id/roles — 200 (own id)", async () => {
+  test("[ROW 91] GET /users/:id/roles — 200 org_admin, 403 site_admin (THE-REMAINING-FOUR)", async () => {
     const r = await api(IDP_BASE, "GET", `/api/v1/users/${myId}/roles`, undefined, oa);
     expect(r.status).toBe(200);
     expect(r.json).toHaveProperty("roles");
+    const refused = await api(IDP_BASE, "GET", `/api/v1/users/${myId}/roles`, undefined, sa);
+    expect(refused.status).toBe(403);
   });
 
   test("[ROW 94] GET /scope-templates — 403 for org_admin (fenced read, UI renders its designed panel)", async () => {
@@ -148,7 +166,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     expect(r.json).toHaveProperty("error");
   });
 
-  test("[ROW 99] GET /organizations/:id/service-accounts — 200", async () => {
+  test("[ROW 99] GET /organizations/:id/service-accounts — 200 org_admin, 403 site_admin (THE-REMAINING-FOUR)", async () => {
     const r = await api(
       IDP_BASE,
       "GET",
@@ -157,6 +175,14 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       oa
     );
     expect(r.status).toBe(200);
+    const refused = await api(
+      IDP_BASE,
+      "GET",
+      `/api/v1/organizations/${orgId}/service-accounts`,
+      undefined,
+      sa
+    );
+    expect(refused.status).toBe(403);
   });
 
   test("[ROW 118] GET /users — 200 paged list", async () => {
@@ -264,15 +290,26 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     expect(r.json).toHaveProperty("active");
   });
 
-  test("[ROW 70] GET /organizations/:id/protocol-settings — 200 (site_admin)", async () => {
+  test("[ROW 70] GET /organizations/:id/protocol-settings — 200 org_admin, 403 site_admin (THE-REMAINING-FOUR)", async () => {
+    // THE-REMAINING-FOUR (2026-08-30): protocol-settings are the org's own —
+    // org_admin reads them, site_admin (which used to be admitted here) is
+    // now refused.
     const r = await api(
+      IDP_BASE,
+      "GET",
+      `/api/v1/organizations/${orgId}/protocol-settings`,
+      undefined,
+      oa
+    );
+    expect(r.status).toBe(200);
+    expect(r.json).toHaveProperty("organization_id");
+    const refused = await api(
       IDP_BASE,
       "GET",
       `/api/v1/organizations/${orgId}/protocol-settings`,
       undefined,
       sa
     );
-    expect(r.status).toBe(200);
-    expect(r.json).toHaveProperty("organization_id");
+    expect(refused.status).toBe(403);
   });
 });

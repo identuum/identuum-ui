@@ -260,35 +260,37 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
   });
 
   test("protocol settings: upsert and its refusals", async () => {
-    // ROW PUT /organizations/:id/protocol-settings (SM)
+    // ROW PUT /organizations/:id/protocol-settings (SM). THE-REMAINING-FOUR
+    // (2026-08-30): protocol-settings are the org's own org_admin's — the
+    // org_admin does the upsert; site_admin is now REFUSED (403).
     const put = await api(
       IDP_BASE,
       "PUT",
       `/api/v1/organizations/${org1}/protocol-settings`,
       { dynamic_client_registration_enabled: true, scim_enabled: false },
-      site.bearer
+      orgAdmin.bearer
     );
-    expect(put.status, "site_admin upsert → 200").toBe(200);
+    expect(put.status, "org_admin upsert of OWN org → 200").toBe(200);
     expect(put.json.source, "explicit settings report their source").toBe("explicit");
     const putEmpty = await api(
       IDP_BASE,
       "PUT",
       `/api/v1/organizations/${org1}/protocol-settings`,
       {},
-      site.bearer
+      orgAdmin.bearer
     );
     expect(putEmpty.status, "empty upsert → 400 (both fields required)").toBe(400);
-    const putOrgAdmin = await api(
+    const putSiteAdmin = await api(
       IDP_BASE,
       "PUT",
       `/api/v1/organizations/${org1}/protocol-settings`,
       { dynamic_client_registration_enabled: false, scim_enabled: false },
-      orgAdmin.bearer
+      site.bearer
     );
     expect(
-      putOrgAdmin.status,
-      "org_admin upsert of OWN org → 200 (docgen: site_admin|org_admin)"
-    ).toBe(200);
+      putSiteAdmin.status,
+      "site_admin upsert of a tenant's settings → 403 (model forbids)"
+    ).toBe(403);
   });
 
   test("org roles + scopes: full CRUD and error branches", async () => {
