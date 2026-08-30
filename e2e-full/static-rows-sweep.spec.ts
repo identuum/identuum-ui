@@ -63,6 +63,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
   let oa = "";
   let orgId = "";
   let myId = "";
+  let saId = "";
 
   test.beforeAll(async () => {
     const bootstrapPassword = process.env.IDENTUUM_E2E_FULL_ADMIN_PASSWORD ?? "";
@@ -317,5 +318,119 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       sa
     );
     expect(refused.status).toBe(403);
+  });
+
+  // ── THE-PER-VERB-SWEEP (2026-08-30) ──
+  // The census rows above pin ONE representative verb per tenant-resource
+  // family (mostly the read). A family is not closed because its read is: a
+  // guard change could re-admit site_admin on a write nobody re-probed. This
+  // sweep pins the WHOLE verb surface — 45 verbs across 9 families — asserting
+  // site_admin is 403 on EVERY one, every harness run. It is registered in
+  // static-rows.json as [ROW 200], so deleting the block reads as STATIC ROWS
+  // DRIFT; the length assertion makes shrinking the matrix fail too.
+  //
+  // Every probe fires against a REAL org (orgId). For eight of the nine
+  // families the refusal is a group gate, a first-line handler gate, or an
+  // authz-first service check that runs BEFORE any resource lookup, so a
+  // random-UUID resource id still yields the authority 403, never an
+  // incidental 404. The exception is the service-accounts ID-scoped surface,
+  // which fetches the SA BEFORE authorizing (unknown id → 404, see [ROW 102]);
+  // those five verbs are probed against a REAL org_admin-created SA so their
+  // 403 is the authority refusal. site_admin is refused before any mutation,
+  // so that SA is never modified or deleted. identity-provider is included:
+  // its route guard admits site_admin, but the handler gate
+  // denySiteAdminTenantIDP refuses site_admin on all four IDP verbs by design
+  // — proven live here, not assumed from the guard.
+  test.beforeAll(async () => {
+    const created = await api(
+      IDP_BASE,
+      "POST",
+      `/api/v1/organizations/${orgId}/service-accounts`,
+      { name: "per-verb-sweep-sa" },
+      oa
+    );
+    if (created.status !== 201 || !(created.json as Json).id) {
+      throw new Error(`per-verb sweep needs a real SA; org_admin create → ${created.status}`);
+    }
+    saId = String((created.json as Json).id);
+  });
+
+  test("[ROW 200] per-verb site_admin refusal sweep — 45 tenant-resource verbs, all 403 (THE-PER-VERB-SWEEP)", async () => {
+    type Probe = {
+      method: "GET" | "POST" | "PUT" | "DELETE";
+      path: string;
+      body?: Record<string, unknown>;
+    };
+    const probes: Probe[] = [
+      // api-resources (6)
+      { method: "GET", path: "/api/v1/api-resources" },
+      { method: "GET", path: `/api/v1/api-resources/${RAND}` },
+      { method: "POST", path: "/api/v1/api-resources", body: {} },
+      { method: "PUT", path: `/api/v1/api-resources/${RAND}`, body: {} },
+      { method: "DELETE", path: `/api/v1/api-resources/${RAND}` },
+      { method: "POST", path: `/api/v1/api-resources/${RAND}/secret/regenerate`, body: {} },
+      // clients (6)
+      { method: "GET", path: "/api/v1/clients" },
+      { method: "GET", path: `/api/v1/clients/${RAND}` },
+      { method: "POST", path: "/api/v1/clients", body: {} },
+      { method: "PUT", path: `/api/v1/clients/${RAND}`, body: {} },
+      { method: "DELETE", path: `/api/v1/clients/${RAND}` },
+      { method: "POST", path: `/api/v1/clients/${RAND}/secret/regenerate`, body: {} },
+      // scope-templates (5)
+      { method: "GET", path: "/api/v1/scope-templates" },
+      { method: "GET", path: `/api/v1/scope-templates/${RAND}` },
+      { method: "POST", path: "/api/v1/scope-templates", body: {} },
+      { method: "PUT", path: `/api/v1/scope-templates/${RAND}`, body: {} },
+      { method: "DELETE", path: `/api/v1/scope-templates/${RAND}` },
+      // organization domains (5)
+      { method: "GET", path: `/api/v1/organizations/${orgId}/domains` },
+      { method: "POST", path: `/api/v1/organizations/${orgId}/domains`, body: {} },
+      { method: "POST", path: `/api/v1/organizations/${orgId}/domains/${RAND}/verify`, body: {} },
+      { method: "DELETE", path: `/api/v1/organizations/${orgId}/domains/${RAND}` },
+      { method: "POST", path: `/api/v1/organizations/${orgId}/domains/${RAND}/primary`, body: {} },
+      // protocol-settings (2)
+      { method: "GET", path: `/api/v1/organizations/${orgId}/protocol-settings` },
+      { method: "PUT", path: `/api/v1/organizations/${orgId}/protocol-settings`, body: {} },
+      // rbac org-roles (7)
+      { method: "GET", path: `/api/v1/organizations/${orgId}/roles` },
+      { method: "GET", path: `/api/v1/organizations/${orgId}/roles/${RAND}` },
+      { method: "POST", path: `/api/v1/organizations/${orgId}/roles`, body: {} },
+      { method: "PUT", path: `/api/v1/organizations/${orgId}/roles/${RAND}`, body: {} },
+      { method: "DELETE", path: `/api/v1/organizations/${orgId}/roles/${RAND}` },
+      { method: "POST", path: `/api/v1/organizations/${orgId}/roles/${RAND}/scopes`, body: {} },
+      {
+        method: "DELETE",
+        path: `/api/v1/organizations/${orgId}/roles/${RAND}/scopes/probe:scope`,
+      },
+      // rbac user-roles (3)
+      { method: "GET", path: `/api/v1/users/${myId}/roles` },
+      { method: "POST", path: `/api/v1/users/${myId}/roles`, body: {} },
+      { method: "DELETE", path: `/api/v1/users/${myId}/roles/${RAND}` },
+      // service-accounts org-scoped (2)
+      { method: "GET", path: `/api/v1/organizations/${orgId}/service-accounts` },
+      { method: "POST", path: `/api/v1/organizations/${orgId}/service-accounts`, body: {} },
+      // service-accounts ID-scoped (5) — REAL SA (fetch-first; unknown id 404s)
+      { method: "GET", path: `/api/v1/service-accounts/${saId}` },
+      { method: "PUT", path: `/api/v1/service-accounts/${saId}`, body: {} },
+      { method: "DELETE", path: `/api/v1/service-accounts/${saId}` },
+      { method: "POST", path: `/api/v1/service-accounts/${saId}/enable`, body: {} },
+      { method: "POST", path: `/api/v1/service-accounts/${saId}/disable`, body: {} },
+      // identity-provider (4) — handler gate denySiteAdminTenantIDP
+      { method: "POST", path: `/api/v1/organizations/${orgId}/identity-provider`, body: {} },
+      { method: "GET", path: `/api/v1/organizations/${orgId}/identity-provider` },
+      { method: "PUT", path: `/api/v1/organizations/${orgId}/identity-provider`, body: {} },
+      { method: "DELETE", path: `/api/v1/organizations/${orgId}/identity-provider` },
+    ];
+    expect(probes.length, "the pinned verb surface is 45; changing it is a deliberate edit").toBe(
+      45
+    );
+    expect(saId, "the ID-scoped SA probes need a real service account").toBeTruthy();
+
+    const admitted: string[] = [];
+    for (const pr of probes) {
+      const res = await api(IDP_BASE, pr.method, pr.path, pr.body, sa);
+      if (res.status !== 403) admitted.push(`${pr.method} ${pr.path} → ${res.status}`);
+    }
+    expect(admitted, `site_admin was NOT refused (403) on: ${admitted.join("; ")}`).toEqual([]);
   });
 });
