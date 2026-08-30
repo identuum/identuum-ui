@@ -10,8 +10,8 @@
  * direction) or a drop below the floor. These pins keep that enforcement from
  * being quietly unwired:
  *
- *   (a) the committed file exists, lists 26 distinct rows (the 23 census rows
- *       + the [ROW 200/201/202] refusal sentinels), and carries a positive
+ *   (a) the committed file exists, lists 27 distinct rows (the 23 census rows
+ *       + the [ROW 200/201/202/203] sentinels), and carries a positive
  *       integer floor equal to the list length;
  *   (b) the enforcement script READS the committed file, COMPARES the
  *       passed set, and EXITS NON-ZERO on drift and on a floor violation;
@@ -37,7 +37,7 @@ const stripComments = (src: string): string =>
     .replace(/\s\/\/[^\n]*/g, "");
 
 describe("the static census rows stay asserted every harness run [STATIC-ROWS-1]", () => {
-  it("static-rows.json commits 26 distinct rows and a floor equal to the list length", () => {
+  it("static-rows.json commits 27 distinct rows and a floor equal to the list length", () => {
     const parsed = JSON.parse(read("e2e-full/static-rows.json")) as {
       rows?: unknown;
       rows_asserted_floor?: unknown;
@@ -50,7 +50,7 @@ describe("the static census rows stay asserted every harness run [STATIC-ROWS-1]
     // [ROW 200] (site_admin) and [ROW 201] (org_user) fire the identical
     // 45-verb tenant-resource battery; [ROW 202] fires the golden-derived
     // site-admin-surface battery as both tenant principals (T4-2).
-    expect(list.length, "23 census rows + the three refusal sentinels [ROW 200/201/202]").toBe(26);
+    expect(list.length, "23 census rows + the four sentinels [ROW 200/201/202/203]").toBe(27);
     expect(parsed.rows_asserted_floor, "floor equals the committed list length").toBe(list.length);
   });
 

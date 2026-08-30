@@ -562,4 +562,352 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       `tenant principals were NOT refused on the site-admin surface: ${admitted.join("; ")}`
     ).toEqual([]);
   });
+
+  test("[ROW 203] census closers — safe positives + anon class probes (THE-ROLE-CENSUS T4-3)", async () => {
+    // Closes the measured remainder of the matrix with probes that are safe
+    // on the disposable appliance: reads, benign-FAILING mutations (wrong
+    // current password, empty MFA proof, empty/invalid bodies — nothing
+    // changes), the ROW-21-style recovery-code regenerations (really rotate,
+    // harness logins never use recovery codes), and anonymous probes on the
+    // public/M2M class endpoints. Every probe asserts an expected status set
+    // — never 5xx — so a fault cannot count as coverage. MUST STAY THE LAST
+    // TEST IN THIS FILE: the session-revocation probes at the end kill the
+    // sweep's own bearers by design (revoke-all is inherently all-sessions);
+    // later phases mint their own sessions and are unaffected.
+    test.setTimeout(120_000);
+    type P = {
+      method: "GET" | "POST" | "PUT";
+      path: string;
+      body?: Record<string, unknown>;
+      bearer?: string;
+      ok: number[]; // acceptable statuses — a fault (5xx) never counts
+      label: string;
+    };
+    const probes: P[] = [
+      // ── role cells: reads ──
+      {
+        method: "GET",
+        path: "/api/v1/audit/events?limit=1",
+        bearer: sa,
+        ok: [200],
+        label: "audit sa",
+      },
+      {
+        method: "GET",
+        path: "/api/v1/me/mfa/status",
+        bearer: sa,
+        ok: [200],
+        label: "mfa-status sa",
+      },
+      {
+        method: "GET",
+        path: "/api/v1/me/mfa/status",
+        bearer: ou,
+        ok: [200],
+        label: "mfa-status ou",
+      },
+      { method: "GET", path: "/api/v1/me/sessions", bearer: sa, ok: [200], label: "sessions sa" },
+      { method: "GET", path: "/api/v1/me/sessions", bearer: oa, ok: [200], label: "sessions oa" },
+      { method: "GET", path: "/api/v1/validate", bearer: sa, ok: [200], label: "validate sa" },
+      { method: "GET", path: "/api/v1/validate", bearer: oa, ok: [200], label: "validate oa" },
+      { method: "GET", path: "/api/v1/organizations", bearer: sa, ok: [200], label: "orgs sa" },
+      { method: "GET", path: "/api/v1/organizations", bearer: oa, ok: [200], label: "orgs oa" },
+      {
+        method: "GET",
+        path: `/api/v1/organizations/${orgId}`,
+        bearer: oa,
+        ok: [200],
+        label: "org oa",
+      },
+      {
+        method: "GET",
+        path: "/api/v1/organizations/current",
+        bearer: sa,
+        ok: [200],
+        label: "org-current sa",
+      },
+      {
+        method: "GET",
+        path: "/api/v1/organizations/current",
+        bearer: oa,
+        ok: [200],
+        label: "org-current oa",
+      },
+      {
+        method: "GET",
+        path: "/api/v1/organizations/current",
+        bearer: ou,
+        ok: [200],
+        label: "org-current ou",
+      },
+      { method: "GET", path: "/api/v1/profile", bearer: sa, ok: [200], label: "profile sa" },
+      { method: "GET", path: "/api/v1/profile", bearer: ou, ok: [200], label: "profile ou" },
+      { method: "GET", path: "/api/v1/me/roles", bearer: sa, ok: [200], label: "me-roles sa" },
+      { method: "GET", path: "/api/v1/me/roles", bearer: oa, ok: [200], label: "me-roles oa" },
+      {
+        method: "GET",
+        path: "/api/v1/health/details",
+        bearer: sa,
+        ok: [200],
+        label: "health-details sa",
+      },
+      { method: "GET", path: "/api/v1/users?limit=1", bearer: sa, ok: [200], label: "users sa" },
+      {
+        method: "GET",
+        path: `/api/v1/users/${myId}`,
+        bearer: sa,
+        ok: [200],
+        label: "user-by-id sa",
+      },
+      // ── role cells: benign-failing mutations (nothing changes) ──
+      {
+        method: "POST",
+        path: "/api/v1/auth/change-password",
+        body: { current_password: "Wrong!Password123", new_password: "NeverApplied!123" },
+        bearer: sa,
+        ok: [403],
+        label: "change-pw sa (wrong current)",
+      },
+      {
+        method: "POST",
+        path: "/api/v1/auth/change-password",
+        body: { current_password: "Wrong!Password123", new_password: "NeverApplied!123" },
+        bearer: ou,
+        ok: [403],
+        label: "change-pw ou (wrong current)",
+      },
+      {
+        method: "POST",
+        path: "/api/v1/me/mfa/disable",
+        body: { code: "", password: "" },
+        bearer: sa,
+        ok: [403],
+        label: "mfa-disable sa (empty proof)",
+      },
+      {
+        // MEASURED: the org_user variant refuses with 401 where the
+        // org_admin variant answers 403 (ROW 20) — both refusals; pinned
+        // as measured.
+        method: "POST",
+        path: "/api/v1/me/mfa/disable",
+        body: { code: "", password: "" },
+        bearer: ou,
+        ok: [401],
+        label: "mfa-disable ou (empty proof, measured 401)",
+      },
+      {
+        // MEASURED: an EMPTY update binds all-optional fields to nil and is
+        // accepted as a 200 no-op — proven by the name/domain comparison
+        // after the loop below.
+        method: "PUT",
+        path: `/api/v1/organizations/${orgId}`,
+        body: {},
+        bearer: sa,
+        ok: [200],
+        label: "org-update sa (empty body = accepted no-op)",
+      },
+      {
+        method: "POST",
+        path: `/api/v1/organizations/${orgId}/service-accounts/with-client`,
+        body: {},
+        bearer: sa,
+        ok: [400, 403],
+        label: "sa-with-client sa (refused/invalid)",
+      },
+      {
+        method: "POST",
+        path: `/api/v1/organizations/${orgId}/service-accounts/with-client`,
+        body: {},
+        bearer: ou,
+        ok: [400, 403],
+        label: "sa-with-client ou (refused)",
+      },
+      {
+        method: "POST",
+        path: `/api/v1/users/${myId}/approve`,
+        body: {},
+        bearer: sa,
+        ok: [200, 400, 409],
+        label: "approve sa (already active — idempotent/benign)",
+      },
+      {
+        method: "POST",
+        path: `/api/v1/users/${RAND}/recovery/reset-mfa`,
+        body: {},
+        bearer: sa,
+        ok: [404],
+        label: "reset-mfa sa (unknown id — exercised, miss; curated positive is T4-4's)",
+      },
+      {
+        method: "POST",
+        path: "/api/v1/users/bulk",
+        body: { users: [{ email: "row203@example.com", name: "Never Created" }] },
+        bearer: sa,
+        ok: [200],
+        label: "users-bulk sa (row refused per contract, created 0)",
+      },
+      // ── role cells: ROW-21-style regenerations (really rotate; disposable) ──
+      {
+        method: "POST",
+        path: "/api/v1/me/mfa/recovery-codes/regenerate",
+        bearer: sa,
+        ok: [200],
+        label: "recovery-regen sa",
+      },
+      {
+        method: "POST",
+        path: "/api/v1/me/mfa/recovery-codes/regenerate",
+        bearer: ou,
+        ok: [200],
+        label: "recovery-regen ou",
+      },
+      // ── class cells: anonymous probes on the public/M2M surface ──
+      {
+        method: "GET",
+        path: "/.well-known/openid-configuration",
+        ok: [200],
+        label: "discovery anon",
+      },
+      { method: "GET", path: "/.well-known/jwks.json", ok: [200], label: "jwks anon" },
+      { method: "GET", path: "/health", ok: [200], label: "health anon" },
+      { method: "GET", path: "/system/info", ok: [200], label: "system-info anon" },
+      { method: "GET", path: "/api/v1/component", ok: [200], label: "component anon" },
+      { method: "GET", path: "/api/setup/status", ok: [200], label: "setup-status anon" },
+      {
+        method: "POST",
+        path: "/api/setup/verify-token",
+        body: {},
+        ok: [400, 401, 403, 410],
+        label: "setup-verify anon (setup complete — refused)",
+      },
+      {
+        method: "POST",
+        path: "/api/setup/complete",
+        body: {},
+        ok: [400, 401, 403, 410],
+        label: "setup-complete anon (setup complete — refused)",
+      },
+      {
+        method: "GET",
+        path: "/api/v1/auth/browser-login",
+        ok: [200, 400],
+        label: "browser-login anon",
+      },
+      {
+        method: "GET",
+        path: "/api/v1/auth/organization-lookup",
+        ok: [200, 400],
+        label: "org-lookup anon (missing param)",
+      },
+      {
+        // MEASURED + code-confirmed: HandleConsumeClaim answers 200 with
+        // {"success":false} for EVERY failure — the same anti-enumeration
+        // contract ROW 107 pins for /revoke (a non-200 would confirm which
+        // claim tokens exist).
+        method: "POST",
+        path: "/api/v1/auth/claim",
+        body: {},
+        ok: [200],
+        label: "claim anon (anti-enum 200 success:false)",
+      },
+      {
+        method: "POST",
+        path: "/api/v1/oauth/token",
+        body: {},
+        ok: [400, 401],
+        label: "token anon (invalid request)",
+      },
+      {
+        method: "POST",
+        path: "/api/v1/oauth/introspection",
+        body: {},
+        ok: [400, 401],
+        label: "introspection anon (no client auth)",
+      },
+      {
+        method: "POST",
+        path: "/api/v1/oauth/revoke",
+        body: {},
+        ok: [200, 400, 401],
+        label: "revoke anon (RFC7009 shape)",
+      },
+      {
+        method: "GET",
+        path: "/api/v1/oidc/frontchannel-logout",
+        ok: [200, 400],
+        label: "frontchannel-logout anon",
+      },
+      {
+        method: "GET",
+        path: `/api/v1/auth/idp/${RAND}/login`,
+        ok: [302, 400, 404],
+        label: "idp-login anon (unknown idp)",
+      },
+      {
+        method: "GET",
+        path: `/api/v1/auth/idp/${RAND}/callback`,
+        ok: [302, 400, 404],
+        label: "idp-callback anon (unknown idp)",
+      },
+    ];
+
+    const orgBefore = await api(IDP_BASE, "GET", `/api/v1/organizations/${orgId}`, undefined, sa);
+    expect(orgBefore.status).toBe(200);
+
+    const faults: string[] = [];
+    for (const pr of probes) {
+      const res = await api(IDP_BASE, pr.method, pr.path, pr.body, pr.bearer);
+      if (!pr.ok.includes(res.status)) {
+        faults.push(
+          `${pr.label}: ${pr.method} ${pr.path} → ${res.status} (wanted ${pr.ok.join("/")})`
+        );
+      }
+    }
+    expect(faults, `census closers off-contract: ${faults.join("; ")}`).toEqual([]);
+
+    // The empty-body org update above answered 200 — prove it was a NO-OP.
+    const orgAfter = await api(IDP_BASE, "GET", `/api/v1/organizations/${orgId}`, undefined, sa);
+    expect(orgAfter.status).toBe(200);
+    expect((orgAfter.json as Json).name, "empty update mutated nothing").toBe(
+      (orgBefore.json as Json).name
+    );
+    expect((orgAfter.json as Json).domain, "empty update mutated nothing").toBe(
+      (orgBefore.json as Json).domain
+    );
+
+    // ── the session-revocation tail: LAST by design (kills bearers) ──
+    // revoke-current on THROWAWAY sessions (precise: only the throwaway dies);
+    // revoke-others as the main bearers (kills earlier-phase siblings, keeps
+    // the current one); revoke-all dead last (inherently kills everything the
+    // user holds, including the sweep's own bearer — nothing runs after).
+    const bootstrapPassword = process.env.IDENTUUM_E2E_FULL_ADMIN_PASSWORD ?? "";
+    const throwSa = (await siteAdminSession(IDP_BASE, SITE_ADMIN_EMAIL, bootstrapPassword)).bearer;
+    const rc = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/me/sessions/revoke-current",
+      undefined,
+      throwSa
+    );
+    expect(rc.status, "revoke-current sa (throwaway session)").toBe(204);
+    const fx2 = loadOrgAdminFixture();
+    if (!fx2) throw new Error("envelope vanished mid-phase");
+    const throwOa = await bearerFor(fx2.email, fx2.password, fx2.totpSecret);
+    const rc2 = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/me/sessions/revoke-current",
+      undefined,
+      throwOa
+    );
+    expect(rc2.status, "revoke-current oa (throwaway session)").toBe(204);
+    const ro = await api(IDP_BASE, "POST", "/api/v1/me/sessions/revoke-others", undefined, sa);
+    expect(ro.status, "revoke-others sa").toBe(204);
+    const ro2 = await api(IDP_BASE, "POST", "/api/v1/me/sessions/revoke-others", undefined, oa);
+    expect(ro2.status, "revoke-others oa").toBe(204);
+    const ra = await api(IDP_BASE, "POST", "/api/v1/me/sessions/revoke-all", undefined, sa);
+    expect(ra.status, "revoke-all sa (kills own bearer; nothing follows)").toBe(204);
+    const ra2 = await api(IDP_BASE, "POST", "/api/v1/me/sessions/revoke-all", undefined, oa);
+    expect(ra2.status, "revoke-all oa (kills own bearer; nothing follows)").toBe(204);
+  });
 });
