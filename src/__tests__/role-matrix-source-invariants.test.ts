@@ -38,15 +38,26 @@ const stripComments = (src: string): string =>
 const ROLES = ["site_admin", "org_admin", "org_user"];
 
 describe("the (endpoint, role) coverage matrix stays enforced every harness run [ROLE-MATRIX-1]", () => {
-  it("role-matrix.json commits a valid matrix: three human roles, positive floor ≤ cell count", () => {
+  it("role-matrix.json commits a valid v2 matrix: role cells + class cells + named exclusions, floor ≤ total", () => {
     const parsed = JSON.parse(read("e2e-full/role-matrix.json")) as {
       endpoints?: unknown;
+      role_endpoints?: unknown;
+      class_endpoints?: unknown;
+      excluded_session_endpoints?: unknown;
       roles?: unknown;
       cells?: Record<string, string[]>;
+      class_cells?: string[];
       covered_cells_floor?: unknown;
     };
     expect(typeof parsed.endpoints, "endpoint denominator present").toBe("number");
     expect(parsed.endpoints as number).toBeGreaterThan(0);
+    expect(typeof parsed.role_endpoints, "role-endpoint count present (v2)").toBe("number");
+    expect(typeof parsed.class_endpoints, "class-endpoint count present (v2)").toBe("number");
+    expect(
+      Array.isArray(parsed.excluded_session_endpoints),
+      "session exclusions are LISTED BY NAME, never silent"
+    ).toBe(true);
+    expect((parsed.excluded_session_endpoints as string[]).length).toBeGreaterThan(0);
     expect(parsed.roles, "the three human principals, exactly").toEqual(ROLES);
     const cells = parsed.cells ?? {};
     let total = 0;
@@ -58,6 +69,11 @@ describe("the (endpoint, role) coverage matrix stays enforced every harness run 
       }
       total += roles.length;
     }
+    const classCells = parsed.class_cells ?? [];
+    for (const c of classCells) {
+      expect(/^[A-Z]+ \/.* @ any$/.test(c), `class cell is "METHOD /path @ any": ${c}`).toBe(true);
+    }
+    total += classCells.length;
     expect(total, "at least one covered cell").toBeGreaterThan(0);
     const floor = parsed.covered_cells_floor as number;
     expect(typeof floor).toBe("number");
@@ -70,8 +86,8 @@ describe("the (endpoint, role) coverage matrix stays enforced every harness run 
     expect(mjs, "reads the committed matrix").toContain("role-matrix.json");
     expect(mjs, "reads the docgen golden (the denominator)").toContain("endpoints.golden.yaml");
     expect(mjs, "cell drift exits non-zero").toMatch(/ROLE-MATRIX DRIFT[\s\S]*?process\.exit\(1\)/);
-    expect(mjs, "floor comparison is the enforcing if").toMatch(
-      /if \(observedCells\.length < committed\.covered_cells_floor\)/
+    expect(mjs, "floor comparison is the enforcing if (v2: role + class total)").toMatch(
+      /if \(observedTotal < committed\.covered_cells_floor\)/
     );
     expect(mjs, "floor violation exits non-zero").toMatch(
       /ROLE-MATRIX FLOOR VIOLATION[\s\S]*?process\.exit\(1\)/

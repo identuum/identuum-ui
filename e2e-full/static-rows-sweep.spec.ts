@@ -22,6 +22,8 @@
  * is logged or asserted by value.
  */
 
+import { readFileSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
 import { expect, test } from "@playwright/test";
 import { api } from "../e2e/helpers/appliance-fixture";
 import { loadOrgAdminFixture, loadOrgUserFixture } from "../e2e/helpers/fixture";
@@ -476,5 +478,88 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       if (res.status !== 403) admitted.push(`${pr.method} ${pr.path} → ${res.status}`);
     }
     expect(admitted, `org_user was NOT refused (403) on: ${admitted.join("; ")}`).toEqual([]);
+  });
+
+  test("[ROW 202] site-admin-surface refusal battery — org_admin/org_user refused on every site-admin-class endpoint (THE-ROLE-CENSUS T4-2)", async () => {
+    // The mirror of ROWS 200/201: the model's OTHER direction. Every endpoint
+    // the docgen golden declares auth=site_admin (or site_admin|bearer) must
+    // refuse BOTH tenant principals; auth=site_admin|org_admin endpoints must
+    // refuse org_user (org_admin is legitimate there). The battery is built
+    // FROM the golden at test time, so an endpoint added to the site-admin
+    // surface is probed automatically — no hand-list to rot. Refusal = 401 /
+    // 403 / 404 (404 where anti-enumeration answers); anything 2xx or 5xx is
+    // an admission or a fault, and fails by name. Path params probe as
+    // random UUIDs (ids) or a literal (names) — the gates refuse before any
+    // lookup, and a hypothetical admission would only ever see a nonexistent
+    // id on this disposable appliance.
+    const goldenPath = resolvePath(
+      __dirname,
+      "..",
+      "..",
+      "identuum-idp-oss",
+      "tools",
+      "api-docgen",
+      "testdata",
+      "endpoints.golden.yaml"
+    );
+    const golden = readFileSync(goldenPath, "utf8");
+    const targets: Array<{ method: string; path: string; auth: string }> = [];
+    {
+      let method = "";
+      let path = "";
+      for (const line of golden.split("\n")) {
+        const m = /^\s*method:\s*"([A-Z]+)"\s*$/.exec(line);
+        if (m) {
+          method = m[1];
+          continue;
+        }
+        const p = /^\s*path:\s*"([^"]+)"\s*$/.exec(line);
+        if (p && method) {
+          path = p[1];
+          continue;
+        }
+        const a = /^\s*auth:\s*"([^"]*)"\s*$/.exec(line);
+        if (a && method && path) {
+          if (["site_admin", "site_admin|bearer", "site_admin|org_admin"].includes(a[1])) {
+            targets.push({ method, path, auth: a[1] });
+          }
+          method = "";
+          path = "";
+        }
+      }
+    }
+    expect(
+      targets.length,
+      "the golden declares a site-admin surface (sanity: the parser found it)"
+    ).toBeGreaterThanOrEqual(25);
+
+    const concretize = (tpl: string): string =>
+      tpl
+        .split("/")
+        .map((seg) => (seg.startsWith(":") ? (seg.includes("id") ? RAND : "probe") : seg))
+        .join("/");
+
+    const admitted: string[] = [];
+    for (const t of targets) {
+      const path = concretize(t.path);
+      const body = t.method === "GET" || t.method === "DELETE" ? undefined : {};
+      const principals: Array<[string, string]> =
+        t.auth === "site_admin|org_admin"
+          ? [["org_user", ou]]
+          : [
+              ["org_admin", oa],
+              ["org_user", ou],
+            ];
+      for (const [name, bearer] of principals) {
+        const res = await api(IDP_BASE, t.method, path, body, bearer);
+        if (![401, 403, 404].includes(res.status)) {
+          admitted.push(`${name} ${t.method} ${t.path} → ${res.status}`);
+        }
+      }
+    }
+    expect(
+      admitted,
+      `tenant principals were NOT refused on the site-admin surface: ${admitted.join("; ")}`
+    ).toEqual([]);
   });
 });

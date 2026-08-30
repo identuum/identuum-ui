@@ -54,7 +54,28 @@ const goldenPath = join(
 
 const ROLES = ["site_admin", "org_admin", "org_user"];
 
-// ── the denominator: method+path templates from the docgen golden ──────────
+// THE SMARTER COUNTER (owner ruling, 2026-08-31): per-user-type cells count
+// only where user type MATTERS. The golden's own auth class decides:
+//   ROLE_CLASSES  -> 3 role cells per endpoint (who you are changes the answer)
+//   CLASS_ONCE    -> 1 "@ any" cell per endpoint (public/M2M: the same call
+//                    for everyone; covered when ANY observation — anon
+//                    included — exercised it)
+//   EXCLUDED      -> browser-cookie ceremonies the bearer-based observer
+//                    cannot reach BY CONSTRUCTION; covered by the dev-loop
+//                    suite and the UI coverage floor, listed here by name so
+//                    the exclusion is visible, never silent.
+const ROLE_CLASSES = new Set([
+  "site_admin",
+  "org_admin",
+  "authenticated",
+  "site_admin|org_admin",
+  "site_admin|bearer",
+  "session|bearer",
+]);
+const CLASS_ONCE = new Set(["public", "oauth_client", "bearer"]);
+const EXCLUDED_CLASSES = new Set(["session"]);
+
+// ── the denominator: method+path+auth from the docgen golden ───────────────
 if (!existsSync(goldenPath)) {
   console.error(
     `role-matrix-from-run: docgen golden not found at ${goldenPath} — the harness requires the sibling identuum-idp-oss checkout`
@@ -64,6 +85,7 @@ if (!existsSync(goldenPath)) {
 const endpoints = [];
 {
   let method = null;
+  let path = null;
   for (const line of readFileSync(goldenPath, "utf8").split("\n")) {
     const m = /^\s*method:\s*"([A-Z]+)"\s*$/.exec(line);
     if (m) {
@@ -72,8 +94,14 @@ const endpoints = [];
     }
     const p = /^\s*path:\s*"([^"]+)"\s*$/.exec(line);
     if (p && method) {
-      endpoints.push({ method, template: p[1], segs: p[1].split("/") });
+      path = p[1];
+      continue;
+    }
+    const a = /^\s*auth:\s*"([^"]*)"\s*$/.exec(line);
+    if (a && method && path) {
+      endpoints.push({ method, template: path, segs: path.split("/"), auth: a[1] });
       method = null;
+      path = null;
     }
   }
 }
@@ -83,6 +111,18 @@ if (endpoints.length === 0) {
   );
   process.exit(2);
 }
+const unknownClass = endpoints.filter(
+  (e) => !ROLE_CLASSES.has(e.auth) && !CLASS_ONCE.has(e.auth) && !EXCLUDED_CLASSES.has(e.auth)
+);
+if (unknownClass.length > 0) {
+  console.error(
+    `role-matrix-from-run: ${unknownClass.length} endpoint(s) carry an auth class this counter does not know — classify them before proceeding:\n  ${unknownClass.map((e) => `${e.method} ${e.template} (auth=${e.auth})`).join("\n  ")}`
+  );
+  process.exit(1);
+}
+const roleEndpoints = endpoints.filter((e) => ROLE_CLASSES.has(e.auth));
+const onceEndpoints = endpoints.filter((e) => CLASS_ONCE.has(e.auth));
+const excludedEndpoints = endpoints.filter((e) => EXCLUDED_CLASSES.has(e.auth));
 
 // ── template matcher: same segment count; literal match or :param; prefer
 //    the template with the most literal segments (fewest params) ───────────
@@ -117,6 +157,7 @@ let observedLines = 0;
 let unmatched = 0;
 const nonRole = { anon: 0, unknown: 0, other: 0 };
 const observed = new Map(); // "METHOD template" -> Set(role)
+const observedAny = new Set(); // "METHOD template" seen by ANY observation
 try {
   for (const line of readFileSync(resolve(obsPath), "utf8").split("\n")) {
     if (!line.trim()) continue;
@@ -132,13 +173,14 @@ try {
       unmatched++;
       continue;
     }
+    const key = `${e.method} ${e.template}`;
+    observedAny.add(key);
     if (!ROLES.includes(o.role)) {
       if (o.role === "anon") nonRole.anon++;
       else if (o.role === "unknown") nonRole.unknown++;
       else nonRole.other++;
       continue;
     }
-    const key = `${e.method} ${e.template}`;
     if (!observed.has(key)) observed.set(key, new Set());
     observed.get(key).add(o.role);
   }
@@ -147,36 +189,60 @@ try {
   process.exit(2);
 }
 
+// v2 cells: role cells only for role-class endpoints; one "@ any" cell for
+// each CLASS_ONCE endpoint covered by ANY observation.
 const observedCells = [];
-for (const [key, roles] of observed) for (const r of roles) observedCells.push(`${key} @ ${r}`);
+for (const e of roleEndpoints) {
+  const key = `${e.method} ${e.template}`;
+  for (const r of observed.get(key) ?? []) observedCells.push(`${key} @ ${r}`);
+}
+const observedClassCells = [];
+for (const e of onceEndpoints) {
+  const key = `${e.method} ${e.template}`;
+  if (observedAny.has(key)) observedClassCells.push(`${key} @ any`);
+}
 observedCells.sort();
-const denominator = endpoints.length * ROLES.length;
+observedClassCells.sort();
+const denominator = roleEndpoints.length * ROLES.length + onceEndpoints.length;
+const observedTotal = observedCells.length + observedClassCells.length;
 
 // ── bootstrap or enforce ───────────────────────────────────────────────────
 if (!existsSync(committedPath)) {
   const cells = {};
-  for (const [key, roles] of [...observed.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-    cells[key] = ROLES.filter((r) => roles.has(r));
+  for (const e of [...roleEndpoints].sort((a, b) =>
+    `${a.method} ${a.template}`.localeCompare(`${b.method} ${b.template}`)
+  )) {
+    const key = `${e.method} ${e.template}`;
+    const roles = ROLES.filter((r) => observed.get(key)?.has(r));
+    if (roles.length > 0) cells[key] = roles;
   }
   const doc = {
     _comment:
-      "THE-ROLE-CENSUS committed (endpoint, role) coverage matrix. Denominator: the docgen endpoint golden x {site_admin, org_admin, org_user}. A cell listed here was EXERCISED by the harness's own api() observations inside a passing witnessed run; role-matrix-from-run.mjs FAILS the phase when a committed cell is not observed (ROLE-MATRIX DRIFT) or the covered count drops below the floor. Cells observed beyond this set are growth candidates — commit them deliberately, like a floor raise.",
+      "THE-ROLE-CENSUS committed coverage matrix, v2 (THE SMARTER COUNTER — owner ruling 2026-08-31): role cells only where the auth class makes user type matter; public/M2M endpoints carry one '@ any' class cell (exercised by anyone, anon included); browser-cookie 'session' endpoints are EXCLUDED by name (unreachable by the bearer-based observer BY CONSTRUCTION — covered by the dev-loop suite and the UI coverage floor). A listed cell was EXERCISED inside a passing witnessed run; role-matrix-from-run.mjs FAILS the phase on any committed cell not observed, on a floor drop, and on denominator drift. Growth is a deliberate commit.",
     endpoints: endpoints.length,
+    role_endpoints: roleEndpoints.length,
+    class_endpoints: onceEndpoints.length,
+    excluded_session_endpoints: excludedEndpoints.map((e) => `${e.method} ${e.template}`).sort(),
     roles: ROLES,
     cells,
-    covered_cells_floor: observedCells.length,
+    class_cells: observedClassCells,
+    covered_cells_floor: observedTotal,
   };
   writeFileSync(committedPath, `${JSON.stringify(doc, null, 2)}\n`);
   console.log(
-    `role-matrix-from-run: BOOTSTRAPPED e2e-full/role-matrix.json from this run — ${observedCells.length} of ${denominator} cells covered (${endpoints.length} endpoints x ${ROLES.length} roles). Review and commit it; the next run enforces.`
+    `role-matrix-from-run: BOOTSTRAPPED e2e-full/role-matrix.json (v2) from this run — ${observedTotal} of ${denominator} cells (${observedCells.length} role cells over ${roleEndpoints.length} endpoints x ${ROLES.length} roles + ${observedClassCells.length} of ${onceEndpoints.length} class cells; ${excludedEndpoints.length} session endpoints excluded by name). Review and commit it; the next run enforces.`
   );
   process.exit(0);
 }
 
 const committed = JSON.parse(readFileSync(committedPath, "utf8"));
-if (committed.endpoints !== endpoints.length) {
+if (
+  committed.endpoints !== endpoints.length ||
+  committed.role_endpoints !== roleEndpoints.length ||
+  committed.class_endpoints !== onceEndpoints.length
+) {
   console.error(
-    `role-matrix-from-run: DENOMINATOR DRIFT — committed matrix says ${committed.endpoints} endpoints, the golden has ${endpoints.length}. Re-derive the matrix deliberately.`
+    `role-matrix-from-run: DENOMINATOR DRIFT — committed matrix says ${committed.endpoints}/${committed.role_endpoints}/${committed.class_endpoints} (total/role/class endpoints), the golden has ${endpoints.length}/${roleEndpoints.length}/${onceEndpoints.length}. Re-derive the matrix deliberately.`
   );
   process.exit(1);
 }
@@ -185,30 +251,34 @@ for (const [key, roles] of Object.entries(committed.cells)) {
   for (const r of roles) committedCells.push(`${key} @ ${r}`);
 }
 committedCells.sort();
+const committedClassCells = [...(committed.class_cells ?? [])].sort();
 const observedSet = new Set(observedCells);
+const observedClassSet = new Set(observedClassCells);
 const missing = committedCells.filter((c) => !observedSet.has(c));
-if (missing.length > 0) {
+const missingClass = committedClassCells.filter((c) => !observedClassSet.has(c));
+if (missing.length + missingClass.length > 0) {
+  const all = [...missing, ...missingClass];
   console.error(
-    `role-matrix-from-run: ROLE-MATRIX DRIFT — ${missing.length} committed cell(s) not observed this run (a test stopped exercising them):\n  ${missing.slice(0, 20).join("\n  ")}${missing.length > 20 ? `\n  … and ${missing.length - 20} more` : ""}`
+    `role-matrix-from-run: ROLE-MATRIX DRIFT — ${all.length} committed cell(s) not observed this run (a test stopped exercising them):\n  ${all.slice(0, 20).join("\n  ")}${all.length > 20 ? `\n  … and ${all.length - 20} more` : ""}`
   );
   process.exit(1);
 }
-if (observedCells.length < committed.covered_cells_floor) {
+if (observedTotal < committed.covered_cells_floor) {
   console.error(
-    `role-matrix-from-run: ROLE-MATRIX FLOOR VIOLATION — covered cells ${observedCells.length} < floor ${committed.covered_cells_floor}.`
+    `role-matrix-from-run: ROLE-MATRIX FLOOR VIOLATION — covered cells ${observedTotal} < floor ${committed.covered_cells_floor}.`
   );
   process.exit(1);
 }
-const committedSet = new Set(committedCells);
-const growth = observedCells.filter((c) => !committedSet.has(c));
+const committedSet = new Set([...committedCells, ...committedClassCells]);
+const growth = [...observedCells, ...observedClassCells].filter((c) => !committedSet.has(c));
 
 const perRole = Object.fromEntries(ROLES.map((r) => [r, 0]));
 for (const c of observedCells) perRole[c.split(" @ ")[1]]++;
 console.log(
-  `check OK: role-matrix ${committedCells.length} committed cells all observed (floor ${committed.covered_cells_floor} held; observed ${observedCells.length} of ${denominator} = ${endpoints.length} endpoints x ${ROLES.length} roles)`
+  `check OK: role-matrix ${committedCells.length + committedClassCells.length} committed cells all observed (floor ${committed.covered_cells_floor} held; observed ${observedTotal} of ${denominator} = ${roleEndpoints.length} role-endpoints x ${ROLES.length} + ${onceEndpoints.length} class cells; ${excludedEndpoints.length} session endpoints excluded by name)`
 );
 console.log(
-  `check OK: role-matrix per-role site_admin=${perRole.site_admin} org_admin=${perRole.org_admin} org_user=${perRole.org_user} (observations ${observedLines}, unmatched-path ${unmatched}, anon ${nonRole.anon}, unknown ${nonRole.unknown})`
+  `check OK: role-matrix per-role site_admin=${perRole.site_admin} org_admin=${perRole.org_admin} org_user=${perRole.org_user} class-cells=${observedClassCells.length} (observations ${observedLines}, unmatched-path ${unmatched}, anon ${nonRole.anon}, unknown ${nonRole.unknown})`
 );
 if (growth.length > 0) {
   console.log(
