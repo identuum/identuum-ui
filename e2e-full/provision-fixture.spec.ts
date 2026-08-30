@@ -21,8 +21,17 @@
 
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { api, seedFixtureFromSiteAdmin } from "../e2e/helpers/appliance-fixture";
-import { fixtureDirectory, resolveFixturePath, validateFixture } from "../e2e/helpers/fixture";
+import {
+  api,
+  seedDisposableRecoveryFixture,
+  seedFixtureFromSiteAdmin,
+} from "../e2e/helpers/appliance-fixture";
+import {
+  E2E_RECOVERY_FIXTURE_MARKER,
+  fixtureDirectory,
+  resolveFixturePath,
+  validateFixture,
+} from "../e2e/helpers/fixture";
 import { siteAdminSession } from "./helpers/session";
 
 const IDP_BASE = process.env.IDENTUUM_E2E_FULL_IDP_BASE ?? "http://127.0.0.1:7113";
@@ -96,6 +105,38 @@ test.describe("provision the dev-loop fixture (opt-in)", () => {
     // would throw on import.
     const asOrgAdmin = validateFixture(envelope, "<in-memory>");
     expect(asOrgAdmin.email).toBe(`admin@e2e-${runId}.test`);
+
+    // THE-DISPOSABLE-IDENTITIES: when the harness supplies run-local
+    // passwords, seed the DISPOSABLE recovery org too — identities the
+    // destructive ceremonies (password rotate, MFA reset) may mutate
+    // without staling anything the rest of the suite logs in with. The
+    // pointer file carries NO secrets (org id + admin email only).
+    const recoveryAdminPw = process.env.IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD ?? "";
+    const rotatePw = process.env.IDENTUUM_OSS_TEST_USER_PASSWORD ?? "";
+    if (recoveryAdminPw && rotatePw) {
+      const recovery = await seedDisposableRecoveryFixture(
+        IDP_BASE,
+        siteAdmin.bearer,
+        recoveryAdminPw,
+        rotatePw
+      );
+      const recoveryPath = `${fixtureDirectory()}/e2e-recovery-fixture.json`;
+      mkdirSync(fixtureDirectory(), { recursive: true, mode: 0o700 });
+      writeFileSync(
+        recoveryPath,
+        `${JSON.stringify(
+          {
+            fixture_marker: E2E_RECOVERY_FIXTURE_MARKER,
+            org_id: recovery.orgId,
+            org_admin_email: recovery.orgAdminEmail,
+          },
+          null,
+          2
+        )}\n`,
+        { mode: 0o600 }
+      );
+      chmodSync(recoveryPath, 0o600);
+    }
 
     const path = resolveFixturePath();
     mkdirSync(fixtureDirectory(), { recursive: true, mode: 0o700 });

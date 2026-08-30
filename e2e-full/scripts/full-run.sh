@@ -135,7 +135,7 @@ GW="scripts/gate-witness.sh"
 # requested, so an absent baseline is a declared subtraction, never INCOMPLETE.
 PLAN=(fresh-appliance api-suite)
 [ "${IDENTUUM_E2E_MEASURE:-}" = "1" ] && PLAN+=(plain-baseline)
-PLAN+=(provisioner static-rows-sweep static-rows devloop-provisioned coverage)
+PLAN+=(provisioner static-rows-sweep static-rows devloop-provisioned skip-ceiling coverage)
 bash "$GW" init "$RECORD" "identuum-ui make e2e-full" "${PLAN[@]}"
 
 rc=0
@@ -187,8 +187,18 @@ fi
 # Provision the dev-loop fixture from the ALREADY-bootstrapped site_admin (the
 # API suite above enrolled its MFA; the provisioner reuses that captured
 # secret — no second bootstrap path). Writes e2e/.auth/e2e-org-admin-fixture.json.
+# THE-DISPOSABLE-IDENTITIES: run-local passwords for the DISPOSABLE recovery
+# org's identities (a TOTP-enrolled org_admin the MFA-reset ceremony may
+# reset, and a no-MFA "rotate" org_user the password-rotate ceremony may
+# rotate). Generated here, passed by env, never printed; mutating them stales
+# nothing the rest of the suite logs in with.
+IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD="E2eRec!$(openssl rand -hex 16)"
+IDENTUUM_OSS_TEST_USER_PASSWORD="E2eRot!$(openssl rand -hex 16)"
+IDENTUUM_OSS_TEST_USER_EMAIL="rotate@e2e-recovery.test"
+export IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD IDENTUUM_OSS_TEST_USER_PASSWORD IDENTUUM_OSS_TEST_USER_EMAIL
+
 echo "e2e-full: provisioning the dev-loop fixture (opt-in specs light up)"
-bash "$GW" step "$RECORD" 'provisioner=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_PROVISION=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh provisioner e2e/.auth/pw-provisioner.json -- --project=oss-full --workers=1 provision-fixture' || rc=1
+bash "$GW" step "$RECORD" 'provisioner=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_PROVISION=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD="$IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD" IDENTUUM_OSS_TEST_USER_PASSWORD="$IDENTUUM_OSS_TEST_USER_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh provisioner e2e/.auth/pw-provisioner.json -- --project=oss-full --workers=1 provision-fixture' || rc=1
 
 # FAIL LOUD if the provisioner did not seal the envelope: without it,
 # global-setup's rebuild path would try to stand up ITS OWN appliance
@@ -226,7 +236,13 @@ bash "$GW" step "$RECORD" 'static-rows=node e2e-full/scripts/static-rows-from-ru
 # dynamic fixture provides an MFA-enrolled site_admin, so it runs here
 # (IDENTUUM_E2E_ORGS_CRUD=1). A leak on failure dies with the appliance.
 echo "e2e-full: dev-loop suite PROVISIONED (the previously-dark specs now light)"
-bash "$GW" step "$RECORD" 'devloop-provisioned=IDENTUUM_E2E_ORGS_CRUD=1 IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-provisioned e2e/.auth/pw-devloop.json -- --project=chromium --workers=1 --trace on' || rc=1
+bash "$GW" step "$RECORD" 'devloop-provisioned=IDENTUUM_E2E_ORGS_CRUD=1 IDENTUUM_E2E_OSS_CHANGE_PASSWORD=1 IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true IDENTUUM_OSS_TEST_USER_EMAIL="$IDENTUUM_OSS_TEST_USER_EMAIL" IDENTUUM_OSS_TEST_USER_PASSWORD="$IDENTUUM_OSS_TEST_USER_PASSWORD" IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD="$IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD" IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-provisioned e2e/.auth/pw-devloop.json -- --project=chromium --workers=1 --trace on' || rc=1
+
+# THE-DISPOSABLE-IDENTITIES: the devloop skip count gets a CEILING, exactly
+# like the coverage floor — a new skip must be a deliberate commit, never
+# silent creep. Enforced from the phase's OWN report.
+echo "e2e-full: enforcing the devloop skip ceiling"
+bash "$GW" step "$RECORD" 'skip-ceiling=node e2e-full/scripts/skip-ceiling-from-run.mjs e2e/.auth/pw-devloop.json' || rc=1
 
 # Route coverage, derived from THE RUN: the inventory is scanned from
 # src/app/**/page.tsx and the reached set from the traces of tests the JSON

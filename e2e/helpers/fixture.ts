@@ -256,6 +256,38 @@ export function loadOrgUserFixture(): OrgUserFixtureCredentials | null {
  *     schema version, reserved prefixes); a malformed file still
  *     throws.
  */
+export const E2E_RECOVERY_FIXTURE_MARKER = "identuum-e2e-recovery-v1";
+
+/**
+ * THE-DISPOSABLE-IDENTITIES: loads the DISPOSABLE recovery-org pointers the
+ * provisioner wrote (org id + admin email — no secrets live in this file).
+ * Returns null when absent (normal outside the harness).
+ */
+export function loadRecoveryFixture(): { orgId: string; orgAdminEmail: string } | null {
+  const path = resolve(fixtureDirectory(), "e2e-recovery-fixture.json");
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf-8");
+  } catch {
+    return null;
+  }
+  const parsed = JSON.parse(raw) as {
+    fixture_marker?: unknown;
+    org_id?: unknown;
+    org_admin_email?: unknown;
+  };
+  if (parsed.fixture_marker !== E2E_RECOVERY_FIXTURE_MARKER) {
+    throw new Error(`recovery fixture at ${path}: wrong marker`);
+  }
+  if (typeof parsed.org_id !== "string" || parsed.org_id.length === 0) {
+    throw new Error(`recovery fixture at ${path}: org_id missing`);
+  }
+  if (typeof parsed.org_admin_email !== "string" || !parsed.org_admin_email.includes("@")) {
+    throw new Error(`recovery fixture at ${path}: org_admin_email missing`);
+  }
+  return { orgId: parsed.org_id, orgAdminEmail: parsed.org_admin_email };
+}
+
 export function loadOrgAdminFixtureOrgDomain(): string | null {
   const path = resolveFixturePath();
   try {

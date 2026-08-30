@@ -1,0 +1,4 @@
+{
+  "_comment": "THE-DISPOSABLE-IDENTITIES skip ceiling. skip-ceiling-from-run.mjs FAILS the harness skip-ceiling phase when the devloop-provisioned run's OWN report shows MORE skipped tests than this ceiling — a new skip must be a deliberate commit (lower it only after a green run measures lower; raising it is the regression to justify). The remaining skips are the named-env set recorded in wiki/platform/disposable-harness.md (THE-SKIPPED-THIRTY-TWO / THE-DISPOSABLE-IDENTITIES).",
+  "devloop_skipped_ceiling": 27
+}

@@ -450,6 +450,62 @@ export async function seedFixtureFromSiteAdmin(
 }
 
 /**
+ * THE-DISPOSABLE-IDENTITIES (2026-08-30): seeds the DISPOSABLE recovery org —
+ * identities the destructive ceremonies may mutate without touching anything
+ * the rest of the suite logs in with. Fixed identifiers (fresh appliance every
+ * run, so no collision):
+ *
+ *   - org "E2E Disposable Recovery" (slug e2e-recovery, domain
+ *     e2e-recovery.test), mfa_policy OPTIONAL — so the rotate-user below can
+ *     complete a plain no-MFA login, which the change-password ceremony
+ *     drives.
+ *   - a disposable org_admin (TOTP-enrolled via first login — the MFA-reset
+ *     ceremony's target; resetting it stales NOTHING shared).
+ *   - a disposable org_user "rotate" target with a password and NO MFA
+ *     enrollment (never logged in here), for the password-rotate ceremony.
+ *
+ * Passwords come from the harness run's environment (generated run-local in
+ * full-run.sh, never printed). Returns only non-secret identifiers.
+ */
+export async function seedDisposableRecoveryFixture(
+  base: string,
+  siteAdminBearer: string,
+  adminPassword: string,
+  rotatePassword: string
+): Promise<{ orgId: string; orgAdminEmail: string; rotateEmail: string }> {
+  const create = await api(
+    base,
+    "POST",
+    "/api/v1/organizations",
+    {
+      name: "E2E Disposable Recovery",
+      slug: "e2e-recovery",
+      domain: "e2e-recovery.test",
+      active: true,
+      mfa_policy: "optional",
+    },
+    siteAdminBearer
+  );
+  must(create.status >= 200 && create.status < 300, `create recovery org → ${create.status}`);
+  const orgId = (create.json.id as string) ?? "";
+  must(orgId.length > 0, "recovery org returned no id");
+
+  const orgAdminEmail = "admin@e2e-recovery.test";
+  const rotateEmail = "rotate@e2e-recovery.test";
+
+  await createVerifiedUser(base, siteAdminBearer, orgAdminEmail, adminPassword, "org_admin", orgId);
+  // Enroll the disposable admin's TOTP via first login (captures nothing we
+  // keep — the MFA-reset ceremony only needs the enrollment to EXIST).
+  const admin = await firstLoginBearerAsync(base, orgAdminEmail, adminPassword);
+
+  // The rotate-user is created by the disposable admin (tenant authority) and
+  // NEVER logged in here — mfa_enabled stays false by construction.
+  await createVerifiedUser(base, admin.bearer, rotateEmail, rotatePassword, "org_user", orgId);
+
+  return { orgId, orgAdminEmail, rotateEmail };
+}
+
+/**
  * Resolves the available Compose invocation as an argv prefix: prefers Docker
  * Compose v2 (`docker compose`), falls back to the legacy v1 binary
  * (`docker-compose`). Returns null when neither is callable. `composeFile` is

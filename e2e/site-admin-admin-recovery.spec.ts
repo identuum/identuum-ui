@@ -50,7 +50,11 @@
 
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { loadOrgAdminFixture, loadOrgAdminFixtureOrgId } from "./helpers/fixture";
+import {
+  loadOrgAdminFixture,
+  loadOrgAdminFixtureOrgId,
+  loadRecoveryFixture,
+} from "./helpers/fixture";
 import { loginAsSiteAdmin, SKIP_AUTH_MSG, skipAuthTests } from "./helpers/login";
 
 // Neutral placeholder defaults. Operators with a different local fixture
@@ -83,11 +87,30 @@ function safeFixtureAdminEmail(): string | null {
   }
 }
 
-const ORG_ID = safeFixtureOrgId() ?? process.env.IDENTUUM_TEST_ORG_ID ?? DEFAULT_ORG_ID;
+// THE-DISPOSABLE-IDENTITIES (2026-08-30): the DISPOSABLE recovery fixture
+// (seeded by the harness provisioner; org id + admin email only) WINS over
+// the shared envelope and env — this ceremony resets its target's MFA, and
+// pointing it at the shared fixture org_admin would stale the envelope's
+// TOTP secret for every later spec in the run.
+const recoveryFx = (() => {
+  try {
+    return loadRecoveryFixture();
+  } catch {
+    return null;
+  }
+})();
+const ORG_ID =
+  recoveryFx?.orgId ?? safeFixtureOrgId() ?? process.env.IDENTUUM_TEST_ORG_ID ?? DEFAULT_ORG_ID;
 const ORG_ADMIN_EMAIL =
-  safeFixtureAdminEmail() ?? process.env.IDENTUUM_TEST_ORG_ADMIN_EMAIL ?? DEFAULT_ORG_ADMIN_EMAIL;
+  recoveryFx?.orgAdminEmail ??
+  safeFixtureAdminEmail() ??
+  process.env.IDENTUUM_TEST_ORG_ADMIN_EMAIL ??
+  DEFAULT_ORG_ADMIN_EMAIL;
 
-const ORG_ADMIN_PASSWORD = process.env.IDENTUUM_TEST_ORG_ADMIN_PASSWORD ?? "";
+const ORG_ADMIN_PASSWORD =
+  (recoveryFx ? process.env.IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD : undefined) ??
+  process.env.IDENTUUM_TEST_ORG_ADMIN_PASSWORD ??
+  "";
 
 // Opt-in safety latch. Keep the literal string "true" — any other value
 // (including unset, empty, "1", "yes") leaves destructive tests skipped.
