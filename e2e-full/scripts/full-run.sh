@@ -112,6 +112,15 @@ cd "$UI_DIR"
 echo "e2e-full: ensuring the Chromium browser is installed for the dev-loop suite"
 pnpm exec playwright install chromium >/dev/null 2>&1 || pnpm exec playwright install chromium
 
+# THE-ROLE-CENSUS: every api() call in every phase appends one observation
+# (method, path, role-from-the-bearer's-own-claims, status) to this run-local
+# JSONL; the role-matrix step collapses them against the docgen endpoint
+# golden and enforces the committed (endpoint, role) matrix. Truncated per
+# run — observations are this run's, never carried forward.
+export IDENTUUM_E2E_MATRIX_LOG="$UI_DIR/e2e/.auth/role-matrix-observations.jsonl"
+mkdir -p "$UI_DIR/e2e/.auth"
+: >"$IDENTUUM_E2E_MATRIX_LOG"
+
 # CREDENTIAL ISOLATION (measured failure, 2026-08-29): playwright.config.ts
 # auto-loads the operator's gitignored .env.playwright.idp-oss.local, whose
 # IDENTUUM_TEST_* credentials belong to the operator's DEV stack — not this
@@ -135,7 +144,7 @@ GW="scripts/gate-witness.sh"
 # requested, so an absent baseline is a declared subtraction, never INCOMPLETE.
 PLAN=(fresh-appliance api-suite)
 [ "${IDENTUUM_E2E_MEASURE:-}" = "1" ] && PLAN+=(plain-baseline)
-PLAN+=(provisioner static-rows-sweep static-rows devloop-provisioned skip-ceiling coverage)
+PLAN+=(provisioner static-rows-sweep static-rows role-matrix devloop-provisioned skip-ceiling coverage)
 bash "$GW" init "$RECORD" "identuum-ui make e2e-full" "${PLAN[@]}"
 
 rc=0
@@ -225,6 +234,17 @@ bash "$GW" step "$RECORD" 'static-rows-sweep=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_ST
 
 echo "e2e-full: enforcing the static-rows committed set + floor"
 bash "$GW" step "$RECORD" 'static-rows=node e2e-full/scripts/static-rows-from-run.mjs e2e/.auth/pw-static-rows.json' || rc=1
+
+# THE-ROLE-CENSUS: collapse this run's api() observations into the
+# (endpoint, role) matrix and enforce the committed set + floor. The
+# measurement WINDOW is fixed by this step's position: the API-driving
+# phases (fresh-appliance through static-rows). The dev-loop suite runs
+# AFTER this step, so its api() calls fall outside the window every run —
+# by design, stated honestly; UI-side coverage has its own floor
+# (coverage-from-run.mjs). The window is identical for the bootstrap run
+# and every enforcing run, so the matrix compares like with like.
+echo "e2e-full: enforcing the (endpoint, role) coverage matrix"
+bash "$GW" step "$RECORD" 'role-matrix=node e2e-full/scripts/role-matrix-from-run.mjs e2e/.auth/role-matrix-observations.jsonl' || rc=1
 
 # Run the dev-loop suite PROVISIONED: the envelope is present and
 # dynamic-fixture mode is on, so global-setup's fast path REUSES this running

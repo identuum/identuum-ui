@@ -33,6 +33,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { appendFileSync } from "node:fs";
 import { generateTOTP } from "./totp";
 
 export const E2E_FIXTURE_MARKER = "identuum-e2e-fixture-v1";
@@ -130,6 +131,36 @@ async function api(
     rtt: Date.now() - t0,
   });
   if (apiRing.length > API_RING_MAX) apiRing.splice(0, apiRing.length - API_RING_MAX);
+  // THE-ROLE-CENSUS (2026-08-30): when the harness sets
+  // IDENTUUM_E2E_MATRIX_LOG, every api() call appends one JSONL observation —
+  // method, path, the ROLE decoded from the bearer's own claims (anon when
+  // unauthenticated), and the status. role-matrix-from-run.mjs collapses
+  // these against the docgen endpoint golden into the (endpoint, role)
+  // coverage matrix. Token VALUES are never written; a logging failure never
+  // breaks a test.
+  const matrixLog = process.env.IDENTUUM_E2E_MATRIX_LOG;
+  if (matrixLog) {
+    let role = "anon";
+    if (bearer) {
+      role = "unknown";
+      try {
+        const payload = JSON.parse(
+          Buffer.from(
+            bearer.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"),
+            "base64"
+          ).toString()
+        ) as Json;
+        if (typeof payload.role === "string" && payload.role.length > 0) role = payload.role;
+      } catch {
+        // opaque or malformed token — recorded as "unknown"
+      }
+    }
+    try {
+      appendFileSync(matrixLog, `${JSON.stringify({ m: method, p: path, role, s: res.status })}\n`);
+    } catch {
+      // never fail a test on observation logging
+    }
+  }
   let json: Json = {};
   if (text.trim().length > 0) {
     try {
