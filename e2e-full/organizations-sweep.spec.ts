@@ -155,6 +155,91 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
     expect(good.status, "a well-formed organization is still created").toBe(201);
   });
 
+  test("field validation on UPDATE: malformed renames are refused, and accepted ones are normalized", async () => {
+    // THE-UNVALIDATED-UPDATE (2026-08-31): the create path was guarded but
+    // OrganizationService.Update went straight to repo.Update, so
+    // PUT {"domain":"lexus"} persisted what POST refuses — and the repository
+    // wrote the raw string, so "LEXUS.COM " and "lexus.com" could become two
+    // rows. The sweep only ever exercised POST, which is how the gap
+    // survived the previous slice's "every create/update path" claim.
+    const subjectId = `upd-${Math.random().toString(36).slice(2, 9)}`;
+    const created = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/organizations",
+      { name: `Update Subject ${subjectId}`, slug: subjectId, domain: `${subjectId}.test` },
+      site.bearer
+    );
+    expect(created.status, "subject org created").toBe(201);
+    const subject =
+      ((created.json as { organization?: { id?: string } }).organization?.id ??
+        (created.json as { id?: string }).id) ||
+      "";
+    expect(subject.length).toBeGreaterThan(0);
+
+    const badUpdates: Array<{ why: string; body: Record<string, unknown> }> = [
+      {
+        why: "domain with no dot or TLD — THE REPORTED DEFECT, on update",
+        body: { domain: "lexus" },
+      },
+      { why: "single-label domain", body: { domain: "localhost" } },
+      { why: "numeric TLD", body: { domain: "example.123" } },
+      { why: "IPv4 literal", body: { domain: "192.168.1.1" } },
+      { why: "hyphen-edged label", body: { domain: "-bad.com" } },
+      { why: "space inside the domain", body: { domain: "exa mple.com" } },
+      { why: "non-ASCII domain", body: { domain: "münchen.de" } },
+      { why: "name that is whitespace only", body: { name: "   " } },
+      { why: "max_sessions_per_user out of range", body: { max_sessions_per_user: 0 } },
+      { why: "mfa_policy not a known value", body: { mfa_policy: "sometimes" } },
+    ];
+    for (const c of badUpdates) {
+      const res = await api(
+        IDP_BASE,
+        "PUT",
+        `/api/v1/organizations/${subject}`,
+        c.body,
+        site.bearer
+      );
+      expect(res.status, `update must refuse: ${c.why}`).toBe(400);
+    }
+
+    // The subject must be UNCHANGED by every refusal above.
+    const after = await api(
+      IDP_BASE,
+      "GET",
+      `/api/v1/organizations/${subject}`,
+      undefined,
+      site.bearer
+    );
+    expect(after.status).toBe(200);
+    expect((after.json as { domain?: string }).domain, "no refused update touched the row").toBe(
+      `${subjectId}.test`
+    );
+
+    // CONTROL: a well-formed rename succeeds AND is stored normalized, so
+    // two spellings cannot become two rows.
+    const renamed = `${subjectId}-renamed.test`;
+    const ok = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/organizations/${subject}`,
+      { domain: `  ${renamed.toUpperCase()}.  ` },
+      site.bearer
+    );
+    expect(ok.status, "a well-formed rename is accepted").toBe(200);
+    const reread = await api(
+      IDP_BASE,
+      "GET",
+      `/api/v1/organizations/${subject}`,
+      undefined,
+      site.bearer
+    );
+    expect(
+      (reread.json as { domain?: string }).domain,
+      "the accepted rename is stored lowercased, trimmed and without the FQDN dot"
+    ).toBe(renamed);
+  });
+
   test("domains: add, primary, verify, delete — and their error branches", async () => {
     // ROW POST /organizations/:id/domains (SM)
     const add = await api(
