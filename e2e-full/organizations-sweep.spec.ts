@@ -385,6 +385,201 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
     expect(ok.status, "a well-formed client update is accepted").toBe(200);
   });
 
+  test("[ORG-ROLE-UPDATE-BLANK-1] a blank rename is refused, never a 200 that changes nothing", async () => {
+    // THE-SILENT-DROP (2026-08-31): UpdateRoleForActor read
+    //   if n := strings.TrimSpace(name); n != "" { role.Name = n }
+    // so a blank rename assigned NOTHING, wrote the unchanged row and
+    // answered 200 OK. The previous slice's inventory cleared this row as
+    // GUARDED on exactly that 200 — which is why this spec asserts the ROW,
+    // not just the status: a 200 with an unchanged name must FAIL here.
+    const created = await api(
+      IDP_BASE,
+      "POST",
+      `/api/v1/organizations/${org1}/roles`,
+      { name: `auditor-${runId}`, description: "reads audit logs" },
+      orgAdmin.bearer
+    );
+    expect(created.status, "subject role created").toBe(201);
+    const roleId =
+      ((created.json.role as { id?: string })?.id ?? (created.json as { id?: string }).id) || "";
+    expect(roleId.length).toBeGreaterThan(0);
+    const rolePath = `/api/v1/organizations/${org1}/roles/${roleId}`;
+
+    for (const blank of ["   ", "\t", ""]) {
+      const res = await api(IDP_BASE, "PUT", rolePath, { name: blank }, orgAdmin.bearer);
+      expect(res.status, `a blank rename (${JSON.stringify(blank)}) must be refused`).toBe(400);
+
+      // THE ASSERTION THAT WOULD HAVE CAUGHT IT: re-read and prove the row
+      // did not quietly stay as it was behind a success status.
+      const after = await api(IDP_BASE, "GET", rolePath, undefined, orgAdmin.bearer);
+      expect(after.status).toBe(200);
+      const row = (after.json.role as Record<string, unknown>) ?? after.json;
+      expect(
+        (row as { name?: string }).name,
+        "the row is unchanged — which is only acceptable BECAUSE the write was refused"
+      ).toBe(`auditor-${runId}`);
+    }
+
+    // CONTROL: a real rename lands and is trimmed exactly as create trims.
+    const renamed = await api(
+      IDP_BASE,
+      "PUT",
+      rolePath,
+      { name: `  security-auditor-${runId}  ` },
+      orgAdmin.bearer
+    );
+    expect(renamed.status, "a real rename is accepted").toBe(200);
+    const reread = await api(IDP_BASE, "GET", rolePath, undefined, orgAdmin.bearer);
+    const rerow = (reread.json.role as Record<string, unknown>) ?? reread.json;
+    expect(
+      (rerow as { name?: string }).name,
+      "the accepted rename is stored trimmed, as the create path trims"
+    ).toBe(`security-auditor-${runId}`);
+
+    // And a supplied EMPTY description now clears it — an operation the
+    // plain-string form could not express, so it was silently kept.
+    const cleared = await api(IDP_BASE, "PUT", rolePath, { description: "" }, orgAdmin.bearer);
+    expect(cleared.status, "clearing the description is accepted").toBe(200);
+    const afterClear = await api(IDP_BASE, "GET", rolePath, undefined, orgAdmin.bearer);
+    const clearedRow = (afterClear.json.role as Record<string, unknown>) ?? afterClear.json;
+    expect(
+      (clearedRow as { description?: string }).description ?? "",
+      "a supplied empty description CLEARS it instead of being silently kept"
+    ).toBe("");
+  });
+
+  test("[SERVICE-ACCOUNT-UPDATE-BLANK-1] [SCOPE-TEMPLATE-UPDATE-BLANK-1] blank renames are refused on both tenant-owned surfaces", async () => {
+    // Same class, two more routes the census MEASURED answering 200 with an
+    // unchanged row. The scope-template one was worse: {"name":"   "}
+    // answered 200 and STORED the whitespace as the template name, because
+    // the shared validator spelled the required-field rule as == "".
+    const sa = await api(
+      IDP_BASE,
+      "POST",
+      `/api/v1/organizations/${org1}/service-accounts`,
+      { name: `ci-${runId}`, role: "org_user" },
+      orgAdmin.bearer
+    );
+    expect(sa.status, "subject service account created").toBe(201);
+    const saId =
+      ((sa.json.service_account as { id?: string })?.id ?? (sa.json as { id?: string }).id) || "";
+    expect(saId.length).toBeGreaterThan(0);
+
+    for (const blank of ["   ", ""]) {
+      const res = await api(
+        IDP_BASE,
+        "PUT",
+        `/api/v1/service-accounts/${saId}`,
+        { name: blank },
+        orgAdmin.bearer
+      );
+      expect(res.status, `service-account blank rename (${JSON.stringify(blank)}) refused`).toBe(
+        400
+      );
+      const after = await api(
+        IDP_BASE,
+        "GET",
+        `/api/v1/service-accounts/${saId}`,
+        undefined,
+        orgAdmin.bearer
+      );
+      const row = (after.json.service_account as Record<string, unknown>) ?? after.json;
+      expect(
+        (row as { name?: string }).name,
+        "the service account is unchanged BECAUSE it was refused"
+      ).toBe(`ci-${runId}`);
+    }
+
+    const tpl = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/scope-templates",
+      { name: `reader-${runId}`, scopes: ["read:things"] },
+      orgAdmin.bearer
+    );
+    expect(tpl.status, "subject scope template created").toBe(201);
+    const tplId =
+      ((tpl.json.scope_template as { id?: string })?.id ?? (tpl.json as { id?: string }).id) || "";
+    expect(tplId.length).toBeGreaterThan(0);
+
+    for (const blank of ["   ", ""]) {
+      const res = await api(
+        IDP_BASE,
+        "PUT",
+        `/api/v1/scope-templates/${tplId}`,
+        { name: blank },
+        orgAdmin.bearer
+      );
+      expect(res.status, `scope-template blank rename (${JSON.stringify(blank)}) refused`).toBe(
+        400
+      );
+      const after = await api(
+        IDP_BASE,
+        "GET",
+        `/api/v1/scope-templates/${tplId}`,
+        undefined,
+        orgAdmin.bearer
+      );
+      const row = (after.json.scope_template as Record<string, unknown>) ?? after.json;
+      expect(
+        (row as { name?: string }).name,
+        "the template kept its real name — whitespace was NOT stored as the name"
+      ).toBe(`reader-${runId}`);
+    }
+  });
+
+  test("[REQUIRED-NAME-NOT-WHITESPACE-1] a whitespace name is refused where an empty one already was", async () => {
+    // The census found the same field answering three different ways
+    // depending only on how much whitespace was typed: on api-resources
+    // {"name":""} was a correct 400 while {"name":"   "} answered 200 AND
+    // STORED "   ". Both shapes must now agree.
+    const created = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/api-resources",
+      {
+        name: `billing-${runId}`,
+        audience: `https://billing-${runId}.test`,
+        token_ttl_secs: 3600,
+      },
+      orgAdmin.bearer
+    );
+    expect(created.status, "subject api resource created").toBe(201);
+    const resId =
+      ((created.json.api_resource as { id?: string })?.id ??
+        (created.json as { id?: string }).id) ||
+      "";
+    expect(resId.length).toBeGreaterThan(0);
+
+    for (const c of [
+      { why: "whitespace name", body: { name: "   ", audience: `https://billing-${runId}.test` } },
+      { why: "empty name", body: { name: "", audience: `https://billing-${runId}.test` } },
+      { why: "whitespace audience", body: { name: `billing-${runId}`, audience: "   " } },
+      { why: "empty audience", body: { name: `billing-${runId}`, audience: "" } },
+    ]) {
+      const res = await api(
+        IDP_BASE,
+        "PUT",
+        `/api/v1/api-resources/${resId}`,
+        { ...c.body, token_ttl_secs: 3600 },
+        orgAdmin.bearer
+      );
+      expect(res.status, `api-resource ${c.why} must be refused`).toBe(400);
+    }
+
+    const after = await api(
+      IDP_BASE,
+      "GET",
+      `/api/v1/api-resources/${resId}`,
+      undefined,
+      orgAdmin.bearer
+    );
+    const row = (after.json.api_resource as Record<string, unknown>) ?? after.json;
+    expect((row as { name?: string }).name, "no refusal stored whitespace as the name").toBe(
+      `billing-${runId}`
+    );
+  });
+
   test("domains: add, primary, verify, delete — and their error branches", async () => {
     // ROW POST /organizations/:id/domains (SM)
     const add = await api(
