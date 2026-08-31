@@ -32,13 +32,46 @@ import { createOrganization } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
 
+/**
+ * THE-UNVALIDATED-DOMAIN (2026-08-31): a MIRROR of the server grammar in
+ * identuum-idp-oss internal/domain.ValidateDomainFormat — convenience only.
+ * The server is the guarantee; this exists so the operator sees the problem
+ * before a round trip, and it must never be more permissive than the server.
+ *
+ * Kept deliberately in step with that grammar: normalized (lowercase, trim,
+ * one optional trailing dot removed), 1..253 characters, at least TWO labels
+ * so a dot is required (this is what rejects "lexus"), each label 1..63 of
+ * a-z 0-9 '-' and never hyphen-edged, final label >= 2 characters and either
+ * all-alphabetic or a punycode "xn--" label. No IANA list: .test / .local
+ * stay valid, as the system organization ("system.local") requires.
+ */
+const DOMAIN_RE = /^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+([a-z]{2,}|xn--[a-z0-9-]+)$/;
+const normalizeDomain = (d: string): string => d.trim().toLowerCase().replace(/\.$/, "");
+
 const schema = z.object({
-  name: z.string().min(1, "Name is required").max(255, "Name must be 255 characters or fewer"),
+  // Mirrors the server: `.min(1)` accepted a name of pure whitespace, exactly
+  // the hole `Name == ""` had on the backend. Trim first, then require
+  // content, with the same 255 bound as the column.
+  name: z
+    .string()
+    .max(255, "Name must be 255 characters or fewer")
+    .transform((v) => v.trim())
+    .refine((v) => v.length > 0, { message: "Name is required" }),
   domain: z
     .string()
     .min(1, "Domain is required")
     .max(253, "Domain must be 253 characters or fewer")
-    .transform((d) => d.toLowerCase().trim()),
+    .transform(normalizeDomain)
+    .refine((d) => d.length > 0 && d.length <= 253, {
+      message: "Domain must be between 1 and 253 characters",
+    })
+    .refine((d) => d.split(".").every((label) => label.length <= 63), {
+      message: "Each part of the domain must be 63 characters or fewer",
+    })
+    .refine((d) => DOMAIN_RE.test(d), {
+      message:
+        "Enter a full domain name including a top-level domain, for example acme.com (a bare name like acme is not a domain)",
+    }),
   admin_email: z
     .string()
     .max(255)

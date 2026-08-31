@@ -105,6 +105,56 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
     orgAdmin = await firstLoginBearerAsync(IDP_BASE, `admin@${runId}-1.test`, adminPw);
   });
 
+  test("field validation: malformed organizations are refused at the API, not persisted", async () => {
+    // THE-UNVALIDATED-DOMAIN (2026-08-31): creating an organization with the
+    // domain "lexus" — no dot, no TLD — SUCCEEDED and persisted, because the
+    // entire server-side check was `Domain == ""`. The owner widened the
+    // ruling to every field. These are the API-level teeth for
+    // ORG-DOMAIN-FORMAT-1: each request differs from a valid one in exactly
+    // ONE field, so a 201 names precisely which guard disappeared.
+    const bad: Array<{ why: string; body: Record<string, unknown> }> = [
+      { why: "domain with no dot or TLD — THE REPORTED DEFECT", body: { domain: "lexus" } },
+      { why: "single-label domain, however familiar", body: { domain: "localhost" } },
+      { why: "domain with a numeric TLD", body: { domain: "example.123" } },
+      { why: "IPv4 literal as a domain", body: { domain: "192.168.1.1" } },
+      { why: "domain with a leading dot", body: { domain: ".example.com" } },
+      { why: "domain with a hyphen-edged label", body: { domain: "-bad.com" } },
+      { why: "domain with a space", body: { domain: "exa mple.com" } },
+      { why: "domain with an underscore", body: { domain: "under_score.com" } },
+      { why: "non-ASCII domain (punycode required)", body: { domain: "münchen.de" } },
+      { why: "name that is whitespace only", body: { name: "   " } },
+    ];
+    for (const c of bad) {
+      const id = `bad-${Math.random().toString(36).slice(2, 9)}`;
+      const res = await api(
+        IDP_BASE,
+        "POST",
+        "/api/v1/organizations",
+        {
+          name: `Bad ${id}`,
+          slug: id,
+          domain: `${id}.test`,
+          ...c.body,
+        },
+        site.bearer
+      );
+      expect(res.status, `create must refuse: ${c.why}`).toBe(400);
+    }
+
+    // The control: the SAME request shape with every field well-formed is
+    // still accepted, so the guard refuses malformed input rather than
+    // simply refusing everything.
+    const okId = `ok-${Math.random().toString(36).slice(2, 9)}`;
+    const good = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/organizations",
+      { name: `Good ${okId}`, slug: okId, domain: `${okId}.test` },
+      site.bearer
+    );
+    expect(good.status, "a well-formed organization is still created").toBe(201);
+  });
+
   test("domains: add, primary, verify, delete — and their error branches", async () => {
     // ROW POST /organizations/:id/domains (SM)
     const add = await api(
