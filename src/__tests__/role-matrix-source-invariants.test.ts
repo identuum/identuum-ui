@@ -114,6 +114,42 @@ describe("the (endpoint, role) coverage matrix stays enforced every harness run 
     );
   });
 
+  it("the outside-matrix closure stays enforced: committed set, enforcing exits, witnessed step", () => {
+    // THE-CLOSURE-AUDIT: "covered elsewhere" is a per-run FACT, not a claim.
+    const committed = JSON.parse(read("e2e-full/closure-coverage.json")) as {
+      endpoints?: Array<{ endpoint: string; kind: string; sources: string[] }>;
+      closure_floor?: number;
+    };
+    const eps = committed.endpoints ?? [];
+    expect(eps.length, "the closure set is committed").toBeGreaterThan(0);
+    expect(committed.closure_floor, "floor equals the committed set").toBe(eps.length);
+    for (const e of eps) {
+      expect(/^[A-Z]+ \//.test(e.endpoint), `endpoint shape: ${e.endpoint}`).toBe(true);
+      expect(["session", "class"], `kind is session|class: ${e.endpoint}`).toContain(e.kind);
+      expect(e.sources.length, `bootstrap evidence recorded: ${e.endpoint}`).toBeGreaterThan(0);
+    }
+    const mjs = stripComments(read("e2e-full/scripts/closure-from-run.mjs"));
+    expect(mjs, "reads the committed file").toContain("closure-coverage.json");
+    expect(mjs, "reads the golden (live denominator)").toContain("endpoints.golden.yaml");
+    expect(mjs, "unobserved endpoint fails").toMatch(/CLOSURE DRIFT[\s\S]*?process\.exit\(1\)/);
+    expect(mjs, "golden change fails until re-derived").toMatch(
+      /DENOMINATOR DRIFT[\s\S]*?process\.exit\(1\)/
+    );
+    expect(mjs, "floor violation fails").toMatch(
+      /CLOSURE FLOOR VIOLATION[\s\S]*?process\.exit\(1\)/
+    );
+    expect(mjs, "evidence line derives from the observation").toContain("check OK: closure");
+    const sh = stripComments(read("e2e-full/scripts/full-run.sh"));
+    expect(sh, "closure phase is planned").toMatch(/coverage closure admin-reset\)/);
+    expect(sh, "enforcement runs as its own witnessed step").toMatch(
+      /step "\$RECORD" 'closure=node e2e-full\/scripts\/closure-from-run\.mjs/
+    );
+    const fixture = stripComments(read("e2e/helpers/appliance-fixture.ts"));
+    expect(fixture, "observeRaw evidence tap exists for request-fixture specs").toContain(
+      "export function observeRaw"
+    );
+  });
+
   it("api() writes the observations when the harness asks — no observations, no census", () => {
     const ts = stripComments(read("e2e/helpers/appliance-fixture.ts"));
     expect(ts, "env-gated").toContain("process.env.IDENTUUM_E2E_MATRIX_LOG");

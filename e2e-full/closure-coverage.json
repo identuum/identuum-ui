@@ -1,0 +1,276 @@
+{
+  "_comment": "THE-CLOSURE-AUDIT committed closure set: every endpoint OUTSIDE the role matrix (auth=session + public/oauth_client/bearer classes) must be OBSERVED in each run's own evidence — the api()/observeRaw JSONL or the network snapshots of PASSED dev-loop traces. closure-from-run.mjs FAILS the phase when any listed endpoint stops being observed, and reads DENOMINATOR DRIFT when the golden's closure set changes. The recorded sources/statuses are the bootstrap run's evidence, kept for the audit trail.",
+  "endpoints": [
+    {
+      "endpoint": "DELETE /api/v1/webauthn/credentials/:id",
+      "kind": "session",
+      "sources": ["trace"],
+      "statuses": [204]
+    },
+    {
+      "endpoint": "GET /.well-known/jwks.json",
+      "kind": "class",
+      "sources": ["jsonl", "trace"],
+      "statuses": [200]
+    },
+    {
+      "endpoint": "GET /.well-known/openid-configuration",
+      "kind": "class",
+      "sources": ["jsonl", "trace"],
+      "statuses": [200]
+    },
+    {
+      "endpoint": "GET /api/setup/status",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200]
+    },
+    {
+      "endpoint": "GET /api/v1/auth/browser-login",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200]
+    },
+    {
+      "endpoint": "GET /api/v1/auth/claim/validate",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200]
+    },
+    {
+      "endpoint": "GET /api/v1/auth/idp/:id/callback",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [400]
+    },
+    {
+      "endpoint": "GET /api/v1/auth/idp/:id/login",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [404]
+    },
+    {
+      "endpoint": "GET /api/v1/auth/organization-lookup",
+      "kind": "class",
+      "sources": ["jsonl", "trace"],
+      "statuses": [200, 400]
+    },
+    {
+      "endpoint": "GET /api/v1/auth/organizations/activate/:token",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200, 400]
+    },
+    {
+      "endpoint": "GET /api/v1/auth/verify-email",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [400]
+    },
+    {
+      "endpoint": "GET /api/v1/component",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200]
+    },
+    {
+      "endpoint": "GET /api/v1/oauth/authorize",
+      "kind": "session",
+      "sources": ["jsonl", "trace"],
+      "statuses": [302, 400]
+    },
+    {
+      "endpoint": "GET /api/v1/oauth/consent",
+      "kind": "session",
+      "sources": ["jsonl"],
+      "statuses": [200, 401]
+    },
+    {
+      "endpoint": "GET /api/v1/oidc/frontchannel-logout",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200]
+    },
+    {
+      "endpoint": "GET /api/v1/oidc/logout",
+      "kind": "session",
+      "sources": ["jsonl"],
+      "statuses": [302]
+    },
+    {
+      "endpoint": "GET /api/v1/oidc/userinfo",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200, 401]
+    },
+    {
+      "endpoint": "GET /api/v1/sessions",
+      "kind": "session",
+      "sources": ["jsonl"],
+      "statuses": [200, 403]
+    },
+    {
+      "endpoint": "GET /api/v1/webauthn/credentials",
+      "kind": "session",
+      "sources": ["trace"],
+      "statuses": [-1, 200]
+    },
+    {
+      "endpoint": "GET /health",
+      "kind": "class",
+      "sources": ["jsonl", "trace"],
+      "statuses": [200]
+    },
+    {
+      "endpoint": "GET /system/info",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200]
+    },
+    {
+      "endpoint": "POST /api/setup/complete",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [400]
+    },
+    {
+      "endpoint": "POST /api/setup/verify-token",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [400]
+    },
+    {
+      "endpoint": "POST /api/v1/auth/browser-login",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [403]
+    },
+    {
+      "endpoint": "POST /api/v1/auth/claim",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200]
+    },
+    {
+      "endpoint": "POST /api/v1/auth/login",
+      "kind": "class",
+      "sources": ["jsonl", "trace"],
+      "statuses": [200, 401]
+    },
+    {
+      "endpoint": "POST /api/v1/auth/login/mfa",
+      "kind": "session",
+      "sources": ["jsonl", "trace"],
+      "statuses": [200]
+    },
+    {
+      "endpoint": "POST /api/v1/auth/login/mfa/enroll/complete",
+      "kind": "session",
+      "sources": ["jsonl"],
+      "statuses": [200]
+    },
+    {
+      "endpoint": "POST /api/v1/auth/login/mfa/enroll/initiate",
+      "kind": "session",
+      "sources": ["jsonl", "trace"],
+      "statuses": [200, 401]
+    },
+    {
+      "endpoint": "POST /api/v1/auth/login/webauthn/begin",
+      "kind": "class",
+      "sources": ["jsonl", "trace"],
+      "statuses": [200, 400]
+    },
+    {
+      "endpoint": "POST /api/v1/auth/login/webauthn/finish",
+      "kind": "class",
+      "sources": ["jsonl", "trace"],
+      "statuses": [200, 401]
+    },
+    {
+      "endpoint": "POST /api/v1/auth/logout",
+      "kind": "session",
+      "sources": ["trace"],
+      "statuses": [204]
+    },
+    {
+      "endpoint": "POST /api/v1/auth/organizations/activate",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200, 400]
+    },
+    {
+      "endpoint": "POST /api/v1/auth/password/reset",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [400]
+    },
+    {
+      "endpoint": "POST /api/v1/auth/password/reset-request",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200]
+    },
+    {
+      "endpoint": "POST /api/v1/auth/resend-verification",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200]
+    },
+    {
+      "endpoint": "POST /api/v1/auth/session/refresh",
+      "kind": "session",
+      "sources": ["jsonl"],
+      "statuses": [200, 401]
+    },
+    {
+      "endpoint": "POST /api/v1/oauth/consent",
+      "kind": "session",
+      "sources": ["jsonl"],
+      "statuses": [302]
+    },
+    {
+      "endpoint": "POST /api/v1/oauth/introspection",
+      "kind": "class",
+      "sources": ["jsonl", "trace"],
+      "statuses": [401]
+    },
+    {
+      "endpoint": "POST /api/v1/oauth/revoke",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [401]
+    },
+    {
+      "endpoint": "POST /api/v1/oauth/token",
+      "kind": "class",
+      "sources": ["jsonl", "trace"],
+      "statuses": [401]
+    },
+    {
+      "endpoint": "POST /api/v1/oidc/userinfo",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200, 401]
+    },
+    {
+      "endpoint": "POST /api/v1/revoke",
+      "kind": "session",
+      "sources": ["jsonl"],
+      "statuses": [200]
+    },
+    {
+      "endpoint": "POST /api/v1/webauthn/register/begin",
+      "kind": "session",
+      "sources": ["jsonl", "trace"],
+      "statuses": [200, 401]
+    },
+    {
+      "endpoint": "POST /api/v1/webauthn/register/finish",
+      "kind": "session",
+      "sources": ["jsonl", "trace"],
+      "statuses": [200, 400]
+    }
+  ],
+  "closure_floor": 45
+}

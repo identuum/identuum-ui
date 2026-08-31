@@ -29,7 +29,7 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { api, firstLoginBearerAsync } from "../e2e/helpers/appliance-fixture";
+import { api, firstLoginBearerAsync, observeRaw } from "../e2e/helpers/appliance-fixture";
 import { siteAdminSession } from "./helpers/session";
 
 const IDP_BASE = process.env.IDENTUUM_E2E_FULL_IDP_BASE ?? "http://127.0.0.1:7113";
@@ -149,6 +149,24 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       maxRedirects: 0,
     });
     expect(anon.status(), "consent GET with no session → 401 login_required").toBe(401);
+    observeRaw("GET", "/api/v1/oauth/consent", anon.status());
+
+    // ── THE-CLOSURE-AUDIT: /oauth/authorize itself, previously NEVER hit by
+    // any test. The AS is redirect-safe: an anonymous authorize with a full
+    // PKCE query answers 302 to the registered redirect_uri carrying
+    // error=login_required and the echoed state — never a naked 401.
+    const anonAuthz = await request.get(`${IDP_BASE}/api/v1/oauth/authorize?${authQuery}`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    expect(anonAuthz.status(), "anonymous authorize → 302 (redirect-safe)").toBe(302);
+    const anonAuthzLoc = anonAuthz.headers().location ?? "";
+    expect(anonAuthzLoc, "…to the registered redirect_uri").toContain(REDIRECT_URI);
+    expect(new URL(anonAuthzLoc).searchParams.get("error"), "…carrying error=login_required").toBe(
+      "login_required"
+    );
+    expect(new URL(anonAuthzLoc).searchParams.get("state"), "…state echoed").toBe(`st-${runId}`);
+    observeRaw("GET", "/api/v1/oauth/authorize", anonAuthz.status());
 
     // ── Establish a browser-login session (honest CSRF double-submit).
     const form = await request.get(`${IDP_BASE}/api/v1/auth/browser-login`, {
@@ -174,6 +192,63 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       consentForm.status(),
       "consent GET WITH the browser-login session → 200 (session cookie returned over http)"
     ).toBe(200);
+    observeRaw("GET", "/api/v1/oauth/consent", consentForm.status());
+
+    // ── THE-CLOSURE-AUDIT: GET /api/v1/sessions, the one endpoint no
+    // evidence channel could see — the UI fetches it SERVER-side (a Next
+    // server component → IdP, invisible to browser traces and to api()).
+    // MEASURED (2026-08-31): despite the docgen golden labelling it
+    // auth=session, the endpoint REFUSES the browser-login ceremony cookie
+    // (401) — in practice it authenticates by BEARER (the UI's proxy lifts
+    // the access_token cookie into Authorization). Both facts pinned; the
+    // golden's auth label is reported as a docgen-accuracy finding.
+    const cookieSessions = await request.get(`${IDP_BASE}/api/v1/sessions`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    expect(
+      cookieSessions.status(),
+      "MEASURED: the ceremony cookie does NOT authenticate /sessions (golden says auth=session)"
+    ).toBe(401);
+    // MEASURED: site_admin is DELIBERATELY refused here too —
+    // HandleListOwnSessions has an explicit IsSiteAdmin() → 403 branch (the
+    // self-service surface follows the tenant-resource philosophy). Pinned.
+    const saSessions = await api(IDP_BASE, "GET", "/api/v1/sessions", undefined, site.bearer);
+    expect(saSessions.status, "site_admin bearer on the self-service list → 403").toBe(403);
+    // The real positive: an ordinary user's bearer lists their own sessions.
+    const ouLogin = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
+      email: userEmail,
+      password: userPw,
+    });
+    expect(ouLogin.status, "ceremony org_user plain login → 200").toBe(200);
+    const mySessions = await api(
+      IDP_BASE,
+      "GET",
+      "/api/v1/sessions",
+      undefined,
+      ouLogin.json.access_token as string
+    );
+    expect(mySessions.status, "GET /sessions with the user's bearer → 200").toBe(200);
+    expect(
+      Array.isArray((mySessions.json as { sessions?: unknown[] }).sessions)
+        ? ((mySessions.json as { sessions: unknown[] }).sessions?.length ?? -1)
+        : -1,
+      "…listing at least the caller's current session"
+    ).toBeGreaterThan(0);
+
+    // ── THE-CLOSURE-AUDIT: authorize WITH the session but WITHOUT stored
+    // consent → 302 error=consent_required (the gate that sends the UI to
+    // the consent page).
+    const preConsentAuthz = await request.get(`${IDP_BASE}/api/v1/oauth/authorize?${authQuery}`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    expect(preConsentAuthz.status(), "authorize with session, no consent → 302").toBe(302);
+    expect(
+      new URL(preConsentAuthz.headers().location ?? "").searchParams.get("error"),
+      "…carrying error=consent_required"
+    ).toBe("consent_required");
+    observeRaw("GET", "/api/v1/oauth/authorize", preConsentAuthz.status());
     const consentHtml = await consentForm.text();
     const consentCsrf = consentHtml.match(/name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i);
     expect(consentCsrf, "consent form embeds a CSRF token").toBeTruthy();
@@ -201,6 +276,31 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     const code = new URL(location).searchParams.get("code") ?? "";
     expect(code.length, "an authorization code is present on the redirect").toBeGreaterThan(0);
     expect(new URL(location).searchParams.get("state"), "state echoed").toBe(`st-${runId}`);
+    observeRaw("POST", "/api/v1/oauth/consent", approve.status());
+
+    // ── THE-CLOSURE-AUDIT: with consent now STORED, authorize itself mints a
+    // code straight through — the positive contract of GET /oauth/authorize
+    // (ConsentService.Lookup Covered=true bypasses the gate). Fresh PKCE
+    // pair so this second code stands alone; it is never redeemed — the
+    // single-use redemption contract is proven on the FIRST code below.
+    const v2 = randomBytes(32).toString("base64url");
+    const ch2 = createHash("sha256").update(v2).digest("base64url");
+    const directAuthz = await request.get(
+      `${IDP_BASE}/api/v1/oauth/authorize?client_id=${encodeURIComponent(clientId)}` +
+        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+        `&response_type=code&scope=${encodeURIComponent("openid")}&state=direct-${runId}` +
+        `&code_challenge=${ch2}&code_challenge_method=S256`,
+      { failOnStatusCode: false, maxRedirects: 0 }
+    );
+    expect(directAuthz.status(), "authorize with session + stored consent → 302").toBe(302);
+    const directLoc = new URL(directAuthz.headers().location ?? "");
+    expect(directLoc.searchParams.get("error"), "…no error").toBeNull();
+    expect(
+      (directLoc.searchParams.get("code") ?? "").length,
+      "…authorize itself minted a code"
+    ).toBeGreaterThan(0);
+    expect(directLoc.searchParams.get("state"), "…state echoed").toBe(`direct-${runId}`);
+    observeRaw("GET", "/api/v1/oauth/authorize", directAuthz.status());
 
     // ── Redeem the code ONCE → 200 with an access token.
     const basic = {
@@ -288,6 +388,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     expect(logout.headers().location ?? "", "…to the post_logout_redirect_uri").toContain(
       POST_LOGOUT
     );
+    observeRaw("GET", "/api/v1/oidc/logout", logout.status());
     // Harness note: the interactive delivery does AT MOST ONE POST and never
     // sleeps, so end_session blocks up to the client's 3s timeout on a
     // dead-but-routable target. Recorded, not asserted (the exact wall time is

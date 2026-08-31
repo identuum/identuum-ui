@@ -144,7 +144,7 @@ GW="scripts/gate-witness.sh"
 # requested, so an absent baseline is a declared subtraction, never INCOMPLETE.
 PLAN=(fresh-appliance api-suite)
 [ "${IDENTUUM_E2E_MEASURE:-}" = "1" ] && PLAN+=(plain-baseline)
-PLAN+=(provisioner static-rows-sweep static-rows role-matrix devloop-provisioned skip-ceiling coverage admin-reset)
+PLAN+=(provisioner static-rows-sweep static-rows role-matrix devloop-provisioned skip-ceiling coverage closure admin-reset)
 bash "$GW" init "$RECORD" "identuum-ui make e2e-full" "${PLAN[@]}"
 
 rc=0
@@ -277,6 +277,14 @@ bash "$GW" step "$RECORD" 'skip-ceiling=node e2e-full/scripts/skip-ceiling-from-
 # report marks passed. No hand-maintained list anywhere.
 echo "e2e-full: deriving route coverage from the provisioned run"
 bash "$GW" step "$RECORD" 'coverage=node e2e-full/scripts/coverage-from-run.mjs "$IDENTUUM_E2E_BASE_URL" e2e/.auth/pw-devloop.json e2e/.auth/pw-fresh.json' || rc=1
+
+# THE-CLOSURE-AUDIT: every endpoint OUTSIDE the role matrix (session
+# ceremonies + public/M2M classes) must be OBSERVED in this run's own
+# evidence — the api()/observeRaw JSONL or the network snapshots inside
+# PASSED dev-loop traces. "Covered elsewhere" is a claim; this step makes it
+# a per-run fact that fails loudly when a test stops exercising one.
+echo "e2e-full: enforcing outside-matrix closure (session + class endpoints)"
+bash "$GW" step "$RECORD" 'closure=node e2e-full/scripts/closure-from-run.mjs e2e/.auth/role-matrix-observations.jsonl e2e/.auth/pw-devloop.json' || rc=1
 
 # THE-ADMIN-RESET (T-R2a): the LAST phase, because it rotates site_admin's
 # credentials — nothing after it may depend on them. Proves TEST-spec R2's

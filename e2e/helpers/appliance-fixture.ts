@@ -105,6 +105,28 @@ export function apiCallLog(last = 40): string {
     .join("\n");
 }
 
+/**
+ * THE-CLOSURE-AUDIT (2026-08-31): evidence tap for specs that drive requests
+ * OUTSIDE api() — playwright `request` fixtures, browser-context fetches. A
+ * spec calls observeRaw AFTER its own assertion passed, recording only
+ * method/path/status (role "session": these are cookie/ceremony surfaces).
+ * closure-from-run.mjs reads the same JSONL, so "covered elsewhere" claims
+ * become observed-in-run facts. Never values, never tokens; logging failures
+ * never break a test.
+ */
+export function observeRaw(method: string, path: string, status: number): void {
+  const matrixLog = process.env.IDENTUUM_E2E_MATRIX_LOG;
+  if (!matrixLog) return;
+  try {
+    appendFileSync(
+      matrixLog,
+      `${JSON.stringify({ m: method, p: path, role: "session", s: status })}\n`
+    );
+  } catch {
+    // never fail a test on observation logging
+  }
+}
+
 async function api(
   base: string,
   method: string,
