@@ -240,6 +240,151 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
     ).toBe(renamed);
   });
 
+  test("[ORG-SYSTEM-RENAME-FORBIDDEN-1] renaming the SYSTEM organization is 403 forbidden, not 404 not-found", async () => {
+    // THE-UNVALIDATED-REST (2026-08-31): AdminPermissionsModel.md says the
+    // System organization cannot be renamed, and the service refused it
+    // correctly — but the handler collapsed domain.ErrForbidden into its
+    // catch-all 404, so site_admin was told a row it can plainly read does
+    // not exist. Nothing pinned the status until this test.
+    //
+    // The System org is NOT in GET /organizations (that surface lists
+    // tenants), so the id comes from the domain constant it is created with.
+    const SYSTEM_ORG_ID = "00000000-0000-7000-0000-000000000000";
+
+    const renamed = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/organizations/${SYSTEM_ORG_ID}`,
+      { name: "Renamed System" },
+      site.bearer
+    );
+    expect(renamed.status, "renaming the System organization is a REFUSAL, not a miss").toBe(403);
+
+    // The three statuses must stay distinguishable from one another —
+    // a 403 that swallowed the other two would pass the line above alone.
+    const ghost = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/organizations/${GHOST}`,
+      { name: "Ghost" },
+      site.bearer
+    );
+    expect(ghost.status, "a genuinely absent organization is still 404").toBe(404);
+
+    const malformed = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/organizations/${SYSTEM_ORG_ID}`,
+      { domain: "lexus" },
+      site.bearer
+    );
+    expect(malformed.status, "an invalid field is still 400").toBe(400);
+  });
+
+  test("[USER-UPDATE-VALIDATION-1] field validation on user UPDATE: malformed fields are refused with 400, not 500", async () => {
+    // THE-UNVALIDATED-REST: UserService.Update validated only the password
+    // and handed Email and Role to the repository raw. The users
+    // chk_user_email_format CHECK and the user_role ENUM were the only
+    // guards, so every one of these MEASURED 500 internal_error — a server
+    // fault reported for the caller's own typo.
+    const tag = `usr-${Math.random().toString(36).slice(2, 8)}`;
+    const created = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/users",
+      {
+        email: `${tag}@${runId}-1.test`,
+        password: `Us3r!${tag}xQ`,
+        name: "Update Subject",
+        role: "org_user",
+      },
+      orgAdmin.bearer
+    );
+    expect(created.status, "subject user created").toBe(201);
+    const uid =
+      ((created.json as { user?: { id?: string } }).user?.id ??
+        (created.json as { id?: string }).id) ||
+      "";
+    expect(uid.length).toBeGreaterThan(0);
+
+    for (const c of [
+      { why: "email with no @ or domain", body: { email: "not-an-email" } },
+      { why: "email that is whitespace only", body: { email: "   " } },
+      { why: "email that is empty", body: { email: "" } },
+      { why: "role outside the user_role enum", body: { role: "wizard" } },
+    ]) {
+      const res = await api(IDP_BASE, "PUT", `/api/v1/users/${uid}`, c.body, orgAdmin.bearer);
+      expect(res.status, `user update must refuse with 400: ${c.why}`).toBe(400);
+    }
+
+    const after = await api(IDP_BASE, "GET", `/api/v1/users/${uid}`, undefined, orgAdmin.bearer);
+    expect(after.status).toBe(200);
+    const row = (after.json as { user?: Record<string, unknown> }).user ?? after.json;
+    expect((row as { email?: string }).email, "no refused update touched the row").toBe(
+      `${tag}@${runId}-1.test`
+    );
+    expect((row as { role?: string }).role, "the role survived every refusal").toBe("org_user");
+
+    // CONTROL: a legitimate change still lands.
+    const ok = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/users/${uid}`,
+      { name: "Renamed Subject" },
+      orgAdmin.bearer
+    );
+    expect(ok.status, "a well-formed user update is accepted").toBe(200);
+  });
+
+  test("[CLIENT-UPDATE-VALIDATION-1] field validation on client UPDATE: a blank name and an empty redirect list are refused, not persisted", async () => {
+    // THE-UNVALIDATED-REST: ClientService.UpdateClient checked redirect-URI
+    // SHAPE but not the two rules prepareClient enforces at create — a name
+    // non-empty after trimming, and AT LEAST ONE redirect URI. Both were
+    // measured answering 200 and PERSISTING; an empty list leaves an
+    // authorization-code client that can never complete a flow.
+    const name = `Client ${Math.random().toString(36).slice(2, 8)}`;
+    const created = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/clients",
+      { name, redirect_uris: ["https://app.example.test/callback"] },
+      orgAdmin.bearer
+    );
+    expect(created.status, "subject client created").toBe(201);
+    const cid =
+      ((created.json as { client?: { id?: string } }).client?.id ??
+        (created.json as { id?: string }).id) ||
+      "";
+    expect(cid.length).toBeGreaterThan(0);
+
+    for (const c of [
+      { why: "a name that is whitespace only", body: { name: "   " } },
+      { why: "an EMPTY redirect-URI list", body: { redirect_uris: [] } },
+    ]) {
+      const res = await api(IDP_BASE, "PUT", `/api/v1/clients/${cid}`, c.body, orgAdmin.bearer);
+      expect(res.status, `client update must refuse: ${c.why}`).toBe(400);
+    }
+
+    const after = await api(IDP_BASE, "GET", `/api/v1/clients/${cid}`, undefined, orgAdmin.bearer);
+    expect(after.status).toBe(200);
+    const row = (after.json as { client?: Record<string, unknown> }).client ?? after.json;
+    expect((row as { name?: string }).name, "no refused update touched the name").toBe(name);
+    expect(
+      ((row as { redirect_uris?: string[] }).redirect_uris ?? []).length,
+      "the client still has the redirect URI it needs to complete a flow"
+    ).toBe(1);
+
+    // CONTROL: a legitimate change still lands.
+    const ok = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/clients/${cid}`,
+      { name: `${name} Renamed` },
+      orgAdmin.bearer
+    );
+    expect(ok.status, "a well-formed client update is accepted").toBe(200);
+  });
+
   test("domains: add, primary, verify, delete — and their error branches", async () => {
     // ROW POST /organizations/:id/domains (SM)
     const add = await api(

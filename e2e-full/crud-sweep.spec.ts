@@ -418,6 +418,48 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
     );
     expect(putGhost.status, "update nonexistent → 404").toBe(404);
 
+    // [API-RESOURCE-REFUSAL-STATUS-1] THE-UNVALIDATED-REST (2026-08-31): the
+    // update path DID validate — resource.Validate() and ValidateAPIScopes
+    // both run before any write (P2-16) — but the handler switch had no
+    // branch for a validation error, so every refusal fell to the default
+    // and answered 500 internal_error. The guard was right; the status lied.
+    for (const c of [
+      { why: "a blank name", body: { name: "", audience: `https://api.${runId}.test` } },
+      { why: "a blank audience", body: { name: `res2-${runId}`, audience: "" } },
+      {
+        why: "a non-positive token TTL",
+        body: { name: `res2-${runId}`, audience: `https://api.${runId}.test`, token_ttl_secs: -5 },
+      },
+      {
+        why: "a reserved scope prefix",
+        body: {
+          name: `res2-${runId}`,
+          audience: `https://api.${runId}.test`,
+          token_ttl_secs: 3600,
+          scopes: [{ name: "system:root" }],
+        },
+      },
+    ]) {
+      const bad = await api(IDP_BASE, "PUT", `/api/v1/api-resources/${resId}`, c.body, A.bearer);
+      expect(bad.status, `api-resource update must refuse with 400, not 500: ${c.why}`).toBe(400);
+    }
+
+    // The refusals must have left the resource exactly as the 200 above left it.
+    const afterRefusals = await api(
+      IDP_BASE,
+      "GET",
+      `/api/v1/api-resources/${resId}`,
+      undefined,
+      A.bearer
+    );
+    expect(afterRefusals.status).toBe(200);
+    const resRow =
+      (afterRefusals.json as { api_resource?: Record<string, unknown> }).api_resource ??
+      afterRefusals.json;
+    expect((resRow as { name?: string }).name, "no refused update touched the row").toBe(
+      `res2-${runId}`
+    );
+
     // ROW POST /api-resources/:id/secret/regenerate (D)
     const regen = await api(
       IDP_BASE,
