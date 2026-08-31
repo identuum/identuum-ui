@@ -690,3 +690,58 @@ export function readSetupCode(compose: string[], service: string): string {
 // than fork it — forking is how suites drift apart. Additive export only;
 // no dev-loop behavior changes.
 export { api, firstLoginBearerAsync };
+
+/**
+ * THE-UNUSABLE-TOKEN (2026-08-31): assert the activation envelope contract on
+ * every endpoint that issues an activation credential.
+ *
+ * A returned token must arrive with the link that CONSUMES it, or with an
+ * honest reason naming the setting to configure — never bare (the /activate
+ * page reads ?token from the query string and has no input field, so a bare
+ * token cannot be redeemed by hand) and never a guessed URL.
+ *
+ * Exactly one of activation_url / activation_url_unavailable is present. When
+ * the link exists it must point at /activate and carry the SAME token; when it
+ * does not, the reason must name IDENTUUM_IDP_UI_PUBLIC_BASE_URL and must not
+ * assert a deployment topology (the "air-gapped" misnomer this slice removed —
+ * air-gapped is a CE feature; OSS runs with email configured or not).
+ *
+ * Never logs the token or the link.
+ */
+export function assertActivationEnvelope(
+  body: Json,
+  expectedToken: string | undefined,
+  where: string
+): void {
+  const url = typeof body.activation_url === "string" ? body.activation_url : "";
+  const reason =
+    typeof body.activation_url_unavailable === "string" ? body.activation_url_unavailable : "";
+  must(
+    (url === "") !== (reason === ""),
+    `${where}: exactly one of activation_url / activation_url_unavailable must be present`
+  );
+  if (url !== "") {
+    const parsed = new URL(url);
+    must(
+      parsed.pathname === "/activate",
+      `${where}: activation_url path is ${parsed.pathname}, want /activate`
+    );
+    const carried = parsed.searchParams.get("token") ?? "";
+    must(carried.length > 0, `${where}: activation_url carries no token`);
+    if (expectedToken !== undefined) {
+      must(
+        carried === expectedToken,
+        `${where}: activation_url token does not match activation_token`
+      );
+    }
+    return;
+  }
+  must(
+    reason.includes("IDENTUUM_IDP_UI_PUBLIC_BASE_URL"),
+    `${where}: the refusal must name the setting to configure`
+  );
+  must(
+    !/air[\s-]?gap/i.test(reason),
+    `${where}: the refusal must not assert a deployment topology (air-gapped is a CE feature)`
+  );
+}

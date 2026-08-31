@@ -9,9 +9,13 @@
  * same predicate server-side and returns ErrInvalidRequest if the user is no
  * longer in that state, so a UI race is safe.
  *
- * The activation_url field on the response is populated only in air-gapped
- * deployments. When present, it is shown in the shared SetupLinkPanel
- * primitive — never stored or logged.
+ * MEASURED 2026-08-31 (THE-UNUSABLE-TOKEN): the OSS approve endpoint returns
+ * the bare safe-user object and NO activation_url — approval only clears the
+ * pending flag, it issues no activation credential. The field is read
+ * defensively because identuum-ui also serves CE, which may populate it; on
+ * OSS this panel simply never renders. It is never fabricated client-side.
+ * When present it is shown in the shared SetupLinkPanel primitive — never
+ * stored or logged.
  */
 
 import { useActionState } from "react";
@@ -38,7 +42,7 @@ export function ApproveButton({ userId }: ApproveButtonProps) {
           <SetupLinkPanel
             link={state.activationUrl}
             title="One-time activation link"
-            description="Air-gapped deployment: share this link with the user out of band. It expires in 24 hours."
+            description="Share this link with the user through a secure channel. It expires in 24 hours."
             compact
           />
         )}

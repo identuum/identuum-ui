@@ -4,7 +4,7 @@
  * SetupLinkPanel — displays a one-time invitation setup link with a copy button.
  *
  * Used for:
- *   - Approve-registration setup link (air-gapped deployments)
+ *   - Approve-registration setup link (editions that issue one; not OSS)
  *   - One-time API-resource secret display
  *
  * Security:

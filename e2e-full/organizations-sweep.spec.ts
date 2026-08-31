@@ -24,7 +24,11 @@
  *  - export-candidates is tenant-scoped for org_admin (own org only).
  */
 import { expect, test } from "@playwright/test";
-import { api, firstLoginBearerAsync } from "../e2e/helpers/appliance-fixture";
+import {
+  api,
+  assertActivationEnvelope,
+  firstLoginBearerAsync,
+} from "../e2e/helpers/appliance-fixture";
 import { siteAdminSession } from "./helpers/session";
 
 const IDP_BASE = process.env.IDENTUUM_E2E_FULL_IDP_BASE ?? "http://127.0.0.1:7113";
@@ -78,12 +82,26 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
     const token = resend.json.activation_token as string;
     expect(token.length).toBeGreaterThan(0);
 
+    // THE-UNUSABLE-TOKEN: the token must arrive with the link that CONSUMES
+    // it, or with an honest reason naming the setting — never bare, never a
+    // guessed URL. EXACTLY ONE of the two, on BOTH issuing endpoints.
+    assertActivationEnvelope(resend.json, token, "resend-activation");
+    assertActivationEnvelope(created.json, undefined, "create-organization");
+
     const adminPw = `Adm!${runId}9wqX`;
+    // THE-UNUSABLE-TOKEN: consume the credential taken FROM THE LINK, not the
+    // bare token field. This is the proof that matters — the link the
+    // operator is told to send is one a real activation actually succeeds
+    // with. (The harness configures IDENTUUM_IDP_UI_PUBLIC_BASE_URL, so the
+    // link branch is the one in force here; the refusal branch is pinned by
+    // the Go rule ACTIVATION-LINK-USABLE-1 and asserted above.)
+    const linkToken = new URL(resend.json.activation_url as string).searchParams.get("token") ?? "";
+    expect(linkToken, "the activation link carries the same credential").toBe(token);
     const activate = await api(IDP_BASE, "POST", "/api/v1/auth/organizations/activate", {
-      token,
+      token: linkToken,
       password: adminPw,
     });
-    expect(activate.status, "activation consume → 200").toBe(200);
+    expect(activate.status, "the token FROM THE LINK activates → 200").toBe(200);
     orgAdmin = await firstLoginBearerAsync(IDP_BASE, `admin@${runId}-1.test`, adminPw);
   });
 

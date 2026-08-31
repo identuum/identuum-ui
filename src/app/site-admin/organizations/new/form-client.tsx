@@ -116,6 +116,8 @@ export function CreateOrgForm() {
 
 function SuccessPanel({ success }: { success: NonNullable<CreateOrgActionState["success"]> }) {
   const { orgId, orgName, orgDomain, adminEmail, activationToken } = success;
+  const activationUrl = success.activationUrl;
+  const activationUrlUnavailable = success.activationUrlUnavailable;
 
   return (
     <div className="max-w-lg space-y-5">
@@ -128,19 +130,49 @@ function SuccessPanel({ success }: { success: NonNullable<CreateOrgActionState["
         </p>
       </div>
 
-      {/* Case: air-gapped mode — token returned, must be delivered manually */}
+      {/* Manual delivery: the operator must hand the activation over themselves.
+          The LINK is the primary affordance — the /activate page consumes
+          ?token from the query string and offers no input field, so a bare
+          token cannot be redeemed by hand (THE-UNUSABLE-TOKEN). The raw token
+          stays visible and copyable underneath, and the one-time warning
+          stands. */}
       {activationToken && adminEmail && (
         <div className="space-y-3">
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
             <p className="text-sm font-semibold text-amber-700">
-              Air-gapped mode: manual token delivery required
+              Deliver this activation to the administrator
             </p>
             <p className="text-xs text-stone-500 mt-1 leading-relaxed">
-              Email delivery is not configured. The one-time activation token below must be
-              delivered securely to <span className="font-mono text-sky-950">{adminEmail}</span> so
-              they can activate their account. The token expires in 24 hours.
+              Send it securely to <span className="font-mono text-sky-950">{adminEmail}</span> so
+              they can activate their account. It expires in 24 hours. If email delivery is
+              configured on this deployment, a message was also sent automatically.
             </p>
           </div>
+
+          {activationUrl && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+                Activation link — send this
+              </p>
+              <a
+                href={activationUrl}
+                className="block rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900 break-all font-mono underline underline-offset-2 hover:bg-sky-100"
+              >
+                {activationUrl}
+              </a>
+            </div>
+          )}
+
+          {!activationUrl && activationUrlUnavailable && (
+            <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+                No activation link could be built
+              </p>
+              <p className="text-xs text-stone-600 mt-1 leading-relaxed">
+                {activationUrlUnavailable}
+              </p>
+            </div>
+          )}
 
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
@@ -151,8 +183,8 @@ function SuccessPanel({ success }: { success: NonNullable<CreateOrgActionState["
               {activationToken}
             </pre>
             <p className="text-xs text-amber-600 leading-relaxed">
-              ⚠ Copy this token now. It will not be shown again after you leave this page. Deliver
-              it to <span className="font-mono">{adminEmail}</span> through a secure channel.
+              ⚠ Copy this now. It will not be shown again after you leave this page. Deliver it to{" "}
+              <span className="font-mono">{adminEmail}</span> through a secure channel.
             </p>
           </div>
         </div>

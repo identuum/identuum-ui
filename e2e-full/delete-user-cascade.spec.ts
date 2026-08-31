@@ -28,7 +28,12 @@
  * e2e/helpers/appliance-fixture.ts.
  */
 import { expect, test } from "@playwright/test";
-import { api, apiCallLog, firstLoginBearerAsync } from "../e2e/helpers/appliance-fixture";
+import {
+  api,
+  apiCallLog,
+  assertActivationEnvelope,
+  firstLoginBearerAsync,
+} from "../e2e/helpers/appliance-fixture";
 import { siteAdminSession } from "./helpers/session";
 
 const IDP_BASE = process.env.IDENTUUM_E2E_FULL_IDP_BASE ?? "http://127.0.0.1:7113";
@@ -84,6 +89,9 @@ test.describe("delete-user cascade (census row: DELETE /api/v1/users/:id)", () =
     expect(resend.status, "resend-activation → 200").toBe(200);
     const activationToken = resend.json.activation_token as string;
     expect(activationToken.length).toBeGreaterThan(0);
+    // THE-UNUSABLE-TOKEN: a second, independent site asserting the envelope
+    // contract — link-or-honest-refusal, never a bare token.
+    assertActivationEnvelope(resend.json, activationToken, "delete-cascade resend");
 
     // Consume it (census-NEITHER destructive row: one-shot activation).
     const activate = await api(IDP_BASE, "POST", "/api/v1/auth/organizations/activate", {

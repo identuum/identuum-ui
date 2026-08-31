@@ -8,9 +8,13 @@
  *   2. Validates/sanitizes form data with zod.
  *   3. Calls createOrganization() in idp-admin-client.ts, which forwards cookies
  *      to the IdP using internal_base_url — never exposed to the browser.
- *   4. On success, returns a success state that may include an activation token.
- *      The token is only returned by the IdP in air-gapped mode. In normal mode
- *      the IdP sends an activation email and the token is not returned.
+ *   4. On success, returns a success state that may include an activation token
+ *      AND the link that consumes it. OSS returns the token whenever
+ *      admin_email was supplied — in BOTH the email-configured and the
+ *      email-not-configured mode (there is no "air-gapped mode" in OSS; that
+ *      is a CE feature, and the flag this comment used to cite does not
+ *      exist). When the IdP cannot build a link it says why instead, naming
+ *      the setting — the UI never guesses a URL.
  *   5. On failure, returns safe error state — no raw stack traces, SQL errors,
  *      or internal URLs.
  *
@@ -51,11 +55,23 @@ export interface CreateOrgSuccess {
   /** Provided if admin_email was submitted. */
   adminEmail?: string;
   /**
-   * Present only in air-gapped mode (backend IsAirGapped=true).
-   * Raw JWT. Not a URL. Expires 24 hours after creation.
-   * Must be delivered out-of-band to the org admin.
+   * The raw one-time activation credential. Not a URL. Expires 24 hours
+   * after creation. OSS returns it whenever admin_email was supplied — in
+   * both the email-configured and email-not-configured modes.
    */
   activationToken?: string;
+  /**
+   * The ready-to-open activation link the token belongs to, when the IdP
+   * knows the UI's public base URL (THE-UNUSABLE-TOKEN). This is the
+   * primary affordance: the /activate page consumes ?token and has no
+   * input field, so a bare token alone cannot be redeemed by hand.
+   */
+  activationUrl?: string;
+  /**
+   * Set INSTEAD of activationUrl when the IdP cannot build a link; carries
+   * the server's reason, naming the setting to configure. Never both.
+   */
+  activationUrlUnavailable?: string;
 }
 
 export interface CreateOrgActionState {
@@ -119,8 +135,10 @@ export async function createOrgAction(
   }
 
   // Success. Return state for the success panel.
-  // When activation_token is present (air-gapped mode), it must be shown in the UI.
-  // We do NOT redirect here — redirecting would discard the one-time token.
+  // The activation token is one-time and must be shown here; we do NOT
+  // redirect, because redirecting would discard it. The link is carried
+  // alongside it (THE-UNUSABLE-TOKEN) so the operator has something they can
+  // actually open, or the server's reason why there is none.
   return {
     success: {
       orgId: result.id,
@@ -128,6 +146,8 @@ export async function createOrgAction(
       orgDomain: result.domain,
       adminEmail: parsed.data.admin_email || undefined,
       activationToken: result.activationToken ?? undefined,
+      activationUrl: result.activationUrl ?? undefined,
+      activationUrlUnavailable: result.activationUrlUnavailable ?? undefined,
     },
   };
 }
