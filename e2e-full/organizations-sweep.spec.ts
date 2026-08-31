@@ -528,6 +528,169 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
     }
   });
 
+  test("[CLIENT-UPDATE-BLANK-FIELDS-1] a blank client field clears or is refused, per field — never dropped", async () => {
+    // THE-SILENT-DROP-2: five fields were still plain strings, so a supplied
+    // blank was indistinguishable from absent and answered 200 unchanged.
+    // The answer differs per field, and the reason is what the column can
+    // hold: the nullable ones CLEAR, the NOT NULL ones with a CHECK
+    // allow-list are REFUSED because the repository would otherwise store
+    // the column default nobody asked for.
+    const created = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/clients",
+      {
+        name: `blanks-${runId}`,
+        redirect_uris: ["https://app.example.test/cb"],
+        scope: "read write",
+        token_endpoint_auth_method: "client_secret_post",
+        token_endpoint_auth_signing_alg: "RS256",
+      },
+      orgAdmin.bearer
+    );
+    expect(created.status, "subject client created").toBe(201);
+    const cid =
+      ((created.json.client as { id?: string })?.id ?? (created.json as { id?: string }).id) || "";
+    expect(cid.length).toBeGreaterThan(0);
+    const readClient = async () => {
+      const r = await api(IDP_BASE, "GET", `/api/v1/clients/${cid}`, undefined, orgAdmin.bearer);
+      expect(r.status).toBe(200);
+      return (r.json.client as Record<string, unknown>) ?? (r.json as Record<string, unknown>);
+    };
+
+    // CLEARS: the blank must actually land, so the row CHANGES.
+    const beforeClear = await readClient();
+    expect((beforeClear as { scope?: string }).scope, "precondition: the scope is set").toBe(
+      "read write"
+    );
+    const cleared = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/clients/${cid}`,
+      { scope: "" },
+      orgAdmin.bearer
+    );
+    expect(cleared.status, "clearing scope is accepted").toBe(200);
+    const afterClear = await readClient();
+    expect(
+      (afterClear as { scope?: string }).scope ?? "",
+      "the supplied blank CLEARED the scope instead of being dropped"
+    ).toBe("");
+
+    // REFUSED: blank, and any value outside the allow-list. The row must be
+    // untouched afterwards — here an unchanged row is correct BECAUSE the
+    // write was refused.
+    for (const c of [
+      { why: "a blank auth method", body: { token_endpoint_auth_method: "" } },
+      { why: "a blank signing alg", body: { token_endpoint_auth_signing_alg: "" } },
+      { why: "an unlisted auth method", body: { token_endpoint_auth_method: "banana" } },
+      { why: "an unlisted signing alg", body: { token_endpoint_auth_signing_alg: "HS256" } },
+    ]) {
+      const res = await api(IDP_BASE, "PUT", `/api/v1/clients/${cid}`, c.body, orgAdmin.bearer);
+      expect(res.status, `client update must refuse ${c.why}`).toBe(400);
+    }
+    const afterRefusals = await readClient();
+    expect(
+      (afterRefusals as { token_endpoint_auth_method?: string }).token_endpoint_auth_method,
+      "no refusal moved the client onto the column default"
+    ).toBe("client_secret_post");
+
+    // CONTROL: a listed value is still accepted.
+    const ok = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/clients/${cid}`,
+      { token_endpoint_auth_method: "client_secret_basic" },
+      orgAdmin.bearer
+    );
+    expect(ok.status, "a listed auth method is accepted").toBe(200);
+    const afterOk = await readClient();
+    expect(
+      (afterOk as { token_endpoint_auth_method?: string }).token_endpoint_auth_method,
+      "the accepted method landed"
+    ).toBe("client_secret_basic");
+  });
+
+  test("[DESCRIPTION-BLANK-UNIFORM-1] a blank description clears identically on every surface", async () => {
+    // The previous slice shipped two answers to one request: a whitespace
+    // description CLEARED an org role and was STORED as "   " on a service
+    // account. Both surfaces are driven with the SAME value here and their
+    // results compared, which is the assertion that catches a divergence.
+    const role = await api(
+      IDP_BASE,
+      "POST",
+      `/api/v1/organizations/${org1}/roles`,
+      { name: `desc-role-${runId}`, description: "original text" },
+      orgAdmin.bearer
+    );
+    expect(role.status, "subject role created").toBe(201);
+    const roleId =
+      ((role.json.role as { id?: string })?.id ?? (role.json as { id?: string }).id) || "";
+
+    const sa = await api(
+      IDP_BASE,
+      "POST",
+      `/api/v1/organizations/${org1}/service-accounts`,
+      { name: `desc-sa-${runId}`, role: "org_user", description: "original text" },
+      orgAdmin.bearer
+    );
+    expect(sa.status, "subject service account created").toBe(201);
+    const saId =
+      ((sa.json.service_account as { id?: string })?.id ?? (sa.json as { id?: string }).id) || "";
+
+    for (const supplied of ["   ", ""]) {
+      const rRole = await api(
+        IDP_BASE,
+        "PUT",
+        `/api/v1/organizations/${org1}/roles/${roleId}`,
+        { description: supplied },
+        orgAdmin.bearer
+      );
+      expect(rRole.status, "org role accepts a description clear").toBe(200);
+      const rSa = await api(
+        IDP_BASE,
+        "PUT",
+        `/api/v1/service-accounts/${saId}`,
+        { description: supplied },
+        orgAdmin.bearer
+      );
+      expect(rSa.status, "service account accepts a description clear").toBe(200);
+
+      const roleRow = await api(
+        IDP_BASE,
+        "GET",
+        `/api/v1/organizations/${org1}/roles/${roleId}`,
+        undefined,
+        orgAdmin.bearer
+      );
+      const saRow = await api(
+        IDP_BASE,
+        "GET",
+        `/api/v1/service-accounts/${saId}`,
+        undefined,
+        orgAdmin.bearer
+      );
+      const roleDesc =
+        (
+          ((roleRow.json.role as Record<string, unknown>) ?? roleRow.json) as {
+            description?: string;
+          }
+        ).description ?? "";
+      const saDesc =
+        (
+          ((saRow.json.service_account as Record<string, unknown>) ?? saRow.json) as {
+            description?: string;
+          }
+        ).description ?? "";
+
+      expect(roleDesc, `org role: ${JSON.stringify(supplied)} clears the description`).toBe("");
+      expect(saDesc, `service account: ${JSON.stringify(supplied)} clears the description`).toBe(
+        ""
+      );
+      expect(saDesc, "the two surfaces AGREE — this is what diverged before").toBe(roleDesc);
+    }
+  });
+
   test("[REQUIRED-NAME-NOT-WHITESPACE-1] a whitespace name is refused where an empty one already was", async () => {
     // The census found the same field answering three different ways
     // depending only on how much whitespace was typed: on api-resources
