@@ -528,6 +528,61 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
     }
   });
 
+  test("[CLIENT-CREATE-VALIDATION-1] client CREATE refuses unlisted protocol values — the mirror of the update guard", async () => {
+    // THE-MIRROR (2026-09-01): the update path validated the auth method and
+    // signing alg while CREATE assigned both raw, so POST with an unlisted
+    // value reached the DB CHECK constraint and returned a flattened error.
+    // prepareClient now runs the full document validator, which also brings
+    // the cross-field rules that were previously database-only.
+    const base = () => ({
+      name: `mirror-${Math.random().toString(36).slice(2, 8)}`,
+      redirect_uris: ["https://app.example.test/cb"],
+    });
+    for (const c of [
+      { why: "an unlisted auth method", extra: { token_endpoint_auth_method: "wizard" } },
+      { why: "an unlisted signing alg", extra: { token_endpoint_auth_signing_alg: "HS256" } },
+      {
+        why: "a signing alg in the wrong case",
+        extra: { token_endpoint_auth_signing_alg: "rs256" },
+      },
+      {
+        why: "jwks_uri on a non-private_key_jwt client (was a flattened DB refusal)",
+        extra: { jwks_uri: "https://app.example.test/jwks.json" },
+      },
+      {
+        why: "private_key_jwt with no key source",
+        extra: { token_endpoint_auth_method: "private_key_jwt" },
+      },
+    ]) {
+      const res = await api(
+        IDP_BASE,
+        "POST",
+        "/api/v1/clients",
+        { ...base(), ...c.extra },
+        orgAdmin.bearer
+      );
+      expect(res.status, `client create must refuse ${c.why}`).toBe(400);
+    }
+
+    // CONTROLS: listed values still create — including the private_key_jwt
+    // shape with exactly one key source, which the census once measured
+    // failing only at the database.
+    const okPlain = await api(IDP_BASE, "POST", "/api/v1/clients", base(), orgAdmin.bearer);
+    expect(okPlain.status, "a defaults-only client is still created").toBe(201);
+    const okPkj = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/clients",
+      {
+        ...base(),
+        token_endpoint_auth_method: "private_key_jwt",
+        jwks_uri: "https://app.example.test/jwks.json",
+      },
+      orgAdmin.bearer
+    );
+    expect(okPkj.status, "a private_key_jwt client with one key source is created").toBe(201);
+  });
+
   test("[CLIENT-UPDATE-BLANK-FIELDS-1] a blank client field clears or is refused, per field — never dropped", async () => {
     // THE-SILENT-DROP-2: five fields were still plain strings, so a supplied
     // blank was indistinguishable from absent and answered 200 unchanged.
