@@ -298,7 +298,12 @@ export IDENTUUM_E2E_RECOVERED_ADMIN_PASSWORD
 echo "e2e-full: admin-reset scenario (rotates site_admin; run-local recovery password)"
 bash "$GW" step "$RECORD" 'admin-reset=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_ADMIN_RESET=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_IDP_DIR='"$IDP_DIR"' IDENTUUM_E2E_FIXTURE_FILE='"$ADMIN_RESET_ENVELOPE"' IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh admin-reset e2e/.auth/pw-admin-reset.json -- --project=oss-full --workers=1 admin-reset' || rc=1
 
-bash "$GW" finalize "$RECORD" || rc=1
+# THE-STALE-WITNESS: this suite exercises TWO repos — the ui specs and the
+# idp-oss appliance they ran against — so the record pins BOTH. finalize
+# writes an `xrepo:` line with idp-oss's HEAD, dirty state and content
+# digest; gate-witness check (and thus the wiki's witness-ui-e2e) fails if
+# either repo moved or was dirty at the mint.
+GATE_WITNESS_XREPO="identuum-idp-oss=$IDP_DIR" bash "$GW" finalize "$RECORD" || rc=1
 
 echo "e2e-full: teardown (down --volumes, app profile included)"
 docker compose -f "$IDP_DIR/deployment/docker-compose.dev.yml" --profile app down --volumes
