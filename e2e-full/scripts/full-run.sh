@@ -144,7 +144,7 @@ GW="scripts/gate-witness.sh"
 # requested, so an absent baseline is a declared subtraction, never INCOMPLETE.
 PLAN=(fresh-appliance api-suite)
 [ "${IDENTUUM_E2E_MEASURE:-}" = "1" ] && PLAN+=(plain-baseline)
-PLAN+=(provisioner static-rows-sweep static-rows role-matrix devloop-provisioned skip-ceiling coverage closure admin-reset)
+PLAN+=(provisioner static-rows-sweep static-rows role-matrix verify-record-ui verify-record-idp-oss devloop-provisioned skip-ceiling coverage closure admin-reset)
 bash "$GW" init "$RECORD" "identuum-ui make e2e-full" "${PLAN[@]}"
 
 rc=0
@@ -263,6 +263,27 @@ bash "$GW" step "$RECORD" 'role-matrix=node e2e-full/scripts/role-matrix-from-ru
 # try/finally self-cleaning) is safe on THIS disposable appliance and the
 # dynamic fixture provides an MFA-enrolled site_admin, so it runs here
 # (IDENTUUM_E2E_ORGS_CRUD=1). A leak on failure dies with the appliance.
+# THE-SECOND-LOGIN ritual break: a two-repo e2e record was minted green while
+# the ui's OWN `make verify` record (GATE-RUN.txt) was stale — the ui work
+# commit had been amended after that record was minted and nothing at mint
+# time looked. The wiki's `make check` (witness-ui) catches it, but only when
+# run; the mint itself must refuse to certify a run whose home or sibling
+# repo carries a stale verify record. Both are witnessed STEPS, so the
+# refusal lands in this record with its own exit code — and BOTH are in the
+# PLAN declared at init, so finalize cannot write `result: green` over a
+# failed one (an unplanned step's exit is invisible to the record's verdict;
+# the first cut of this guard was caught by exactly that, together with an
+# unexported $IDP_DIR that the step's subshell expanded to "" — hence the
+# quote-break idiom below, the same one the admin-reset step uses). Both
+# trees are static for the whole run, so the checks sit here, between the
+# role-matrix and dev-loop phases — the one slot the source invariants leave
+# free (they pin the PLAN's head through role-matrix, the
+# 'devloop-provisioned skip-ceiling coverage' adjacency, and admin-reset as
+# the LAST phase).
+echo "e2e-full: refusing to mint over a stale verify record (ui + idp-oss)"
+bash "$GW" step "$RECORD" 'verify-record-ui=bash scripts/gate-witness.sh check . GATE-RUN.txt' || rc=1
+bash "$GW" step "$RECORD" 'verify-record-idp-oss=bash scripts/gate-witness.sh check '"$IDP_DIR"' GATE-RUN.txt' || rc=1
+
 echo "e2e-full: dev-loop suite PROVISIONED (the previously-dark specs now light)"
 bash "$GW" step "$RECORD" 'devloop-provisioned=IDENTUUM_E2E_ORGS_CRUD=1 IDENTUUM_E2E_OSS_CHANGE_PASSWORD=1 IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true IDENTUUM_OSS_TEST_USER_EMAIL="$IDENTUUM_OSS_TEST_USER_EMAIL" IDENTUUM_OSS_TEST_USER_PASSWORD="$IDENTUUM_OSS_TEST_USER_PASSWORD" IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD="$IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD" IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-provisioned e2e/.auth/pw-devloop.json -- --project=chromium --workers=1 --trace on' || rc=1
 
@@ -275,6 +296,17 @@ bash "$GW" step "$RECORD" 'skip-ceiling=node e2e-full/scripts/skip-ceiling-from-
 # Route coverage, derived from THE RUN: the inventory is scanned from
 # src/app/**/page.tsx and the reached set from the traces of tests the JSON
 # report marks passed. No hand-maintained list anywhere.
+# THE-SECOND-LOGIN ritual break: a two-repo e2e record was minted green while
+# the ui's OWN `make verify` record (GATE-RUN.txt) was stale — the ui work
+# commit had been amended after that record was minted and nothing at mint
+# time looked. The wiki's `make check` (witness-ui) catches it, but only when
+# run; the mint itself must refuse to certify a run whose home or sibling
+# repo carries a stale verify record. Both are witnessed STEPS, so the
+# refusal lands in this record with its own exit code — and BOTH are in the
+# PLAN declared at init, so finalize cannot write `result: green` over a
+# failed one (an unplanned step's exit is invisible to the record's verdict;
+# the first cut of this guard was caught by exactly that, together with an
+# unexported $IDP_DIR that the step's subshell expanded to "" — hence the
 echo "e2e-full: deriving route coverage from the provisioned run"
 bash "$GW" step "$RECORD" 'coverage=node e2e-full/scripts/coverage-from-run.mjs "$IDENTUUM_E2E_BASE_URL" e2e/.auth/pw-devloop.json e2e/.auth/pw-fresh.json' || rc=1
 
@@ -297,17 +329,6 @@ IDENTUUM_E2E_RECOVERED_ADMIN_PASSWORD="R3cover!$(openssl rand -hex 16)"
 export IDENTUUM_E2E_RECOVERED_ADMIN_PASSWORD
 echo "e2e-full: admin-reset scenario (rotates site_admin; run-local recovery password)"
 bash "$GW" step "$RECORD" 'admin-reset=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_ADMIN_RESET=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_IDP_DIR='"$IDP_DIR"' IDENTUUM_E2E_FIXTURE_FILE='"$ADMIN_RESET_ENVELOPE"' IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh admin-reset e2e/.auth/pw-admin-reset.json -- --project=oss-full --workers=1 admin-reset' || rc=1
-
-# THE-SECOND-LOGIN ritual break: a two-repo e2e record was minted green while
-# the ui's OWN `make verify` record (GATE-RUN.txt) was stale — the ui work
-# commit had been amended after that record was minted and nothing at mint
-# time looked. The wiki's `make check` (witness-ui) catches it, but only when
-# run; the mint itself must refuse to certify a run whose home or sibling
-# repo carries a stale verify record. Both are witnessed STEPS, so the
-# refusal lands in this record with its own exit code.
-echo "e2e-full: refusing to mint over a stale verify record (ui + idp-oss)"
-bash "$GW" step "$RECORD" 'verify-record-ui=bash scripts/gate-witness.sh check . GATE-RUN.txt' || rc=1
-bash "$GW" step "$RECORD" 'verify-record-idp-oss=bash scripts/gate-witness.sh check "$IDP_DIR" GATE-RUN.txt' || rc=1
 
 # THE-STALE-WITNESS: this suite exercises TWO repos — the ui specs and the
 # idp-oss appliance they ran against — so the record pins BOTH. finalize
