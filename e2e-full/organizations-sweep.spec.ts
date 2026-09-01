@@ -583,6 +583,72 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
     expect(okPkj.status, "a private_key_jwt client with one key source is created").toBe(201);
   });
 
+  test("[CLIENT-UPDATE-DOCUMENT-1] an update that would leave an inconsistent document is refused by the service", async () => {
+    // THE-INCONSISTENT-DOCUMENT (2026-09-01): update validated fields, not
+    // the document, so these three transitions were refused only by a DB
+    // CHECK answering a flattened 400. The service now validates the UPDATED
+    // document with the same Client.Validate create runs.
+    const created = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/clients",
+      {
+        name: `doc-${runId}`,
+        redirect_uris: ["https://app.example.test/cb"],
+        token_endpoint_auth_method: "client_secret_basic",
+      },
+      orgAdmin.bearer
+    );
+    expect(created.status, "subject client created").toBe(201);
+    const cid =
+      ((created.json.client as { id?: string })?.id ?? (created.json as { id?: string }).id) || "";
+    expect(cid.length).toBeGreaterThan(0);
+    const readClient = async () => {
+      const r = await api(IDP_BASE, "GET", `/api/v1/clients/${cid}`, undefined, orgAdmin.bearer);
+      expect(r.status).toBe(200);
+      return (r.json.client as Record<string, unknown>) ?? (r.json as Record<string, unknown>);
+    };
+
+    for (const c of [
+      {
+        why: "private_key_jwt with no key source",
+        body: { token_endpoint_auth_method: "private_key_jwt" },
+      },
+      { why: "method none while confidential", body: { token_endpoint_auth_method: "none" } },
+      {
+        why: "jwks material on a secret-based client",
+        body: { jwks_uri: "https://app.example.test/jwks.json" },
+      },
+    ]) {
+      const res = await api(IDP_BASE, "PUT", `/api/v1/clients/${cid}`, c.body, orgAdmin.bearer);
+      expect(res.status, `the inconsistent document must be refused: ${c.why}`).toBe(400);
+      const row = await readClient();
+      expect(
+        (row as { token_endpoint_auth_method?: string }).token_endpoint_auth_method,
+        "no refusal moved the stored method"
+      ).toBe("client_secret_basic");
+    }
+
+    // CONTROL: the same transition done COHERENTLY lands — method and key
+    // source in one PUT.
+    const ok = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/clients/${cid}`,
+      {
+        token_endpoint_auth_method: "private_key_jwt",
+        jwks_uri: "https://app.example.test/jwks.json",
+      },
+      orgAdmin.bearer
+    );
+    expect(ok.status, "the coherent pkj switch is accepted").toBe(200);
+    const after = await readClient();
+    expect(
+      (after as { token_endpoint_auth_method?: string }).token_endpoint_auth_method,
+      "the coherent switch landed"
+    ).toBe("private_key_jwt");
+  });
+
   test("[CLIENT-UPDATE-BLANK-FIELDS-1] a blank client field clears or is refused, per field — never dropped", async () => {
     // THE-SILENT-DROP-2: five fields were still plain strings, so a supplied
     // blank was indistinguishable from absent and answered 200 unchanged.
