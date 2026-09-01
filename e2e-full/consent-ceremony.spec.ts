@@ -151,22 +151,60 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     expect(anon.status(), "consent GET with no session → 401 login_required").toBe(401);
     observeRaw("GET", "/api/v1/oauth/consent", anon.status());
 
-    // ── THE-CLOSURE-AUDIT: /oauth/authorize itself, previously NEVER hit by
-    // any test. The AS is redirect-safe: an anonymous authorize with a full
-    // PKCE query answers 302 to the registered redirect_uri carrying
-    // error=login_required and the echoed state — never a naked 401.
+    // ── THE-PKCE-DECISION re-pins THE-CLOSURE-AUDIT's contract: an
+    // anonymous INTERACTIVE authorize now sends the browser to the OP's OWN
+    // login form (return_to carries the full authorize URL, so the ceremony
+    // resumes where it began). prompt=none keeps the OIDC-required
+    // error=login_required redirect to the client — both contracts pinned.
     const anonAuthz = await request.get(`${IDP_BASE}/api/v1/oauth/authorize?${authQuery}`, {
       failOnStatusCode: false,
       maxRedirects: 0,
     });
-    expect(anonAuthz.status(), "anonymous authorize → 302 (redirect-safe)").toBe(302);
+    expect(anonAuthz.status(), "anonymous interactive authorize → 302").toBe(302);
     const anonAuthzLoc = anonAuthz.headers().location ?? "";
-    expect(anonAuthzLoc, "…to the registered redirect_uri").toContain(REDIRECT_URI);
-    expect(new URL(anonAuthzLoc).searchParams.get("error"), "…carrying error=login_required").toBe(
-      "login_required"
+    expect(anonAuthzLoc, "…to the OP's own browser-login form").toContain(
+      "/api/v1/auth/browser-login?return_to="
     );
-    expect(new URL(anonAuthzLoc).searchParams.get("state"), "…state echoed").toBe(`st-${runId}`);
+    expect(
+      decodeURIComponent(anonAuthzLoc.split("return_to=")[1] ?? ""),
+      "…return_to carries the original authorize request"
+    ).toContain("/api/v1/oauth/authorize?");
     observeRaw("GET", "/api/v1/oauth/authorize", anonAuthz.status());
+
+    // prompt=none: no interaction allowed — OIDC requires the error
+    // redirect to the client, never a login page.
+    const anonNone = await request.get(
+      `${IDP_BASE}/api/v1/oauth/authorize?${authQuery}&prompt=none`,
+      { failOnStatusCode: false, maxRedirects: 0 }
+    );
+    expect(anonNone.status(), "anonymous prompt=none authorize → 302 (redirect-safe)").toBe(302);
+    const anonNoneLoc = anonNone.headers().location ?? "";
+    expect(anonNoneLoc, "…to the registered redirect_uri").toContain(REDIRECT_URI);
+    expect(
+      new URL(anonNoneLoc).searchParams.get("error"),
+      "…carrying error=login_required"
+    ).toBe("login_required");
+    expect(new URL(anonNoneLoc).searchParams.get("state"), "…state echoed").toBe(`st-${runId}`);
+
+    // ── OIDC Core §3.1.2.1 (THE-PKCE-DECISION): the authorize endpoint also
+    // accepts a form-serialized POST with identical semantics — the redirect
+    // re-encodes every submitted parameter into a resumable GET URL.
+    const postParams = Object.fromEntries(new URLSearchParams(authQuery));
+    const anonPost = await request.post(`${IDP_BASE}/api/v1/oauth/authorize`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+      form: postParams,
+    });
+    expect(anonPost.status(), "anonymous POST authorize → 302").toBe(302);
+    const anonPostLoc = anonPost.headers().location ?? "";
+    expect(anonPostLoc, "…to the OP's own browser-login form").toContain(
+      "/api/v1/auth/browser-login?return_to="
+    );
+    expect(
+      decodeURIComponent(anonPostLoc.split("return_to=")[1] ?? ""),
+      "…return_to re-encodes the POSTed parameters as a GET authorize URL"
+    ).toContain(`client_id=${clientId}`);
+    observeRaw("POST", "/api/v1/oauth/authorize", anonPost.status());
 
     // ── Establish a browser-login session (honest CSRF double-submit).
     const form = await request.get(`${IDP_BASE}/api/v1/auth/browser-login`, {
@@ -236,19 +274,30 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       "…listing at least the caller's current session"
     ).toBeGreaterThan(0);
 
-    // ── THE-CLOSURE-AUDIT: authorize WITH the session but WITHOUT stored
-    // consent → 302 error=consent_required (the gate that sends the UI to
-    // the consent page).
+    // ── THE-PKCE-DECISION (DO-3): authorize WITH the session but WITHOUT
+    // stored consent sends the INTERACTIVE browser to the OP's own consent
+    // form carrying the full authorize query — no longer an error redirect
+    // back to the client. prompt=none keeps the OIDC-required
+    // consent_required error redirect, asserted right after.
     const preConsentAuthz = await request.get(`${IDP_BASE}/api/v1/oauth/authorize?${authQuery}`, {
       failOnStatusCode: false,
       maxRedirects: 0,
     });
     expect(preConsentAuthz.status(), "authorize with session, no consent → 302").toBe(302);
-    expect(
-      new URL(preConsentAuthz.headers().location ?? "").searchParams.get("error"),
-      "…carrying error=consent_required"
-    ).toBe("consent_required");
+    const preConsentLoc = preConsentAuthz.headers().location ?? "";
+    expect(preConsentLoc, "…to the OP consent form").toMatch(/^\/api\/v1\/oauth\/consent\?/);
+    expect(preConsentLoc, "…carrying the authorize query").toContain(`client_id=${clientId}`);
     observeRaw("GET", "/api/v1/oauth/authorize", preConsentAuthz.status());
+
+    const preConsentNone = await request.get(
+      `${IDP_BASE}/api/v1/oauth/authorize?${authQuery}&prompt=none`,
+      { failOnStatusCode: false, maxRedirects: 0 }
+    );
+    expect(preConsentNone.status(), "prompt=none with session, no consent → 302").toBe(302);
+    expect(
+      new URL(preConsentNone.headers().location ?? "").searchParams.get("error"),
+      "…carrying error=consent_required (OIDC 3.1.2.6)"
+    ).toBe("consent_required");
     const consentHtml = await consentForm.text();
     const consentCsrf = consentHtml.match(/name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i);
     expect(consentCsrf, "consent form embeds a CSRF token").toBeTruthy();

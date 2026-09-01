@@ -80,6 +80,12 @@
       "statuses": [302, 400]
     },
     {
+      "endpoint": "POST /api/v1/oauth/authorize",
+      "kind": "session",
+      "sources": ["jsonl"],
+      "statuses": [302]
+    },
+    {
       "endpoint": "GET /api/v1/oauth/consent",
       "kind": "session",
       "sources": ["jsonl"],
@@ -272,5 +278,5 @@
       "statuses": [200, 400]
     }
   ],
-  "closure_floor": 45
+  "closure_floor": 46
 }
