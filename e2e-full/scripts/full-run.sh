@@ -298,6 +298,17 @@ export IDENTUUM_E2E_RECOVERED_ADMIN_PASSWORD
 echo "e2e-full: admin-reset scenario (rotates site_admin; run-local recovery password)"
 bash "$GW" step "$RECORD" 'admin-reset=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_ADMIN_RESET=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_IDP_DIR='"$IDP_DIR"' IDENTUUM_E2E_FIXTURE_FILE='"$ADMIN_RESET_ENVELOPE"' IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh admin-reset e2e/.auth/pw-admin-reset.json -- --project=oss-full --workers=1 admin-reset' || rc=1
 
+# THE-SECOND-LOGIN ritual break: a two-repo e2e record was minted green while
+# the ui's OWN `make verify` record (GATE-RUN.txt) was stale — the ui work
+# commit had been amended after that record was minted and nothing at mint
+# time looked. The wiki's `make check` (witness-ui) catches it, but only when
+# run; the mint itself must refuse to certify a run whose home or sibling
+# repo carries a stale verify record. Both are witnessed STEPS, so the
+# refusal lands in this record with its own exit code.
+echo "e2e-full: refusing to mint over a stale verify record (ui + idp-oss)"
+bash "$GW" step "$RECORD" 'verify-record-ui=bash scripts/gate-witness.sh check . GATE-RUN.txt' || rc=1
+bash "$GW" step "$RECORD" 'verify-record-idp-oss=bash scripts/gate-witness.sh check "$IDP_DIR" GATE-RUN.txt' || rc=1
+
 # THE-STALE-WITNESS: this suite exercises TWO repos — the ui specs and the
 # idp-oss appliance they ran against — so the record pins BOTH. finalize
 # writes an `xrepo:` line with idp-oss's HEAD, dirty state and content

@@ -180,10 +180,9 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     expect(anonNone.status(), "anonymous prompt=none authorize → 302 (redirect-safe)").toBe(302);
     const anonNoneLoc = anonNone.headers().location ?? "";
     expect(anonNoneLoc, "…to the registered redirect_uri").toContain(REDIRECT_URI);
-    expect(
-      new URL(anonNoneLoc).searchParams.get("error"),
-      "…carrying error=login_required"
-    ).toBe("login_required");
+    expect(new URL(anonNoneLoc).searchParams.get("error"), "…carrying error=login_required").toBe(
+      "login_required"
+    );
     expect(new URL(anonNoneLoc).searchParams.get("state"), "…state echoed").toBe(`st-${runId}`);
 
     // ── OIDC Core §3.1.2.1 (THE-PKCE-DECISION): the authorize endpoint also
@@ -350,6 +349,82 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     ).toBeGreaterThan(0);
     expect(directLoc.searchParams.get("state"), "…state echoed").toBe(`direct-${runId}`);
     observeRaw("GET", "/api/v1/oauth/authorize", directAuthz.status());
+
+    // ── THE-SECOND-LOGIN: forced re-authentication. The SAME authenticated,
+    // consent-covered request with prompt=login must NOT mint a code — the
+    // browser is sent back through the login ceremony, and the resumed
+    // request in return_to no longer carries prompt=login (the ceremony
+    // consumed it). A max_age still inside its window proceeds. Then the
+    // second login is actually performed, and the FIRST session survives it:
+    // the user's session count grows by exactly one, none is dropped.
+    const reauthQuery =
+      `client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+      `&response_type=code&scope=${encodeURIComponent("openid")}&state=reauth-${runId}` +
+      `&code_challenge=${ch2}&code_challenge_method=S256`;
+    const promptLogin = await request.get(
+      `${IDP_BASE}/api/v1/oauth/authorize?${reauthQuery}&prompt=login`,
+      {
+        failOnStatusCode: false,
+        maxRedirects: 0,
+      }
+    );
+    expect(promptLogin.status(), "prompt=login with a live session → 302").toBe(302);
+    const promptLoginLoc = promptLogin.headers().location ?? "";
+    expect(promptLoginLoc, "…back through the login ceremony, never a code").toContain(
+      "/api/v1/auth/browser-login?return_to="
+    );
+    const resumed = decodeURIComponent(promptLoginLoc.split("return_to=")[1] ?? "");
+    expect(resumed, "…return_to resumes the authorize request").toContain(`client_id=${clientId}`);
+    expect(resumed, "…without prompt=login (consumed by the ceremony)").not.toMatch(/prompt=login/);
+
+    const freshEnough = await request.get(
+      `${IDP_BASE}/api/v1/oauth/authorize?${reauthQuery}&max_age=3600`,
+      {
+        failOnStatusCode: false,
+        maxRedirects: 0,
+      }
+    );
+    expect(freshEnough.status(), "max_age=3600 on a seconds-old session → 302").toBe(302);
+    expect(
+      (new URL(freshEnough.headers().location ?? "").searchParams.get("code") ?? "").length,
+      "…still inside the window: a code, not a login"
+    ).toBeGreaterThan(0);
+
+    const sessionsBefore = (mySessions.json as { sessions: unknown[] }).sessions.length;
+    const form2 = await request.get(`${IDP_BASE}/api/v1/auth/browser-login`, {
+      failOnStatusCode: false,
+    });
+    const csrf2 = (await form2.text()).match(/name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i);
+    expect(csrf2, "second login form embeds a CSRF token").toBeTruthy();
+    const secondLogin = await request.post(`${IDP_BASE}/api/v1/auth/browser-login`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+      form: { email: userEmail, password: userPw, [csrf2?.[1] ?? "csrf_token"]: csrf2?.[2] ?? "" },
+    });
+    expect(secondLogin.status(), "second browser-login → 303 (a NEW session)").toBe(303);
+    const afterSecond = await api(
+      IDP_BASE,
+      "GET",
+      "/api/v1/sessions",
+      undefined,
+      ouLogin.json.access_token as string
+    );
+    expect(afterSecond.status, "GET /sessions after the second login → 200").toBe(200);
+    expect(
+      (afterSecond.json as { sessions: unknown[] }).sessions.length,
+      "the second login ADDED a session and the first survived it (count grew by exactly one)"
+    ).toBe(sessionsBefore + 1);
+    // Consent is remembered per (user, client): the fresh session goes
+    // straight to a code — the ceremony demanded only the login.
+    const afterReauth = await request.get(`${IDP_BASE}/api/v1/oauth/authorize?${reauthQuery}`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    expect(afterReauth.status(), "authorize on the fresh session → 302").toBe(302);
+    expect(
+      (new URL(afterReauth.headers().location ?? "").searchParams.get("code") ?? "").length,
+      "…a code (consent remembered across the re-login)"
+    ).toBeGreaterThan(0);
 
     // ── Redeem the code ONCE → 200 with an access token.
     const basic = {
