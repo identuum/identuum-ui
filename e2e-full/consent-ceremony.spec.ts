@@ -448,11 +448,29 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     const firstBody = (await first.json()) as { access_token?: string };
     expect((firstBody.access_token ?? "").length, "…with an access_token").toBeGreaterThan(0);
 
+    // ── Control BEFORE the replay: the first access token works at userinfo.
+    const bearer = { Authorization: `Bearer ${firstBody.access_token}` };
+    const before = await request.get(`${IDP_BASE}/api/v1/oidc/userinfo`, {
+      failOnStatusCode: false,
+      headers: bearer,
+    });
+    expect(before.status(), "first access token → userinfo 200 before any replay").toBe(200);
+
     // ── The TRANSITION: the SAME code a second time is refused.
     const second = await exchange();
     expect(second.status(), "second redemption of the same code → 400").toBe(400);
     const secondBody = (await second.json()) as { error?: string };
     expect(secondBody.error, "…as invalid_grant (single-use enforced)").toBe("invalid_grant");
+
+    // ── THE-CODE-REUSE-REVOKER (RFC 6749 §4.1.2): the replay revoked what the
+    // first exchange minted — the SAME access token now stops working.
+    const after = await request.get(`${IDP_BASE}/api/v1/oidc/userinfo`, {
+      failOnStatusCode: false,
+      headers: bearer,
+    });
+    expect(after.status(), "first access token → userinfo 401 after the code was replayed").toBe(
+      401
+    );
   });
 
   test("end_session mints a backchannel delivery row the admin surface lists + replays", async ({
