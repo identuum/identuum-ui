@@ -55,6 +55,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
   let orgAdminBearer = "";
   let userId = "";
   let orgId = "";
+  let userTotpSecret = "";
 
   test("setup: org, org_user, and a confidential authorization_code client", async () => {
     const adminPassword = process.env.IDENTUUM_E2E_FULL_ADMIN_PASSWORD ?? "";
@@ -921,8 +922,8 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     expect(disco.status()).toBe(200);
     expect(
       ((await disco.json()) as { acr_values_supported?: string[] }).acr_values_supported,
-      "acr_values_supported is exactly [password, mfa]"
-    ).toEqual([PASSWORD, MFA]);
+      "acr_values_supported is exactly [password, mfa, phishing-resistant] (THE-PHISHING-RESISTANT-ACR)"
+    ).toEqual([PASSWORD, MFA, "urn:identuum:loa:phishing-resistant"]);
 
     // S1: a PASSWORD-level browser session (honest CSRF), established BEFORE
     // the user enrols in TOTP.
@@ -994,6 +995,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     });
     expect(init.status, "enroll/initiate → 200").toBe(200);
     const totpSecret = (init.json as { secret?: string }).secret ?? "";
+    userTotpSecret = totpSecret;
     expect(totpSecret.length).toBeGreaterThan(0);
     let complete = await api(IDP_BASE, "POST", "/api/v1/auth/login/mfa/enroll/complete", {
       session_id: pendingId,
@@ -1156,5 +1158,214 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       (new URL(lower.headers().location ?? "").searchParams.get("code") ?? "").length,
       "acr_values=password on the uplifted session → a code straight through"
     ).toBeGreaterThan(0);
+  });
+
+  // THE-PHISHING-RESISTANT-ACR. The third honest context. A real browser
+  // (CDP virtual authenticator) on the RP origin — the issuer's own origin,
+  // http://localhost:7113 in the harness, which the WebAuthn service always
+  // lists as an allowed origin. Order: (1) password+TOTP browser session in
+  // the page; (2) while the user holds NO passkey, acr_values=phishing-resistant
+  // → honest refusal to the client, no code; (3) register a passkey through
+  // the real WebAuthn ceremony; (4) the SAME session asks again → the passkey
+  // step-up page → assertion → uplift → the resumed authorize mints and the
+  // id_token carries the phishing-resistant rung; (5) the uplifted session
+  // satisfies the LOWER mfa and password requests straight through.
+  test("acr_values: phishing-resistant → passkey step-up on a passkey user, refusal on a TOTP-only user, lower rungs covered", async ({
+    page,
+    context,
+    request,
+  }) => {
+    test.setTimeout(240_000);
+    const PR = "urn:identuum:loa:phishing-resistant";
+    const MFA = "urn:identuum:loa:mfa";
+    const PASSWORD = "urn:identuum:loa:password";
+    const IDP_ORIGIN = process.env.IDENTUUM_E2E_FULL_IDP_ORIGIN ?? "http://localhost:7113";
+    expect(userTotpSecret.length, "the TOTP secret enrolled by the previous test").toBeGreaterThan(
+      0
+    );
+    // TOTP replay protection refuses a code used twice: wait for a fresh
+    // 30-second window before every TOTP use after the first.
+    const nextTotpWindow = () =>
+      new Promise((r) => setTimeout(r, 30_000 - (Date.now() % 30_000) + 750));
+    const authorizeURL = (acr: string, state: string) => {
+      const v = randomBytes(32).toString("base64url");
+      const ch = createHash("sha256").update(v).digest("base64url");
+      return {
+        verifier: v,
+        url:
+          `${IDP_ORIGIN}/api/v1/oauth/authorize?client_id=${encodeURIComponent(clientId)}` +
+          `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=openid` +
+          `&state=${state}&code_challenge=${ch}&code_challenge_method=S256` +
+          `&acr_values=${encodeURIComponent(acr)}`,
+      };
+    };
+    // The client's redirect_uri is an unroutable test host: answer it locally
+    // so the browser lands there and the URL (code / error) can be read.
+    await page.route(`${REDIRECT_URI}**`, (route) =>
+      route.fulfill({ status: 200, contentType: "text/plain", body: "callback" })
+    );
+
+    // ── (1) password + TOTP browser-login in the PAGE → an mfa-rung session.
+    await page.goto(`${IDP_ORIGIN}/api/v1/auth/browser-login`);
+    await page.fill('input[name="email"]', userEmail);
+    await page.fill('input[name="password"]', userPw);
+    await page.fill('input[name="totp_code"]', generateTOTP(userTotpSecret, 0));
+    await page.click('button[type="submit"]');
+    await page.waitForLoadState("domcontentloaded");
+
+    // ── (2) NO passkey yet: the phishing-resistant rung cannot be performed.
+    const unmet = authorizeURL(PR, `pr-unmet-${runId}`);
+    await page.goto(unmet.url);
+    await page.waitForURL((u) => u.href.startsWith(REDIRECT_URI));
+    const unmetURL = new URL(page.url());
+    expect(
+      unmetURL.searchParams.get("error"),
+      "TOTP-only user → unmet_authentication_requirements"
+    ).toBe("unmet_authentication_requirements");
+    expect(unmetURL.searchParams.get("code"), "…and NO code").toBeNull();
+
+    // ── (3) The user's bearer (fresh TOTP window), then a real passkey
+    // registration through the WebAuthn ceremony on the RP origin.
+    await nextTotpWindow();
+    const pending = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
+      email: userEmail,
+      password: userPw,
+    });
+    expect(pending.status, "TOTP-enrolled JSON login → 401 pending").toBe(401);
+    const verify = await api(IDP_BASE, "POST", "/api/v1/auth/login/mfa", {
+      session_id: (pending.json as { session_id?: string }).session_id ?? "",
+      code: generateTOTP(userTotpSecret, 0),
+    });
+    expect(verify.status, "TOTP verify → 200 bearer").toBe(200);
+    const bearer = (verify.json as { access_token?: string }).access_token ?? "";
+    expect(bearer.length).toBeGreaterThan(0);
+
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("WebAuthn.enable", { enableUI: false });
+    await cdp.send("WebAuthn.addVirtualAuthenticator", {
+      options: {
+        protocol: "ctap2",
+        transport: "internal",
+        hasResidentKey: true,
+        hasUserVerification: true,
+        isUserVerified: true,
+        automaticPresenceSimulation: true,
+      },
+    });
+    await page.goto(`${IDP_ORIGIN}/api/v1/auth/browser-login`); // any document on the RP origin
+    const registered = await page.evaluate(async (token) => {
+      const b64uToBuf = (s: string) => {
+        const b = s.replace(/-/g, "+").replace(/_/g, "/");
+        const bin = atob(b + "=".repeat((4 - (b.length % 4)) % 4));
+        const out = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+        return out.buffer;
+      };
+      const bufToB64u = (buf: ArrayBuffer) => {
+        let bin = "";
+        for (const byte of new Uint8Array(buf)) bin += String.fromCharCode(byte);
+        return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      };
+      const auth = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+      const begin = await fetch("/api/v1/webauthn/register/begin", {
+        method: "POST",
+        headers: auth,
+        body: "{}",
+      });
+      if (!begin.ok) return { step: "begin", status: begin.status };
+      // biome-ignore lint/suspicious/noExplicitAny: raw ceremony options
+      const b: any = await begin.json();
+      const pk = b.publicKey;
+      pk.challenge = b64uToBuf(pk.challenge);
+      pk.user.id = b64uToBuf(pk.user.id);
+      // biome-ignore lint/suspicious/noExplicitAny: raw ceremony options
+      pk.excludeCredentials = (pk.excludeCredentials ?? []).map((c: any) => ({
+        ...c,
+        id: b64uToBuf(c.id),
+      }));
+      const cred = (await navigator.credentials.create({ publicKey: pk })) as PublicKeyCredential;
+      const r = cred.response as AuthenticatorAttestationResponse;
+      const body = {
+        id: cred.id,
+        rawId: bufToB64u(cred.rawId),
+        type: cred.type,
+        response: {
+          attestationObject: bufToB64u(r.attestationObject),
+          clientDataJSON: bufToB64u(r.clientDataJSON),
+        },
+      };
+      const fin = await fetch(
+        `/api/v1/webauthn/register/finish?session_id=${encodeURIComponent(b.session_id)}&nickname=acr-e2e`,
+        { method: "POST", headers: auth, body: JSON.stringify(body) }
+      );
+      return { step: "finish", status: fin.status };
+    }, bearer);
+    expect(registered, "passkey registered through the real WebAuthn ceremony").toEqual({
+      step: "finish",
+      status: 200,
+    });
+
+    // ── (4) The SAME mfa-rung session asks for the phishing-resistant rung:
+    // the passkey step-up page, the assertion, the uplift, the resumed mint.
+    const stepUp = authorizeURL(PR, `pr-${runId}`);
+    const pageResp = page.waitForResponse(
+      (r) => r.request().method() === "GET" && r.url().includes("/api/v1/auth/step-up/passkey?")
+    );
+    const finishResp = page.waitForResponse(
+      (r) => r.request().method() === "POST" && r.url().includes("/api/v1/auth/step-up/passkey?")
+    );
+    await page.goto(stepUp.url);
+    const pr = await pageResp;
+    expect(pr.status(), "passkey step-up page renders for the live session").toBe(200);
+    observeRaw("GET", "/api/v1/auth/step-up/passkey", pr.status());
+    const fr = await finishResp;
+    expect(fr.status(), "verified assertion → 200 (uplift recorded)").toBe(200);
+    observeRaw("POST", "/api/v1/auth/step-up/passkey", fr.status());
+    await page.waitForURL((u) => u.href.startsWith(REDIRECT_URI));
+    const minted = new URL(page.url());
+    expect(minted.searchParams.get("error"), "…no error").toBeNull();
+    const code = minted.searchParams.get("code") ?? "";
+    expect(code.length, "…a code after the passkey step-up").toBeGreaterThan(0);
+    expect(minted.searchParams.get("state"), "…state echoed").toBe(`pr-${runId}`);
+
+    const exchange = await request.post(`${IDP_BASE}/api/v1/oauth/token`, {
+      failOnStatusCode: false,
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      },
+      form: {
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: REDIRECT_URI,
+        code_verifier: stepUp.verifier,
+      },
+    });
+    expect(exchange.status(), "exchange → 200").toBe(200);
+    const idToken = ((await exchange.json()) as { id_token?: string }).id_token ?? "";
+    const idClaims = JSON.parse(
+      Buffer.from(idToken.split(".")[1] ?? "", "base64url").toString("utf8")
+    ) as { acr?: string; amr?: string[] };
+    expect(idClaims.acr, "id_token acr is the phishing-resistant rung the session PERFORMED").toBe(
+      PR
+    );
+    expect(idClaims.amr ?? [], "…amr still records the password+TOTP login").toEqual(
+      expect.arrayContaining(["pwd", "otp"])
+    );
+
+    // ── (5) Ranking covers downward: the uplifted session satisfies mfa and
+    // password requests without any ceremony.
+    for (const [acr, state] of [
+      [MFA, `pr-low-mfa-${runId}`],
+      [PASSWORD, `pr-low-pw-${runId}`],
+    ] as const) {
+      await page.goto(authorizeURL(acr, state).url);
+      await page.waitForURL((u) => u.href.startsWith(REDIRECT_URI));
+      const low = new URL(page.url());
+      expect(low.searchParams.get("error"), `${acr}: no error`).toBeNull();
+      expect(
+        (low.searchParams.get("code") ?? "").length,
+        `${acr}: a code straight through`
+      ).toBeGreaterThan(0);
+    }
   });
 });
