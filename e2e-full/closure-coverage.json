@@ -62,6 +62,12 @@
       "statuses": [200, 400]
     },
     {
+      "endpoint": "GET /api/v1/auth/step-up",
+      "kind": "session",
+      "sources": ["jsonl"],
+      "statuses": [200]
+    },
+    {
       "endpoint": "GET /api/v1/auth/verify-email",
       "kind": "class",
       "sources": ["jsonl"],
@@ -230,6 +236,12 @@
       "statuses": [200, 401]
     },
     {
+      "endpoint": "POST /api/v1/auth/step-up",
+      "kind": "session",
+      "sources": ["jsonl"],
+      "statuses": [303]
+    },
+    {
       "endpoint": "POST /api/v1/oauth/consent",
       "kind": "session",
       "sources": ["jsonl"],
@@ -278,5 +290,5 @@
       "statuses": [200, 400]
     }
   ],
-  "closure_floor": 46
+  "closure_floor": 48
 }

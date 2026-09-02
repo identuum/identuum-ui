@@ -30,6 +30,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { api, firstLoginBearerAsync, observeRaw } from "../e2e/helpers/appliance-fixture";
+import { generateTOTP } from "../e2e/helpers/totp";
 import { siteAdminSession } from "./helpers/session";
 
 const IDP_BASE = process.env.IDENTUUM_E2E_FULL_IDP_BASE ?? "http://127.0.0.1:7113";
@@ -53,6 +54,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
   let clientSecret = "";
   let orgAdminBearer = "";
   let userId = "";
+  let orgId = "";
 
   test("setup: org, org_user, and a confidential authorization_code client", async () => {
     const adminPassword = process.env.IDENTUUM_E2E_FULL_ADMIN_PASSWORD ?? "";
@@ -75,6 +77,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     expect(c1.status).toBe(201);
     const org = (c1.json.organization as { id?: string })?.id ?? "";
     expect(org.length).toBeGreaterThan(0);
+    orgId = org;
 
     const rs = await api(
       IDP_BASE,
@@ -895,5 +898,263 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       ).status,
       "replay of a ghost delivery id → 404"
     ).toBe(404);
+  });
+
+  // THE-HONEST-ACR (OIDC Core §3.1.2.1 acr_values). The id_token acr is the
+  // context ACTUALLY performed. A password-level session asked for the
+  // password+TOTP rung is (a) refused with unmet_authentication_requirements
+  // while the user has no TOTP enrolled — no code, no token — and (b) sent
+  // through the OP's step-up ceremony once enrolled: the SAME session records
+  // the uplift, the resumed authorize mints, and the id_token carries the
+  // TOTP rung with amr [pwd otp]. LAST in this describe: it enrols the user
+  // in TOTP, which changes what a later password-only login would need.
+  test("acr_values: TOTP rung → step-up on an enrolled user, refusal without enrolment; id_token acr is the performed context", async ({
+    request,
+  }) => {
+    const MFA = "urn:identuum:loa:mfa";
+    const PASSWORD = "urn:identuum:loa:password";
+
+    // Discovery advertises exactly the two honest contexts.
+    const disco = await request.get(`${IDP_BASE}/.well-known/openid-configuration`, {
+      failOnStatusCode: false,
+    });
+    expect(disco.status()).toBe(200);
+    expect(
+      ((await disco.json()) as { acr_values_supported?: string[] }).acr_values_supported,
+      "acr_values_supported is exactly [password, mfa]"
+    ).toEqual([PASSWORD, MFA]);
+
+    // S1: a PASSWORD-level browser session (honest CSRF), established BEFORE
+    // the user enrols in TOTP.
+    const loginForm = await request.get(`${IDP_BASE}/api/v1/auth/browser-login`, {
+      failOnStatusCode: false,
+    });
+    const loginCsrf = (await loginForm.text()).match(
+      /name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i
+    );
+    expect(loginCsrf, "login form embeds a CSRF token").toBeTruthy();
+    const login = await request.post(`${IDP_BASE}/api/v1/auth/browser-login`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+      form: {
+        email: userEmail,
+        password: userPw,
+        [loginCsrf?.[1] ?? "csrf_token"]: loginCsrf?.[2] ?? "",
+      },
+    });
+    expect(login.status(), "browser-login (password only) → 303").toBe(303);
+
+    const verifier = randomBytes(32).toString("base64url");
+    const challenge = createHash("sha256").update(verifier).digest("base64url");
+    const acrQuery =
+      `client_id=${encodeURIComponent(clientId)}` +
+      `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+      `&response_type=code&scope=openid&state=acr-${runId}` +
+      `&code_challenge=${challenge}&code_challenge_method=S256` +
+      `&acr_values=${encodeURIComponent(MFA)}`;
+
+    // ── Negative FIRST: the user has NO TOTP enrolled → the TOTP rung cannot
+    // be performed → the honest OIDC error to the client, never a code.
+    const unmet = await request.get(`${IDP_BASE}/api/v1/oauth/authorize?${acrQuery}`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    expect(unmet.status(), "acr_values=mfa, password session, no TOTP → 302").toBe(302);
+    const unmetLoc = new URL(unmet.headers().location ?? "");
+    expect(unmetLoc.origin + unmetLoc.pathname, "…to the registered redirect_uri").toBe(
+      REDIRECT_URI
+    );
+    expect(unmetLoc.searchParams.get("error"), "…error=unmet_authentication_requirements").toBe(
+      "unmet_authentication_requirements"
+    );
+    expect(unmetLoc.searchParams.get("code"), "…and NO code").toBeNull();
+    expect(unmetLoc.searchParams.get("state"), "…state echoed").toBe(`acr-${runId}`);
+
+    // ── Enrol the user in TOTP through the pending-MFA login flow: the org
+    // policy is set to required for the enrolment and restored afterwards.
+    const requirePolicy = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/organizations/${orgId}`,
+      { mfa_policy: "required" },
+      site.bearer
+    );
+    expect(requirePolicy.status, "site_admin sets org mfa_policy=required").toBe(200);
+    const pending = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
+      email: userEmail,
+      password: userPw,
+    });
+    expect(pending.status, "password login under mfa_policy=required → 401 + pending session").toBe(
+      401
+    );
+    const pendingId = (pending.json as { session_id?: string }).session_id ?? "";
+    expect(pendingId.length).toBeGreaterThan(0);
+    const init = await api(IDP_BASE, "POST", "/api/v1/auth/login/mfa/enroll/initiate", {
+      session_id: pendingId,
+    });
+    expect(init.status, "enroll/initiate → 200").toBe(200);
+    const totpSecret = (init.json as { secret?: string }).secret ?? "";
+    expect(totpSecret.length).toBeGreaterThan(0);
+    let complete = await api(IDP_BASE, "POST", "/api/v1/auth/login/mfa/enroll/complete", {
+      session_id: pendingId,
+      code: generateTOTP(totpSecret, 0),
+    });
+    if (complete.status !== 200) {
+      await new Promise((r) => setTimeout(r, 1000));
+      complete = await api(IDP_BASE, "POST", "/api/v1/auth/login/mfa/enroll/complete", {
+        session_id: pendingId,
+        code: generateTOTP(totpSecret, 1),
+      });
+    }
+    expect(complete.status, "enroll/complete → 200 (user now TOTP-enrolled)").toBe(200);
+    const restorePolicy = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/organizations/${orgId}`,
+      { mfa_policy: "optional" },
+      site.bearer
+    );
+    expect(restorePolicy.status, "org mfa_policy restored to optional").toBe(200);
+
+    // ── S1 is STILL a password-level session. The same request now finds a
+    // user who CAN perform the TOTP rung → the OP's step-up ceremony.
+    const toStepUp = await request.get(`${IDP_BASE}/api/v1/oauth/authorize?${acrQuery}`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    expect(toStepUp.status(), "acr_values=mfa, password session, TOTP enrolled → 302").toBe(302);
+    const stepUpLoc = toStepUp.headers().location ?? "";
+    expect(stepUpLoc, "…to the OP step-up ceremony, never a code").toMatch(
+      /^\/api\/v1\/auth\/step-up\?return_to=/
+    );
+    const returnTo = decodeURIComponent(stepUpLoc.split("return_to=")[1] ?? "");
+    expect(returnTo, "…return_to resumes the authorize request").toContain(
+      `acr_values=${encodeURIComponent(MFA)}`
+    );
+
+    // prompt=none can never get an interactive step-up: the OIDC error instead.
+    const noneStepUp = await request.get(
+      `${IDP_BASE}/api/v1/oauth/authorize?${acrQuery}&prompt=none`,
+      { failOnStatusCode: false, maxRedirects: 0 }
+    );
+    expect(noneStepUp.status()).toBe(302);
+    expect(
+      new URL(noneStepUp.headers().location ?? "").searchParams.get("error"),
+      "prompt=none needing a step-up → error=login_required to the client"
+    ).toBe("login_required");
+
+    const stepUpForm = await request.get(`${IDP_BASE}${stepUpLoc}`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    expect(stepUpForm.status(), "step-up form renders for the live session").toBe(200);
+    observeRaw("GET", "/api/v1/auth/step-up", stepUpForm.status());
+    const stepUpHtml = await stepUpForm.text();
+    expect(stepUpHtml, "…asking for the authenticator code").toContain('name="totp_code"');
+    const stepUpCsrf = stepUpHtml.match(/name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i);
+    expect(stepUpCsrf, "step-up form embeds a CSRF token").toBeTruthy();
+
+    // A WRONG code never uplifts: back to the form with error=invalid_code.
+    const wrong = await request.post(`${IDP_BASE}/api/v1/auth/step-up`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+      form: {
+        totp_code: "000000",
+        return_to: returnTo,
+        [stepUpCsrf?.[1] ?? "csrf_token"]: stepUpCsrf?.[2] ?? "",
+      },
+    });
+    expect(wrong.status(), "wrong code → 303").toBe(303);
+    expect(wrong.headers().location ?? "", "…back to the form, error=invalid_code").toContain(
+      "/api/v1/auth/step-up?error=invalid_code"
+    );
+    const stillPassword = await request.get(`${IDP_BASE}/api/v1/oauth/authorize?${acrQuery}`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    expect(stillPassword.headers().location ?? "", "…the session is still password-level").toMatch(
+      /^\/api\/v1\/auth\/step-up\?return_to=/
+    );
+
+    // The RIGHT code uplifts the SAME session and resumes the authorize URL.
+    const reForm = await request.get(`${IDP_BASE}${stepUpLoc}`, { failOnStatusCode: false });
+    const reCsrf = (await reForm.text()).match(/name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i);
+    let stepped = await request.post(`${IDP_BASE}/api/v1/auth/step-up`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+      form: {
+        totp_code: generateTOTP(totpSecret, 0),
+        return_to: returnTo,
+        [reCsrf?.[1] ?? "csrf_token"]: reCsrf?.[2] ?? "",
+      },
+    });
+    if ((stepped.headers().location ?? "").includes("error=invalid_code")) {
+      // Straddled a 30s TOTP boundary: one retry on the next window.
+      await new Promise((r) => setTimeout(r, 1000));
+      const again = await request.get(`${IDP_BASE}${stepUpLoc}`, { failOnStatusCode: false });
+      const againCsrf = (await again.text()).match(/name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i);
+      stepped = await request.post(`${IDP_BASE}/api/v1/auth/step-up`, {
+        failOnStatusCode: false,
+        maxRedirects: 0,
+        form: {
+          totp_code: generateTOTP(totpSecret, 1),
+          return_to: returnTo,
+          [againCsrf?.[1] ?? "csrf_token"]: againCsrf?.[2] ?? "",
+        },
+      });
+    }
+    expect(stepped.status(), "verified code → 303").toBe(303);
+    expect(stepped.headers().location ?? "", "…back to the authorize request").toBe(returnTo);
+    observeRaw("POST", "/api/v1/auth/step-up", stepped.status());
+
+    // The resumed authorize now mints: the session performed the TOTP rung.
+    const resumed = await request.get(`${IDP_BASE}${returnTo}`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    expect(resumed.status(), "resumed authorize after step-up → 302").toBe(302);
+    const resumedLoc = new URL(resumed.headers().location ?? "");
+    expect(resumedLoc.searchParams.get("error"), "…no error").toBeNull();
+    const code = resumedLoc.searchParams.get("code") ?? "";
+    expect(code.length, "…a code").toBeGreaterThan(0);
+
+    const exchange = await request.post(`${IDP_BASE}/api/v1/oauth/token`, {
+      failOnStatusCode: false,
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      },
+      form: {
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: REDIRECT_URI,
+        code_verifier: verifier,
+      },
+    });
+    expect(exchange.status(), "exchange → 200").toBe(200);
+    const tokens = (await exchange.json()) as { id_token?: string };
+    const idToken = tokens.id_token ?? "";
+    expect(idToken.split(".").length, "an id_token is issued").toBe(3);
+    const idClaims = JSON.parse(
+      Buffer.from(idToken.split(".")[1] ?? "", "base64url").toString("utf8")
+    ) as { acr?: string; amr?: string[] };
+    expect(idClaims.acr, "id_token acr is the TOTP rung the session PERFORMED").toBe(MFA);
+    expect(idClaims.amr ?? [], "…amr carries pwd and otp").toEqual(
+      expect.arrayContaining(["pwd", "otp"])
+    );
+
+    // The uplifted session also satisfies the LOWER password rung (rank).
+    const v3 = randomBytes(32).toString("base64url");
+    const ch3 = createHash("sha256").update(v3).digest("base64url");
+    const lower = await request.get(
+      `${IDP_BASE}/api/v1/oauth/authorize?client_id=${encodeURIComponent(clientId)}` +
+        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=openid` +
+        `&state=low-${runId}&code_challenge=${ch3}&code_challenge_method=S256` +
+        `&acr_values=${encodeURIComponent(PASSWORD)}`,
+      { failOnStatusCode: false, maxRedirects: 0 }
+    );
+    expect(
+      (new URL(lower.headers().location ?? "").searchParams.get("code") ?? "").length,
+      "acr_values=password on the uplifted session → a code straight through"
+    ).toBeGreaterThan(0);
   });
 });
