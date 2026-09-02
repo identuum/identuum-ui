@@ -1889,4 +1889,67 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       "request_uri_not_supported"
     );
   });
+
+  // THE-LOGOUT-THAT-CANNOT-REVOKE: with a HEALTHY store, an OP logout revokes
+  // the cookie session, clears the cookie, audits cookie_revoked, and emits
+  // NEITHER the revocation_unconfirmed marker nor its audit event (the
+  // store-error triple is pinned unit-level, LOGOUT-UNCONFIRMED-1).
+  test("logout with a healthy store: cookie revoked + cleared, no revocation_unconfirmed marker or audit event", async ({
+    request,
+  }) => {
+    // Fresh TOTP window so the login code cannot collide with an earlier test's.
+    const nextTotpWindow = () =>
+      new Promise((r) => setTimeout(r, 30_000 - (Date.now() % 30_000) + 750));
+    await nextTotpWindow();
+    const loginForm = await request.get(`${IDP_BASE}/api/v1/auth/browser-login`, {
+      failOnStatusCode: false,
+    });
+    const loginCsrf = (await loginForm.text()).match(
+      /name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i
+    );
+    const login = await request.post(`${IDP_BASE}/api/v1/auth/browser-login`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+      form: {
+        email: userEmail,
+        password: userPw,
+        totp_code: generateTOTP(userTotpSecret, 0),
+        [loginCsrf?.[1] ?? "csrf_token"]: loginCsrf?.[2] ?? "",
+      },
+    });
+    expect(login.status(), "browser-login → 303").toBe(303);
+
+    const logout = await request.get(`${IDP_BASE}/api/v1/oidc/logout`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    expect(logout.status(), "end-session without a redirect target → 204").toBe(204);
+    expect(
+      logout.headers()["x-identuum-logout"],
+      "healthy store: no unconfirmed marker"
+    ).toBeUndefined();
+    const setCookie = logout.headersArray().filter((h) => h.name.toLowerCase() === "set-cookie");
+    expect(
+      setCookie.some((h) => h.value.startsWith("identuum_session=") && /max-age=0/i.test(h.value)),
+      "the cookie is cleared"
+    ).toBe(true);
+
+    const events = await api(
+      IDP_BASE,
+      "GET",
+      "/api/v1/audit/events?limit=200",
+      undefined,
+      site.bearer
+    );
+    expect(events.status).toBe(200);
+    const actions = ((events.json as { events?: Array<{ action?: string }> }).events ?? []).map(
+      (e) => e.action ?? ""
+    );
+    expect(actions, "the successful revocation is audited").toContain(
+      "user_session.logout.cookie_revoked"
+    );
+    expect(actions, "a healthy logout never audits an unconfirmed revocation").not.toContain(
+      "user_session.logout.revocation_unconfirmed"
+    );
+  });
 });

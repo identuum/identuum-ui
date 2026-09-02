@@ -65,10 +65,12 @@ told apart. Other devices may still hold the session until it expires or is
 revoked from the account's sessions page.
 
 The OP-side logout handlers (OIDC end-session, front-channel logout in
-identuum-idp-oss) still read a cookie-session store error as "no session"
-and clear the cookie without revoking — out of this slice's write scope
-(idp-oss was writable only for a missing header); recorded as the next
-slice.
+identuum-idp-oss) apply the same pattern since THE-LOGOUT-THAT-CANNOT-REVOKE
+(2026-09-02): on a store error the cookie is still cleared, the AUTH-503
+line and the audit event `user_session.logout.revocation_unconfirmed` are
+recorded, and the answer carries `X-Identuum-Logout: revocation_unconfirmed`
+(see identuum-idp-oss docs/TESTING-OPERATORS.md, "Logout when the store
+cannot answer").
 
 ## What did NOT change
 
