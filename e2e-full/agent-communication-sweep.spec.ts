@@ -188,7 +188,16 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       { email_verified: true },
       A.bearer
     );
-    userA = await firstLoginBearerAsync(IDP_BASE, userEmail, userPw);
+    // An org_user with a verified email logs in plainly (200 + access_token);
+    // firstLoginBearerAsync is the org_admin first-login ceremony (401 +
+    // session_id → TOTP enrolment) and refuses a plain 200 — measured in the
+    // first mint of this slice.
+    const login = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
+      email: userEmail,
+      password: userPw,
+    });
+    expect(login.status, "org_user plain login → 200").toBe(200);
+    userA = { bearer: (login.json.access_token as string) ?? "" };
     expect(userA.bearer.length, "org_user bearer").toBeGreaterThan(0);
   });
 
