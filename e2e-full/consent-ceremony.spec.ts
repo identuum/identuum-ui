@@ -1656,8 +1656,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     request,
   }) => {
     test.setTimeout(180_000);
-    const { generateKeyPairSync, sign, constants } =
-      await import("node:crypto");
+    const { generateKeyPairSync, sign, constants } = await import("node:crypto");
     const nextTotpWindow = () =>
       new Promise((r) => setTimeout(r, 30_000 - (Date.now() % 30_000) + 750));
     const b64u = (b: Buffer | string) => Buffer.from(b).toString("base64url");
