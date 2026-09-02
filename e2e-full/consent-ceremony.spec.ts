@@ -1606,8 +1606,10 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
 
     // ── Consented to address + phone: exactly the set members, verified=false.
     const full = await ceremony("openid address phone", `ap-${runId}`);
-    expect(full.html, "consent page names the address scope").toContain("View your postal address");
-    expect(full.html, "consent page names the phone scope").toContain("View your phone number");
+    // MEASURED (first mint): the OP consent page lists requested scopes by
+    // NAME (<li>address</li>), not by domain.ScopeDescriptions text.
+    expect(full.html, "consent page lists the address scope").toContain("<li>address</li>");
+    expect(full.html, "consent page lists the phone scope").toContain("<li>phone</li>");
     const address = full.userinfo.address as Record<string, string> | undefined;
     expect(address, "userinfo carries the structured address").toEqual({
       street_address: "1 Ceremony Way",
