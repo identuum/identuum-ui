@@ -494,6 +494,28 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     );
     expect(named.status, "org_admin sets the user's display name").toBe(200);
 
+    // Each test owns a fresh cookie jar: establish the browser-login session
+    // for THIS request context (honest CSRF double-submit), as the first
+    // ceremony did.
+    const loginForm = await request.get(`${IDP_BASE}/api/v1/auth/browser-login`, {
+      failOnStatusCode: false,
+    });
+    expect(loginForm.status(), "login form renders").toBe(200);
+    const loginCsrf = (await loginForm.text()).match(
+      /name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i
+    );
+    expect(loginCsrf, "login form embeds a CSRF token").toBeTruthy();
+    const login = await request.post(`${IDP_BASE}/api/v1/auth/browser-login`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+      form: {
+        email: userEmail,
+        password: userPw,
+        [loginCsrf?.[1] ?? "csrf_token"]: loginCsrf?.[2] ?? "",
+      },
+    });
+    expect(login.status(), "browser-login → 303 (session established)").toBe(303);
+
     const codeVerifier = randomBytes(32).toString("base64url");
     const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
     const claims = JSON.stringify({ userinfo: { name: { essential: true }, picture: null } });
