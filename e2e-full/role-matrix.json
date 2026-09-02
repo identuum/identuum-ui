@@ -169,5 +169,5 @@
     "POST /api/v1/oauth/token @ any",
     "POST /api/v1/oidc/userinfo @ any"
   ],
-  "covered_cells_floor": 294
+  "covered_cells_floor": 297
 }
