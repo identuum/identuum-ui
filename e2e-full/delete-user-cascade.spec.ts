@@ -30,8 +30,8 @@
 import { expect, test } from "@playwright/test";
 import {
   api,
-  apiCallLog,
   assertActivationEnvelope,
+  expectHonestAuthBody,
   firstLoginBearerAsync,
 } from "../e2e/helpers/appliance-fixture";
 import { siteAdminSession } from "./helpers/session";
@@ -54,7 +54,6 @@ test.describe("delete-user cascade (census row: DELETE /api/v1/users/:id)", () =
 
     // site_admin: fresh DB, so this is always a first login → TOTP enrolment.
     const site = await siteAdminSession(IDP_BASE, SITE_ADMIN_EMAIL, adminPassword);
-    const siteMintedAt = Date.now(); // THE-SESSION-REJECTIONS: bearer age on failure
 
     // Tenant org + pending org_admin in one request (201 + activation_token).
     const runId = `full-${Date.now().toString(36)}`;
@@ -164,31 +163,16 @@ test.describe("delete-user cascade (census row: DELETE /api/v1/users/:id)", () =
       undefined,
       site.bearer
     );
-    if (delAgain.status !== 404) {
-      // THE-SESSION-REJECTIONS diagnostic (incident 2026-08-30: this call
-      // answered 401 on a seconds-old site_admin bearer, and the server logs
-      // NOTHING for a 401 — every rejection branch answers the same body).
-      // Capture the discriminator BEFORE failing: a follow-up /validate on
-      // the same bearer separates "session actually dead" (validate 401 —
-      // revoked/expired) from "transient fail-closed rejection" (validate
-      // 200 — the store errored under load on the failing call only). The
-      // diagnostic retry result is recorded too. The assertion below still
-      // judges the ORIGINAL response — this never makes the test pass.
-      const revalidate = await api(IDP_BASE, "GET", "/api/v1/validate", undefined, site.bearer);
-      const diagRetry = await api(
-        IDP_BASE,
-        "DELETE",
-        `/api/v1/users/${victimId}`,
-        undefined,
-        site.bearer
-      );
-      console.log(
-        `[SESSION-REJECTION DIAGNOSTIC] second-delete=${delAgain.status} ` +
-          `body=${JSON.stringify(delAgain.json)} server-date=${delAgain.date ?? "-"} ` +
-          `bearer-age=${Math.round((Date.now() - siteMintedAt) / 1000)}s ` +
-          `revalidate=${revalidate.status} (200 = transient fail-closed rejection; 401 = session dead) ` +
-          `diagnostic-retry=${diagRetry.status}\n` +
-          `api-call timeline (newest last):\n${apiCallLog()}`
+    // THE-SESSION-REJECTION-ROOT-CAUSE (AUTH-503): the IdP now answers a store
+    // error as 503 with a correlation id and a verdict as 401 with a reason,
+    // so the former second-probe diagnostic is gone. Whatever the status, an
+    // auth refusal here must be honest: a 401 names its verdict, a 503 carries
+    // the id that joins it to the IdP's ERROR log. The 404 assertion stands.
+    if (delAgain.status === 401 || delAgain.status === 503) {
+      expectHonestAuthBody(
+        delAgain.status,
+        delAgain.json as Record<string, unknown>,
+        "second delete"
       );
     }
     expect(delAgain.status, "second delete of the same user → 404").toBe(404);

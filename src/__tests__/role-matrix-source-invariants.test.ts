@@ -140,7 +140,10 @@ describe("the (endpoint, role) coverage matrix stays enforced every harness run 
     );
     expect(mjs, "evidence line derives from the observation").toContain("check OK: closure");
     const sh = stripComments(read("e2e-full/scripts/full-run.sh"));
-    expect(sh, "closure phase is planned").toMatch(/coverage closure admin-reset\)/);
+    // THE-SESSION-REJECTION-ROOT-CAUSE: the credential-free AUTH-503 log scan
+    // is the only phase allowed after admin-reset (it reads the appliance log,
+    // it needs no credential).
+    expect(sh, "closure phase is planned").toMatch(/coverage closure admin-reset auth503-scan\)/);
     expect(sh, "enforcement runs as its own witnessed step").toMatch(
       /step "\$RECORD" 'closure=node e2e-full\/scripts\/closure-from-run\.mjs/
     );

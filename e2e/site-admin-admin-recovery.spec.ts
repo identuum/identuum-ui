@@ -50,6 +50,7 @@
 
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import { expectHonestAuthAnswer } from "./helpers/appliance-fixture";
 import {
   loadOrgAdminFixture,
   loadOrgAdminFixtureOrgId,
@@ -229,29 +230,18 @@ test.describe("/site-admin/organizations/[id] — admin recovery card (read-only
       await page.goto(`/site-admin/organizations/${ORG_ID}`);
       await page.waitForLoadState("networkidle");
 
-      // Fail fast if the session was rejected.
+      // Fail fast if the session was rejected. THE-SESSION-REJECTION-ROOT-CAUSE
+      // (AUTH-503): the IdP now answers a store error as 503 (the UI's
+      // session helper retries it) and a verdict as 401 WITH a reason, so the
+      // former second-probe diagnostic is gone; on a bounce, the same cookie
+      // jar's /validate must give an honest answer — never a bare 401.
       const landedPath = new URL(page.url()).pathname;
       if (landedPath !== `/site-admin/organizations/${ORG_ID}`) {
-        // THE-SESSION-REJECTIONS diagnostic (incident 2026-08-30: this
-        // beforeAll-minted site_admin session bounced to /login mid-suite;
-        // the IdP answers one opaque `{"error":"unauthorized"}` for every
-        // rejection branch and logs nothing). Probe the SAME cookie jar
-        // right now: validate 200 means the session is alive and the bounce
-        // was a transient fail-closed rejection on the page's own call;
-        // validate 401 means the session is genuinely dead. Cookie values
-        // are never read — only the probe's status/body are logged. The
-        // assertion below still fails on the original landing.
         const probe = await page.request.get("/api/idp/api/v1/validate");
-        let probeBody = "";
-        try {
-          probeBody = (await probe.text()).slice(0, 300);
-        } catch {
-          probeBody = "(unreadable)";
-        }
-        console.log(
-          `[SESSION-REJECTION DIAGNOSTIC] landed=${landedPath} ` +
-            `cookie-jar validate=${probe.status()} (200 = transient rejection on the page load; 401 = session dead) ` +
-            `body=${probeBody} server-date=${probe.headers().date ?? "-"} host=${new Date().toISOString()}`
+        await expectHonestAuthAnswer(
+          probe.status(),
+          () => probe.json(),
+          `after landing on ${landedPath}`
         );
       }
       expect(landedPath).toBe(`/site-admin/organizations/${ORG_ID}`);

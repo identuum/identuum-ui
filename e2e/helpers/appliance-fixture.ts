@@ -34,6 +34,7 @@
 
 import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
+import { expect } from "@playwright/test";
 import { generateTOTP } from "./totp";
 
 export const E2E_FIXTURE_MARKER = "identuum-e2e-fixture-v1";
@@ -103,6 +104,64 @@ export function apiCallLog(last = 40): string {
         `${new Date(e.t).toISOString()} ${e.method} ${e.path} -> ${e.status} rtt=${e.rtt}ms server-date=${e.date ?? "-"}`
     )
     .join("\n");
+}
+
+/**
+ * THE-SESSION-REJECTION-ROOT-CAUSE (2026-09-02, AUTH-503): the IdP now answers
+ * an auth-path STORE error as 503 `{error:"temporarily_unavailable",
+ * reason:"auth_store_error", correlation_id}` (joined to its ERROR log by the
+ * id, also on the X-Request-ID header) and a genuine VERDICT as 401
+ * `{error, reason}` with a non-empty reason (no_credential, missing_credential,
+ * token_invalid, token_revoked, session_not_live, session_not_found,
+ * session_not_usable, user_not_found, user_not_active, token_not_session,
+ * login_required, …). This assertion replaces the former second-probe
+ * diagnostic: a bare 401 or a 503 without its correlation id is itself the
+ * defect. Statuses other than 401/503 are not judged here.
+ */
+export function expectHonestAuthBody(
+  status: number,
+  body: Record<string, unknown> | undefined,
+  label: string
+): void {
+  if (status === 401) {
+    // The verdict is `reason` on the IdP's own 401s; on the OAuth endpoints
+    // (token / introspection / revocation / userinfo) RFC 6749 §5.2 / RFC 6750
+    // make the `error` code itself the verdict (invalid_client, invalid_token,
+    // login_required) — only the bare generic `unauthorized` says nothing.
+    const reason = typeof body?.reason === "string" ? (body.reason as string) : "";
+    const code = typeof body?.error === "string" ? (body.error as string) : "";
+    const verdict = reason !== "" ? reason : code !== "unauthorized" ? code : "";
+    expect(verdict, `${label}: a 401 must NAME its verdict, got ${JSON.stringify(body)}`).not.toBe(
+      ""
+    );
+    return;
+  }
+  if (status === 503) {
+    const cid = typeof body?.correlation_id === "string" ? (body.correlation_id as string) : "";
+    expect(
+      cid,
+      `${label}: a 503 must carry the correlation_id that joins it to the IdP's ERROR log, got ${JSON.stringify(body)}`
+    ).not.toBe("");
+    expect(body?.reason, `${label}: a 503 on the auth path is the store class`).toBe(
+      "auth_store_error"
+    );
+  }
+}
+
+/** expectHonestAuthBody for a response whose JSON body is still to be read. */
+export async function expectHonestAuthAnswer(
+  status: number,
+  readJson: () => Promise<unknown>,
+  label: string
+): Promise<void> {
+  if (status !== 401 && status !== 503) return;
+  let body: Record<string, unknown> | undefined;
+  try {
+    body = (await readJson()) as Record<string, unknown>;
+  } catch {
+    body = undefined;
+  }
+  expectHonestAuthBody(status, body, label);
 }
 
 /**

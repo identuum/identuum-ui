@@ -22,6 +22,7 @@
  */
 
 import { expect, test } from "@playwright/test";
+import { expectHonestAuthAnswer } from "./helpers/appliance-fixture";
 import {
   SITE_ADMIN_EMAIL,
   SITE_ADMIN_PASSWORD,
@@ -139,30 +140,16 @@ test.describe("identuum-ui login flow", () => {
 
     // And the session is genuinely live.
     const validateRes = await page.request.get("/api/idp/api/v1/validate");
-    if (validateRes.status() !== 200) {
-      // THE-SESSION-REJECTIONS diagnostic (incident 2026-08-30: this call
-      // answered 401 seconds after a completed round-2 login; the IdP's
-      // rejection body is identical for every branch and the server logs
-      // nothing). A second probe on the same cookie jar discriminates:
-      // 200 = the first rejection was transient (fail-closed store error);
-      // 401 = the fresh session is genuinely dead (would point at logout
-      // revocation racing the re-login). Cookie values never read. The
-      // assertion below still judges the ORIGINAL response.
-      let firstBody = "";
-      try {
-        firstBody = (await validateRes.text()).slice(0, 300);
-      } catch {
-        firstBody = "(unreadable)";
-      }
-      const probe = await page.request.get("/api/idp/api/v1/validate");
-      const cookieNames = (await page.context().cookies()).map((c) => c.name);
-      console.log(
-        `[SESSION-REJECTION DIAGNOSTIC] validate-after-relogin=${validateRes.status()} ` +
-          `body=${firstBody} server-date=${validateRes.headers().date ?? "-"} ` +
-          `second-probe=${probe.status()} (200 = transient rejection; 401 = new session dead) ` +
-          `cookie-names=[${cookieNames.join(",")}] host=${new Date().toISOString()}`
-      );
-    }
+    // THE-SESSION-REJECTION-ROOT-CAUSE (AUTH-503): the IdP now answers a
+    // store error as 503 with a correlation id and a genuine verdict as 401
+    // with a reason — the two are no longer the same body, so the former
+    // second-probe diagnostic is gone. A 401 here must NAME its verdict; a
+    // 503 must carry the correlation id that joins it to the IdP's ERROR log.
+    await expectHonestAuthAnswer(
+      validateRes.status(),
+      () => validateRes.json(),
+      "validate after re-login"
+    );
     expect(validateRes.status()).toBe(200);
   });
 });

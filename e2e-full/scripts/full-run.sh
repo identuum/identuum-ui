@@ -144,7 +144,7 @@ GW="scripts/gate-witness.sh"
 # requested, so an absent baseline is a declared subtraction, never INCOMPLETE.
 PLAN=(fresh-appliance api-suite)
 [ "${IDENTUUM_E2E_MEASURE:-}" = "1" ] && PLAN+=(plain-baseline)
-PLAN+=(provisioner static-rows-sweep static-rows role-matrix verify-record-ui verify-record-idp-oss devloop-provisioned skip-ceiling coverage closure admin-reset)
+PLAN+=(provisioner static-rows-sweep static-rows role-matrix verify-record-ui verify-record-idp-oss devloop-provisioned skip-ceiling coverage closure admin-reset auth503-scan)
 bash "$GW" init "$RECORD" "identuum-ui make e2e-full" "${PLAN[@]}"
 
 rc=0
@@ -318,8 +318,9 @@ bash "$GW" step "$RECORD" 'coverage=node e2e-full/scripts/coverage-from-run.mjs 
 echo "e2e-full: enforcing outside-matrix closure (session + class endpoints)"
 bash "$GW" step "$RECORD" 'closure=node e2e-full/scripts/closure-from-run.mjs e2e/.auth/role-matrix-observations.jsonl e2e/.auth/pw-devloop.json' || rc=1
 
-# THE-ADMIN-RESET (T-R2a): the LAST phase, because it rotates site_admin's
-# credentials — nothing after it may depend on them. Proves TEST-spec R2's
+# THE-ADMIN-RESET (T-R2a): the LAST CREDENTIALED phase, because it rotates
+# site_admin's credentials — nothing after it may depend on them (only the
+# credential-free AUTH-503 log scan follows). Proves TEST-spec R2's
 # "admin reset without customer data loss" live on the populated appliance:
 # recover-site-admin via the product CLI (run-local password, generated
 # below, never printed), old password refused, new password through the
@@ -329,6 +330,13 @@ IDENTUUM_E2E_RECOVERED_ADMIN_PASSWORD="R3cover!$(openssl rand -hex 16)"
 export IDENTUUM_E2E_RECOVERED_ADMIN_PASSWORD
 echo "e2e-full: admin-reset scenario (rotates site_admin; run-local recovery password)"
 bash "$GW" step "$RECORD" 'admin-reset=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_ADMIN_RESET=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_IDP_DIR='"$IDP_DIR"' IDENTUUM_E2E_FIXTURE_FILE='"$ADMIN_RESET_ENVELOPE"' IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh admin-reset e2e/.auth/pw-admin-reset.json -- --project=oss-full --workers=1 admin-reset' || rc=1
+
+# THE-SESSION-REJECTION-ROOT-CAUSE (AUTH-503): read the appliance log for
+# every store error the IdP answered as 503 during this mint — the hunt's
+# evidence, printed into the record with its correlation ids. Never red on a
+# hit (see auth503-scan.sh); the specs assert no bare 401 was answered.
+echo "e2e-full: AUTH-503 scan (store errors the appliance logged and answered as 503)"
+bash "$GW" step "$RECORD" 'auth503-scan=bash e2e-full/scripts/auth503-scan.sh '"$IDP_DIR"'' || rc=1
 
 # THE-STALE-WITNESS: this suite exercises TWO repos — the ui specs and the
 # idp-oss appliance they ran against — so the record pins BOTH. finalize
