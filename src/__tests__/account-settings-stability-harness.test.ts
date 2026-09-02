@@ -52,26 +52,28 @@ function source(rel: string): string {
 describe("Account Settings — tab inventory invariant", () => {
   const page = source("app/account/settings/page.tsx");
 
-  it("page.tsx declares the closed Tab enum 'password' | 'sessions' | 'passkeys' | 'mfa'", () => {
-    // Pinning the exact union literal: adding a tab without updating the
-    // harness contract fires this test.
+  // THE-PROFILE-CLAIMS (2026-09-02, owner ruled): a fifth tab — Profile —
+  // edits the caller's own OIDC §5.1 profile fields via PUT /api/v1/profile.
+  // The contract is raised deliberately from four to five tabs; the union,
+  // the whitelist and the nav are pinned END-ANCHORED so a sixth tab fires.
+  it("page.tsx declares the closed Tab enum 'password' | 'sessions' | 'passkeys' | 'mfa' | 'profile'", () => {
     expect(page).toMatch(
-      /type\s+Tab\s*=\s*"password"\s*\|\s*"sessions"\s*\|\s*"passkeys"\s*\|\s*"mfa"/
+      /type\s+Tab\s*=\s*"password"\s*\|\s*"sessions"\s*\|\s*"passkeys"\s*\|\s*"mfa"\s*\|\s*"profile"\s*;/
     );
   });
 
-  it("parseTab whitelists exactly the four tab values", () => {
+  it("parseTab whitelists exactly the five tab values", () => {
     expect(page).toMatch(
-      /s\s*===\s*"password"\s*\|\|\s*s\s*===\s*"sessions"\s*\|\|\s*s\s*===\s*"passkeys"\s*\|\|\s*s\s*===\s*"mfa"/
+      /s\s*===\s*"password"\s*\|\|\s*s\s*===\s*"sessions"\s*\|\|\s*s\s*===\s*"passkeys"\s*\|\|\s*s\s*===\s*"mfa"\s*\|\|\s*s\s*===\s*"profile"\s*\)/
     );
   });
 
-  it("page.tsx renders exactly the four documented tab nav entries", () => {
+  it("page.tsx renders exactly the five documented tab nav entries", () => {
     // Catch a regression that adds a UI tab without harness coverage.
-    for (const value of ["password", "mfa", "sessions", "passkeys"]) {
+    for (const value of ["password", "profile", "mfa", "sessions", "passkeys"]) {
       expect(page).toMatch(new RegExp(`value:\\s*"${value}"`));
     }
-    // Negative: no fifth tab label sneaks in. We pin only the label
+    // Negative: no sixth tab label sneaks in. We pin only the label
     // literals used in the existing tab nav (`{ label: "...", value: "..." }`),
     // so a literal-string drift in the nav fires here. The Passkeys entry
     // carries an `as Tab` type annotation because it's spread from a
@@ -79,7 +81,7 @@ describe("Account Settings — tab inventory invariant", () => {
     // regex tolerates the optional annotation.
     const labelLines =
       page.match(/\{\s*label:\s*"[^"]+",\s*value:\s*"[a-z]+"(?:\s+as\s+Tab)?\s*\}/g) ?? [];
-    expect(labelLines.length).toBe(4);
+    expect(labelLines.length).toBe(5);
   });
 
   it("default tab when no tab+reason is provided is 'password'", () => {
