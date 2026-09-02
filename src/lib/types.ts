@@ -487,7 +487,40 @@ export interface UserProfile {
   domain: string | null;
   mfa_enabled: boolean;
   email_verified: boolean;
+  /**
+   * OIDC Core §5.1 profile fields (THE-PROFILE-CLAIMS). Optional on the IdP;
+   * null when unset. Edited on /account/settings?tab=profile via PUT /api/v1/profile.
+   */
+  given_name: string | null;
+  family_name: string | null;
+  middle_name: string | null;
+  nickname: string | null;
+  preferred_username: string | null;
+  profile: string | null;
+  picture: string | null;
+  website: string | null;
+  gender: string | null;
+  birthdate: string | null;
+  zoneinfo: string | null;
+  locale: string | null;
 }
+
+/** The self-service writable subset of UserProfile (PUT /api/v1/profile). */
+export const PROFILE_FIELD_KEYS = [
+  "given_name",
+  "family_name",
+  "middle_name",
+  "nickname",
+  "preferred_username",
+  "profile",
+  "picture",
+  "website",
+  "gender",
+  "birthdate",
+  "zoneinfo",
+  "locale",
+] as const;
+export type ProfileFieldKey = (typeof PROFILE_FIELD_KEYS)[number];
 
 // Shared between /api/status server route and browser-side status client.
 export interface BackendHealthStatus {

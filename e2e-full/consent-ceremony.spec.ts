@@ -636,6 +636,134 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     ).toBeUndefined();
   });
 
+  // THE-PROFILE-CLAIMS: the user sets OIDC §5.1 profile fields on their own
+  // profile; a client consented to scope=profile receives exactly the SET
+  // fields (+ name, updated_at) at userinfo and never an unset one.
+  test("profile scope: set profile fields reach userinfo; unset fields are absent", async ({
+    request,
+  }) => {
+    // Self-service profile write with the user's own bearer.
+    const ouLogin = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
+      email: userEmail,
+      password: userPw,
+    });
+    expect(ouLogin.status, "org_user login → 200").toBe(200);
+    const ouBearer = ouLogin.json.access_token as string;
+    const put = await api(
+      IDP_BASE,
+      "PUT",
+      "/api/v1/profile",
+      { given_name: "Ceremony", locale: "en-GB", website: "https://ceremony.example" },
+      ouBearer
+    );
+    expect(put.status, "PUT /profile (self-service) → 200").toBe(200);
+    expect((put.json as { given_name?: string }).given_name).toBe("Ceremony");
+    const badPut = await api(
+      IDP_BASE,
+      "PUT",
+      "/api/v1/profile",
+      { website: "not a url" },
+      ouBearer
+    );
+    expect(badPut.status, "a malformed website → 400 naming the field").toBe(400);
+    expect(String((badPut.json as { message?: string }).message ?? "")).toContain("website");
+
+    // Browser-login session for this request context, then authorize with
+    // scope=openid profile — the stored consent covers openid (+ the name
+    // claim), not the profile scope → consent page → approve.
+    const loginForm = await request.get(`${IDP_BASE}/api/v1/auth/browser-login`, {
+      failOnStatusCode: false,
+    });
+    const loginCsrf = (await loginForm.text()).match(
+      /name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i
+    );
+    const login = await request.post(`${IDP_BASE}/api/v1/auth/browser-login`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+      form: {
+        email: userEmail,
+        password: userPw,
+        [loginCsrf?.[1] ?? "csrf_token"]: loginCsrf?.[2] ?? "",
+      },
+    });
+    expect(login.status(), "browser-login → 303").toBe(303);
+    const codeVerifier = randomBytes(32).toString("base64url");
+    const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
+    const authQuery =
+      `client_id=${encodeURIComponent(clientId)}` +
+      `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+      `&response_type=code&scope=${encodeURIComponent("openid profile")}&state=pf-${runId}` +
+      `&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+    const authz = await request.get(`${IDP_BASE}/api/v1/oauth/authorize?${authQuery}`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    expect(authz.status(), "authorize with the unconsented profile scope → 302").toBe(302);
+    const toConsent = authz.headers().location ?? "";
+    expect(toConsent, "…to the OP consent form").toMatch(/^\/api\/v1\/oauth\/consent\?/);
+    const consentForm = await request.get(`${IDP_BASE}${toConsent}`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    const consentCsrf = (await consentForm.text()).match(
+      /name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i
+    );
+    const approve = await request.post(`${IDP_BASE}/api/v1/oauth/consent`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+      form: {
+        action: "approve",
+        response_type: "code",
+        client_id: clientId,
+        redirect_uri: REDIRECT_URI,
+        scope: "openid profile",
+        state: `pf-${runId}`,
+        code_challenge: codeChallenge,
+        code_challenge_method: "S256",
+        [consentCsrf?.[1] ?? "csrf_token"]: consentCsrf?.[2] ?? "",
+      },
+    });
+    expect(approve.status(), "consent approve → 302").toBe(302);
+    const code = new URL(approve.headers().location ?? "").searchParams.get("code") ?? "";
+    expect(code.length, "a code is minted under the profile scope").toBeGreaterThan(0);
+    const exchange = await request.post(`${IDP_BASE}/api/v1/oauth/token`, {
+      failOnStatusCode: false,
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      },
+      form: {
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: REDIRECT_URI,
+        code_verifier: codeVerifier,
+      },
+    });
+    expect(exchange.status(), "exchange → 200").toBe(200);
+    const tokens = (await exchange.json()) as { access_token?: string };
+    const info = await request.get(`${IDP_BASE}/api/v1/oidc/userinfo`, {
+      failOnStatusCode: false,
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    });
+    expect(info.status(), "userinfo → 200").toBe(200);
+    const claims = (await info.json()) as Record<string, unknown>;
+    expect(claims.given_name, "set given_name released under profile").toBe("Ceremony");
+    expect(claims.locale, "set locale released").toBe("en-GB");
+    expect(claims.website, "set website released").toBe("https://ceremony.example");
+    expect(claims.name, "name released under profile").toBe(`Ceremony User ${runId}`);
+    expect(typeof claims.updated_at, "updated_at is a number under profile").toBe("number");
+    for (const unset of [
+      "family_name",
+      "middle_name",
+      "picture",
+      "gender",
+      "birthdate",
+      "zoneinfo",
+    ]) {
+      expect(claims[unset], `unset ${unset} is ABSENT — never a placeholder`).toBeUndefined();
+    }
+    expect(claims.email, "email not scoped → absent").toBeUndefined();
+  });
+
   test("end_session mints a backchannel delivery row the admin surface lists + replays", async ({
     request,
   }) => {

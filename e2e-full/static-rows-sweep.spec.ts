@@ -642,6 +642,33 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       },
       { method: "GET", path: "/api/v1/profile", bearer: sa, ok: [200], label: "profile sa" },
       { method: "GET", path: "/api/v1/profile", bearer: ou, ok: [200], label: "profile ou" },
+      // THE-PROFILE-CLAIMS: every human role edits its OWN OIDC profile
+      // fields; a valid patch is 200 for all three (the sweep asserts the
+      // (endpoint, role) cell — the ceremony spec asserts the semantics).
+      {
+        method: "PUT",
+        path: "/api/v1/profile",
+        bearer: sa,
+        body: { nickname: "sa-sweep" },
+        ok: [200],
+        label: "profile-put sa",
+      },
+      {
+        method: "PUT",
+        path: "/api/v1/profile",
+        bearer: oa,
+        body: { nickname: "oa-sweep" },
+        ok: [200],
+        label: "profile-put oa",
+      },
+      {
+        method: "PUT",
+        path: "/api/v1/profile",
+        bearer: ou,
+        body: { nickname: "ou-sweep" },
+        ok: [200],
+        label: "profile-put ou",
+      },
       { method: "GET", path: "/api/v1/me/roles", bearer: sa, ok: [200], label: "me-roles sa" },
       { method: "GET", path: "/api/v1/me/roles", bearer: oa, ok: [200], label: "me-roles oa" },
       {

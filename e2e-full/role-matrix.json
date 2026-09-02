@@ -1,7 +1,7 @@
 {
   "_comment": "THE-ROLE-CENSUS committed coverage matrix, v2 (THE SMARTER COUNTER — owner ruling 2026-08-31): role cells only where the auth class makes user type matter; public/M2M endpoints carry one '@ any' class cell (exercised by anyone, anon included); browser-cookie 'session' endpoints are EXCLUDED by name (unreachable by the bearer-based observer BY CONSTRUCTION — covered by the dev-loop suite and the UI coverage floor). A listed cell was EXERCISED inside a passing witnessed run; role-matrix-from-run.mjs FAILS the phase on any committed cell not observed, on a floor drop, and on denominator drift. Growth is a deliberate commit.",
-  "endpoints": 134,
-  "role_endpoints": 88,
+  "endpoints": 135,
+  "role_endpoints": 89,
   "class_endpoints": 30,
   "excluded_session_endpoints": [
     "DELETE /api/v1/webauthn/credentials/:id",
@@ -67,6 +67,7 @@
     "GET /api/v1/organizations/current": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/organizations/export-candidates": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/profile": ["site_admin", "org_admin", "org_user"],
+    "PUT /api/v1/profile": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/scope-templates": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/scope-templates/:id": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/service-accounts/:id": ["site_admin", "org_admin", "org_user"],

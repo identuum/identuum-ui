@@ -720,17 +720,29 @@ export async function getOwnProfile(): Promise<UserProfile | null> {
     const u = data?.user;
     if (!u) return null;
 
+    const optStr = (v: unknown): string | null =>
+      typeof v === "string" && v.length > 0 ? v : null;
     return {
       email: String(u.email ?? ""),
-      name: typeof u.name === "string" && u.name.length > 0 ? u.name : null,
+      name: optStr(u.name),
       role: (u.role as UserRole) ?? "org_user",
-      organization_name:
-        typeof u.organization_name === "string" && u.organization_name.length > 0
-          ? u.organization_name
-          : null,
-      domain: typeof u.domain === "string" && u.domain.length > 0 ? u.domain : null,
+      organization_name: optStr(u.organization_name),
+      domain: optStr(u.domain),
       mfa_enabled: Boolean(u.mfa_enabled),
       email_verified: Boolean(u.email_verified),
+      // THE-PROFILE-CLAIMS: OIDC §5.1 profile fields, null when unset.
+      given_name: optStr(u.given_name),
+      family_name: optStr(u.family_name),
+      middle_name: optStr(u.middle_name),
+      nickname: optStr(u.nickname),
+      preferred_username: optStr(u.preferred_username),
+      profile: optStr(u.profile),
+      picture: optStr(u.picture),
+      website: optStr(u.website),
+      gender: optStr(u.gender),
+      birthdate: optStr(u.birthdate),
+      zoneinfo: optStr(u.zoneinfo),
+      locale: optStr(u.locale),
     };
   } catch {
     return null;

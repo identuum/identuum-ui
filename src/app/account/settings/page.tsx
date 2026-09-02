@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { PasskeySection } from "@/components/ui/passkey-section";
 import { getOwnMfaStatus, listOwnSessions } from "@/lib/idp-account-client";
+import { getOwnProfile } from "@/lib/idp-admin-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { getServerSession } from "@/lib/server-session";
 import { ChangePasswordForm } from "./change-password-form";
 import { MfaSection } from "./mfa-section";
+import { ProfileForm } from "./profile-form";
 import { SessionsSection } from "./sessions-section";
 
 /**
@@ -31,11 +33,12 @@ import { SessionsSection } from "./sessions-section";
 
 export const metadata: Metadata = { title: "Account Settings — Identuum" };
 
-type Tab = "password" | "sessions" | "passkeys" | "mfa";
+type Tab = "password" | "sessions" | "passkeys" | "mfa" | "profile";
 
 function parseTab(raw: string | string[] | undefined): Tab | null {
   const s = Array.isArray(raw) ? raw[0] : raw;
-  if (s === "password" || s === "sessions" || s === "passkeys" || s === "mfa") return s;
+  if (s === "password" || s === "sessions" || s === "passkeys" || s === "mfa" || s === "profile")
+    return s;
   return null;
 }
 
@@ -91,6 +94,9 @@ export default async function AccountSettingsPage({
     : session?.user?.mfa_enabled;
 
   const sessionsResult = tab === "sessions" ? await listOwnSessions() : null;
+  // THE-PROFILE-CLAIMS: the profile tab edits the caller's own OIDC profile
+  // fields (PUT /api/v1/profile); fetched only when that tab is active.
+  const ownProfile = tab === "profile" ? await getOwnProfile() : null;
 
   // Passkeys capability gate — landed by
   // agent-a-20260744-account-settings-passkeys-capability-gate per the
@@ -133,6 +139,7 @@ export default async function AccountSettingsPage({
         {(
           [
             { label: "Password", value: "password" },
+            { label: "Profile", value: "profile" },
             { label: "MFA", value: "mfa" },
             { label: "Sessions", value: "sessions" },
             ...(webauthnAvailable ? [{ label: "Passkeys", value: "passkeys" as Tab }] : []),
@@ -165,6 +172,22 @@ export default async function AccountSettingsPage({
           </div>
           <div className="px-6 py-5">
             <ChangePasswordForm />
+          </div>
+        </div>
+      )}
+
+      {/* Profile tab */}
+      {tab === "profile" && (
+        <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-stone-100">
+            <p className="text-sm font-semibold text-sky-950">Profile</p>
+            <p className="text-xs text-stone-400 mt-0.5">
+              Your display name and the OpenID Connect profile fields applications may request. Only
+              fields you set are ever shared, and only with applications you consent to.
+            </p>
+          </div>
+          <div className="px-6 py-5">
+            <ProfileForm profile={ownProfile} />
           </div>
         </div>
       )}
