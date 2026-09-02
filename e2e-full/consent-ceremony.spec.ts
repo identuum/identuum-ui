@@ -1685,8 +1685,13 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       expect.arrayContaining(["HS256"])
     );
 
-    // A client whose REGISTERED key signs its request objects (inline jwks;
-    // the DCR field is a JSON string on this OP).
+    // A client whose REGISTERED key signs its request objects. This OP
+    // registers keys (inline `jwks`, a JSON string on the wire, or `jwks_uri`)
+    // ONLY for private_key_jwt clients — Client.Validate's
+    // jwks-absent-for-non-pkj rule refuses them on any other auth method
+    // (measured: a client_secret_basic DCR with a jwks → 400) — so a signed
+    // request object is a private_key_jwt-client feature here, and the same
+    // key authenticates the token exchange.
     const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
     const jwk = { ...publicKey.export({ format: "jwk" }), kid: "e2e-ro", alg: "RS256", use: "sig" };
     const dcr = await api(
@@ -1699,16 +1704,14 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
         grant_types: ["authorization_code"],
         response_types: ["code"],
         scope: "openid",
+        token_endpoint_auth_method: "private_key_jwt",
+        token_endpoint_auth_signing_alg: "RS256",
         jwks: JSON.stringify({ keys: [jwk] }),
       },
       site.bearer
     );
-    expect(dcr.status, "DCR with an inline jwks → 201").toBe(201);
+    expect(dcr.status, "DCR of a private_key_jwt client with an inline jwks → 201").toBe(201);
     const roClient = (dcr.json.client_id as string) ?? "";
-    const roSecret = (dcr.json.client_secret as string) ?? "";
-    const basic = {
-      Authorization: `Basic ${Buffer.from(`${roClient}:${roSecret}`).toString("base64")}`,
-    };
 
     const signRS256 = (claims: Record<string, unknown>) => {
       const header = b64u(JSON.stringify({ alg: "RS256", kid: "e2e-ro", typ: "JWT" }));
@@ -1718,6 +1721,20 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
         padding: constants.RSA_PKCS1_PADDING,
       });
       return `${header}.${payload}.${b64u(sig)}`;
+    };
+    // private_key_jwt client authentication (OIDC Core §9): iss = sub =
+    // client_id, aud = the token endpoint discovery names, fresh jti.
+    const tokenEndpoint = disco.token_endpoint as string;
+    const clientAssertion = () => {
+      const now = Math.floor(Date.now() / 1000);
+      return signRS256({
+        iss: roClient,
+        sub: roClient,
+        aud: tokenEndpoint,
+        jti: randomBytes(16).toString("hex"),
+        iat: now,
+        exp: now + 60,
+      });
     };
     const unsigned = (claims: Record<string, unknown>) =>
       `${b64u(JSON.stringify({ alg: "none" }))}.${b64u(JSON.stringify(claims))}.`;
@@ -1800,15 +1817,20 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     expect(code.length).toBeGreaterThan(0);
     const exchange = await request.post(`${IDP_BASE}/api/v1/oauth/token`, {
       failOnStatusCode: false,
-      headers: basic,
       form: {
         grant_type: "authorization_code",
         code,
         redirect_uri: REDIRECT_URI,
         code_verifier: verifier,
+        client_id: roClient,
+        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+        client_assertion: clientAssertion(),
       },
     });
-    expect(exchange.status(), "exchange with the OBJECT's PKCE verifier → 200").toBe(200);
+    expect(
+      exchange.status(),
+      "exchange with the OBJECT's PKCE verifier, authenticated by the SAME registered key → 200"
+    ).toBe(200);
     const idToken = ((await exchange.json()) as { id_token?: string }).id_token ?? "";
     const idClaims = JSON.parse(
       Buffer.from(idToken.split(".")[1] ?? "", "base64url").toString("utf8")
