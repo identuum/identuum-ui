@@ -1644,4 +1644,219 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     expect(viaClaims.userinfo.phone_number_verified).toBe(false);
     expect(viaClaims.userinfo.address, "address not requested → absent").toBeUndefined();
   });
+
+  // THE-JAR-REQUEST-OBJECT (OIDC Core §6 / RFC 9101): a request object BY
+  // VALUE. Signed (RS256 with the client's REGISTERED key) → verified, its
+  // parameters supersede the query and drive the whole ceremony (the
+  // object's state and nonce come back on the code and in the id_token); a
+  // tampered signature → invalid_request_object to the registered query
+  // redirect_uri, no code; unsigned (alg none) → accepted (decision: it
+  // carries no authority a query string lacks); request_uri stays refused.
+  test("request object: signed round-trip, tampered signature refused, unsigned accepted, request_uri refused", async ({
+    request,
+  }) => {
+    test.setTimeout(180_000);
+    const { generateKeyPairSync, sign, constants } =
+      await import("node:crypto");
+    const nextTotpWindow = () =>
+      new Promise((r) => setTimeout(r, 30_000 - (Date.now() % 30_000) + 750));
+    const b64u = (b: Buffer | string) => Buffer.from(b).toString("base64url");
+
+    // Discovery says exactly what works.
+    const disco = (await (
+      await request.get(`${IDP_BASE}/.well-known/openid-configuration`, { failOnStatusCode: false })
+    ).json()) as Record<string, unknown>;
+    expect(disco.request_parameter_supported, "request objects by value supported").toBe(true);
+    expect(disco.request_uri_parameter_supported, "request_uri NOT supported, explicitly").toBe(
+      false
+    );
+    expect(disco.request_object_signing_alg_values_supported, "none + asymmetric algs").toEqual(
+      expect.arrayContaining(["none", "RS256", "ES256", "EdDSA"])
+    );
+    expect(disco.request_object_signing_alg_values_supported).not.toEqual(
+      expect.arrayContaining(["HS256"])
+    );
+
+    // A client whose REGISTERED key signs its request objects (inline jwks;
+    // the DCR field is a JSON string on this OP).
+    const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const jwk = { ...publicKey.export({ format: "jwk" }), kid: "e2e-ro", alg: "RS256", use: "sig" };
+    const dcr = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/oauth/register",
+      {
+        client_name: `ro-${runId}`,
+        redirect_uris: [REDIRECT_URI],
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+        scope: "openid",
+        jwks: JSON.stringify({ keys: [jwk] }),
+      },
+      site.bearer
+    );
+    expect(dcr.status, "DCR with an inline jwks → 201").toBe(201);
+    const roClient = (dcr.json.client_id as string) ?? "";
+    const roSecret = (dcr.json.client_secret as string) ?? "";
+    const basic = {
+      Authorization: `Basic ${Buffer.from(`${roClient}:${roSecret}`).toString("base64")}`,
+    };
+
+    const signRS256 = (claims: Record<string, unknown>) => {
+      const header = b64u(JSON.stringify({ alg: "RS256", kid: "e2e-ro", typ: "JWT" }));
+      const payload = b64u(JSON.stringify(claims));
+      const sig = sign("sha256", Buffer.from(`${header}.${payload}`), {
+        key: privateKey,
+        padding: constants.RSA_PKCS1_PADDING,
+      });
+      return `${header}.${payload}.${b64u(sig)}`;
+    };
+    const unsigned = (claims: Record<string, unknown>) =>
+      `${b64u(JSON.stringify({ alg: "none" }))}.${b64u(JSON.stringify(claims))}.`;
+
+    // Browser-login session (password + TOTP, fresh window).
+    await nextTotpWindow();
+    const loginForm = await request.get(`${IDP_BASE}/api/v1/auth/browser-login`, {
+      failOnStatusCode: false,
+    });
+    const loginCsrf = (await loginForm.text()).match(
+      /name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i
+    );
+    const login = await request.post(`${IDP_BASE}/api/v1/auth/browser-login`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+      form: {
+        email: userEmail,
+        password: userPw,
+        totp_code: generateTOTP(userTotpSecret, 0),
+        [loginCsrf?.[1] ?? "csrf_token"]: loginCsrf?.[2] ?? "",
+      },
+    });
+    expect(login.status(), "browser-login → 303").toBe(303);
+
+    // ── Signed request object carrying EVERYTHING but client_id (§6.1:
+    // client_id and response_type also travel in the query and must match).
+    const verifier = randomBytes(32).toString("base64url");
+    const challenge = createHash("sha256").update(verifier).digest("base64url");
+    const objectClaims = {
+      iss: roClient,
+      client_id: roClient,
+      response_type: "code",
+      redirect_uri: REDIRECT_URI,
+      scope: "openid",
+      state: `ro-object-${runId}`,
+      nonce: `nonce-${runId}`,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+    };
+    const signed = signRS256(objectClaims);
+    const authz = await request.get(
+      `${IDP_BASE}/api/v1/oauth/authorize?client_id=${encodeURIComponent(roClient)}&response_type=code&scope=openid` +
+        `&state=query-state-${runId}&request=${encodeURIComponent(signed)}`,
+      { failOnStatusCode: false, maxRedirects: 0 }
+    );
+    expect(authz.status(), "signed request object, no consent yet → 302").toBe(302);
+    const toConsent = authz.headers().location ?? "";
+    expect(toConsent, "…to the OP consent form").toMatch(/^\/api\/v1\/oauth\/consent\?/);
+    expect(toConsent, "…carrying the OBJECT's state (it supersedes the query's)").toContain(
+      `state=ro-object-${runId}`
+    );
+    expect(toConsent, "…and no raw request= (verified once, merged)").not.toContain("request=");
+    const consentForm = await request.get(`${IDP_BASE}${toConsent}`, { failOnStatusCode: false });
+    expect(consentForm.status()).toBe(200);
+    const consentCsrf = (await consentForm.text()).match(
+      /name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i
+    );
+    const approve = await request.post(`${IDP_BASE}/api/v1/oauth/consent`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+      form: {
+        action: "approve",
+        response_type: "code",
+        client_id: roClient,
+        redirect_uri: REDIRECT_URI,
+        scope: "openid",
+        state: `ro-object-${runId}`,
+        nonce: `nonce-${runId}`,
+        code_challenge: challenge,
+        code_challenge_method: "S256",
+        [consentCsrf?.[1] ?? "csrf_token"]: consentCsrf?.[2] ?? "",
+      },
+    });
+    expect(approve.status(), "approve → 302").toBe(302);
+    const minted = new URL(approve.headers().location ?? "");
+    expect(minted.searchParams.get("state"), "the object's state comes back on the code").toBe(
+      `ro-object-${runId}`
+    );
+    const code = minted.searchParams.get("code") ?? "";
+    expect(code.length).toBeGreaterThan(0);
+    const exchange = await request.post(`${IDP_BASE}/api/v1/oauth/token`, {
+      failOnStatusCode: false,
+      headers: basic,
+      form: {
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: REDIRECT_URI,
+        code_verifier: verifier,
+      },
+    });
+    expect(exchange.status(), "exchange with the OBJECT's PKCE verifier → 200").toBe(200);
+    const idToken = ((await exchange.json()) as { id_token?: string }).id_token ?? "";
+    const idClaims = JSON.parse(
+      Buffer.from(idToken.split(".")[1] ?? "", "base64url").toString("utf8")
+    ) as { nonce?: string };
+    expect(idClaims.nonce, "the object's nonce lands in the id_token").toBe(`nonce-${runId}`);
+
+    // ── Tampered signature → invalid_request_object to the REGISTERED query
+    // redirect_uri, no code.
+    const tampered = `${signed.slice(0, -4)}AAAA`;
+    const bad = await request.get(
+      `${IDP_BASE}/api/v1/oauth/authorize?client_id=${encodeURIComponent(roClient)}&response_type=code&scope=openid` +
+        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&state=tamper-${runId}&request=${encodeURIComponent(tampered)}`,
+      { failOnStatusCode: false, maxRedirects: 0 }
+    );
+    expect(bad.status(), "tampered object → 302").toBe(302);
+    const badLoc = new URL(bad.headers().location ?? "");
+    expect(badLoc.origin + badLoc.pathname).toBe(REDIRECT_URI);
+    expect(badLoc.searchParams.get("error"), "…error=invalid_request_object").toBe(
+      "invalid_request_object"
+    );
+    expect(badLoc.searchParams.get("code"), "…no code").toBeNull();
+    expect(badLoc.searchParams.get("state"), "…the QUERY state (the object was not trusted)").toBe(
+      `tamper-${runId}`
+    );
+    // Without a registered query redirect_uri the refusal is a direct 400 —
+    // never a redirect to an unverified object's redirect_uri.
+    const badDirect = await request.get(
+      `${IDP_BASE}/api/v1/oauth/authorize?client_id=${encodeURIComponent(roClient)}&request=${encodeURIComponent(tampered)}`,
+      { failOnStatusCode: false, maxRedirects: 0 }
+    );
+    expect(badDirect.status(), "tampered object, no query redirect_uri → 400 direct").toBe(400);
+
+    // ── Unsigned (alg none) by value → accepted; consent is stored now, so
+    // the resumed request mints straight through with the object's state.
+    const v2 = randomBytes(32).toString("base64url");
+    const ch2 = createHash("sha256").update(v2).digest("base64url");
+    const none = await request.get(
+      `${IDP_BASE}/api/v1/oauth/authorize?client_id=${encodeURIComponent(roClient)}&response_type=code&scope=openid` +
+        `&request=${encodeURIComponent(unsigned({ ...objectClaims, state: `ro-none-${runId}`, nonce: "n2", code_challenge: ch2 }))}`,
+      { failOnStatusCode: false, maxRedirects: 0 }
+    );
+    expect(none.status(), "unsigned object → 302").toBe(302);
+    const noneLoc = new URL(none.headers().location ?? "");
+    expect(noneLoc.searchParams.get("error"), "…no error").toBeNull();
+    expect((noneLoc.searchParams.get("code") ?? "").length, "…a code").toBeGreaterThan(0);
+    expect(noneLoc.searchParams.get("state")).toBe(`ro-none-${runId}`);
+
+    // ── request_uri stays refused, explicitly.
+    const byRef = await request.get(
+      `${IDP_BASE}/api/v1/oauth/authorize?client_id=${encodeURIComponent(roClient)}&response_type=code&scope=openid` +
+        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&state=ref-${runId}&request_uri=${encodeURIComponent("https://rp.example/ro.jwt")}`,
+      { failOnStatusCode: false, maxRedirects: 0 }
+    );
+    expect(byRef.status()).toBe(302);
+    expect(new URL(byRef.headers().location ?? "").searchParams.get("error")).toBe(
+      "request_uri_not_supported"
+    );
+  });
 });
