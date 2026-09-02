@@ -51,6 +51,8 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
   let userPw = "";
   let clientId = "";
   let clientSecret = "";
+  let orgAdminBearer = "";
+  let userId = "";
 
   test("setup: org, org_user, and a confidential authorization_code client", async () => {
     const adminPassword = process.env.IDENTUUM_E2E_FULL_ADMIN_PASSWORD ?? "";
@@ -89,6 +91,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     });
     expect(act.status).toBe(200);
     const orgAdmin = await firstLoginBearerAsync(IDP_BASE, `admin@${runId}.test`, adminPw);
+    orgAdminBearer = orgAdmin.bearer;
 
     userEmail = `user@${runId}.test`;
     userPw = `Usr!${runId}3kpZ`;
@@ -100,6 +103,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       orgAdmin.bearer
     );
     expect(uc.status).toBe(201);
+    userId = uc.json.id as string;
     const uv = await api(
       IDP_BASE,
       "PUT",
@@ -471,6 +475,143 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     expect(after.status(), "first access token → userinfo 401 after the code was replayed").toBe(
       401
     );
+  });
+
+  // THE-CLAIMS-PARAMETER (OIDC Core §5.5): a client asking for `name` through
+  // the claims parameter gets it at userinfo ONLY after the user consented to
+  // that claim; the same user's code minted WITHOUT the claims request (and
+  // without the profile scope) carries no name.
+  test("claims parameter: consented name reaches userinfo; unrequested/unconsented does not", async ({
+    request,
+  }) => {
+    // Give the user a truthful name to release (the OP never fabricates one).
+    const named = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/users/${userId}`,
+      { name: `Ceremony User ${runId}` },
+      orgAdminBearer
+    );
+    expect(named.status, "org_admin sets the user's display name").toBe(200);
+
+    const codeVerifier = randomBytes(32).toString("base64url");
+    const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
+    const claims = JSON.stringify({ userinfo: { name: { essential: true }, picture: null } });
+    const authQuery =
+      `client_id=${encodeURIComponent(clientId)}` +
+      `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+      `&response_type=code&scope=openid&state=cl-${runId}` +
+      `&code_challenge=${codeChallenge}&code_challenge_method=S256` +
+      `&claims=${encodeURIComponent(claims)}`;
+
+    // The stored consent covers scope openid but NOT the name claim → the
+    // signed-in user is sent to consent again (an unconsented claim never lands).
+    const authz = await request.get(`${IDP_BASE}/api/v1/oauth/authorize?${authQuery}`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    expect(authz.status(), "authorize with an unconsented claim → 302").toBe(302);
+    const toConsent = authz.headers().location ?? "";
+    expect(toConsent, "…to the OP consent form").toMatch(/^\/api\/v1\/oauth\/consent\?/);
+    expect(toConsent, "…carrying the claims parameter").toContain("claims=");
+
+    // The consent page lists the emittable claim and never the unknown one.
+    const consentForm = await request.get(`${IDP_BASE}${toConsent}`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    expect(consentForm.status(), "consent form renders for the claims request").toBe(200);
+    const consentHtml = await consentForm.text();
+    expect(consentHtml, "consent page lists the requested name claim").toContain(
+      "name (shared with the application)"
+    );
+    // The hidden field echoes the raw parameter (so approval resumes the
+    // request); the LIST never shows an unknown claim.
+    expect(consentHtml, "unknown claims are never listed").not.toContain("<li>picture");
+    const consentCsrf = consentHtml.match(/name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i);
+    expect(consentCsrf, "consent form embeds a CSRF token").toBeTruthy();
+
+    const approve = await request.post(`${IDP_BASE}/api/v1/oauth/consent`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+      form: {
+        action: "approve",
+        response_type: "code",
+        client_id: clientId,
+        redirect_uri: REDIRECT_URI,
+        scope: "openid",
+        state: `cl-${runId}`,
+        code_challenge: codeChallenge,
+        code_challenge_method: "S256",
+        claims,
+        [consentCsrf?.[1] ?? "csrf_token"]: consentCsrf?.[2] ?? "",
+      },
+    });
+    expect(approve.status(), "consent approve with claims → 302").toBe(302);
+    const code = new URL(approve.headers().location ?? "").searchParams.get("code") ?? "";
+    expect(code.length, "a code is minted under the consented claims").toBeGreaterThan(0);
+
+    const basic = {
+      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+    };
+    const exchange = await request.post(`${IDP_BASE}/api/v1/oauth/token`, {
+      failOnStatusCode: false,
+      headers: basic,
+      form: {
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: REDIRECT_URI,
+        code_verifier: codeVerifier,
+      },
+    });
+    expect(exchange.status(), "exchange → 200").toBe(200);
+    const tokens = (await exchange.json()) as { access_token?: string };
+    const withClaims = await request.get(`${IDP_BASE}/api/v1/oidc/userinfo`, {
+      failOnStatusCode: false,
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    });
+    expect(withClaims.status(), "userinfo → 200").toBe(200);
+    const info = (await withClaims.json()) as { name?: string; email?: string };
+    expect(info.name, "userinfo carries the consented name claim").toBe(`Ceremony User ${runId}`);
+    expect(info.email, "…and nothing that was neither scoped nor requested").toBeUndefined();
+
+    // Negative: the SAME user, a code minted WITHOUT the claims request (scope
+    // openid only) → the token carries no claim names → no name at userinfo.
+    const plainVerifier = randomBytes(32).toString("base64url");
+    const plainChallenge = createHash("sha256").update(plainVerifier).digest("base64url");
+    const plainAuthz = await request.get(
+      `${IDP_BASE}/api/v1/oauth/authorize?client_id=${encodeURIComponent(clientId)}` +
+        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=openid` +
+        `&state=pl-${runId}&code_challenge=${plainChallenge}&code_challenge_method=S256`,
+      { failOnStatusCode: false, maxRedirects: 0 }
+    );
+    expect(
+      plainAuthz.status(),
+      "authorize without claims (consent stored) → 302 to the client"
+    ).toBe(302);
+    const plainCode = new URL(plainAuthz.headers().location ?? "").searchParams.get("code") ?? "";
+    expect(plainCode.length, "a code is minted straight through").toBeGreaterThan(0);
+    const plainExchange = await request.post(`${IDP_BASE}/api/v1/oauth/token`, {
+      failOnStatusCode: false,
+      headers: basic,
+      form: {
+        grant_type: "authorization_code",
+        code: plainCode,
+        redirect_uri: REDIRECT_URI,
+        code_verifier: plainVerifier,
+      },
+    });
+    expect(plainExchange.status(), "plain exchange → 200").toBe(200);
+    const plainTokens = (await plainExchange.json()) as { access_token?: string };
+    const plainInfo = await request.get(`${IDP_BASE}/api/v1/oidc/userinfo`, {
+      failOnStatusCode: false,
+      headers: { Authorization: `Bearer ${plainTokens.access_token}` },
+    });
+    expect(plainInfo.status(), "userinfo → 200").toBe(200);
+    expect(
+      ((await plainInfo.json()) as { name?: string }).name,
+      "no claims request, no profile scope → no name, even though consent exists and the user has one"
+    ).toBeUndefined();
   });
 
   test("end_session mints a backchannel delivery row the admin surface lists + replays", async ({
