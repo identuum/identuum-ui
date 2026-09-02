@@ -1187,23 +1187,50 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     // 30-second window before every TOTP use after the first.
     const nextTotpWindow = () =>
       new Promise((r) => setTimeout(r, 30_000 - (Date.now() % 30_000) + 750));
+    // The describe's client redirects to an unroutable test host, and a browser
+    // navigation follows the OP's 302 there WITHOUT consulting page.route
+    // (Chromium follows redirects of an intercepted request internally —
+    // MEASURED: page.goto → net::ERR_NAME_NOT_RESOLVED). So this test registers
+    // ITS OWN client whose redirect_uri is a page the OP itself serves on the
+    // RP origin (/health): the browser lands there with ?code= and the URL can
+    // be read. Non-navigating authorize probes use page.request — the page's
+    // own cookie jar — with redirects disabled and read the Location header.
+    const LOCAL_CB = `${IDP_ORIGIN}/health`;
+    const dcr2 = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/oauth/register",
+      {
+        client_name: `pr-${runId}`,
+        redirect_uris: [LOCAL_CB],
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+        scope: "openid",
+      },
+      site.bearer
+    );
+    expect(dcr2.status, "DCR of the passkey-ceremony client → 201").toBe(201);
+    const client2 = (dcr2.json.client_id as string) ?? "";
+    const client2Secret = (dcr2.json.client_secret as string) ?? "";
+    expect(client2.length).toBeGreaterThan(0);
     const authorizeURL = (acr: string, state: string) => {
       const v = randomBytes(32).toString("base64url");
       const ch = createHash("sha256").update(v).digest("base64url");
       return {
         verifier: v,
+        challenge: ch,
         url:
-          `${IDP_ORIGIN}/api/v1/oauth/authorize?client_id=${encodeURIComponent(clientId)}` +
-          `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=openid` +
+          `${IDP_ORIGIN}/api/v1/oauth/authorize?client_id=${encodeURIComponent(client2)}` +
+          `&redirect_uri=${encodeURIComponent(LOCAL_CB)}&response_type=code&scope=openid` +
           `&state=${state}&code_challenge=${ch}&code_challenge_method=S256` +
-          `&acr_values=${encodeURIComponent(acr)}`,
+          (acr ? `&acr_values=${encodeURIComponent(acr)}` : ""),
       };
     };
-    // The client's redirect_uri is an unroutable test host: answer it locally
-    // so the browser lands there and the URL (code / error) can be read.
-    await page.route(`${REDIRECT_URI}**`, (route) =>
-      route.fulfill({ status: 200, contentType: "text/plain", body: "callback" })
-    );
+    const locationOf = async (url: string, what: string) => {
+      const r = await page.request.get(url, { failOnStatusCode: false, maxRedirects: 0 });
+      expect(r.status(), `${what} → 302`).toBe(302);
+      return r.headers().location ?? "";
+    };
 
     // ── (1) password + TOTP browser-login in the PAGE → an mfa-rung session.
     await page.goto(`${IDP_ORIGIN}/api/v1/auth/browser-login`);
@@ -1213,11 +1240,50 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     await page.click('button[type="submit"]');
     await page.waitForLoadState("domcontentloaded");
 
+    // Consent for the new client, once, through the OP consent form with the
+    // page's session (approve resumes the request and mints a code we ignore).
+    const consentReq = authorizeURL("", `pr-consent-${runId}`);
+    const consentLoc = await locationOf(
+      consentReq.url,
+      "authorize with no consent for the new client"
+    );
+    expect(consentLoc, "…to the OP consent form").toMatch(/^\/api\/v1\/oauth\/consent\?/);
+    const consentForm = await page.request.get(`${IDP_ORIGIN}${consentLoc}`, {
+      failOnStatusCode: false,
+    });
+    expect(consentForm.status(), "consent form renders for the page session").toBe(200);
+    const consentCsrf = (await consentForm.text()).match(
+      /name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i
+    );
+    expect(consentCsrf, "consent form embeds a CSRF token").toBeTruthy();
+    const approve = await page.request.post(`${IDP_ORIGIN}/api/v1/oauth/consent`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+      form: {
+        action: "approve",
+        response_type: "code",
+        client_id: client2,
+        redirect_uri: LOCAL_CB,
+        scope: "openid",
+        state: `pr-consent-${runId}`,
+        code_challenge: consentReq.challenge,
+        code_challenge_method: "S256",
+        [consentCsrf?.[1] ?? "csrf_token"]: consentCsrf?.[2] ?? "",
+      },
+    });
+    expect(approve.status(), "consent approve → 302").toBe(302);
+    expect(approve.headers().location ?? "", "…to the client with a code").toContain(
+      `${LOCAL_CB}?`
+    );
+
     // ── (2) NO passkey yet: the phishing-resistant rung cannot be performed.
-    const unmet = authorizeURL(PR, `pr-unmet-${runId}`);
-    await page.goto(unmet.url);
-    await page.waitForURL((u) => u.href.startsWith(REDIRECT_URI));
-    const unmetURL = new URL(page.url());
+    const unmetURL = new URL(
+      await locationOf(
+        authorizeURL(PR, `pr-unmet-${runId}`).url,
+        "acr_values=phishing-resistant, TOTP-only user"
+      )
+    );
+    expect(unmetURL.origin + unmetURL.pathname, "…to the client's redirect_uri").toBe(LOCAL_CB);
     expect(
       unmetURL.searchParams.get("error"),
       "TOTP-only user → unmet_authentication_requirements"
@@ -1308,20 +1374,22 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     // ── (4) The SAME mfa-rung session asks for the phishing-resistant rung:
     // the passkey step-up page, the assertion, the uplift, the resumed mint.
     const stepUp = authorizeURL(PR, `pr-${runId}`);
-    const pageResp = page.waitForResponse(
-      (r) => r.request().method() === "GET" && r.url().includes("/api/v1/auth/step-up/passkey?")
+    const stepUpLoc = await locationOf(stepUp.url, "acr_values=phishing-resistant, passkey held");
+    expect(stepUpLoc, "…to the OP passkey step-up ceremony, never a code").toMatch(
+      /^\/api\/v1\/auth\/step-up\/passkey\?return_to=/
     );
     const finishResp = page.waitForResponse(
       (r) => r.request().method() === "POST" && r.url().includes("/api/v1/auth/step-up/passkey?")
     );
-    await page.goto(stepUp.url);
-    const pr = await pageResp;
-    expect(pr.status(), "passkey step-up page renders for the live session").toBe(200);
-    observeRaw("GET", "/api/v1/auth/step-up/passkey", pr.status());
+    const pr = await page.goto(`${IDP_ORIGIN}${stepUpLoc}`);
+    expect(pr?.status(), "passkey step-up page renders for the live session").toBe(200);
+    observeRaw("GET", "/api/v1/auth/step-up/passkey", pr?.status() ?? 0);
     const fr = await finishResp;
     expect(fr.status(), "verified assertion → 200 (uplift recorded)").toBe(200);
     observeRaw("POST", "/api/v1/auth/step-up/passkey", fr.status());
-    await page.waitForURL((u) => u.href.startsWith(REDIRECT_URI));
+    await page.waitForURL(
+      (u) => u.origin === IDP_ORIGIN && u.pathname === "/health" && u.searchParams.has("code")
+    );
     const minted = new URL(page.url());
     expect(minted.searchParams.get("error"), "…no error").toBeNull();
     const code = minted.searchParams.get("code") ?? "";
@@ -1331,12 +1399,12 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     const exchange = await request.post(`${IDP_BASE}/api/v1/oauth/token`, {
       failOnStatusCode: false,
       headers: {
-        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+        Authorization: `Basic ${Buffer.from(`${client2}:${client2Secret}`).toString("base64")}`,
       },
       form: {
         grant_type: "authorization_code",
         code,
-        redirect_uri: REDIRECT_URI,
+        redirect_uri: LOCAL_CB,
         code_verifier: stepUp.verifier,
       },
     });
@@ -1358,9 +1426,8 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       [MFA, `pr-low-mfa-${runId}`],
       [PASSWORD, `pr-low-pw-${runId}`],
     ] as const) {
-      await page.goto(authorizeURL(acr, state).url);
-      await page.waitForURL((u) => u.href.startsWith(REDIRECT_URI));
-      const low = new URL(page.url());
+      const low = new URL(await locationOf(authorizeURL(acr, state).url, `acr_values=${acr}`));
+      expect(low.origin + low.pathname, `${acr}: to the client`).toBe(LOCAL_CB);
       expect(low.searchParams.get("error"), `${acr}: no error`).toBeNull();
       expect(
         (low.searchParams.get("code") ?? "").length,
