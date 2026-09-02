@@ -743,6 +743,14 @@ export async function getOwnProfile(): Promise<UserProfile | null> {
       birthdate: optStr(u.birthdate),
       zoneinfo: optStr(u.zoneinfo),
       locale: optStr(u.locale),
+      // THE-ADDRESS-PHONE-CLAIMS
+      phone_number: optStr(u.phone_number),
+      address_formatted: optStr(u.address_formatted),
+      address_street_address: optStr(u.address_street_address),
+      address_locality: optStr(u.address_locality),
+      address_region: optStr(u.address_region),
+      address_postal_code: optStr(u.address_postal_code),
+      address_country: optStr(u.address_country),
     };
   } catch {
     return null;

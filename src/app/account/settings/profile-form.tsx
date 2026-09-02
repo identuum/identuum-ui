@@ -35,10 +35,17 @@ type FieldSpec = {
     | "gender"
     | "birthdate"
     | "zoneinfo"
-    | "locale";
+    | "locale"
+    | "phone_number"
+    | "address_formatted"
+    | "address_street_address"
+    | "address_locality"
+    | "address_region"
+    | "address_postal_code"
+    | "address_country";
   label: string;
   hint?: string;
-  type?: "text" | "url" | "date";
+  type?: "text" | "url" | "date" | "tel";
   placeholder?: string;
 };
 
@@ -56,6 +63,18 @@ const FIELDS: FieldSpec[] = [
   { key: "birthdate", label: "Birthdate", hint: "YYYY-MM-DD, YYYY, or 0000-MM-DD" },
   { key: "zoneinfo", label: "Time zone", hint: "IANA name, e.g. Europe/London" },
   { key: "locale", label: "Locale", hint: "BCP47 tag, e.g. en-GB" },
+  // THE-ADDRESS-PHONE-CLAIMS: released under the phone / address scopes.
+  { key: "phone_number", label: "Phone number", type: "tel", hint: "E.164, e.g. +442079460000" },
+  {
+    key: "address_formatted",
+    label: "Address (formatted)",
+    hint: "The full address as you would print it",
+  },
+  { key: "address_street_address", label: "Street address" },
+  { key: "address_locality", label: "City or locality" },
+  { key: "address_region", label: "State, province or region" },
+  { key: "address_postal_code", label: "Postal code" },
+  { key: "address_country", label: "Country" },
 ];
 
 export function ProfileForm({ profile }: { profile: UserProfile | null }) {

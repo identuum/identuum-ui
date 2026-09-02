@@ -503,6 +503,18 @@ export interface UserProfile {
   birthdate: string | null;
   zoneinfo: string | null;
   locale: string | null;
+  /**
+   * OIDC Core §5.1 phone_number and the §5.1.1 structured address members
+   * (THE-ADDRESS-PHONE-CLAIMS), flattened as the IdP exposes them. null when
+   * unset; an unset field is never released to any client.
+   */
+  phone_number: string | null;
+  address_formatted: string | null;
+  address_street_address: string | null;
+  address_locality: string | null;
+  address_region: string | null;
+  address_postal_code: string | null;
+  address_country: string | null;
 }
 
 /** The self-service writable subset of UserProfile (PUT /api/v1/profile). */
@@ -519,6 +531,13 @@ export const PROFILE_FIELD_KEYS = [
   "birthdate",
   "zoneinfo",
   "locale",
+  "phone_number",
+  "address_formatted",
+  "address_street_address",
+  "address_locality",
+  "address_region",
+  "address_postal_code",
+  "address_country",
 ] as const;
 export type ProfileFieldKey = (typeof PROFILE_FIELD_KEYS)[number];
 

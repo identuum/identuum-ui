@@ -522,9 +522,9 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
 
     const codeVerifier = randomBytes(32).toString("base64url");
     const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
-    // phone_number is NOT an emittable claim on this OP (the profile family,
+    // shoe_size is NOT an emittable claim on this OP (phone_number became one in THE-ADDRESS-PHONE-CLAIMS) (the profile family,
     // email and email_verified are) — the unknown one must never be listed.
-    const claims = JSON.stringify({ userinfo: { name: { essential: true }, phone_number: null } });
+    const claims = JSON.stringify({ userinfo: { name: { essential: true }, shoe_size: null } });
     const authQuery =
       `client_id=${encodeURIComponent(clientId)}` +
       `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
@@ -555,7 +555,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     );
     // The hidden field echoes the raw parameter (so approval resumes the
     // request); the LIST never shows an unknown claim.
-    expect(consentHtml, "unknown claims are never listed").not.toContain("<li>phone_number");
+    expect(consentHtml, "unknown claims are never listed").not.toContain("<li>shoe_size");
     const consentCsrf = consentHtml.match(/name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i);
     expect(consentCsrf, "consent form embeds a CSRF token").toBeTruthy();
 
@@ -1434,5 +1434,212 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
         `${acr}: a code straight through`
       ).toBeGreaterThan(0);
     }
+  });
+
+  // THE-ADDRESS-PHONE-CLAIMS: the user sets a phone number and SOME address
+  // members on their own profile; a client consented to scope=address phone
+  // receives the structured address (exactly the set members) plus
+  // phone_number and phone_number_verified=false at userinfo; an unset
+  // member is absent; a consentless request (scope openid only) carries
+  // neither; the claims parameter releases phone_number alone.
+  test("address + phone: set, consent, userinfo carries them; unset absent; consentless carries neither", async ({
+    request,
+  }) => {
+    test.setTimeout(180_000);
+    const nextTotpWindow = () =>
+      new Promise((r) => setTimeout(r, 30_000 - (Date.now() % 30_000) + 750));
+    expect(userTotpSecret.length, "the TOTP secret enrolled earlier").toBeGreaterThan(0);
+
+    // ── The user's bearer (TOTP-enrolled JSON login) → self-service PUT.
+    await nextTotpWindow();
+    const pending = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
+      email: userEmail,
+      password: userPw,
+    });
+    expect(pending.status, "TOTP-enrolled JSON login → 401 pending").toBe(401);
+    const verify = await api(IDP_BASE, "POST", "/api/v1/auth/login/mfa", {
+      session_id: (pending.json as { session_id?: string }).session_id ?? "",
+      code: generateTOTP(userTotpSecret, 0),
+    });
+    expect(verify.status, "TOTP verify → 200 bearer").toBe(200);
+    const ouBearer = (verify.json as { access_token?: string }).access_token ?? "";
+
+    const put = await api(
+      IDP_BASE,
+      "PUT",
+      "/api/v1/profile",
+      {
+        phone_number: "+442079460000",
+        address_street_address: "1 Ceremony Way",
+        address_locality: "London",
+        address_postal_code: "SW1A 1AA",
+        address_country: "United Kingdom",
+      },
+      ouBearer
+    );
+    expect(put.status, "PUT /profile with phone + partial address → 200").toBe(200);
+    expect((put.json as { phone_number?: string }).phone_number).toBe("+442079460000");
+    expect(
+      (put.json as { address_region?: string }).address_region,
+      "region never set"
+    ).toBeUndefined();
+    const badPhone = await api(
+      IDP_BASE,
+      "PUT",
+      "/api/v1/profile",
+      { phone_number: "020 7946 0000" },
+      ouBearer
+    );
+    expect(badPhone.status, "non-E.164 phone → 400 naming the field").toBe(400);
+    expect(String((badPhone.json as { message?: string }).message ?? "")).toContain("phone_number");
+
+    // ── A client registered for the address + phone scopes.
+    const dcr = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/oauth/register",
+      {
+        client_name: `ap-${runId}`,
+        redirect_uris: [REDIRECT_URI],
+        grant_types: ["authorization_code"],
+        response_types: ["code"],
+        scope: "openid address phone",
+      },
+      site.bearer
+    );
+    expect(dcr.status, "DCR of the address/phone client → 201").toBe(201);
+    const apClient = (dcr.json.client_id as string) ?? "";
+    const apSecret = (dcr.json.client_secret as string) ?? "";
+    const basic = {
+      Authorization: `Basic ${Buffer.from(`${apClient}:${apSecret}`).toString("base64")}`,
+    };
+
+    // ── Browser-login session for this request context (password + TOTP,
+    // fresh window).
+    await nextTotpWindow();
+    const loginForm = await request.get(`${IDP_BASE}/api/v1/auth/browser-login`, {
+      failOnStatusCode: false,
+    });
+    const loginCsrf = (await loginForm.text()).match(
+      /name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i
+    );
+    const login = await request.post(`${IDP_BASE}/api/v1/auth/browser-login`, {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+      form: {
+        email: userEmail,
+        password: userPw,
+        totp_code: generateTOTP(userTotpSecret, 0),
+        [loginCsrf?.[1] ?? "csrf_token"]: loginCsrf?.[2] ?? "",
+      },
+    });
+    expect(login.status(), "browser-login (password + TOTP) → 303").toBe(303);
+
+    // The ceremony: authorize → consent form (scopes listed) → approve → code
+    // → token → userinfo. Returns the userinfo body.
+    const ceremony = async (scope: string, state: string, claims?: string) => {
+      const verifier = randomBytes(32).toString("base64url");
+      const challenge = createHash("sha256").update(verifier).digest("base64url");
+      const q =
+        `client_id=${encodeURIComponent(apClient)}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+        `&response_type=code&scope=${encodeURIComponent(scope)}&state=${state}` +
+        `&code_challenge=${challenge}&code_challenge_method=S256` +
+        (claims ? `&claims=${encodeURIComponent(claims)}` : "");
+      const authz = await request.get(`${IDP_BASE}/api/v1/oauth/authorize?${q}`, {
+        failOnStatusCode: false,
+        maxRedirects: 0,
+      });
+      expect(authz.status(), `${state}: authorize → 302`).toBe(302);
+      let loc = authz.headers().location ?? "";
+      let code = "";
+      if (loc.startsWith("/api/v1/oauth/consent?")) {
+        const form = await request.get(`${IDP_BASE}${loc}`, { failOnStatusCode: false });
+        expect(form.status(), `${state}: consent form`).toBe(200);
+        const html = await form.text();
+        const csrf = html.match(/name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i);
+        const approve = await request.post(`${IDP_BASE}/api/v1/oauth/consent`, {
+          failOnStatusCode: false,
+          maxRedirects: 0,
+          form: {
+            action: "approve",
+            response_type: "code",
+            client_id: apClient,
+            redirect_uri: REDIRECT_URI,
+            scope,
+            state,
+            code_challenge: challenge,
+            code_challenge_method: "S256",
+            ...(claims ? { claims } : {}),
+            [csrf?.[1] ?? "csrf_token"]: csrf?.[2] ?? "",
+          },
+        });
+        expect(approve.status(), `${state}: approve → 302`).toBe(302);
+        loc = approve.headers().location ?? "";
+        return { html, userinfo: await exchangeAndUserinfo(loc) };
+      }
+      code = new URL(loc).searchParams.get("code") ?? "";
+      expect(code.length, `${state}: a code`).toBeGreaterThan(0);
+      return { html: "", userinfo: await exchangeAndUserinfo(loc) };
+      async function exchangeAndUserinfo(location: string) {
+        const c = new URL(location).searchParams.get("code") ?? "";
+        expect(c.length, `${state}: code on the redirect`).toBeGreaterThan(0);
+        const exchange = await request.post(`${IDP_BASE}/api/v1/oauth/token`, {
+          failOnStatusCode: false,
+          headers: basic,
+          form: {
+            grant_type: "authorization_code",
+            code: c,
+            redirect_uri: REDIRECT_URI,
+            code_verifier: verifier,
+          },
+        });
+        expect(exchange.status(), `${state}: exchange → 200`).toBe(200);
+        const tokens = (await exchange.json()) as { access_token?: string };
+        const info = await request.get(`${IDP_BASE}/api/v1/oidc/userinfo`, {
+          failOnStatusCode: false,
+          headers: { Authorization: `Bearer ${tokens.access_token}` },
+        });
+        expect(info.status(), `${state}: userinfo → 200`).toBe(200);
+        return (await info.json()) as Record<string, unknown>;
+      }
+    };
+
+    // ── Consented to address + phone: exactly the set members, verified=false.
+    const full = await ceremony("openid address phone", `ap-${runId}`);
+    expect(full.html, "consent page names the address scope").toContain("View your postal address");
+    expect(full.html, "consent page names the phone scope").toContain("View your phone number");
+    const address = full.userinfo.address as Record<string, string> | undefined;
+    expect(address, "userinfo carries the structured address").toEqual({
+      street_address: "1 Ceremony Way",
+      locality: "London",
+      postal_code: "SW1A 1AA",
+      country: "United Kingdom",
+    });
+    expect(full.userinfo.phone_number, "userinfo carries phone_number").toBe("+442079460000");
+    expect(
+      full.userinfo.phone_number_verified,
+      "phone_number_verified is false — never true, no verification event exists"
+    ).toBe(false);
+    expect(full.userinfo.email, "email not scoped → absent").toBeUndefined();
+    expect(full.userinfo.name, "name not scoped → absent").toBeUndefined();
+
+    // ── Consentless for these claims (scope openid only): neither lands.
+    const plain = await ceremony("openid", `ap-plain-${runId}`);
+    for (const k of ["address", "phone_number", "phone_number_verified"]) {
+      expect(plain.userinfo[k], `${k} without its scope → absent`).toBeUndefined();
+    }
+
+    // ── Claims parameter: phone_number alone (consented) → the phone pair,
+    // never the address.
+    const viaClaims = await ceremony(
+      "openid",
+      `ap-claims-${runId}`,
+      JSON.stringify({ userinfo: { phone_number: null } })
+    );
+    expect(viaClaims.userinfo.phone_number, "claims parameter releases phone_number").toBe(
+      "+442079460000"
+    );
+    expect(viaClaims.userinfo.phone_number_verified).toBe(false);
+    expect(viaClaims.userinfo.address, "address not requested → absent").toBeUndefined();
   });
 });
