@@ -381,7 +381,16 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     expect(promptLoginLoc, "…back through the login ceremony, never a code").toContain(
       "/api/v1/auth/browser-login?return_to="
     );
-    const resumed = decodeURIComponent(promptLoginLoc.split("return_to=")[1] ?? "");
+    // THE-JAR-REQUEST-OBJECT: the login URL itself carries `prompt=login`
+    // (outside return_to) when the login was forced — the honest marker the
+    // conformance browser screenshots for oidcc-prompt-login. The RESUMED
+    // request must still not carry the consumed token, so parse the two
+    // apart instead of splitting the raw string.
+    const promptLoginUrl = new URL(promptLoginLoc, IDP_BASE);
+    expect(promptLoginUrl.searchParams.get("prompt"), "…the login URL marks the forced login").toBe(
+      "login"
+    );
+    const resumed = promptLoginUrl.searchParams.get("return_to") ?? "";
     expect(resumed, "…return_to resumes the authorize request").toContain(`client_id=${clientId}`);
     expect(resumed, "…without prompt=login (consumed by the ceremony)").not.toMatch(/prompt=login/);
 
