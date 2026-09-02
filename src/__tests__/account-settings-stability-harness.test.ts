@@ -190,8 +190,12 @@ describe("Account Settings — role-shell aside + main layout pattern", () => {
     expect(layout).toMatch(/runtimeState\?\.components\?\.idp\?\.capabilities/);
   });
 
-  it("account/layout.tsx redirects unauthenticated visitors to /login?reason=session_expired", () => {
-    expect(layout).toMatch(/redirect\(\s*"\/login\?reason=session_expired"\s*\)/);
+  it("account/layout.tsx redirects unauthenticated visitors to /login?reason=session_expired through the tri-state guard, never on an outage", () => {
+    // THE-UNAVAILABLE-IS-NOT-EXPIRED: decideSessionGuard → a VERDICT redirects
+    // (LOGIN_SESSION_EXPIRED in lib/session-guard.ts), an OUTAGE renders in place.
+    expect(layout).toMatch(/decideSessionGuard\(\s*await getServerSessionState\(\)\s*\)/);
+    expect(layout).toMatch(/redirect\(\s*guard\.to\s*\)/);
+    expect(layout).toMatch(/render-unavailable/);
   });
 
   it("account/layout.tsx uses 'force-dynamic' so the SSR'd page reflects fresh server state per request", () => {

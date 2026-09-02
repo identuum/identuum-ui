@@ -35,10 +35,12 @@ import { OrgAdminNav } from "@/components/org-admin/org-admin-nav";
  * role's sidebar shape propagates here automatically.
  */
 import { AccountMenu } from "@/components/shared/account-menu";
+import { ServiceUnavailable } from "@/components/shared/service-unavailable";
 import { SiteAdminNav } from "@/components/site-admin/site-admin-nav";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
-import { getServerSession } from "@/lib/server-session";
+import { getServerSessionState } from "@/lib/server-session";
+import { decideSessionGuard } from "@/lib/session-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -51,11 +53,22 @@ export default async function AccountLayout({ children }: { children: React.Reac
     redirect("/login");
   }
 
-  const session = await getServerSession();
-
-  if (!session) {
-    redirect("/login?reason=session_expired");
+  // THE-UNAVAILABLE-IS-NOT-EXPIRED: three states — a VERDICT redirects to
+  // /login; an OUTAGE renders in place with the correlation id, no cookie touched.
+  const guard = decideSessionGuard(await getServerSessionState());
+  if (guard.action === "render-unavailable") {
+    return (
+      <ServiceUnavailable
+        correlationId={guard.state.correlationId}
+        retryAfterSeconds={guard.state.retryAfterSeconds}
+        status={guard.state.status}
+      />
+    );
   }
+  if (guard.action === "redirect") {
+    redirect(guard.to);
+  }
+  const session = guard.session;
 
   const role = session.user?.role ?? session.role;
   const userEmail = session.user?.email ?? null;

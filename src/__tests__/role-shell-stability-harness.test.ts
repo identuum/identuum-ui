@@ -69,8 +69,15 @@ describe("site-admin role-shell layout invariants", () => {
     expect(layout).toMatch(/getServerRuntimeState.*from\s+"@\/lib\/server-runtime-state"/);
   });
 
-  it("redirects to /login?reason=session_expired on no session", () => {
-    expect(layout).toMatch(/redirect\(\s*"\/login\?reason=session_expired"\s*\)/);
+  it("redirects to /login?reason=session_expired on no session (via the tri-state guard), never on an outage", () => {
+    // THE-UNAVAILABLE-IS-NOT-EXPIRED: the layout applies decideSessionGuard —
+    // a VERDICT redirects to LOGIN_SESSION_EXPIRED, an OUTAGE renders in place.
+    expect(layout).toMatch(/decideSessionGuard\(\s*await getServerSessionState\(\)\s*\)/);
+    expect(layout).toMatch(/redirect\(\s*guard\.to\s*\)/);
+    expect(layout).toMatch(/render-unavailable/);
+    expect(source("lib/session-guard.ts")).toMatch(
+      /LOGIN_SESSION_EXPIRED\s*=\s*"\/login\?reason=session_expired"/
+    );
   });
 
   it("redirects wrong-role users to roleToPath(role)", () => {
@@ -108,8 +115,15 @@ describe("org-admin role-shell layout invariants", () => {
     expect(layout).toMatch(/getServerRuntimeState.*from\s+"@\/lib\/server-runtime-state"/);
   });
 
-  it("redirects to /login?reason=session_expired on no session", () => {
-    expect(layout).toMatch(/redirect\(\s*"\/login\?reason=session_expired"\s*\)/);
+  it("redirects to /login?reason=session_expired on no session (via the tri-state guard), never on an outage", () => {
+    // THE-UNAVAILABLE-IS-NOT-EXPIRED: the layout applies decideSessionGuard —
+    // a VERDICT redirects to LOGIN_SESSION_EXPIRED, an OUTAGE renders in place.
+    expect(layout).toMatch(/decideSessionGuard\(\s*await getServerSessionState\(\)\s*\)/);
+    expect(layout).toMatch(/redirect\(\s*guard\.to\s*\)/);
+    expect(layout).toMatch(/render-unavailable/);
+    expect(source("lib/session-guard.ts")).toMatch(
+      /LOGIN_SESSION_EXPIRED\s*=\s*"\/login\?reason=session_expired"/
+    );
   });
 
   it("redirects to Account Settings MFA tab when org policy + user state require MFA enrollment", () => {
@@ -140,8 +154,15 @@ describe("dashboard role-shell layout invariants", () => {
     expect(layout).toMatch(/getServerSession.*from\s+"@\/lib\/server-session"/);
   });
 
-  it("redirects to /login?reason=session_expired on no session", () => {
-    expect(layout).toMatch(/redirect\(\s*"\/login\?reason=session_expired"\s*\)/);
+  it("redirects to /login?reason=session_expired on no session (via the tri-state guard), never on an outage", () => {
+    // THE-UNAVAILABLE-IS-NOT-EXPIRED: the layout applies decideSessionGuard —
+    // a VERDICT redirects to LOGIN_SESSION_EXPIRED, an OUTAGE renders in place.
+    expect(layout).toMatch(/decideSessionGuard\(\s*await getServerSessionState\(\)\s*\)/);
+    expect(layout).toMatch(/redirect\(\s*guard\.to\s*\)/);
+    expect(layout).toMatch(/render-unavailable/);
+    expect(source("lib/session-guard.ts")).toMatch(
+      /LOGIN_SESSION_EXPIRED\s*=\s*"\/login\?reason=session_expired"/
+    );
   });
 
   it("redirects wrong-role users via roleToPath(role)", () => {
@@ -275,10 +296,15 @@ describe("cross-cutting role-shell discipline", () => {
     }
   });
 
-  it("every role-shell layout has a session-gated redirect to /login?reason=session_expired", () => {
+  it("every role-shell layout has a session-gated redirect to /login?reason=session_expired — through the tri-state guard, never for an outage", () => {
     for (const rel of layouts) {
       const src = source(rel);
-      expect(src).toMatch(/redirect\(\s*"\/login\?reason=session_expired"\s*\)/);
+      expect(src).toMatch(/decideSessionGuard\(\s*await getServerSessionState\(\)\s*\)/);
+      expect(src).toMatch(/redirect\(\s*guard\.to\s*\)/);
+      expect(src).not.toMatch(/redirect\(\s*"\/login\?reason=session_expired"\s*\)/);
     }
+    expect(source("lib/session-guard.ts")).toMatch(
+      /LOGIN_SESSION_EXPIRED\s*=\s*"\/login\?reason=session_expired"/
+    );
   });
 });

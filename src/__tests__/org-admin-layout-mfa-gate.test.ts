@@ -61,6 +61,14 @@ vi.mock("../lib/role-routing", () => ({
 const mockGetServerSession = vi.fn();
 vi.mock("../lib/server-session", () => ({
   getServerSession: () => mockGetServerSession(),
+  // THE-UNAVAILABLE-IS-NOT-EXPIRED: the layout now reads the tri-state; a
+  // null session from the stub is the UNAUTHENTICATED verdict.
+  getServerSessionState: async () => {
+    const session = await mockGetServerSession();
+    return session
+      ? { kind: "authenticated", session }
+      : { kind: "unauthenticated", status: 401, reason: null };
+  },
 }));
 
 vi.mock("../lib/server-runtime-state", () => ({

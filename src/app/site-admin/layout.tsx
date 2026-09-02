@@ -21,11 +21,13 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AccountMenu } from "@/components/shared/account-menu";
 import { PlatformLicenseWarnings } from "@/components/shared/platform-license-warnings";
+import { ServiceUnavailable } from "@/components/shared/service-unavailable";
 import { SiteAdminNav } from "@/components/site-admin/site-admin-nav";
 import { roleToPath } from "@/lib/role-routing";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
-import { getServerSession } from "@/lib/server-session";
+import { getServerSessionState } from "@/lib/server-session";
+import { decideSessionGuard } from "@/lib/session-guard";
 
 // force-dynamic propagates to every child route within this segment.
 // Session state must never be statically cached.
@@ -46,13 +48,25 @@ export default async function SiteAdminLayout({ children }: { children: React.Re
     );
   }
 
-  // Server-side session validation. getServerSession() is cached per-request,
-  // so the page calling it again does not incur a second IdP network request.
-  const session = await getServerSession();
-
-  if (!session) {
-    redirect("/login?reason=session_expired");
+  // Server-side session validation. getServerSessionState() is cached
+  // per-request, so the page calling getServerSession() again does not incur
+  // a second IdP network request. THE-UNAVAILABLE-IS-NOT-EXPIRED: three
+  // states — a VERDICT redirects to /login; an OUTAGE renders in place with
+  // the correlation id and touches no cookie.
+  const guard = decideSessionGuard(await getServerSessionState());
+  if (guard.action === "render-unavailable") {
+    return (
+      <ServiceUnavailable
+        correlationId={guard.state.correlationId}
+        retryAfterSeconds={guard.state.retryAfterSeconds}
+        status={guard.state.status}
+      />
+    );
   }
+  if (guard.action === "redirect") {
+    redirect(guard.to);
+  }
+  const session = guard.session;
 
   const role = session.user?.role ?? session.role;
 

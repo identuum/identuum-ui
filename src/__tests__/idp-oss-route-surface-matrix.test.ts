@@ -50,6 +50,23 @@ const IDP_ROUTE_SURFACE_MATRIX: SurfaceMatrixRow[] = [
     signals: ["degraded-idp-unavailable", "Setup required", "runtime configuration"],
   },
   {
+    route: "/unavailable outage landing (THE-UNAVAILABLE-IS-NOT-EXPIRED)",
+    classification: "backend-absent tolerant",
+    coveredRoutes: ["/unavailable"],
+    files: [
+      "app/unavailable/page.tsx",
+      "components/shared/service-unavailable.tsx",
+      "lib/server-session.ts",
+      "lib/session-guard.ts",
+    ],
+    signals: [
+      "ServiceUnavailable",
+      "correlationId",
+      "Temporarily unavailable",
+      "render-unavailable",
+    ],
+  },
+  {
     route: "/setup appliance first-run wizard",
     classification: "OSS-supported",
     coveredRoutes: ["/setup"],
@@ -314,6 +331,7 @@ describe("IDP OSS route/surface matrix", () => {
   it("covers the expected high-value IDP-facing surfaces", () => {
     expect(IDP_ROUTE_SURFACE_MATRIX.map((row) => row.route)).toEqual([
       "/ + /setup-required runtime entrypoints",
+      "/unavailable outage landing (THE-UNAVAILABLE-IS-NOT-EXPIRED)",
       "/setup appliance first-run wizard",
       "/account/settings",
       "/login + MFA session handling",
