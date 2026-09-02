@@ -518,7 +518,9 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
 
     const codeVerifier = randomBytes(32).toString("base64url");
     const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
-    const claims = JSON.stringify({ userinfo: { name: { essential: true }, picture: null } });
+    // phone_number is NOT an emittable claim on this OP (the profile family,
+    // email and email_verified are) — the unknown one must never be listed.
+    const claims = JSON.stringify({ userinfo: { name: { essential: true }, phone_number: null } });
     const authQuery =
       `client_id=${encodeURIComponent(clientId)}` +
       `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
@@ -549,7 +551,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     );
     // The hidden field echoes the raw parameter (so approval resumes the
     // request); the LIST never shows an unknown claim.
-    expect(consentHtml, "unknown claims are never listed").not.toContain("<li>picture");
+    expect(consentHtml, "unknown claims are never listed").not.toContain("<li>phone_number");
     const consentCsrf = consentHtml.match(/name="([^"]*csrf[^"]*)"[^>]*value="([^"]+)"/i);
     expect(consentCsrf, "consent form embeds a CSRF token").toBeTruthy();
 
