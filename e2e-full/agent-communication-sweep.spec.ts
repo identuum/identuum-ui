@@ -37,6 +37,88 @@ async function rsaThumbprint(jwk: { e?: string; kty?: string; n?: string }): Pro
   return createHash("sha256").update(canonical).digest("base64url");
 }
 
+// ── AYGHU-3: participant-token issuance helpers (RS256 JWS by hand) ──────────
+type SignerKey = {
+  privateKey: import("node:crypto").KeyObject;
+  jwk: Record<string, unknown>;
+  kid: string;
+};
+
+async function signRS256(
+  key: SignerKey,
+  header: Record<string, unknown>,
+  claims: Record<string, unknown>
+): Promise<string> {
+  const { sign } = await import("node:crypto");
+  const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
+  const signingInput = `${b64({ alg: "RS256", ...header })}.${b64(claims)}`;
+  const sig = sign("sha256", Buffer.from(signingInput), key.privateKey);
+  return `${signingInput}.${sig.toString("base64url")}`;
+}
+
+// private_key_jwt client assertion (RFC 7523): iss = sub = client_id, aud = token endpoint.
+async function clientAssertion(
+  key: SignerKey,
+  clientId: string,
+  tokenEndpoint: string
+): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  return signRS256(
+    key,
+    { typ: "JWT", kid: key.kid },
+    {
+      iss: clientId,
+      sub: clientId,
+      aud: tokenEndpoint,
+      jti: `${Date.now()}-${Math.random()}`,
+      iat: now,
+      exp: now + 120,
+    }
+  );
+}
+
+// DPoP proof (RFC 9449 §4) for the token endpoint: typ dpop+jwt, public jwk header, htm/htu/iat/jti.
+async function dpopProof(
+  key: SignerKey,
+  tokenEndpoint: string,
+  jti = `${Date.now()}-${Math.random()}`
+): Promise<string> {
+  const { kid: _kid, ...publicJwk } = { ...key.jwk, kid: key.kid };
+  return signRS256(
+    key,
+    { typ: "dpop+jwt", jwk: publicJwk },
+    { htm: "POST", htu: tokenEndpoint, iat: Math.floor(Date.now() / 1000), jti }
+  );
+}
+
+// Form-encoded POST (the token endpoint speaks application/x-www-form-urlencoded, not JSON).
+async function postForm(
+  url: string,
+  params: Record<string, string>,
+  headers: Record<string, string> = {}
+): Promise<{ status: number; json: Record<string, unknown> }> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", ...headers },
+    body: new URLSearchParams(params).toString(),
+  });
+  const text = await res.text();
+  let json: Record<string, unknown> = {};
+  try {
+    json = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    json = { raw: text };
+  }
+  return { status: res.status, json };
+}
+
+function decodeJwtPayload(token: string): Record<string, unknown> {
+  return JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()) as Record<
+    string,
+    unknown
+  >;
+}
+
 test.describe.configure({ mode: "serial" });
 
 test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cross-tenant 404)", () => {
@@ -50,7 +132,10 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
   const B = { id: "", bearer: "" };
   let userA = { bearer: "" };
   let runId = "";
-  type Agent = { saId: string; clientId: string; thumbprint: string };
+  // One RSA key per agent: it is BOTH the client's registered private_key_jwt
+  // key and the participant's enrolled DPoP proof key (thumbprint).
+  type Agent = { saId: string; clientId: string; thumbprint: string; key: SignerKey };
+  let tokenEndpoint = "";
   const agentsA: Agent[] = [];
   const agentsB: Agent[] = [];
   let authA = "";
@@ -101,7 +186,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     expect(sa.status, `create service account ${name} → 201`).toBe(201);
     const saId = sa.json.id as string;
     const { generateKeyPairSync } = await import("node:crypto");
-    const { publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
     const jwk = publicKey.export({ format: "jwk" }) as { e?: string; kty?: string; n?: string };
     const cl = await api(
       IDP_BASE,
@@ -122,7 +207,39 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     expect(cl.status, `create private_key_jwt client for ${name} → 201`).toBe(201);
     const clientId = (cl.json.client as { client_id?: string })?.client_id ?? "";
     expect(clientId.length, "client_id present").toBeGreaterThan(0);
-    return { saId, clientId, thumbprint: await rsaThumbprint(jwk) };
+    return {
+      saId,
+      clientId,
+      thumbprint: await rsaThumbprint(jwk),
+      key: { privateKey, jwk: jwk as Record<string, unknown>, kid: `${name}-k1` },
+    };
+  };
+
+  // Participant-token request for one agent: private_key_jwt assertion + DPoP proof.
+  const tokenRequest = async (
+    agent: Agent,
+    authId: string,
+    aci: string,
+    opts: { audience?: string; proof?: string | null; details?: string; proofKey?: SignerKey } = {}
+  ) => {
+    const proof =
+      opts.proof === null
+        ? undefined
+        : (opts.proof ?? (await dpopProof(opts.proofKey ?? agent.key, tokenEndpoint)));
+    return postForm(
+      tokenEndpoint,
+      {
+        grant_type: "client_credentials",
+        client_id: agent.clientId,
+        client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+        client_assertion: await clientAssertion(agent.key, agent.clientId, tokenEndpoint),
+        audience: opts.audience ?? `https://relay.${runId}.test/session`,
+        authorization_details:
+          opts.details ??
+          JSON.stringify([{ type: "agent_communication", authorization_id: authId, aci }]),
+      },
+      proof ? { DPoP: proof } : {}
+    );
   };
 
   const createBody = (agents: Agent[], overrides: Record<string, unknown> = {}) => ({
@@ -155,6 +272,13 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     expect(adminPassword.length, "harness must export the bootstrap password").toBeGreaterThan(0);
     site = await siteAdminSession(IDP_BASE, SITE_ADMIN_EMAIL, adminPassword);
     runId = `ayghu-${Date.now().toString(36)}`;
+    const disco = (await (
+      await fetch(`${IDP_BASE}/.well-known/openid-configuration`)
+    ).json()) as Record<string, unknown>;
+    tokenEndpoint = disco.token_endpoint as string;
+    expect(tokenEndpoint, "discovery advertises the token endpoint").toContain(
+      "/api/v1/oauth/token"
+    );
     const a = await mkOrg("a");
     A.id = a.id;
     A.bearer = a.bearer;
@@ -320,6 +444,93 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     expect(malformed.status).toBe(400);
   });
 
+  test("TOKEN: participant grant → 200 token_type DPoP, cnf.jkt = enrolled thumbprint, no refresh_token, ≤ 5 min", async () => {
+    const authz = await api(IDP_BASE, "GET", `${BASE}/${authA}`, undefined, A.bearer);
+    expect(authz.status).toBe(200);
+    const parts = authz.json.participants as Array<Record<string, unknown>>;
+    const initiator = parts.find((p) => p.role === "initiator") as Record<string, unknown>;
+    const responder = parts.find((p) => p.role === "responder") as Record<string, unknown>;
+
+    const r = await tokenRequest(agentsA[0], authA, initiator.aci as string);
+    expect(r.status, `participant grant → 200 (${JSON.stringify(r.json)})`).toBe(200);
+    expect(r.json.token_type, "sender-constrained, never Bearer").toBe("DPoP");
+    expect(r.json).not.toHaveProperty("refresh_token");
+    expect(r.json.scope).toBe("agent_communication");
+    expect(Number(r.json.expires_in)).toBeLessThanOrEqual(300);
+    const claims = decodeJwtPayload(r.json.access_token as string);
+    expect((claims.cnf as Record<string, unknown>).jkt, "cnf.jkt is the enrolled thumbprint").toBe(
+      agentsA[0].thumbprint
+    );
+    expect(claims.aud).toBe(`https://relay.${runId}.test/session`);
+    expect(claims.sub).toBe(agentsA[0].saId);
+    expect(claims.client_id).toBe(agentsA[0].clientId);
+    const ac = claims.agent_communication as Record<string, unknown>;
+    expect(ac.authorization_id).toBe(authA);
+    expect(ac.aci).toBe(initiator.aci);
+    expect(ac.role).toBe("initiator");
+    expect(ac.policy_digest).toBe(authz.json.policy_digest);
+    expect(Number(claims.exp) - Number(claims.iat)).toBeLessThanOrEqual(300);
+    expect(claims).not.toHaveProperty("email");
+
+    // The responder, with its own key and ACI.
+    const r2 = await tokenRequest(agentsA[1], authA, responder.aci as string);
+    expect(r2.status, "responder grant → 200").toBe(200);
+    expect(r2.json.token_type).toBe("DPoP");
+  });
+
+  test("TOKEN refusals: no proof / foreign key / replay → invalid_dpop_proof; other ACI → invalid_grant; audience → invalid_target; unknown type → invalid_authorization_details", async () => {
+    const authz = await api(IDP_BASE, "GET", `${BASE}/${authA}`, undefined, A.bearer);
+    const parts = authz.json.participants as Array<Record<string, unknown>>;
+    const initiatorAci = (parts.find((p) => p.role === "initiator") as Record<string, unknown>)
+      .aci as string;
+    const responderAci = (parts.find((p) => p.role === "responder") as Record<string, unknown>)
+      .aci as string;
+
+    const noProof = await tokenRequest(agentsA[0], authA, initiatorAci, { proof: null });
+    expect(noProof.status, "no DPoP proof → 400").toBe(400);
+    expect(noProof.json.error, "never a Bearer downgrade").toBe("invalid_dpop_proof");
+    expect(noProof.json).not.toHaveProperty("access_token");
+
+    const foreign = await tokenRequest(agentsA[0], authA, initiatorAci, {
+      proofKey: agentsB[0].key,
+    });
+    expect(foreign.status).toBe(400);
+    expect(foreign.json.error, "a proof key that is not the enrolled one").toBe(
+      "invalid_dpop_proof"
+    );
+
+    const proof = await dpopProof(agentsA[0].key, tokenEndpoint);
+    const first = await tokenRequest(agentsA[0], authA, initiatorAci, { proof });
+    expect(first.status, "first use of a proof → 200").toBe(200);
+    const replay = await tokenRequest(agentsA[0], authA, initiatorAci, { proof });
+    expect(replay.status, "the same proof again → 400").toBe(400);
+    expect(replay.json.error).toBe("invalid_dpop_proof");
+
+    const otherAci = await tokenRequest(agentsA[0], authA, responderAci);
+    expect(otherAci.status).toBe(400);
+    expect(otherAci.json.error, "the caller cannot request the other participant's token").toBe(
+      "invalid_grant"
+    );
+
+    const audience = await tokenRequest(agentsA[0], authA, initiatorAci, {
+      audience: "https://other-relay.test/x",
+    });
+    expect(audience.status).toBe(400);
+    expect(audience.json.error).toBe("invalid_target");
+
+    const unknownType = await tokenRequest(agentsA[0], authA, initiatorAci, {
+      details: JSON.stringify([
+        { type: "openid_credential", authorization_id: authA, aci: initiatorAci },
+      ]),
+    });
+    expect(unknownType.status).toBe(400);
+    expect(unknownType.json.error).toBe("invalid_authorization_details");
+
+    const absent = await tokenRequest(agentsA[0], GHOST.replace(/^0{8}/, "01900000"), initiatorAci);
+    expect(absent.status).toBe(400);
+    expect(["invalid_grant", "invalid_authorization_details"]).toContain(absent.json.error);
+  });
+
   test("ROW revoke: cross-tenant → 404 identical to absent; own → 200 terminal + idempotent; oversized reason 400", async () => {
     const foreign = await api(
       IDP_BASE,
@@ -381,6 +592,16 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     expect(noBody.status, "revoke without a body → 200").toBe(200);
     expect(noBody.json.status).toBe("revoked");
     expect(noBody.json).not.toHaveProperty("revocation_reason");
+
+    // Revocation stops issuance for BOTH participants, immediately.
+    const parts = rev.json.participants as Array<Record<string, unknown>>;
+    for (const agent of agentsA) {
+      const p = parts.find((x) => x.service_account_id === agent.saId) as Record<string, unknown>;
+      const denied = await tokenRequest(agent, authA, p.aci as string);
+      expect(denied.status, "token after revocation → 400").toBe(400);
+      expect(denied.json.error).toBe("invalid_grant");
+      expect(denied.json).not.toHaveProperty("access_token");
+    }
   });
 
   test("ROLES: site_admin and org_user are refused 403 on all four routes — uniformly, whatever the target", async () => {
