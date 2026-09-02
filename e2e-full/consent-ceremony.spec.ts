@@ -1942,8 +1942,9 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       site.bearer
     );
     expect(events.status).toBe(200);
-    const actions = ((events.json as { events?: Array<{ action?: string }> }).events ?? []).map(
-      (e) => e.action ?? ""
+    // The audit wire shape names the action `event_type` (auditEventView).
+    const actions = ((events.json as { events?: Array<{ event_type?: string }> }).events ?? []).map(
+      (e) => e.event_type ?? ""
     );
     expect(actions, "the successful revocation is audited").toContain(
       "user_session.logout.cookie_revoked"
