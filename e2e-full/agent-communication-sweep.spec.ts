@@ -531,6 +531,75 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     expect(["invalid_grant", "invalid_authorization_details"]).toContain(absent.json.error);
   });
 
+  // Introspection by the participant's own client (private_key_jwt assertion).
+  const introspect = async (agent: Agent, token: string) =>
+    postForm(`${IDP_BASE}/api/v1/oauth/introspection`, {
+      token,
+      client_id: agent.clientId,
+      client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+      client_assertion: await clientAssertion(agent.key, agent.clientId, tokenEndpoint),
+    });
+
+  let liveTokenA = "";
+  // A short-lived authorization whose token expires within the sweep, for
+  // the after-expiry introspection case.
+  let shortToken = "";
+  let shortExp = 0;
+
+  test("INTROSPECT: a live participant token → active, token_type DPoP, cnf.jkt only, agent_communication fields; malformed → inactive", async () => {
+    const authz = await api(IDP_BASE, "GET", `${BASE}/${authA}`, undefined, A.bearer);
+    const parts = authz.json.participants as Array<Record<string, unknown>>;
+    const initiatorAci = (parts.find((p) => p.role === "initiator") as Record<string, unknown>)
+      .aci as string;
+    const grant = await tokenRequest(agentsA[0], authA, initiatorAci);
+    expect(grant.status).toBe(200);
+    liveTokenA = grant.json.access_token as string;
+
+    const r = await introspect(agentsA[0], liveTokenA);
+    expect(r.status, `introspect → 200 (${JSON.stringify(r.json)})`).toBe(200);
+    expect(r.json.active).toBe(true);
+    expect(r.json.token_type).toBe("DPoP");
+    expect(r.json.cnf, "cnf carries the thumbprint only").toEqual({ jkt: agentsA[0].thumbprint });
+    expect(r.json.sub).toBe(agentsA[0].saId);
+    const ac = r.json.agent_communication as Record<string, unknown>;
+    expect(ac.authorization_id).toBe(authA);
+    expect(ac.aci).toBe(initiatorAci);
+    expect(ac.role).toBe("initiator");
+    expect(ac.policy_digest).toBe(authz.json.policy_digest);
+    const raw = JSON.stringify(r.json);
+    for (const forbidden of ['"jwk"', '"n":', '"d":', "proof_key_thumbprint"]) {
+      expect(raw, `no key material (${forbidden})`).not.toContain(forbidden);
+    }
+
+    const malformed = await introspect(agentsA[0], "not.a.token");
+    expect(malformed.status).toBe(200);
+    expect(malformed.json).toEqual({ active: false });
+
+    // A second authorization that expires in ~75 s: its token's exp is capped
+    // at the authorization's expiry, so the after-expiry case can be measured
+    // inside this run (see the last test).
+    const short = await api(
+      IDP_BASE,
+      "POST",
+      BASE,
+      createBody(agentsA, { expires_at: new Date(Date.now() + 75_000).toISOString() }),
+      A.bearer
+    );
+    expect(short.status, "short-lived authorization → 201").toBe(201);
+    const shortParts = short.json.participants as Array<Record<string, unknown>>;
+    const shortAci = (shortParts.find((p) => p.role === "initiator") as Record<string, unknown>)
+      .aci as string;
+    const shortGrant = await tokenRequest(agentsA[0], short.json.id as string, shortAci);
+    expect(shortGrant.status, "token on the short-lived authorization → 200").toBe(200);
+    shortToken = shortGrant.json.access_token as string;
+    shortExp = Number(decodeJwtPayload(shortToken).exp);
+    expect(shortExp * 1000, "exp capped at the authorization's expiry").toBeLessThanOrEqual(
+      Date.now() + 76_000
+    );
+    const live = await introspect(agentsA[0], shortToken);
+    expect(live.json.active, "active before expiry").toBe(true);
+  });
+
   test("ROW revoke: cross-tenant → 404 identical to absent; own → 200 terminal + idempotent; oversized reason 400", async () => {
     const foreign = await api(
       IDP_BASE,
@@ -593,6 +662,16 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     expect(noBody.json.status).toBe("revoked");
     expect(noBody.json).not.toHaveProperty("revocation_reason");
 
+    // Revocation makes the already-issued token inactive IMMEDIATELY (AYGHU-4).
+    const afterRevoke = await introspect(agentsA[0], liveTokenA);
+    expect(afterRevoke.status).toBe(200);
+    expect(
+      afterRevoke.json,
+      "introspection after revocation → inactive, long before expiry"
+    ).toEqual({
+      active: false,
+    });
+
     // Revocation stops issuance for BOTH participants, immediately.
     const parts = rev.json.participants as Array<Record<string, unknown>>;
     for (const agent of agentsA) {
@@ -625,5 +704,18 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     }
     const anon = await api(IDP_BASE, "GET", BASE);
     expect(anon.status, "no bearer → 401").toBe(401);
+  });
+
+  test("INTROSPECT after expiry: the short-lived token reads inactive once its exp has passed", async () => {
+    test.setTimeout(150_000);
+    expect(
+      shortToken.length,
+      "the short-lived token was issued earlier in this run"
+    ).toBeGreaterThan(0);
+    const waitMs = shortExp * 1000 + 2_000 - Date.now();
+    if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
+    const r = await introspect(agentsA[0], shortToken);
+    expect(r.status).toBe(200);
+    expect(r.json, "expired participant token → inactive").toEqual({ active: false });
   });
 });
