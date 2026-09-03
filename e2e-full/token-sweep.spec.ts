@@ -462,6 +462,83 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
       "cross-tenant SA update → 404"
     ).toBe(404);
 
+    // THE-SILENT-EXPIRY: an expiry-only update is STORED. Before this row the
+    // repository statement covered {name, description, role} only, so the PUT
+    // answered 200 and the account went on minting tokens past the expiry its
+    // operator had just set.
+    const wantExpiry = new Date(Date.now() + 72 * 3600 * 1000).toISOString();
+    const setExpiry = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/service-accounts/${saId}`,
+      { expires_at: wantExpiry },
+      orgBearer
+    );
+    expect(setExpiry.status, "expiry-only SA update → 200").toBe(200);
+    const readBack = await api(
+      IDP_BASE,
+      "GET",
+      `/api/v1/service-accounts/${saId}`,
+      undefined,
+      orgBearer
+    );
+    expect(readBack.status, "read back → 200").toBe(200);
+    const storedExpiry = (readBack.json as { expires_at?: string }).expires_at ?? "";
+    expect(storedExpiry.length, "the expiry is PERSISTED, not silently dropped").toBeGreaterThan(0);
+    expect(
+      Math.abs(new Date(storedExpiry).getTime() - new Date(wantExpiry).getTime()),
+      "the stored expiry is the one that was sent"
+    ).toBeLessThan(2000);
+    // An unrelated update leaves it standing.
+    expect(
+      (
+        await api(
+          IDP_BASE,
+          "PUT",
+          `/api/v1/service-accounts/${saId}`,
+          { description: "expiry survives an unrelated edit" },
+          orgBearer
+        )
+      ).status,
+      "rename after setting an expiry → 200"
+    ).toBe(200);
+    const afterRename = await api(
+      IDP_BASE,
+      "GET",
+      `/api/v1/service-accounts/${saId}`,
+      undefined,
+      orgBearer
+    );
+    expect(
+      (afterRename.json as { expires_at?: string }).expires_at ?? "",
+      "the expiry survives an update that does not mention it"
+    ).toBe(storedExpiry);
+    // A PAST expiry is refused, and the stored one is untouched.
+    const past = new Date(Date.now() - 3600 * 1000).toISOString();
+    expect(
+      (
+        await api(
+          IDP_BASE,
+          "PUT",
+          `/api/v1/service-accounts/${saId}`,
+          { expires_at: past },
+          orgBearer
+        )
+      ).status,
+      "a past expiry → 400"
+    ).toBe(400);
+    const afterRefusal = await api(
+      IDP_BASE,
+      "GET",
+      `/api/v1/service-accounts/${saId}`,
+      undefined,
+      orgBearer
+    );
+    expect(
+      (afterRefusal.json as { expires_at?: string }).expires_at ?? "",
+      "a refused update writes nothing"
+    ).toBe(storedExpiry);
+
     // ROW POST /service-accounts/:id/disable (D) + /enable (SM)
     expect(
       (await api(IDP_BASE, "POST", `/api/v1/service-accounts/${saId}/disable`, {}, orgBearer))
