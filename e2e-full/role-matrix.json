@@ -1,7 +1,7 @@
 {
-  "_comment": "THE-ROLE-CENSUS committed coverage matrix, v2 (THE SMARTER COUNTER — owner ruling 2026-08-31): role cells only where the auth class makes user type matter; public/M2M endpoints carry one '@ any' class cell (exercised by anyone, anon included); browser-cookie 'session' endpoints are EXCLUDED by name (unreachable by the bearer-based observer BY CONSTRUCTION — covered by the dev-loop suite and the UI coverage floor). A listed cell was EXERCISED inside a passing witnessed run; role-matrix-from-run.mjs FAILS the phase on any committed cell not observed, on a floor drop, and on denominator drift. Growth is a deliberate commit.",
-  "endpoints": 143,
-  "role_endpoints": 93,
+  "_comment": "THE-ROLE-CENSUS committed coverage matrix, v2 (THE SMARTER COUNTER \u2014 owner ruling 2026-08-31): role cells only where the auth class makes user type matter; public/M2M endpoints carry one '@ any' class cell (exercised by anyone, anon included); browser-cookie 'session' endpoints are EXCLUDED by name (unreachable by the bearer-based observer BY CONSTRUCTION \u2014 covered by the dev-loop suite and the UI coverage floor). A listed cell was EXERCISED inside a passing witnessed run; role-matrix-from-run.mjs FAILS the phase on any committed cell not observed, on a floor drop, and on denominator drift. Growth is a deliberate commit.",
+  "endpoints": 144,
+  "role_endpoints": 94,
   "class_endpoints": 30,
   "excluded_session_endpoints": [
     "DELETE /api/v1/webauthn/credentials/:id",
@@ -27,14 +27,6 @@
   ],
   "roles": ["site_admin", "org_admin", "org_user"],
   "cells": {
-    "GET /api/v1/agent-communication-authorizations": ["site_admin", "org_admin", "org_user"],
-    "GET /api/v1/agent-communication-authorizations/:id": ["site_admin", "org_admin", "org_user"],
-    "POST /api/v1/agent-communication-authorizations": ["site_admin", "org_admin", "org_user"],
-    "POST /api/v1/agent-communication-authorizations/:id/revoke": [
-      "site_admin",
-      "org_admin",
-      "org_user"
-    ],
     "DELETE /api/v1/api-resources/:id": ["site_admin", "org_admin", "org_user"],
     "DELETE /api/v1/clients/:id": ["site_admin", "org_admin", "org_user"],
     "DELETE /api/v1/keys/expired": ["site_admin", "org_admin", "org_user"],
@@ -53,6 +45,8 @@
     "DELETE /api/v1/users/:id/roles/:role_id": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/admin/backchannel-logout-deliveries": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/admin/backchannel-logout-deliveries/:id": ["site_admin", "org_admin", "org_user"],
+    "GET /api/v1/agent-communication-authorizations": ["site_admin", "org_admin", "org_user"],
+    "GET /api/v1/agent-communication-authorizations/:id": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/api-resources": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/api-resources/:id": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/audit/events": ["site_admin", "org_admin", "org_user"],
@@ -79,7 +73,6 @@
     "GET /api/v1/organizations/current": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/organizations/export-candidates": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/profile": ["site_admin", "org_admin", "org_user"],
-    "PUT /api/v1/profile": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/scope-templates": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/scope-templates/:id": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/service-accounts/:id": ["site_admin", "org_admin", "org_user"],
@@ -88,6 +81,12 @@
     "GET /api/v1/users/:id/roles": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/validate": ["site_admin", "org_admin", "org_user"],
     "POST /api/v1/admin/backchannel-logout-deliveries/:id/replay": [
+      "site_admin",
+      "org_admin",
+      "org_user"
+    ],
+    "POST /api/v1/agent-communication-authorizations": ["site_admin", "org_admin", "org_user"],
+    "POST /api/v1/agent-communication-authorizations/:id/revoke": [
       "site_admin",
       "org_admin",
       "org_user"
@@ -133,6 +132,7 @@
     "POST /api/v1/scope-templates": ["site_admin", "org_admin", "org_user"],
     "POST /api/v1/service-accounts/:id/disable": ["site_admin", "org_admin", "org_user"],
     "POST /api/v1/service-accounts/:id/enable": ["site_admin", "org_admin", "org_user"],
+    "POST /api/v1/service-accounts/:id/owner": ["site_admin", "org_admin", "org_user"],
     "POST /api/v1/users": ["site_admin", "org_admin", "org_user"],
     "POST /api/v1/users/:id/approve": ["site_admin", "org_admin", "org_user"],
     "POST /api/v1/users/:id/recovery/reset-mfa": ["site_admin", "org_admin", "org_user"],
@@ -145,6 +145,7 @@
     "PUT /api/v1/organizations/:id/identity-provider": ["site_admin", "org_admin", "org_user"],
     "PUT /api/v1/organizations/:id/protocol-settings": ["site_admin", "org_admin", "org_user"],
     "PUT /api/v1/organizations/:id/roles/:role_id": ["site_admin", "org_admin", "org_user"],
+    "PUT /api/v1/profile": ["site_admin", "org_admin", "org_user"],
     "PUT /api/v1/scope-templates/:id": ["site_admin", "org_admin", "org_user"],
     "PUT /api/v1/service-accounts/:id": ["site_admin", "org_admin", "org_user"],
     "PUT /api/v1/users/:id": ["site_admin", "org_admin", "org_user"]

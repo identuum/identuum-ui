@@ -792,6 +792,127 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     ).toBe(refusedBefore + 2);
   });
 
+  test("OWNER: own-org transfer, refused while a live authorization names the account, cross-tenant 404, org_user and site_admin refused", async () => {
+    test.setTimeout(120_000);
+    // A fresh pair of agent identities in org A, so this row does not depend
+    // on the state any other row leaves behind. Both are owned by the org_admin
+    // that created them (AYGHU-2), so the wire exercises TRANSFER; the
+    // assign-where-there-is-none path belongs to accounts created before that
+    // and is pinned by the handler tests.
+    const pair = [
+      await mkAgent("agent-a-own1", A.id, A.bearer),
+      await mkAgent("agent-a-own2", A.id, A.bearer),
+    ];
+    const ownerRoute = (saId: string) => `/api/v1/service-accounts/${saId}/owner`;
+
+    // A second org_admin in A to hand the identity to.
+    const successorEmail = `succ@${runId}-a.test`;
+    const succ = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/users",
+      {
+        email: successorEmail,
+        password: `Adm!${runId}succ7Qx`,
+        role: "org_admin",
+        organization_id: A.id,
+      },
+      A.bearer
+    );
+    expect(succ.status, "create a second org_admin in A → 201").toBe(201);
+    const successorId = succ.json.id as string;
+
+    // A live authorization naming both accounts.
+    const created = await api(
+      IDP_BASE,
+      "POST",
+      BASE,
+      createBody(pair, { relay_audience: `https://relay.${runId}.test/owner-row` }),
+      A.bearer
+    );
+    expect(created.status, "create authorization for the owner row → 201").toBe(201);
+    const liveAuth = created.json.id as string;
+
+    // Transfer is refused while it stands — for BOTH participants.
+    for (const agent of pair) {
+      const blocked = await api(
+        IDP_BASE,
+        "POST",
+        ownerRoute(agent.saId),
+        { owner_user_id: successorId },
+        A.bearer
+      );
+      expect(blocked.status, "transfer while a live authorization names it → 409").toBe(409);
+      expect(blocked.json.reason).toBe("agent_communication_authorization_active");
+    }
+
+    // org_user and site_admin are refused; a foreign org_admin and an absent
+    // id answer identically (no cross-tenant existence oracle).
+    const byUser = await api(
+      IDP_BASE,
+      "POST",
+      ownerRoute(pair[0].saId),
+      { owner_user_id: successorId },
+      userA.bearer
+    );
+    expect(byUser.status, "org_user → 403").toBe(403);
+    const bySite = await api(
+      IDP_BASE,
+      "POST",
+      ownerRoute(pair[0].saId),
+      { owner_user_id: successorId },
+      site.bearer
+    );
+    expect(bySite.status, "site_admin → 403 (tenant-owned resource)").toBe(403);
+    const foreign = await api(IDP_BASE, "POST", ownerRoute(pair[0].saId), {}, B.bearer);
+    const absent = await api(IDP_BASE, "POST", ownerRoute(GHOST), {}, B.bearer);
+    expect(foreign.status, "another tenant's account → 404").toBe(404);
+    expect(absent.status, "an absent account → 404").toBe(404);
+    expect(JSON.stringify(foreign.json), "identical bodies — no existence oracle").toBe(
+      JSON.stringify(absent.json)
+    );
+
+    // An ineligible candidate is refused with the stable reason.
+    const ineligible = await api(
+      IDP_BASE,
+      "POST",
+      ownerRoute(pair[0].saId),
+      { owner_user_id: GHOST },
+      A.bearer
+    );
+    expect(ineligible.status, "unknown candidate → 400").toBe(400);
+    expect(ineligible.json.reason).toBe("owner_not_eligible");
+
+    // Revoke the authorization — the owner's own remedy — and the same
+    // transfer now lands, with the before and after owner ids on the wire.
+    const revoked = await api(IDP_BASE, "POST", `${BASE}/${liveAuth}/revoke`, {}, A.bearer);
+    expect(revoked.status, "revoke → 200").toBe(200);
+    const moved = await api(
+      IDP_BASE,
+      "POST",
+      ownerRoute(pair[0].saId),
+      { owner_user_id: successorId },
+      A.bearer
+    );
+    expect(moved.status, "transfer after revocation → 200").toBe(200);
+    expect(moved.json.result).toBe("transferred");
+    expect(moved.json.owner_user_id).toBe(successorId);
+    expect(typeof moved.json.previous_owner_user_id, "the previous owner is on the wire").toBe(
+      "string"
+    );
+
+    // Idempotent: the same target again writes nothing.
+    const again = await api(
+      IDP_BASE,
+      "POST",
+      ownerRoute(pair[0].saId),
+      { owner_user_id: successorId },
+      A.bearer
+    );
+    expect(again.status).toBe(200);
+    expect(again.json.result).toBe("unchanged");
+  });
+
   test("INTROSPECT after expiry: the short-lived token reads inactive once its exp has passed", async () => {
     test.setTimeout(150_000);
     expect(
