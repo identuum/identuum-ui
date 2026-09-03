@@ -706,6 +706,92 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     expect(anon.status, "no bearer → 401").toBe(401);
   });
 
+  test("LIFECYCLE: create → tokens for BOTH participants → both introspect active → revoke → issuance refused AND introspection inactive for both → audit trail", async () => {
+    test.setTimeout(120_000);
+    const auditCount = async (eventType: string, subjectId?: string) => {
+      const q = new URLSearchParams({ event_type: eventType, limit: "100" });
+      if (subjectId) q.set("subject_id", subjectId);
+      const r = await api(
+        IDP_BASE,
+        "GET",
+        `/api/v1/audit/events?${q.toString()}`,
+        undefined,
+        site.bearer
+      );
+      expect(r.status, `audit read ${eventType} → 200`).toBe(200);
+      return (r.json.events as Array<Record<string, unknown>>).length;
+    };
+    const refusedBefore = await auditCount("agent_communication.token.refused");
+
+    // 1. create
+    const created = await api(IDP_BASE, "POST", BASE, createBody(agentsA), A.bearer);
+    expect(created.status, `lifecycle create → 201 (${JSON.stringify(created.json)})`).toBe(201);
+    const authL = created.json.id as string;
+    const partsL = created.json.participants as Array<Record<string, unknown>>;
+    const byRole = (role: string) => partsL.find((p) => p.role === role) as Record<string, unknown>;
+    expect(await auditCount("agent_communication_authorization.created", authL)).toBe(1);
+
+    // 2. tokens for BOTH participants (DPoP)
+    const tokenOf: Record<string, string> = {};
+    for (const [agent, role] of [
+      [agentsA[0], "initiator"],
+      [agentsA[1], "responder"],
+    ] as const) {
+      const grant = await tokenRequest(agent, authL, byRole(role).aci as string);
+      expect(grant.status, `${role} grant → 200 (${JSON.stringify(grant.json)})`).toBe(200);
+      expect(grant.json.token_type).toBe("DPoP");
+      expect(grant.json).not.toHaveProperty("refresh_token");
+      tokenOf[role] = grant.json.access_token as string;
+      const claims = decodeJwtPayload(tokenOf[role]);
+      expect((claims.cnf as Record<string, unknown>).jkt).toBe(agent.thumbprint);
+      expect((claims.agent_communication as Record<string, unknown>).session_id).toBe(
+        created.json.session_id
+      );
+    }
+    expect(await auditCount("agent_communication.token.issued", authL)).toBe(2);
+
+    // 3. both introspect active, same session
+    for (const [agent, role] of [
+      [agentsA[0], "initiator"],
+      [agentsA[1], "responder"],
+    ] as const) {
+      const r = await introspect(agent, tokenOf[role]);
+      expect(r.json.active, `${role} active before revocation`).toBe(true);
+      expect((r.json.agent_communication as Record<string, unknown>).session_id).toBe(
+        created.json.session_id
+      );
+      expect((r.json.agent_communication as Record<string, unknown>).role).toBe(role);
+    }
+
+    // 4. revoke
+    const rev = await api(
+      IDP_BASE,
+      "POST",
+      `${BASE}/${authL}/revoke`,
+      { reason: "lifecycle" },
+      A.bearer
+    );
+    expect(rev.status, "revoke → 200").toBe(200);
+    expect(rev.json.status).toBe("revoked");
+    expect(await auditCount("agent_communication_authorization.revoked", authL)).toBe(1);
+
+    // 5. issuance refused AND introspection inactive — for BOTH
+    for (const [agent, role] of [
+      [agentsA[0], "initiator"],
+      [agentsA[1], "responder"],
+    ] as const) {
+      const denied = await tokenRequest(agent, authL, byRole(role).aci as string);
+      expect(denied.status, `${role} issuance after revocation → 400`).toBe(400);
+      expect(denied.json.error).toBe("invalid_grant");
+      const r = await introspect(agent, tokenOf[role]);
+      expect(r.json, `${role} token inactive after revocation`).toEqual({ active: false });
+    }
+    expect(
+      await auditCount("agent_communication.token.refused"),
+      "two refusals audited (one per participant)"
+    ).toBe(refusedBefore + 2);
+  });
+
   test("INTROSPECT after expiry: the short-lived token reads inactive once its exp has passed", async () => {
     test.setTimeout(150_000);
     expect(
