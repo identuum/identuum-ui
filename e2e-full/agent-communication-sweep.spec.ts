@@ -575,14 +575,26 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     expect(malformed.status).toBe(200);
     expect(malformed.json).toEqual({ active: false });
 
-    // A second authorization that expires in ~75 s: its token's exp is capped
+    // A second authorization that expires in ~20 s: its token's exp is capped
     // at the authorization's expiry, so the after-expiry case can be measured
     // inside this run (see the last test).
+    //
+    // THE-THIRTY-SECOND-WAIT (2026-09-04): this was 75 s, and the last test
+    // then slept ~76 s for it — the single slowest thing in the api-suite.
+    // The TTL is THIS TEST'S OWN PARAMETER, not a server minimum, so the wait
+    // is shortened by shortening the life of the token, never by asserting
+    // less: the expiry is still real, the token is still observed ACTIVE
+    // before it and INACTIVE after it, and the cap assertion below is
+    // TIGHTENED to match (21 s, not 76 s), so it constrains the server more
+    // than it did. Twenty seconds is far longer than the sub-second gap to
+    // the `active before expiry` probe on the next line, and by the time the
+    // last test runs — many tests later — the expiry has long passed, so the
+    // sleep there is now zero.
     const short = await api(
       IDP_BASE,
       "POST",
       BASE,
-      createBody(agentsA, { expires_at: new Date(Date.now() + 75_000).toISOString() }),
+      createBody(agentsA, { expires_at: new Date(Date.now() + 20_000).toISOString() }),
       A.bearer
     );
     expect(short.status, "short-lived authorization → 201").toBe(201);
@@ -594,7 +606,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     shortToken = shortGrant.json.access_token as string;
     shortExp = Number(decodeJwtPayload(shortToken).exp);
     expect(shortExp * 1000, "exp capped at the authorization's expiry").toBeLessThanOrEqual(
-      Date.now() + 76_000
+      Date.now() + 21_000
     );
     const live = await introspect(agentsA[0], shortToken);
     expect(live.json.active, "active before expiry").toBe(true);

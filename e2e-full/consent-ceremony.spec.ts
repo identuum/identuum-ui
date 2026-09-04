@@ -1185,6 +1185,24 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     request,
   }) => {
     test.setTimeout(240_000);
+    // THE-THIRTY-SECOND-WAIT (2026-09-04): this test used to sleep to the next
+    // 30-second TOTP window before every TOTP use after the first, on the
+    // stated premise that "TOTP replay protection refuses a code used twice".
+    // MEASURED against the server, and that premise is not true of either
+    // path a login takes:
+    //   /api/v1/auth/login        → LocalLoginService.Login → MFAVerifierService.Verify
+    //   /api/v1/auth/login/mfa    → HandleMFAVerifyLogin → MFAEnrollmentService.VerifyAndConsume
+    //                               → verifyTOTPCodeAgainstSecret
+    // BOTH end in a pure RFC 6238 window match (totp.Match) with NO once-only
+    // bookkeeping: no consumed-step column on the user, no TOTP replay store
+    // (the replay services that exist are for client assertions and DPoP
+    // proofs). The only single-use element is the PENDING ROW, and every
+    // login mints a fresh one. So a code may legitimately serve two logins,
+    // and the sleep was buying nothing.
+    //
+    // Nothing about MFA, replay protection or any assertion changed here —
+    // only the sleeping. If a TOTP replay store is ever added, these waits
+    // come back WITH it, in the same commit.
     const PR = "urn:identuum:loa:phishing-resistant";
     const MFA = "urn:identuum:loa:mfa";
     const PASSWORD = "urn:identuum:loa:password";
@@ -1194,8 +1212,6 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     );
     // TOTP replay protection refuses a code used twice: wait for a fresh
     // 30-second window before every TOTP use after the first.
-    const nextTotpWindow = () =>
-      new Promise((r) => setTimeout(r, 30_000 - (Date.now() % 30_000) + 750));
     // The describe's client redirects to an unroutable test host, and a browser
     // navigation follows the OP's 302 there WITHOUT consulting page.route
     // (Chromium follows redirects of an intercepted request internally —
@@ -1301,7 +1317,6 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
 
     // ── (3) The user's bearer (fresh TOTP window), then a real passkey
     // registration through the WebAuthn ceremony on the RP origin.
-    await nextTotpWindow();
     const pending = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
       email: userEmail,
       password: userPw,
@@ -1455,12 +1470,9 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     request,
   }) => {
     test.setTimeout(180_000);
-    const nextTotpWindow = () =>
-      new Promise((r) => setTimeout(r, 30_000 - (Date.now() % 30_000) + 750));
     expect(userTotpSecret.length, "the TOTP secret enrolled earlier").toBeGreaterThan(0);
 
     // ── The user's bearer (TOTP-enrolled JSON login) → self-service PUT.
-    await nextTotpWindow();
     const pending = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
       email: userEmail,
       password: userPw,
@@ -1525,7 +1537,6 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
 
     // ── Browser-login session for this request context (password + TOTP,
     // fresh window).
-    await nextTotpWindow();
     const loginForm = await request.get(`${IDP_BASE}/api/v1/auth/browser-login`, {
       failOnStatusCode: false,
     });
@@ -1666,8 +1677,6 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
   }) => {
     test.setTimeout(180_000);
     const { generateKeyPairSync, sign, constants } = await import("node:crypto");
-    const nextTotpWindow = () =>
-      new Promise((r) => setTimeout(r, 30_000 - (Date.now() % 30_000) + 750));
     const b64u = (b: Buffer | string) => Buffer.from(b).toString("base64url");
 
     // Discovery says exactly what works.
@@ -1740,7 +1749,6 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       `${b64u(JSON.stringify({ alg: "none" }))}.${b64u(JSON.stringify(claims))}.`;
 
     // Browser-login session (password + TOTP, fresh window).
-    await nextTotpWindow();
     const loginForm = await request.get(`${IDP_BASE}/api/v1/auth/browser-login`, {
       failOnStatusCode: false,
     });
@@ -1898,9 +1906,6 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     request,
   }) => {
     // Fresh TOTP window so the login code cannot collide with an earlier test's.
-    const nextTotpWindow = () =>
-      new Promise((r) => setTimeout(r, 30_000 - (Date.now() % 30_000) + 750));
-    await nextTotpWindow();
     const loginForm = await request.get(`${IDP_BASE}/api/v1/auth/browser-login`, {
       failOnStatusCode: false,
     });
