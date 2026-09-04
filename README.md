@@ -117,8 +117,11 @@ falls through to the sibling. No resolvable binary fails the script
 loudly — there is no skip. CI is WIRED to run the same gate script
 (`ci.yml` declares one `RULEFLOOR_VERSION`, builds that tag's tarball
 against a pinned sha256, and asserts the built binary's version) — but
-that is what the workflow DECLARES, not an observed run: no CI run has
-been witnessed here, and this repository has no record of one. See
+that is what the workflow DECLARES, not an observed run. No CI run is
+witnessed here — this repository holds no record of one — and runs do
+happen: on 2026-09-04 the sibling repository's CI was found to have been
+RED on every run back to 2026-08-31, unread, while its local gates were
+green. See
 `wiki/platform/decisions.md` P-048 for what a CI run would prove and
 what it would not. The tool's feature set is discovered, never assumed:
 `rulefloor capabilities --json`.
