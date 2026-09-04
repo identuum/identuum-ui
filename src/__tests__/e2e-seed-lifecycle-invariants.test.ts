@@ -26,13 +26,13 @@ const session = () => readFileSync(resolve(UI_ROOT, "e2e-full/helpers/session.ts
 
 const SEED = "full-site-admin-totp";
 
-// NOT ledger-bound, deliberately: this slice was told to keep the floors
-// identical, so no rule was declared and FLOOR stays 65. The guard still runs
-// — vitest is a `make verify` target — but it carries no ledger row and no
-// recorded red-proof. Giving it one is a one-line follow-up, and until then
-// this comment is the only thing saying so.
-describe("the e2e site_admin seed never outlives its appliance", () => {
-  it("the harness deletes the seed at RUN START, before the stack is destroyed", () => {
+// LEDGER-BOUND (THE-PARALLEL-RITUAL, 2026-09-04). P-056 shipped this guard
+// with no ledger row and said so here; that follow-up is now taken. The rule
+// is SEED-NEVER-OUTLIVES-APPLIANCE-1 in RULE-FLOOR.md, armed against this file
+// with a recorded mutation red-proof, so a guard that stops guarding is caught
+// by the ledger rather than by the next three red mints.
+describe("the e2e site_admin seed never outlives its appliance [SEED-NEVER-OUTLIVES-APPLIANCE-1]", () => {
+  it("the harness deletes the seed at RUN START, before the stack is destroyed [SEED-NEVER-OUTLIVES-APPLIANCE-1]", () => {
     const sh = runner();
     const rmIdx = sh.indexOf(`rm -f "$UI_DIR/e2e-full/.auth/${SEED}"`);
     expect(
