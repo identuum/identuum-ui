@@ -197,8 +197,11 @@ fi
 	/app/identuum-idp bootstrap "$OSS_DB_DSN")
 
 echo "e2e-full: API suite (oss-full)"
-# THE-THIRTY-SECOND-WAIT (2026-09-04): api-suite runs --workers=2, and it is
-# the ONLY phase that does. The serialisation everywhere used to be justified
+# THE-THIRTY-SECOND-WAIT (2026-09-04, corrected the same day): EVERY phase runs
+# --workers=1. api-suite was raised to 2 and PUT BACK after it cost four red
+# mints; this header used to open by announcing the raise and only admit the
+# reversal seven lines down, which is the wrong order for the sentence a reader
+# stops at. The serialisation everywhere used to be justified
 # by "TOTP replay protection rejects concurrent logins minting the same
 # 30-second code" — measured false: both login paths end in a plain RFC 6238
 # window match with no once-only bookkeeping. What --workers=1 really protects
