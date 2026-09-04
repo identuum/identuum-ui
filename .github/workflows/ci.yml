@@ -39,8 +39,8 @@ env:
   # workflow — any job that installs rulefloor derives URL tag, tarball
   # directory, ldflags stamp, and version assert from this pair. Bump
   # both lines together.
-  RULEFLOOR_VERSION: v0.9.0
-  RULEFLOOR_SHA256: 525803b58c2881415da532555b927bc8e75a15d4c5a7c813836bfde17a517d36
+  RULEFLOOR_VERSION: v0.9.1
+  RULEFLOOR_SHA256: 7a04a6ccbd87a53b342a4f324318bf2034cd0bb640c8191badb87d23abb5f509
   # THE-UNWATCHED-FOUR: one declaration per tool, every use derived,
   # every version printed and asserted. GO_VERSION drives setup-go for
   # the ledger-tool build; the vendored install gate's digest must match
