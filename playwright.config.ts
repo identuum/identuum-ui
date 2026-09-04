@@ -111,8 +111,17 @@ if (process.env.IDENTUUM_E2E_CE_CUSTOMER_SMOKE === "1") {
  *   Org-admin vars:                IDENTUUM_TEST_ORG_ADMIN_EMAIL / _PASSWORD / _TOTP_SECRET
  *   Legacy IDENTUUM_TEST_EMAIL / _PASSWORD / _TOTP_SECRET are no longer read.
  *   Authenticated tests self-skip when credentials are absent.
- *   Run authenticated tests with --workers=1 — TOTP replay protection rejects
- *   concurrent logins that generate the same 30-second code.
+ *   Run authenticated tests with --workers=1. The REASON is test isolation,
+ *   not TOTP: this said "TOTP replay protection rejects concurrent logins
+ *   that generate the same 30-second code" until 2026-09-04, and that is not
+ *   true of this server — both login paths end in a pure RFC 6238 window
+ *   match with no once-only bookkeeping, so two logins may legitimately mint
+ *   the same code. What --workers=1 actually protects is SHARED STATE:
+ *   MEASURED at --workers=2, e2e/site-admin-organizations.spec.ts's
+ *   unauthenticated-redirect test saw an authenticated session from a file
+ *   running beside it (expected "/login", got the deactivate route). The
+ *   specs share one appliance, one tenant fixture and the storage-state
+ *   files under e2e/.auth/, and nothing isolates them per worker.
  *
  * CI:
  *   Set CI=true (most CI systems do this automatically). The runner always
@@ -208,9 +217,13 @@ export default defineConfig({
     // stack, volume included), so the project is registered ONLY when the
     // harness entry point (e2e-full/scripts/full-run.sh via `make e2e-full`)
     // sets IDENTUUM_E2E_FULL=1. A plain `pnpm e2e` never sees it; the specs
-    // additionally self-skip without the flag. Serial by physics: the
-    // harness passes --workers=1 because TOTP replay protection rejects
-    // concurrent logins minting the same 30-second code.
+    // additionally self-skip without the flag. Serial because the specs
+    // share one appliance and one tenant fixture — NOT because of TOTP: this
+    // said "TOTP replay protection rejects concurrent logins minting the same
+    // 30-second code" until 2026-09-04, and the server has no such
+    // protection (both login paths are a plain RFC 6238 window match). The
+    // real constraint was measured: at --workers=2 an unauthenticated
+    // redirect test observed another file's session.
     ...(process.env.IDENTUUM_E2E_FULL === "1"
       ? [
           {
