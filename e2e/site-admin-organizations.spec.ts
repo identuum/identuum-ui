@@ -227,6 +227,13 @@ test.describe("/site-admin/organizations action routes — unauthenticated redir
     test(`${route} redirects unauthenticated to /login`, async ({ page }) => {
       await page.goto(route);
       await page.waitForLoadState("networkidle");
+      // THE-SHARED-FIXTURE: wait for the redirect to LAND before reading the
+      // URL. `networkidle` means "no requests in flight", which is not the
+      // same as "the redirect finished" — under a loaded dev server the URL
+      // could still be the pre-redirect one. This is strictly stronger: a
+      // route that never redirects still fails (waitForURL times out), and a
+      // route that redirects late no longer fails for being late.
+      await page.waitForURL(/\/login(\?|$)/);
 
       const finalUrl = new URL(page.url());
       // Must redirect to /login (session_expired or unauthorized reason)
@@ -241,6 +248,7 @@ test.describe("/site-admin/organizations action routes — unauthenticated redir
   test("organizations list redirects unauthenticated to /login", async ({ page }) => {
     await page.goto("/site-admin/organizations");
     await page.waitForLoadState("networkidle");
+    await page.waitForURL(/\/login(\?|$)/);
     const finalUrl = new URL(page.url());
     expect(finalUrl.pathname).toBe("/login");
   });

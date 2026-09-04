@@ -81,12 +81,18 @@ test.describe("local-demo: unauthenticated layout guards redirect to /login", ()
   test("/site-admin redirects to /login when unauthenticated [GUARD-LOGIN-1]", async ({ page }) => {
     await page.goto("/site-admin");
     await page.waitForLoadState("networkidle");
+    // THE-SHARED-FIXTURE: wait for the redirect to LAND (see
+    // site-admin-organizations.spec.ts) — stronger, not weaker.
+    await page.waitForURL(/\/login(\?|$)/);
     expect(new URL(page.url()).pathname).toBe("/login");
   });
 
   test("/org-admin redirects to /login when unauthenticated", async ({ page }) => {
     await page.goto("/org-admin");
     await page.waitForLoadState("networkidle");
+    // THE-SHARED-FIXTURE: wait for the redirect to LAND (see
+    // site-admin-organizations.spec.ts) — stronger, not weaker.
+    await page.waitForURL(/\/login(\?|$)/);
     expect(new URL(page.url()).pathname).toBe("/login");
   });
 });
