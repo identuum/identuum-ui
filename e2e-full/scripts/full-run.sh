@@ -22,6 +22,21 @@ set -euo pipefail
 UI_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 IDP_DIR=$(cd "$UI_DIR/../identuum-idp-oss" && pwd)
 
+# THE-SEED-THAT-OUTLIVED-ITS-APPLIANCE: the site_admin TOTP seed is written
+# under e2e-full/.auth/ during a run and is valid ONLY for the appliance that
+# issued it. The appliance is destroyed with `down --volumes` on the next line,
+# so a seed can never legitimately survive into the run below — yet the file
+# persisted, and siteAdminSession's fallback read it across appliances. That
+# produced codes no window could match and a message blaming a replay guard
+# that does not exist. It cost three red mints.
+#
+# Deleting it HERE, at run start, is what makes the cause moot: the fallback
+# can no longer read a seed from an appliance that is already gone, so the
+# enrolment path runs and writes a fresh one. The previous fix deleted the file
+# only AFTER every window had failed, which repaired the NEXT run while still
+# spending the current one.
+rm -f "$UI_DIR/e2e-full/.auth/full-site-admin-totp"
+
 echo "e2e-full: DESTROYING the OSS dev stack (down --volumes, app profile included)"
 # NOT `make fast-clean`: that recipe omits `--profile app`, so it deletes
 # postgres and the volume but LEAVES the profiled app container serving

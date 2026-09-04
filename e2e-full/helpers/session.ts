@@ -65,14 +65,17 @@ export async function siteAdminSession(
     // Every window failed, so the seed does not belong to this appliance.
     // Remove it: a secret that cannot log in is worthless, and leaving it
     // makes the NEXT run fail identically instead of re-enrolling.
+    let removalNote = "the stale seed file was removed";
     try {
       unlinkSync(SECRET_FILE);
-    } catch {
-      // Nothing to clean up; the message below is what matters.
+    } catch (rmErr) {
+      // NO BARE CATCH ON THIS PATH: a cleanup that fails silently is how the
+      // next run inherits the same bad seed and fails the same way. Name it.
+      removalNote = `the stale seed file could NOT be removed (${String(rmErr)}) — delete ${SECRET_FILE} by hand`;
     }
     throw new Error(
       "site_admin mfa login: the cached TOTP seed does not belong to this appliance — " +
-        "no window matched, so it is stale, not replayed. The seed file has been removed so " +
+        `no window matched, so it is stale, not replayed. ${removalNote}, so ` +
         "the next run re-enrols. THE ENROLMENT PATH FAILED FIRST, and this is why: " +
         String(enrolErr)
     );
