@@ -156,6 +156,7 @@ function matchTemplate(method, rawPath) {
 let observedLines = 0;
 let unmatched = 0;
 const nonRole = { anon: 0, unknown: 0, other: 0 };
+const unknownSeen = new Set();
 const observed = new Map(); // "METHOD template" -> Set(role)
 const observedAny = new Set(); // "METHOD template" seen by ANY observation
 try {
@@ -177,8 +178,15 @@ try {
     observedAny.add(key);
     if (!ROLES.includes(o.role)) {
       if (o.role === "anon") nonRole.anon++;
-      else if (o.role === "unknown") nonRole.unknown++;
-      else nonRole.other++;
+      else if (o.role === "unknown") {
+        nonRole.unknown++;
+        // NAME them. "unknown" means api() saw a bearer it could not decode
+        // (opaque or malformed), which is what a deliberately-invalid-token
+        // probe looks like — a real class, not an unclassifiable observation.
+        // Counting them without naming them is how "unknown 2" sat in every
+        // mint record for weeks meaning nothing to anyone reading it.
+        unknownSeen.add(`${o.m} ${o.p} -> ${o.s}`);
+      } else nonRole.other++;
       continue;
     }
     if (!observed.has(key)) observed.set(key, new Set());
@@ -280,6 +288,11 @@ console.log(
 console.log(
   `check OK: role-matrix per-role site_admin=${perRole.site_admin} org_admin=${perRole.org_admin} org_user=${perRole.org_user} class-cells=${observedClassCells.length} (observations ${observedLines}, unmatched-path ${unmatched}, anon ${nonRole.anon}, unknown ${nonRole.unknown})`
 );
+if (unknownSeen.size > 0) {
+  console.log(
+    `check OK: role-matrix unknown-role observations named (${nonRole.unknown} observation(s), ${unknownSeen.size} distinct): ${[...unknownSeen].sort().join(", ")} — a bearer api() could not decode, i.e. a deliberately invalid or opaque token; these carry no role and are correctly outside the (endpoint, role) matrix`
+  );
+}
 if (growth.length > 0) {
   console.log(
     `role-matrix-from-run: ${growth.length} NEW cell(s) observed beyond the committed set — growth candidates, commit deliberately:\n  ${growth.slice(0, 10).join("\n  ")}${growth.length > 10 ? `\n  … and ${growth.length - 10} more` : ""}`
