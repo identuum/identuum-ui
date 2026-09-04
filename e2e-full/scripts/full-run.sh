@@ -193,12 +193,27 @@ echo "e2e-full: API suite (oss-full)"
 #              passed=73 skipped=29 failed=0 every time. Its specs each build
 #              their own orgs/agents in their own `setup:` test and address
 #              them by id, so two files do not collide.
-#   devloop    --workers=2  RED on the FIRST run, deterministically:
-#              site-admin-organizations.spec.ts "unauthenticated redirect
-#              safety" expected /login and got the deactivate route — an
-#              unauthenticated test saw a neighbouring file's session. Its 38
-#              specs share one tenant fixture and the e2e/.auth storage state.
-#              STAYS AT 1 until per-worker isolation exists.
+#   devloop    --workers=2  RED, twice, deterministically, and SLOWER
+#              (170s against 143s). The blocker was MEASURED in
+#              THE-SHARED-FIXTURE and it is not the tenant, the users or the
+#              storage state — those are all per-context or uniquely named:
+#
+#              e2e/unavailable-not-expired.spec.ts REWRITES THE UI'S RUNTIME
+#              CONFIG FILE, repointing idp.internal_base_url at a local 503
+#              stub for the duration of its test, then restores it. The UI dev
+#              server is ONE PROCESS reading ONE config file, so for those
+#              seconds EVERY worker's requests see the IdP as unavailable —
+#              and the product is correct to respond by rendering the
+#              unavailable state IN PLACE rather than signing anyone out
+#              ("an outage is not a sign-out", UNAVAILABLE-NOT-EXPIRED-1).
+#              Any concurrent test asserting "unauthenticated -> /login" then
+#              waits forever for a redirect that must not come.
+#
+#              So this is global FAULT INJECTION, not fixture coupling. A
+#              per-worker storage state or tenant would not touch it. It needs
+#              a per-worker UI server with its own config file, or fault
+#              injection scoped to a request instead of the whole process.
+#              STAYS AT 1.
 #
 # Raise nothing here without three consecutive green runs and identical counts.
 bash "$GW" step "$RECORD" 'api-suite=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh api-suite e2e/.auth/pw-api-suite.json -- --project=oss-full --workers=2' || rc=1

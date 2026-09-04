@@ -116,12 +116,20 @@ if (process.env.IDENTUUM_E2E_CE_CUSTOMER_SMOKE === "1") {
  *   that generate the same 30-second code" until 2026-09-04, and that is not
  *   true of this server — both login paths end in a pure RFC 6238 window
  *   match with no once-only bookkeeping, so two logins may legitimately mint
- *   the same code. What --workers=1 actually protects is SHARED STATE:
- *   MEASURED at --workers=2, e2e/site-admin-organizations.spec.ts's
- *   unauthenticated-redirect test saw an authenticated session from a file
- *   running beside it (expected "/login", got the deactivate route). The
- *   specs share one appliance, one tenant fixture and the storage-state
- *   files under e2e/.auth/, and nothing isolates them per worker.
+ *   the same code. What --workers=1 actually protects is GLOBAL FAULT
+ *   INJECTION — measured in THE-SHARED-FIXTURE (2026-09-04), and NOT the
+ *   tenant or the storage state, which are per-context or uniquely named:
+ *   e2e/unavailable-not-expired.spec.ts rewrites the UI's RUNTIME CONFIG
+ *   FILE to repoint idp.internal_base_url at a 503 stub, then restores it.
+ *   The dev server is ONE process reading ONE config file, so for those
+ *   seconds every worker sees the IdP as unavailable — and the product is
+ *   RIGHT to render the unavailable state in place instead of signing anyone
+ *   out (UNAVAILABLE-NOT-EXPIRED-1, "an outage is not a sign-out"). A
+ *   concurrent "unauthenticated -> /login" assertion then waits for a
+ *   redirect that must not come; with an explicit waitForURL it times out
+ *   after 90s, which is how the mechanism was finally identified.
+ *   Fixing it needs a per-worker UI server + config file, or request-scoped
+ *   fault injection — not per-worker fixtures.
  *
  * CI:
  *   Set CI=true (most CI systems do this automatically). The runner always
@@ -222,8 +230,10 @@ export default defineConfig({
     // said "TOTP replay protection rejects concurrent logins minting the same
     // 30-second code" until 2026-09-04, and the server has no such
     // protection (both login paths are a plain RFC 6238 window match). The
-    // real constraint was measured: at --workers=2 an unauthenticated
-    // redirect test observed another file's session.
+    // real constraint was measured twice: e2e-full's api-suite parallelises
+    // safely (--workers=2, three consecutive green runs), while the dev-loop
+    // suite cannot while one of its specs repoints the shared UI runtime
+    // config at a 503 stub — see the header note and full-run.sh.
     ...(process.env.IDENTUUM_E2E_FULL === "1"
       ? [
           {
