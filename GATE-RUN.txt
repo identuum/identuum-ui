@@ -1,8 +1,8 @@
 schema: gate-run.v1
 gate: identuum-ui make verify
 note: evidence lines are the tools' own summary lines; a summary format this script does not match is recorded only as an exit code
-repo-head: ab2e1ae
-started: 2026-09-04T15:01:38Z
+repo-head: bddb61b
+started: 2026-09-04T15:40:40Z
 plan: tool-versions wiki-fresh image-base-check image-base-parity rulefloor biome tsc vitest
 tool: node       v24.18.0  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/node
 tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/pnpm
@@ -12,14 +12,14 @@ target: tool-versions exit=0
 evidence: [wiki-fresh] wiki freshness: 1 fresh, 0 behind, 0 unpinned, 0 unreadable
 elapsed: wiki-fresh 0s
 target: wiki-fresh exit=0
-elapsed: image-base-check 0s
+elapsed: image-base-check 1s
 target: image-base-check exit=0
 elapsed: image-base-parity 0s
 target: image-base-parity exit=0
-evidence: [rulefloor] check OK: 65 rows (65 armed), FLOOR 65, RED-PROOFS 62 (measured 62)
-elapsed: rulefloor 1s
+evidence: [rulefloor] check OK: 66 rows (66 armed), FLOOR 66, RED-PROOFS 63 (measured 63)
+elapsed: rulefloor 0s
 target: rulefloor exit=0
-elapsed: biome 0s
+elapsed: biome 1s
 target: biome exit=0
 elapsed: tsc 0s
 target: tsc exit=0
@@ -27,6 +27,6 @@ evidence: [vitest]  Test Files  129 passed (129)
 evidence: [vitest]       Tests  3472 passed (3472)
 elapsed: vitest 2s
 target: vitest exit=0
-finished: 2026-09-04T15:01:41Z
-tree: sha256=e89307ce4282bad4e299a739ff14641ce2e771127d3de1acdebbf56a6299add5
+finished: 2026-09-04T15:40:44Z
+tree: sha256=b7332f2f3e23984f2a8283b924e8945386ce20e1acc4d23fa1ee1154ed98c537
 result: green
