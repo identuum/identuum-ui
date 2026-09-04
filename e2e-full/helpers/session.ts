@@ -12,7 +12,7 @@
  * Shared building blocks, not forks: api() + firstLoginBearerAsync() from
  * e2e/helpers/appliance-fixture, generateTOTP() from e2e/helpers/totp.
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { api, firstLoginBearerAsync } from "../../e2e/helpers/appliance-fixture";
 import { generateTOTP } from "../../e2e/helpers/totp";
@@ -29,8 +29,20 @@ export async function siteAdminSession(
     mkdirSync(dirname(SECRET_FILE), { recursive: true });
     writeFileSync(SECRET_FILE, first.totpSecret, { mode: 0o600 });
     return first;
-  } catch {
+  } catch (enrolErr) {
     // Already enrolled in THIS run — verify with the captured secret.
+    //
+    // THE-GREEN-CI-BASELINE: this catch used to swallow the error entirely
+    // and then blame a "replay guard" when the cached secret failed. Both
+    // were wrong, and together they cost two mints and hid the cause.
+    //
+    // The secret file PERSISTS on disk between runs. It is only valid for
+    // the appliance that issued it, so when the enrolment path above fails
+    // against a FRESH appliance for any reason, this fallback reads a
+    // secret from a PREVIOUS one — and then no TOTP window can ever match,
+    // because the seed is simply wrong. That is not replay protection (this
+    // server has none: both login paths end in a plain RFC 6238 window
+    // match, measured in THE-THIRTY-SECOND-WAIT). It is a stale seed.
     const secret = readFileSync(SECRET_FILE, "utf-8").trim();
     const login = await api(base, "POST", "/api/v1/auth/login", { email, password });
     if (login.status !== 401 || !login.json.session_id) {
@@ -46,9 +58,23 @@ export async function siteAdminSession(
         const bearer = (v.json.access_token as string) ?? "";
         if (bearer.length > 0) return { bearer, totpSecret: secret };
       }
-      // TOTP replay protection refuses a code another login just consumed;
-      // the next 30s window is accepted, so walk forward rather than sleep.
+      // Walk a couple of windows for ordinary clock skew between this
+      // machine and the appliance — not for a replay guard, which does not
+      // exist here.
     }
-    throw new Error("site_admin mfa login: no window accepted (replay guard)");
+    // Every window failed, so the seed does not belong to this appliance.
+    // Remove it: a secret that cannot log in is worthless, and leaving it
+    // makes the NEXT run fail identically instead of re-enrolling.
+    try {
+      unlinkSync(SECRET_FILE);
+    } catch {
+      // Nothing to clean up; the message below is what matters.
+    }
+    throw new Error(
+      "site_admin mfa login: the cached TOTP seed does not belong to this appliance — " +
+        "no window matched, so it is stale, not replayed. The seed file has been removed so " +
+        "the next run re-enrols. THE ENROLMENT PATH FAILED FIRST, and this is why: " +
+        String(enrolErr)
+    );
   }
 }
