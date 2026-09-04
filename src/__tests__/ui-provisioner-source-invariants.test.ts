@@ -47,10 +47,9 @@ describe("the e2e-full provisioner lights the dev-loop suite from one bootstrap 
     const devloopIdx = sh.indexOf("IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true");
     expect(apiIdx, "the API (oss-full) suite runs").toBeGreaterThan(-1);
     // Kept from the old literal: that step is still the oss-full project.
-    expect(
-      sh.slice(apiIdx, apiIdx + 400),
-      "the API suite runs the oss-full project"
-    ).toContain("--project=oss-full");
+    expect(sh.slice(apiIdx, apiIdx + 400), "the API suite runs the oss-full project").toContain(
+      "--project=oss-full"
+    );
     expect(provIdx, "the provisioner invocation follows the API suite").toBeGreaterThan(apiIdx);
     expect(devloopIdx, "the provisioned dev-loop run follows the provisioner").toBeGreaterThan(
       provIdx
