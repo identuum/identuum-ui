@@ -182,7 +182,26 @@ fi
 	/app/identuum-idp bootstrap "$OSS_DB_DSN")
 
 echo "e2e-full: API suite (oss-full)"
-bash "$GW" step "$RECORD" 'api-suite=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh api-suite e2e/.auth/pw-api-suite.json -- --project=oss-full --workers=1' || rc=1
+# THE-THIRTY-SECOND-WAIT (2026-09-04): api-suite runs --workers=2, and it is
+# the ONLY phase that does. The serialisation everywhere used to be justified
+# by "TOTP replay protection rejects concurrent logins minting the same
+# 30-second code" — measured false: both login paths end in a plain RFC 6238
+# window match with no once-only bookkeeping. What --workers=1 really protects
+# is shared fixture state, so each phase was measured separately:
+#
+#   api-suite  --workers=2  GREEN x3 consecutively (28s, 27s, 28s vs 44s),
+#              passed=73 skipped=29 failed=0 every time. Its specs each build
+#              their own orgs/agents in their own `setup:` test and address
+#              them by id, so two files do not collide.
+#   devloop    --workers=2  RED on the FIRST run, deterministically:
+#              site-admin-organizations.spec.ts "unauthenticated redirect
+#              safety" expected /login and got the deactivate route — an
+#              unauthenticated test saw a neighbouring file's session. Its 38
+#              specs share one tenant fixture and the e2e/.auth storage state.
+#              STAYS AT 1 until per-worker isolation exists.
+#
+# Raise nothing here without three consecutive green runs and identical counts.
+bash "$GW" step "$RECORD" 'api-suite=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh api-suite e2e/.auth/pw-api-suite.json -- --project=oss-full --workers=2' || rc=1
 
 # MEASUREMENT baseline (opt-in via IDENTUUM_E2E_MEASURE=1): the SAME dev-loop
 # suite BEFORE provisioning — no envelope, no dynamic-fixture, no inherited
