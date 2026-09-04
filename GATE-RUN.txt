@@ -1,8 +1,8 @@
 schema: gate-run.v1
 gate: identuum-ui make verify
 note: evidence lines are the tools' own summary lines; a summary format this script does not match is recorded only as an exit code
-repo-head: 7e382eb
-started: 2026-09-04T10:32:38Z
+repo-head: 0363f13
+started: 2026-09-04T14:07:30Z
 plan: tool-versions wiki-fresh image-base-check image-base-parity rulefloor biome tsc vitest
 tool: node       v24.18.0  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/node
 tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/pnpm
@@ -10,7 +10,7 @@ tool: rulefloor  {"schema_version":"rulefloor.version.v1","version":"v0.9.1","to
 elapsed: tool-versions 0s
 target: tool-versions exit=0
 evidence: [wiki-fresh] wiki freshness: 1 fresh, 0 behind, 0 unpinned, 0 unreadable
-elapsed: wiki-fresh 0s
+elapsed: wiki-fresh 1s
 target: wiki-fresh exit=0
 elapsed: image-base-check 0s
 target: image-base-check exit=0
@@ -27,6 +27,6 @@ evidence: [vitest]  Test Files  128 passed (128)
 evidence: [vitest]       Tests  3469 passed (3469)
 elapsed: vitest 2s
 target: vitest exit=0
-finished: 2026-09-04T10:32:41Z
-tree: sha256=540bdca77f1c38ce0f15000833652f096a8a22343cb2921a66b32999152d67ad
+finished: 2026-09-04T14:07:34Z
+tree: sha256=d280aaed701ab2643fc5c924266a1533dbf77de6dae2d0a51d853eb1d6c729e7
 result: green
