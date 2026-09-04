@@ -39,20 +39,20 @@ env:
   # workflow — any job that installs rulefloor derives URL tag, tarball
   # directory, ldflags stamp, and version assert from this pair. Bump
   # both lines together.
-  RULEFLOOR_VERSION: v0.7.0
-  RULEFLOOR_SHA256: a0b6ef8a212c64378a8aae9785bd8a589efa71daa42af3ce792827c70c4dc6c6
+  RULEFLOOR_VERSION: v0.9.0
+  RULEFLOOR_SHA256: 525803b58c2881415da532555b927bc8e75a15d4c5a7c813836bfde17a517d36
   # THE-UNWATCHED-FOUR: one declaration per tool, every use derived,
   # every version printed and asserted. GO_VERSION drives setup-go for
   # the ledger-tool build; the vendored install gate's digest must match
   # the shared master (the wiki-side check holds all three copies and
   # this pin identical).
-  GO_VERSION: "1.27.0"
+  GO_VERSION: "1.27.1"
   RULEFLOOR_GATE_SHA256: "db2a505d1c1f2fb55b34632a5098ef658dd6fbab1671e58de2c41788a63f37a6"
   # THE-UNWITNESSED-MIRROR: same contract for the gate witness — the vendored
   # scripts/gate-witness.sh must be the wiki master, or the record CI uploads
   # is written by something else. Held identical to the wiki-side digest
   # (contracts/gate-witness.master.sha256) by gate-witness.sh --sync-check.
-  GATE_WITNESS_SHA256: "48eeba51aac38bed3a70b5c547f8a898e0c6042c2b77fb5fcb8b2f62a502926b"
+  GATE_WITNESS_SHA256: "1377b103674b75f97d171fa41fed1651863ca9c0244ee51972b125c266d9ed5e"
 
 jobs:
   build-and-test:

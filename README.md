@@ -114,9 +114,13 @@ checkout as last resort (`scripts/rulefloor-gate.sh`). Candidates are
 probed through the machine interface `version --json`
 (rulefloor.version.v1) — v0.3.0 or newer only; a stale PATH binary
 falls through to the sibling. No resolvable binary fails the script
-loudly — there is no skip. CI runs the SAME gate script with the
-pinned tool installed (`go install github.com/ozgurcd/rulefloor@v0.3.0`;
-see ci.yml). The tool's feature set is discovered, never assumed:
+loudly — there is no skip. CI is WIRED to run the same gate script
+(`ci.yml` declares one `RULEFLOOR_VERSION`, builds that tag's tarball
+against a pinned sha256, and asserts the built binary's version) — but
+that is what the workflow DECLARES, not an observed run: no CI run has
+been witnessed here, and this repository has no record of one. See
+`wiki/platform/decisions.md` P-048 for what a CI run would prove and
+what it would not. The tool's feature set is discovered, never assumed:
 `rulefloor capabilities --json`.
 
 How the ledger works is the tool's documentation
