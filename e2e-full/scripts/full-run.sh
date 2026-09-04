@@ -204,10 +204,23 @@ echo "e2e-full: API suite (oss-full)"
 # window match with no once-only bookkeeping. What --workers=1 really protects
 # is shared fixture state, so each phase was measured separately:
 #
-#   api-suite  --workers=2  GREEN x3 consecutively (28s, 27s, 28s vs 44s),
-#              passed=73 skipped=29 failed=0 every time. Its specs each build
-#              their own orgs/agents in their own `setup:` test and address
-#              them by id, so two files do not collide.
+#   api-suite  --workers=1  — RETURNED to serial 2026-09-04 after it caused
+#              FOUR red mints. THE-THIRTY-SECOND-WAIT raised it to 2 on three
+#              consecutive green runs; three green runs did not prove it,
+#              because the defect needs an interleaving.
+#              THE RACE: every api-suite spec's `setup:` calls
+#              siteAdminSession, which enrols site_admin on first use and
+#              writes ONE shared seed file. With two files in flight, one
+#              worker enrols and writes while the other gets 401 (already
+#              enrolled) and reads — and a single run shows BOTH halves of the
+#              race at once:
+#                ENOENT … full-site-admin-totp        (read before the write)
+#                the cached TOTP seed does not belong to this appliance
+#                                                     (read during the write)
+#              writeFileSync is not atomic and there is no barrier, so the
+#              reader can see no file or half a file. Serial makes the enrol
+#              strictly precede every read. Raising it again needs an atomic
+#              write AND a barrier, not another three green runs.
 #   devloop    --workers=2  RED, twice, deterministically, and SLOWER
 #              (170s against 143s). The blocker was MEASURED in
 #              THE-SHARED-FIXTURE and it is not the tenant, the users or the
@@ -231,7 +244,7 @@ echo "e2e-full: API suite (oss-full)"
 #              STAYS AT 1.
 #
 # Raise nothing here without three consecutive green runs and identical counts.
-bash "$GW" step "$RECORD" 'api-suite=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh api-suite e2e/.auth/pw-api-suite.json -- --project=oss-full --workers=2' || rc=1
+bash "$GW" step "$RECORD" 'api-suite=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh api-suite e2e/.auth/pw-api-suite.json -- --project=oss-full --workers=1' || rc=1
 
 # MEASUREMENT baseline (opt-in via IDENTUUM_E2E_MEASURE=1): the SAME dev-loop
 # suite BEFORE provisioning — no envelope, no dynamic-fixture, no inherited

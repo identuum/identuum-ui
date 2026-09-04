@@ -230,10 +230,13 @@ export default defineConfig({
     // said "TOTP replay protection rejects concurrent logins minting the same
     // 30-second code" until 2026-09-04, and the server has no such
     // protection (both login paths are a plain RFC 6238 window match). The
-    // real constraint was measured twice: e2e-full's api-suite parallelises
-    // safely (--workers=2, three consecutive green runs), while the dev-loop
-    // suite cannot while one of its specs repoints the shared UI runtime
-    // config at a 503 stub — see the header note and full-run.sh.
+    // real constraint was measured three times. The dev-loop suite cannot
+    // parallelise while one of its specs repoints the shared UI runtime
+    // config at a 503 stub. e2e-full's api-suite looked safe at --workers=2
+    // on three consecutive green runs and was NOT: its specs share one
+    // site_admin seed file, written non-atomically on first enrolment, so a
+    // second worker reads no file or half a file. It cost four red mints and
+    // is back at 1 — see full-run.sh for both halves of the race.
     ...(process.env.IDENTUUM_E2E_FULL === "1"
       ? [
           {
