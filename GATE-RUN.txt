@@ -1,16 +1,16 @@
 schema: gate-run.v1
 gate: identuum-ui make verify
 note: evidence lines are the tools' own summary lines; a summary format this script does not match is recorded only as an exit code
-repo-head: d94b99c
-started: 2026-09-04T19:52:48Z
+repo-head: 73cf093
+started: 2026-09-04T20:30:19Z
 plan: tool-versions wiki-fresh image-base-check image-base-parity rulefloor biome tsc vitest
 tool: node       v24.18.0  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/node
 tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/pnpm
 tool: rulefloor  {"schema_version":"rulefloor.version.v1","version":"v0.9.1","toolchain_version":"v0.9.1","version_agreement":"pass"}  /opt/homebrew/bin/rulefloor
-elapsed: tool-versions 0s
+elapsed: tool-versions 1s
 target: tool-versions exit=0
 evidence: [wiki-fresh] wiki freshness: 1 fresh, 0 behind, 0 unpinned, 0 unreadable
-elapsed: wiki-fresh 1s
+elapsed: wiki-fresh 0s
 target: wiki-fresh exit=0
 elapsed: image-base-check 0s
 target: image-base-check exit=0
@@ -21,12 +21,12 @@ elapsed: rulefloor 0s
 target: rulefloor exit=0
 elapsed: biome 1s
 target: biome exit=0
-elapsed: tsc 0s
+elapsed: tsc 1s
 target: tsc exit=0
 evidence: [vitest]  Test Files  129 passed (129)
 evidence: [vitest]       Tests  3472 passed (3472)
-elapsed: vitest 2s
+elapsed: vitest 1s
 target: vitest exit=0
-finished: 2026-09-04T19:52:52Z
-tree: sha256=4ac71547e86bebfd7e8115f3baf3e120d67be232c2189e007be9482290d434d7
+finished: 2026-09-04T20:30:23Z
+tree: sha256=d7c33e0282421d1dda123954fe26b9e54f852f345760a4ce7386389102828802
 result: green
