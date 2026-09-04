@@ -35,10 +35,22 @@ describe("the e2e-full provisioner lights the dev-loop suite from one bootstrap 
 
   it("full-run.sh provisions, then runs the dev-loop chromium suite, AFTER the API suite", () => {
     const sh = fullRun();
-    const apiIdx = sh.indexOf("--project=oss-full --workers=1");
+    // THE-THIRTY-SECOND-WAIT: locate the API suite by the PHASE IT RUNS, not
+    // by a flag string. This was `indexOf("--project=oss-full --workers=1")`,
+    // which silently stopped pointing at the api-suite step the moment that
+    // phase moved to --workers=2 — it then matched a LATER oss-full phase and
+    // the ordering assertion failed on a file whose order had not changed.
+    // The phase name is the stable identity; the worker count is a tuning
+    // decision that is allowed to move.
+    const apiIdx = sh.indexOf("pw-phase.sh api-suite");
     const provIdx = sh.indexOf("IDENTUUM_E2E_PROVISION=1");
     const devloopIdx = sh.indexOf("IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true");
     expect(apiIdx, "the API (oss-full) suite runs").toBeGreaterThan(-1);
+    // Kept from the old literal: that step is still the oss-full project.
+    expect(
+      sh.slice(apiIdx, apiIdx + 400),
+      "the API suite runs the oss-full project"
+    ).toContain("--project=oss-full");
     expect(provIdx, "the provisioner invocation follows the API suite").toBeGreaterThan(apiIdx);
     expect(devloopIdx, "the provisioned dev-loop run follows the provisioner").toBeGreaterThan(
       provIdx
