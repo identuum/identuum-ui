@@ -18,7 +18,7 @@ DEV_PLATFORM_STATUS_URL ?= http://127.0.0.1:7104/platform-status
 # 127.0.0.1:7315 instead of the monolith on 7215.
 AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 
-.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory
+.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory ci-witness ci-fetch
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
 .PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
 .PHONY: e2e-full
@@ -180,6 +180,49 @@ advisory:
 	@command -v pnpm >/dev/null 2>&1 || { echo "advisory: pnpm is not installed — cannot audit pnpm-lock.yaml against the advisory database; refusing to pass silently" >&2; exit 2; }; \
 	pnpm audit
 
+## The idp-oss sibling holds the Go judges these gates reuse (tools/ci-witness,
+## tools/ledger-diff-gate, tools/grype-gate). This repo is not a Go module, so
+## `go run -C $(IDP_OSS_DIR) ./tools/<judge> --repo $(CURDIR)` runs the sibling's
+## tool against THIS tree, read-only for the sibling. An absent sibling or an
+## absent Go toolchain is exit 2 by name, never a silent pass (the same
+## sibling-coupled shape as wiki-fresh, with the loud branch this slice's owner
+## ruled for absent tools). THE-UI-GATE-PARITY-2, 2026-09-06.
+IDP_OSS_DIR ?= ../identuum-idp-oss
+
+## ci-witness: judge the CI record a human fetched and COMMITTED here as
+## CI-WITNESS.txt. What CI uploads today (ci.yml): per matrix job an artifact
+## gate-run-ci-node<22|24> holding GATE-RUN.ci.txt, finalized with
+## GATE_WITNESS_TIE=commit and, since this slice, a `ci-run:` provenance line
+## only the workflow writes. The judge (idp-oss tools/ci-witness, rule
+## CI-RECORD-HONEST-1) fetches nothing: absent, or present but UNTRACKED, it
+## reports NO CLAIM and passes — absence is honest; committed, the record must
+## carry provenance, tie by commit (not digest), be finalized clean, green,
+## complete, and name a commit on HEAD's ancestry. Being behind HEAD is
+## reported, never failed. Fetch with `make ci-fetch RUN=<id> [NODE=22]`.
+ci-witness:
+	@command -v go >/dev/null 2>&1 || { echo "ci-witness: go is not installed — the judge is a Go tool in $(IDP_OSS_DIR)/tools/ci-witness; refusing to pass silently" >&2; exit 2; }; \
+	test -d "$(IDP_OSS_DIR)/tools/ci-witness" || { echo "ci-witness: sibling judge absent at $(IDP_OSS_DIR)/tools/ci-witness — refusing to pass silently" >&2; exit 2; }; \
+	go run -C "$(IDP_OSS_DIR)" ./tools/ci-witness --repo "$(CURDIR)"
+
+## ci-fetch: the OPERATOR step — download one NAMED CI run's record so
+## ci-witness has something to judge. Not part of verify (a gate must not reach
+## the network). RUN=<id> is required: a record fetched from "whatever is
+## newest" is a record nobody chose. NODE picks the matrix job's artifact
+## (default 22, the runtime the image ships). Read what came back, then commit
+## it; only then does ci-witness see a claim.
+ci-fetch:
+	@if [ -z "$(RUN)" ]; then \
+		echo "ci-fetch: name the run — make ci-fetch RUN=<id> [NODE=22|24]"; \
+		echo "ci-fetch: refusing to fetch 'whatever is newest'; a record nobody chose witnesses nothing."; \
+		echo "ci-fetch: list them with: gh run list"; \
+		exit 1; \
+	fi
+	@rm -rf .ci-fetch && mkdir -p .ci-fetch
+	gh run download $(RUN) -n gate-run-ci-node$(or $(NODE),22) -D .ci-fetch
+	@cp .ci-fetch/GATE-RUN.ci.txt CI-WITNESS.txt && rm -rf .ci-fetch
+	@echo "ci-fetch: wrote CI-WITNESS.txt from run $(RUN) (node $(or $(NODE),22)) — READ IT, then commit it."
+	@$(MAKE) --no-print-directory ci-witness || true
+
 ## verify: THE UI gate set — biome + typecheck + vitest + rulefloor, all
 ## four, every slice (THE-UI-FORMAT-FLOOR). Slices run THIS target, never
 ## an ad-hoc subset: format drift accumulated invisibly across several
@@ -222,6 +265,7 @@ verify:
 		'credential-transparency=$(MAKE) --no-print-directory credential-transparency' \
 		'frozen-lockfile=$(MAKE) --no-print-directory frozen-lockfile' \
 		'advisory=$(MAKE) --no-print-directory advisory' \
+		'ci-witness=$(MAKE) --no-print-directory ci-witness' \
 		'rulefloor=pnpm rulefloor' \
 		'biome=pnpm exec biome check . --reporter=json --max-diagnostics=none' \
 		'tsc=pnpm exec tsc --noEmit' \

@@ -201,6 +201,19 @@ jobs:
             echo "no record to finalize (job died before init)"
           fi
 
+      - name: Stamp CI provenance into the record
+        # THE-UI-GATE-PARITY-2 (2026-09-06), the idp-oss shape: a gate-witness
+        # record cannot say where it came from, and a local run can forge every
+        # other line. This line is the only thing a local run cannot write, and
+        # the ci-witness judge (make ci-witness, after make ci-fetch RUN=<id>)
+        # REFUSES a committed record without it. if: always() — a red record
+        # needs provenance just as much.
+        if: always()
+        run: |
+          if [ -f GATE-RUN.ci.txt ]; then
+            echo "ci-run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} attempt=${GITHUB_RUN_ATTEMPT} sha=${GITHUB_SHA}" >> GATE-RUN.ci.txt
+          fi
+
       - name: Upload the gate run record
         # if-no-files-found stays warn: when the job dies before init there is
         # no record, and this step must not repaint that failure as its own.
