@@ -18,7 +18,7 @@ DEV_PLATFORM_STATUS_URL ?= http://127.0.0.1:7104/platform-status
 # 127.0.0.1:7315 instead of the monolith on 7215.
 AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 
-.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory ci-witness ci-fetch toolchain-parity grype-scan
+.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory ci-witness ci-fetch toolchain-parity grype-scan ledger-diff-gate ledger-rebase
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
 .PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
 .PHONY: e2e-full
@@ -317,6 +317,31 @@ grype-scan:
 	[ -z "$$tmp" ] || rm -f "$$tmp"; \
 	exit $$rc
 
+## ledger-diff-gate: a RULE-FLOOR.md sentence never changes silently again (the
+## idp-oss shape, THE-LEDGER-DIFF-GATE, rule LEDGER-DIFF-RECONCILED-1; ported
+## by THE-UI-GATE-PARITY-2, 2026-09-06). Why this floor needs it: 66 rules over
+## 11 witnessed slices, every one of which may reword, rebind or re-prove a
+## rule, and the `rulefloor` entry only re-hashes what is there — it cannot
+## tell a declared change from a quiet one. The judge (idp-oss
+## tools/ledger-diff-gate) runs `rulefloor ledger-diff --base <the newest
+## "Witness: make verify green at" commit strictly before HEAD>` and reconciles
+## it BOTH ways against the committed, SHA-scoped ledger-amendments.json
+## (ledger-amendments.v1): an undeclared change, a declaration the diff does
+## not show, a wrong base_commit, rulefloor exit 2 — every one FAILS. Sits
+## right after rulefloor in the plan, as in idp-oss. go, rulefloor or the
+## sibling judge absent: exit 2 by name.
+##
+## Cadence: `make ledger-rebase` at the FIRST commit after a witness (HEAD must
+## not itself be the witness, or the base lands one witness too early); a
+## consumed declaration is removed by hand once its witness exists.
+ledger-diff-gate:
+	@for t in go rulefloor; do command -v "$$t" >/dev/null 2>&1 || { echo "ledger-diff-gate: $$t is not installed — cannot reconcile the ledger; refusing to pass silently" >&2; exit 2; }; done; \
+	test -d "$(IDP_OSS_DIR)/tools/ledger-diff-gate" || { echo "ledger-diff-gate: sibling judge absent at $(IDP_OSS_DIR)/tools/ledger-diff-gate — refusing to pass silently" >&2; exit 2; }; \
+	go run -C "$(IDP_OSS_DIR)" ./tools/ledger-diff-gate --manifest "$(CURDIR)/ledger-amendments.json" --repo "$(CURDIR)" --rulefloor "$$(command -v rulefloor)"
+
+ledger-rebase:
+	@go run -C "$(IDP_OSS_DIR)" ./tools/ledger-diff-gate --rebase --manifest "$(CURDIR)/ledger-amendments.json" --repo "$(CURDIR)"
+
 ## verify: THE UI gate set — biome + typecheck + vitest + rulefloor, all
 ## four, every slice (THE-UI-FORMAT-FLOOR). Slices run THIS target, never
 ## an ad-hoc subset: format drift accumulated invisibly across several
@@ -362,6 +387,7 @@ verify:
 		'ci-witness=$(MAKE) --no-print-directory ci-witness' \
 		'toolchain-parity=$(MAKE) --no-print-directory toolchain-parity' \
 		'rulefloor=pnpm rulefloor' \
+		'ledger-diff-gate=$(MAKE) --no-print-directory ledger-diff-gate' \
 		'biome=pnpm exec biome check . --reporter=json --max-diagnostics=none' \
 		'tsc=pnpm exec tsc --noEmit' \
 		'vitest=pnpm exec vitest run'
