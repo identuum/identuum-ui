@@ -18,7 +18,7 @@ DEV_PLATFORM_STATUS_URL ?= http://127.0.0.1:7104/platform-status
 # 127.0.0.1:7315 instead of the monolith on 7215.
 AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 
-.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory ci-witness ci-fetch toolchain-parity
+.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory ci-witness ci-fetch toolchain-parity grype-scan
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
 .PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
 .PHONY: e2e-full
@@ -274,6 +274,48 @@ toolchain-parity:
 		exit 1; \
 	fi; \
 	echo "check OK: toolchain-parity $$agree pins agree (node $$img in matrix [$$matrix], engines/@types/node $$eng/$$types, local node $$lnode, pnpm $$lpnpm, go $$lgo, rulefloor $$lrf, both vendored digests)"
+
+## grype-scan: the published image, judged by the idp-oss policy (tools/grype-gate,
+## rule GRYPE-FIXABLE-FAILS-1): a finding with an AVAILABLE FIX fails, a
+## High/Critical finding fails whether or not a fix exists, an allowlist entry
+## (grype-allowlist.json, absent today = empty) needs a reason AND a ruling and
+## can excuse "you have not taken the fix", never severity. Builds
+## identuum-ui:verify from the repo-root Dockerfile (the tag publish-image.yml
+## builds), scans it through the docker context's endpoint (grype does not read
+## `docker context`; on this machine the socket is colima's, not
+## /var/run/docker.sock), and hands the JSON to the judge. Absent grype, docker,
+## go or the sibling judge: exit 2 by name, never a silent pass. SCAN=<json>
+## judges an existing report instead of building and scanning (the judge's own
+## -scan mode; used for the mutation proofs).
+##
+## NOT IN THE verify PLAN — a finding, not a gate weakened (THE-UI-GATE-PARITY-2,
+## 2026-09-06). On its first run against the real image the verdict was
+## `check FAILED: grype-gate matches=211 fixable=1 severe=58`: 58 High/Critical
+## CVEs in Debian 12 packages the node:22-bookworm-slim base ships and Debian
+## marks not-fixed or wont-fix (util-linux and its libs, perl-base, libc6,
+## ncurses, gzip, libacl1, libtasn1), plus libpcre2-8-0 CVE-2026-86145 fixed in
+## 10.42-1+deb12u1. The freshly pulled base tag alone scans to matches=230,
+## severe=69, fixable=20; the idp-oss image scans to matches=0. Under this
+## policy no Debian-12-based Node image can pass while Debian will not fix
+## libc6, so wiring this entry into verify would make every ui witness, mint
+## and wiki close impossible until the base image changes — an OWNER decision
+## (a glibc image with a clean CVE record; Alpine is out by IMG-NONALPINE).
+## The policy is not weakened to fit: run `make grype-scan` and read the
+## verdict; the owner adds the plan entry when the image can carry it.
+grype-scan:
+	@for t in grype docker go; do command -v "$$t" >/dev/null 2>&1 || { echo "grype-scan: $$t is not installed — cannot scan or judge the image; refusing to pass silently" >&2; exit 2; }; done; \
+	test -d "$(IDP_OSS_DIR)/tools/grype-gate" || { echo "grype-scan: sibling judge absent at $(IDP_OSS_DIR)/tools/grype-gate — refusing to pass silently" >&2; exit 2; }; \
+	if [ -n "$(SCAN)" ]; then \
+		report="$(SCAN)"; tmp=""; \
+	else \
+		tmp=$$(mktemp -t ui-grype); report="$$tmp"; \
+		docker build -q -t identuum-ui:verify . >/dev/null || { echo "grype-scan: docker build of identuum-ui:verify failed — nothing to judge" >&2; rm -f "$$tmp"; exit 2; }; \
+		host=$$(docker context inspect --format '{{(index .Endpoints "docker").Host}}' 2>/dev/null); \
+		DOCKER_HOST="$${host:-$$DOCKER_HOST}" grype identuum-ui:verify -o json > "$$tmp" 2>/dev/null || { echo "grype-scan: grype could not scan identuum-ui:verify — nothing to judge" >&2; rm -f "$$tmp"; exit 2; }; \
+	fi; \
+	go run -C "$(IDP_OSS_DIR)" ./tools/grype-gate -scan "$$report" -allowlist "$(CURDIR)/grype-allowlist.json"; rc=$$?; \
+	[ -z "$$tmp" ] || rm -f "$$tmp"; \
+	exit $$rc
 
 ## verify: THE UI gate set — biome + typecheck + vitest + rulefloor, all
 ## four, every slice (THE-UI-FORMAT-FLOOR). Slices run THIS target, never
