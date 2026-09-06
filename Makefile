@@ -18,7 +18,7 @@ DEV_PLATFORM_STATUS_URL ?= http://127.0.0.1:7104/platform-status
 # 127.0.0.1:7315 instead of the monolith on 7215.
 AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 
-.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory ci-witness ci-fetch
+.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory ci-witness ci-fetch toolchain-parity
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
 .PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
 .PHONY: e2e-full
@@ -223,6 +223,58 @@ ci-fetch:
 	@echo "ci-fetch: wrote CI-WITNESS.txt from run $(RUN) (node $(or $(NODE),22)) — READ IT, then commit it."
 	@$(MAKE) --no-print-directory ci-witness || true
 
+## toolchain-parity: the toolchain this tree declares in four places must AGREE
+## with each other and with the machine running verify (the idp-oss shape,
+## rule CI-LOCAL-PARITY-1; THE-UI-GATE-PARITY-2, 2026-09-06). The idp-oss judge
+## reads Go pins, so this repo carries its own comparisons as a recipe — nine
+## rules, ten pins (the last rule holds two digests):
+##   1. every Dockerfile FROM node:<major> names ONE major;
+##   2. that major is in ci.yml's matrix.node;
+##   3. package.json engines.node floor has that major;
+##   4. @types/node has that major (dependencyNotes: types track the engines
+##      floor, never the newest local runtime);
+##   5. the local node major is in the CI matrix (you test what CI tests);
+##   6. local pnpm equals package.json packageManager (corepack pins CI to it);
+##   7. ci.yml GO_VERSION equals the local go;
+##   8. ci.yml RULEFLOOR_VERSION equals the local rulefloor;
+##   9. ci.yml GATE_WITNESS_SHA256 and RULEFLOOR_GATE_SHA256 equal the sha256
+##      of the vendored scripts CI verifies with `sha256sum -c`.
+## Measured at landing: all nine agree (image 22 in matrix 22/24, engines and
+## @types/node 22, local node 24 in the matrix, pnpm 11.3.0, go 1.27.1,
+## rulefloor v0.9.1, both digests). A disagreement prints the pin and the two
+## values and FAILS; an absent tool is exit 2 by name. Local grype is not a pin
+## here: the ui CI installs no grype.
+toolchain-parity:
+	@for t in node pnpm go rulefloor shasum; do command -v "$$t" >/dev/null 2>&1 || { echo "toolchain-parity: $$t is not installed — cannot compare the pins; refusing to pass silently" >&2; exit 2; }; done; \
+	bad=0; agree=0; \
+	img=$$(grep -E '^FROM node:' Dockerfile | sed -E 's/^FROM node:([0-9]+).*/\1/' | sort -u | tr '\n' ' ' | sed 's/ $$//'); \
+	case "$$img" in *" "*|"") echo "  DISAGREE  Dockerfile FROM node majors: '$$img' — every stage must name one major"; bad=1;; *) agree=$$((agree+1));; esac; \
+	matrix=$$(grep -E '^[[:space:]]+node: \[' .github/workflows/ci.yml | head -1 | grep -oE '[0-9]+' | tr '\n' ' '); \
+	case " $$matrix" in *" $$img "*) agree=$$((agree+1));; *) echo "  DISAGREE  Dockerfile node $$img is not in ci.yml matrix.node [$$matrix]"; bad=1;; esac; \
+	eng=$$(node -p "require('./package.json').engines.node" | sed -E 's/^[^0-9]*([0-9]+).*/\1/'); \
+	[ "$$eng" = "$$img" ] && agree=$$((agree+1)) || { echo "  DISAGREE  engines.node floor major $$eng vs Dockerfile node $$img"; bad=1; }; \
+	types=$$(node -p "require('./package.json').devDependencies['@types/node']" | sed -E 's/^[^0-9]*([0-9]+).*/\1/'); \
+	[ "$$types" = "$$img" ] && agree=$$((agree+1)) || { echo "  DISAGREE  @types/node major $$types vs Dockerfile node $$img"; bad=1; }; \
+	lnode=$$(node --version | sed -E 's/^v([0-9]+).*/\1/'); \
+	case " $$matrix" in *" $$lnode "*) agree=$$((agree+1));; *) echo "  DISAGREE  local node major $$lnode is not in ci.yml matrix.node [$$matrix]"; bad=1;; esac; \
+	pm=$$(node -p "require('./package.json').packageManager"); lpnpm=$$(pnpm --version); \
+	[ "$$pm" = "pnpm@$$lpnpm" ] && agree=$$((agree+1)) || { echo "  DISAGREE  packageManager $$pm vs local pnpm $$lpnpm"; bad=1; }; \
+	cigo=$$(grep -E '^[[:space:]]+GO_VERSION:' .github/workflows/ci.yml | head -1 | sed -E 's/.*GO_VERSION:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/'); lgo=$$(go version | awk '{print $$3}' | sed 's/^go//'); \
+	[ "$$cigo" = "$$lgo" ] && agree=$$((agree+1)) || { echo "  DISAGREE  ci.yml GO_VERSION $$cigo vs local go $$lgo"; bad=1; }; \
+	cirf=$$(grep -E '^[[:space:]]+RULEFLOOR_VERSION:' .github/workflows/ci.yml | head -1 | sed -E 's/.*RULEFLOOR_VERSION:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/'); lrf=$$(rulefloor version --json | sed -E 's/.*"version":"([^"]+)".*/\1/'); \
+	[ "$$cirf" = "$$lrf" ] && agree=$$((agree+1)) || { echo "  DISAGREE  ci.yml RULEFLOOR_VERSION $$cirf vs local rulefloor $$lrf"; bad=1; }; \
+	for pair in GATE_WITNESS_SHA256=scripts/gate-witness.sh RULEFLOOR_GATE_SHA256=scripts/rulefloor-install-gate.sh; do \
+		key=$${pair%%=*}; file=$${pair#*=}; \
+		pin=$$(grep -E "^[[:space:]]+$$key:" .github/workflows/ci.yml | head -1 | sed -E 's/.*:[[:space:]]*"?([0-9a-f]{64})"?.*/\1/'); \
+		have=$$(shasum -a 256 "$$file" | awk '{print $$1}'); \
+		[ "$$pin" = "$$have" ] && agree=$$((agree+1)) || { echo "  DISAGREE  ci.yml $$key $$(printf '%.12s' "$$pin")… vs sha256($$file) $$(printf '%.12s' "$$have")…"; bad=1; }; \
+	done; \
+	if [ "$$bad" -ne 0 ]; then \
+		echo "check FAILED: toolchain-parity — the pins above disagree; align the declaration or the machine, never the gate"; \
+		exit 1; \
+	fi; \
+	echo "check OK: toolchain-parity $$agree pins agree (node $$img in matrix [$$matrix], engines/@types/node $$eng/$$types, local node $$lnode, pnpm $$lpnpm, go $$lgo, rulefloor $$lrf, both vendored digests)"
+
 ## verify: THE UI gate set — biome + typecheck + vitest + rulefloor, all
 ## four, every slice (THE-UI-FORMAT-FLOOR). Slices run THIS target, never
 ## an ad-hoc subset: format drift accumulated invisibly across several
@@ -266,6 +318,7 @@ verify:
 		'frozen-lockfile=$(MAKE) --no-print-directory frozen-lockfile' \
 		'advisory=$(MAKE) --no-print-directory advisory' \
 		'ci-witness=$(MAKE) --no-print-directory ci-witness' \
+		'toolchain-parity=$(MAKE) --no-print-directory toolchain-parity' \
 		'rulefloor=pnpm rulefloor' \
 		'biome=pnpm exec biome check . --reporter=json --max-diagnostics=none' \
 		'tsc=pnpm exec tsc --noEmit' \
