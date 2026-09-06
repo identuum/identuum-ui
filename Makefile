@@ -18,7 +18,7 @@ DEV_PLATFORM_STATUS_URL ?= http://127.0.0.1:7104/platform-status
 # 127.0.0.1:7315 instead of the monolith on 7215.
 AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 
-.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory ci-witness ci-fetch toolchain-parity grype-scan ledger-diff-gate ledger-rebase
+.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory ci-witness ci-fetch toolchain-parity grype-scan ledger-diff-gate ledger-rebase workflow-yaml
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
 .PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
 .PHONY: e2e-full
@@ -154,6 +154,37 @@ credential-transparency:
 		exit 1; \
 	fi; \
 	echo "credential-transparency: every committed credential is fake by construction"
+
+## workflow-yaml: every .github/workflows/*.yml must PARSE as YAML, or the
+## workflow GitHub would run never starts and every gate it declares is a
+## claim. THE-UI-YAML-LINE-111 (2026-09-06): the pnpm-install-tool step
+## THE-UI-NODE-26-LATEST wrote carried a colon-space inside a plain scalar —
+## invalid YAML — and survived a green verify, a green mint and four new gates
+## in one day, because nothing in this plan parsed the workflows; the
+## byte-scanning route gate passed it, GitHub would have refused it. The
+## parser is yq (mikefarah, Go yaml.v3 — the same parser family the
+## workspace's achta uses); the file is read whole (`yq eval '.'`), the
+## scanner's own error is printed verbatim, and an absent yq is exit 2 by
+## name, never a silent pass. Sits after credential-transparency, before the
+## pnpm gates: a workflow that cannot parse is a repo-hygiene fact, cheap
+## and early.
+workflow-yaml:
+	@command -v yq >/dev/null 2>&1 || { echo "workflow-yaml: yq is not installed — cannot parse .github/workflows/*.yml; refusing to pass silently" >&2; exit 2; }; \
+	bad=0; n=0; \
+	for f in .github/workflows/*.yml .github/workflows/*.yaml; do \
+		[ -f "$$f" ] || continue; n=$$((n+1)); \
+		if out=$$(yq eval '.' "$$f" 2>&1 >/dev/null); then \
+			echo "  parses   $$f"; \
+		else \
+			echo "  INVALID  $$f"; printf '%s\n' "$$out" | sed 's/^/           /'; bad=1; \
+		fi; \
+	done; \
+	[ "$$n" -gt 0 ] || { echo "workflow-yaml: no workflow files under .github/workflows — nothing to parse" >&2; exit 2; }; \
+	if [ "$$bad" -ne 0 ]; then \
+		echo "check FAILED: workflow-yaml — a workflow GitHub cannot parse never runs; fix the file, never the gate"; \
+		exit 1; \
+	fi; \
+	echo "check OK: workflow-yaml $$n workflow file(s) parse (yq $$(yq --version 2>/dev/null | grep -oE 'v[0-9.]+' | head -1))"
 
 ## frozen-lockfile: package.json and pnpm-lock.yaml must agree, exactly as CI
 ## demands. ci.yml's "Install dependencies (frozen lockfile)" step runs
@@ -390,6 +421,7 @@ verify:
 		'image-base-parity=$(MAKE) --no-print-directory image-base-parity' \
 		'tracked-binary-check=$(MAKE) --no-print-directory tracked-binary-check' \
 		'credential-transparency=$(MAKE) --no-print-directory credential-transparency' \
+		'workflow-yaml=$(MAKE) --no-print-directory workflow-yaml' \
 		'frozen-lockfile=$(MAKE) --no-print-directory frozen-lockfile' \
 		'advisory=$(MAKE) --no-print-directory advisory' \
 		'ci-witness=$(MAKE) --no-print-directory ci-witness' \
