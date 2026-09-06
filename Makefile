@@ -18,7 +18,7 @@ DEV_PLATFORM_STATUS_URL ?= http://127.0.0.1:7104/platform-status
 # 127.0.0.1:7315 instead of the monolith on 7215.
 AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 
-.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory ci-witness ci-fetch toolchain-parity grype-scan ledger-diff-gate ledger-rebase workflow-yaml
+.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory ci-witness ci-fetch toolchain-parity grype-scan ledger-diff-gate ledger-rebase workflow-yaml workflow-yaml-parity
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
 .PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
 .PHONY: e2e-full
@@ -185,6 +185,33 @@ workflow-yaml:
 		exit 1; \
 	fi; \
 	echo "check OK: workflow-yaml $$n workflow file(s) parse (yq $$(yq --version 2>/dev/null | grep -oE 'v[0-9.]+' | head -1))"
+
+## workflow-yaml-parity: this repo's workflow-yaml block must equal the copy
+## shared with identuum-idp-oss, byte for byte — the image-base-parity
+## discipline above: a copy that drifts to a laxer parser accepts what GitHub
+## rejects, which is worse than no gate. THE-UI-WORKFLOW-YAML-PARITY
+## (2026-09-06): idp-oss carried this pin first and this repo did not, so an
+## edit HERE turned idp-oss red while this repo stayed green — the alarm
+## pointed at the repo that had not changed. Both sides now carry the same
+## constant. The unit is the target line through the `check OK` line, hashed
+## as extracted (no trailing blank line, unlike image-base-parity: this block
+## ends in an echo, not a `fi`). CHANGING THE GATE ON PURPOSE: edit one copy,
+## read the new digest out of this target's failure, update the block AND
+## WORKFLOW_YAML_MD5 in every copy.
+WORKFLOW_YAML_MD5 ?= d63f3fdb5cd211c38abe98a03ecb1544
+
+workflow-yaml-parity:
+	@blk="$$(awk '/^workflow-yaml:/{f=1} f{print} f&&/check OK: workflow-yaml/{exit}' Makefile)"; \
+	got="$$(printf '%s\n' "$$blk" | { md5sum 2>/dev/null || md5; } | awk '{print $$1}')"; \
+	if [ "$$got" != "$(WORKFLOW_YAML_MD5)" ]; then \
+		echo "WORKFLOW-YAML COPY HAS DIVERGED:"; \
+		echo "  wanted md5 $(WORKFLOW_YAML_MD5)"; \
+		echo "  got    md5 $$got"; \
+		echo "This repo's workflow-yaml no longer matches the copy shared with identuum-idp-oss."; \
+		echo "Either restore this copy, or update the block AND WORKFLOW_YAML_MD5 in every copy."; \
+		exit 1; \
+	fi; \
+	echo "check OK: workflow-yaml-parity block md5 $$got matches the shared pin"
 
 ## frozen-lockfile: package.json and pnpm-lock.yaml must agree, exactly as CI
 ## demands. ci.yml's "Install dependencies (frozen lockfile)" step runs
@@ -422,6 +449,7 @@ verify:
 		'tracked-binary-check=$(MAKE) --no-print-directory tracked-binary-check' \
 		'credential-transparency=$(MAKE) --no-print-directory credential-transparency' \
 		'workflow-yaml=$(MAKE) --no-print-directory workflow-yaml' \
+		'workflow-yaml-parity=$(MAKE) --no-print-directory workflow-yaml-parity' \
 		'frozen-lockfile=$(MAKE) --no-print-directory frozen-lockfile' \
 		'advisory=$(MAKE) --no-print-directory advisory' \
 		'ci-witness=$(MAKE) --no-print-directory ci-witness' \
