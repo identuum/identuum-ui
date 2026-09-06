@@ -18,7 +18,7 @@ DEV_PLATFORM_STATUS_URL ?= http://127.0.0.1:7104/platform-status
 # 127.0.0.1:7315 instead of the monolith on 7215.
 AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 
-.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity
+.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
 .PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
 .PHONY: e2e-full
@@ -53,6 +53,45 @@ wiki-fresh:
 		case "$$out" in *"flag provided but not defined: -only"*) echo "wiki-fresh: achta >= v0.4.1 required (wiki check --only freshness); installed: $$(achta version)" >&2; exit 2;; esac; \
 		exit $$rc; \
 	fi
+
+## tracked-binary-check: no compiled binary and no oversized blob may be
+## TRACKED. Ported as-is from identuum-idp-oss (THE-STRAY-BINARY, 2026-08-07;
+## THE-UI-GATE-PARITY, 2026-09-06): there a 3.8 MB Mach-O swept up by a broad
+## `git add` rode every clone and a source tag before a rebuild overwrote it.
+## Here the same one `git add` away is a `.next` output or a stray binary.
+## Refused: any tracked file whose first four bytes are ELF or Mach-O magic
+## (either endianness, plus the universal-binary cafebabe), or whose size
+## exceeds 1 MiB. Measured before landing: largest tracked file 203887 bytes,
+## 0 magic hits across 507 tracked files.
+##
+## NO ALLOWLIST, deliberately: if a legitimate oversized file ever lands,
+## this prints it and FAILS for an owner ruling, rather than allowlisting it
+## silently — an allowlist added in the same commit as the file it excuses is
+## how gates go quiet. One-repo self-contained (the CI-shape rule): git
+## ls-files + head + od, nothing outside the checkout.
+tracked-binary-check:
+	@bad=0; \
+	while IFS= read -r -d '' f; do \
+		[ -f "$$f" ] || continue; \
+		magic=$$(head -c4 "$$f" 2>/dev/null | od -An -tx1 | tr -d ' \n'); \
+		case "$$magic" in \
+			7f454c46) echo "TRACKED BINARY (ELF): $$f"; bad=1;; \
+			feedface|feedfacf|cffaedfe|cefaedfe) echo "TRACKED BINARY (Mach-O): $$f"; bad=1;; \
+			cafebabe) echo "TRACKED BINARY (universal/cafebabe): $$f"; bad=1;; \
+		esac; \
+		size=$$(wc -c < "$$f" | tr -d ' '); \
+		if [ "$$size" -gt 1048576 ]; then \
+			echo "TRACKED FILE OVER 1 MiB: $$f ($$size bytes)"; bad=1; \
+		fi; \
+	done < <(git ls-files -z); \
+	if [ "$$bad" -ne 0 ]; then \
+		echo "A compiled binary or oversized blob is TRACKED. If it is a stray build,"; \
+		echo "git rm it (and give it a /name .gitignore line). If it is legitimate,"; \
+		echo "this gate has NO allowlist on purpose — take it to the owner for a"; \
+		echo "ruling instead of teaching the gate to look away."; \
+		exit 1; \
+	fi; \
+	echo "tracked-binary-check: no tracked ELF/Mach-O and nothing over 1 MiB"
 
 ## verify: THE UI gate set — biome + typecheck + vitest + rulefloor, all
 ## four, every slice (THE-UI-FORMAT-FLOOR). Slices run THIS target, never
@@ -92,6 +131,7 @@ verify:
 		'wiki-fresh=$(MAKE) --no-print-directory wiki-fresh' \
 		'image-base-check=$(MAKE) --no-print-directory image-base-check' \
 		'image-base-parity=$(MAKE) --no-print-directory image-base-parity' \
+		'tracked-binary-check=$(MAKE) --no-print-directory tracked-binary-check' \
 		'rulefloor=pnpm rulefloor' \
 		'biome=pnpm exec biome check . --reporter=json --max-diagnostics=none' \
 		'tsc=pnpm exec tsc --noEmit' \
