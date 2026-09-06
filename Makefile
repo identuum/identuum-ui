@@ -1,3 +1,10 @@
+## SHELL: recipes run /bin/bash, the same pin identuum-idp-oss carries.
+## Without it make runs /bin/sh, which is bash 3.2 in POSIX mode on macOS and
+## dash on Debian; today no recipe here uses a construct that differs between
+## them (THE-UI-HOUSEKEEPING, 2026-09-06: 99 recipe lines scanned, 0 bash-only
+## or bash-4-only constructs), so the pin is preventive parity, not a fix.
+SHELL := /bin/bash
+
 COMPOSE_FILE ?= deployment/docker-compose.local.yml
 COMPOSE_CMD ?= docker compose
 DEV_SERVICE ?= identuum-ui
@@ -17,23 +24,34 @@ AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 .PHONY: e2e-full
 
 ## wiki-fresh: WIKI-1 gate — fail verify when this repo's wiki page is BEHIND.
-## Runs wiki-freshness.sh --repo identuum-ui --strict against the sibling wiki
-## checkout. BE HONEST ABOUT WHAT THIS ENFORCES: at verify time HEAD is the
+## Runs `achta wiki check --only freshness` against the sibling wiki checkout,
+## the same recipe identuum-idp-oss carries. Until THE-UI-HOUSEKEEPING
+## (2026-09-06) this target still called tools/wiki-freshness.sh, a script the
+## wiki retired on 2026-09-05 (THE-THREE-VERB-RETIREMENT): every ui `make
+## verify` since then stopped at target 2 with "No such file or directory",
+## exit 127 — a gate that fails because its tool is gone, not because the pin
+## is stale. BE HONEST ABOUT WHAT THIS ENFORCES: at verify time HEAD is the
 ## LAST commit, so a green gate means "the PREVIOUS slice's wiki update was
 ## banked before new work is verified" — zero commits of allowed drift. It does
 ## NOT and cannot check the commit you are about to make; the §F-bis append for
 ## THIS slice is still on you, and the gate will catch its absence on the NEXT
 ## slice's verify. A missing wiki dir (fresh clone / CI) prints one loud SKIPPED
-## line and continues — visible, never silent. A typo'd repo name FAILS (the
-## checker exits 2 when --repo matches no page), so the gate cannot be
-## accidentally disabled by a rename.
+## line and continues — visible, never silent. A missing or too-old achta exits
+## 2 by name, never 0. The old typo guard ("--repo matches no page exits 2") is
+## gone with the --repo flag; what replaces it is --wiki-dir's own refusal of
+## any directory that is not a workspace's direct wiki child, so a mistyped
+## WIKI_DIR fails here rather than checking nothing.
 WIKI_DIR ?= ../wiki
 
 wiki-fresh:
 	@if [ ! -d "$(WIKI_DIR)" ]; then \
 		echo "WIKI FRESHNESS SKIPPED: no wiki at $(WIKI_DIR)"; \
 	else \
-		bash "$(WIKI_DIR)/tools/wiki-freshness.sh" --repo identuum-ui --strict; \
+		command -v achta >/dev/null 2>&1 || { echo "wiki-fresh: achta is not installed — this gate needs achta >= v0.4.1 (wiki check --only freshness)" >&2; exit 2; }; \
+		out=$$(achta --wiki-dir "$(WIKI_DIR)" wiki check --only freshness 2>&1); rc=$$?; \
+		printf '%s\n' "$$out"; \
+		case "$$out" in *"flag provided but not defined: -only"*) echo "wiki-fresh: achta >= v0.4.1 required (wiki check --only freshness); installed: $$(achta version)" >&2; exit 2;; esac; \
+		exit $$rc; \
 	fi
 
 ## verify: THE UI gate set — biome + typecheck + vitest + rulefloor, all
