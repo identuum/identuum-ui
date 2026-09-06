@@ -14,7 +14,7 @@
  *   - The spec body never includes a plausible token plaintext
  *     literal (no 50+ base32 run).
  *   - The spec body never inlines a Postgres connection string
- *     with credentials (no `postgres://user:pass@host` literal).
+ *     with credentials (no `postgres://` URL carrying `user:password@`).
  *   - The spec never injects raw backup body bytes (`CREATE TABLE`,
  *     `INSERT INTO`, `COPY`) into assertions in the positive sense.
  *     A negative `expect(...).not.toContain(...)` assertion is

@@ -18,7 +18,7 @@ DEV_PLATFORM_STATUS_URL ?= http://127.0.0.1:7104/platform-status
 # 127.0.0.1:7315 instead of the monolith on 7215.
 AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 
-.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check
+.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
 .PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
 .PHONY: e2e-full
@@ -93,6 +93,68 @@ tracked-binary-check:
 	fi; \
 	echo "tracked-binary-check: no tracked ELF/Mach-O and nothing over 1 MiB"
 
+## credential-transparency: every committed credential must be UNMISTAKABLY
+## fake. Ported from identuum-idp-oss (THE-TRANSPARENT-CREDENTIALS, 2026-08-07)
+## with the ui's OWN shapes, derived from what the tree held on 2026-09-06
+## (THE-UI-GATE-PARITY): the ui is not a Go service, so a credential reaches
+## a running system here through compose env blocks, shell scripts, env
+## example files and docs — never through TypeScript fixtures, which feed
+## mocked clients (55 such fixtures exist and are NOT credentials). Four
+## rules, NO allowlist:
+##   1. every tracked postgres://<user>:<pass>@ literal has the password
+##      dev-<user>-not-a-secret (2 today, e2e/docker-compose.e2e.yml); a
+##      password that is a $-expansion is dynamic, not committed, and skipped;
+##   2. every env-style line whose KEY ends in PASSWORD or _PW and carries a
+##      literal value (no $ inside) declares itself: the value contains
+##      not-a-secret, or starts with REPLACE_ME (the env-example convention);
+##   3. every TOTP seed literal (a TOTP_SECRET/mfa_secret/secret key with 16+
+##      base32 chars) is the RFC 6238 test seed JBSWY3DPEHPK3PXP or one
+##      repeated character (2 today);
+##   4. every 64-hex *_ENCRYPTION_KEY literal is the sequential 00 01 … 1f
+##      byte string, a value nobody would deploy (1 today).
+## Anything else prints file:line and FAILS for an owner ruling — the value is
+## never printed. An allowlist added in the same commit as the value it excuses
+## is how gates go quiet. One-repo self-contained (the CI-shape rule).
+credential-transparency:
+	@bad=0; \
+	while IFS=: read -r f ln m; do \
+		user=$$(printf '%s' "$$m" | sed -E 's|postgres://([A-Za-z_][A-Za-z0-9_]*):.*|\1|'); \
+		pass=$$(printf '%s' "$$m" | sed -E 's|postgres://[A-Za-z_][A-Za-z0-9_]*:(.*)@$$|\1|'); \
+		case "$$pass" in \$$*) continue;; esac; \
+		if [ "$$pass" != "dev-$$user-not-a-secret" ]; then \
+			echo "OPAQUE CREDENTIAL: $$f:$$ln — postgres user '$$user' has a password that is not dev-$$user-not-a-secret (value not printed)"; \
+			bad=1; \
+		fi; \
+	done < <(git grep -noE "postgres://[A-Za-z_][A-Za-z0-9_]*:[^@\"'[:space:]]+@" -- .); \
+	while IFS=: read -r f ln m; do \
+		val=$$(printf '%s' "$$m" | sed -E "s/^[^=:]*[=:][[:space:]]*//; s/^[\"']//; s/[\"']?[[:space:]]*$$//"); \
+		case "$$val" in *not-a-secret*|*NOT-A-SECRET*|*Not-A-Secret*|REPLACE_ME*) : ;; \
+			*) echo "OPAQUE CREDENTIAL: $$f:$$ln — a password literal that does not declare itself fake (value not printed)"; bad=1;; \
+		esac; \
+	done < <(git grep -nIE "^[[:space:]]*(export[[:space:]]+)?[A-Z][A-Z0-9_]*(PASSWORD|_PW)[[:space:]]*[:=][[:space:]]*[\"']?[^\"'\$$[:space:]]{4,}[\"']?[[:space:]]*$$" -- .); \
+	while IFS=: read -r f ln m; do \
+		seed=$$(printf '%s' "$$m" | grep -oE '[A-Z2-7]{16,}' | head -1); \
+		case "$$seed" in JBSWY3DPEHPK3PXP) : ;; \
+			*) if [ "$$(printf '%s' "$$seed" | fold -w1 | sort -u | wc -l | tr -d ' ')" != "1" ]; then \
+				echo "OPAQUE CREDENTIAL: $$f:$$ln — a TOTP seed literal that is neither the RFC 6238 test seed nor one repeated character (value not printed)"; bad=1; \
+			fi;; \
+		esac; \
+	done < <(git grep -nIE "(TOTP_SECRET|mfa_secret|[Ss]ecret)[\"']?[[:space:]]*[:=][[:space:]]*[\"']?[A-Z2-7]{16,}" -- .); \
+	seq_key=$$(printf '%02x' $$(seq 0 31) | tr -d ' '); \
+	while IFS=: read -r f ln m; do \
+		case "$$m" in *"$$seq_key"*) : ;; \
+			*) echo "OPAQUE CREDENTIAL: $$f:$$ln — a 64-hex encryption-key literal that is not the sequential 00..1f fake (value not printed)"; bad=1;; \
+		esac; \
+	done < <(git grep -nIE "_ENCRYPTION_KEY[\"']?[[:space:]]*[:=][[:space:]]*[\"']?[0-9a-f]{64}" -- .); \
+	if [ "$$bad" -ne 0 ]; then \
+		echo "A committed credential does not declare itself fake. The shapes accepted here:"; \
+		echo "dev-<user>-not-a-secret (DSNs and PASSWORD/_PW lines), REPLACE_ME_* (env examples),"; \
+		echo "the RFC 6238 test seed or one repeated character (TOTP seeds), the sequential"; \
+		echo "00..1f key — anything else goes to the OWNER for a ruling; NO allowlist on purpose."; \
+		exit 1; \
+	fi; \
+	echo "credential-transparency: every committed credential is fake by construction"
+
 ## verify: THE UI gate set — biome + typecheck + vitest + rulefloor, all
 ## four, every slice (THE-UI-FORMAT-FLOOR). Slices run THIS target, never
 ## an ad-hoc subset: format drift accumulated invisibly across several
@@ -132,6 +194,7 @@ verify:
 		'image-base-check=$(MAKE) --no-print-directory image-base-check' \
 		'image-base-parity=$(MAKE) --no-print-directory image-base-parity' \
 		'tracked-binary-check=$(MAKE) --no-print-directory tracked-binary-check' \
+		'credential-transparency=$(MAKE) --no-print-directory credential-transparency' \
 		'rulefloor=pnpm rulefloor' \
 		'biome=pnpm exec biome check . --reporter=json --max-diagnostics=none' \
 		'tsc=pnpm exec tsc --noEmit' \

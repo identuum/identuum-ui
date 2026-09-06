@@ -36,7 +36,7 @@ ISSUER="http://127.0.0.1:${IDP_PORT}"
 # Policy-conforming test credential (>=12 chars; upper+lower+digit+special from
 # the allowed set "!@#%^&*-+=?_~"). This is a throwaway smoke credential.
 ADMIN_EMAIL="site_admin@system.local"
-ADMIN_PW="Sm0ke_Smoke_Test_9"
+ADMIN_PW="Sm0ke!Not-A-Secret-9"
 # Known base32 TOTP secret seeded for the site_admin (OSS forces MFA for
 # site_admin; OSS stores mfa_secret as plaintext base32). The spec computes the
 # RFC 6238 code from this and completes the real MFA login.

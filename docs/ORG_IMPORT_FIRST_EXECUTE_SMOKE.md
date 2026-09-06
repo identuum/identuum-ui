@@ -46,7 +46,7 @@ Create a local env file (already covered by `.gitignore` —
 cat > .smoke-org-import.env <<'EOF'
 # IDP site_admin login
 IDENTUUM_SITE_ADMIN_EMAIL=site_admin@system.local
-IDENTUUM_SITE_ADMIN_PASSWORD=replace-me
+IDENTUUM_SITE_ADMIN_PASSWORD=REPLACE_ME_site_admin_password
 # Only consumed if IDP returns mfa_required=true. The harness generates
 # the current TOTP code internally (HMAC-SHA1, RFC 6238); the secret and
 # the generated code are never logged.
@@ -61,7 +61,7 @@ IDENTUUM_SITE_ADMIN_TOTP_SECRET=replace-me
 
 # AG operator login (preferred when AG bearer token is not supplied)
 IDENTUUM_AG_OPERATOR_EMAIL=replace-me
-IDENTUUM_AG_OPERATOR_PASSWORD=replace-me
+IDENTUUM_AG_OPERATOR_PASSWORD=REPLACE_ME_ag_operator_password
 
 # Alternative to AG email/password — operator bearer token. If both this
 # and AG email/password are set, this takes precedence on the AG side.
