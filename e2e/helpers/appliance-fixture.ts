@@ -257,6 +257,20 @@ function must(cond: boolean, msg: string): void {
   if (!cond) throw new Error(`[e2e fixture] ${msg}`);
 }
 
+/**
+ * The response's `error` field, printed ONLY if it is a bare code — the shape
+ * every branch of the appliance's login handler answers with
+ * (invalid_credentials, account_unverified, mfa_required,
+ * mfa_enrollment_required, temporarily_unavailable, internal_error). Anything
+ * else (a message, a token, a hash, a missing field) prints as a placeholder,
+ * never as its content: a failure message must never carry a credential.
+ */
+function errorCode(json: Json): string {
+  const v = json.error;
+  if (typeof v !== "string") return "none";
+  return /^[a-z0-9_]{1,40}$/.test(v) ? v : "non-code";
+}
+
 const SITE_ADMIN_EMAIL = "site_admin@system.local";
 
 /**
@@ -302,9 +316,16 @@ async function firstLoginBearerAsync(
   password: string
 ): Promise<LoginResult> {
   const login = await api(base, "POST", "/api/v1/auth/login", { email, password });
+  // THE-FIXTURE-SAYS-WHICH (2026-09-06): this assertion tests TWO things —
+  // the status AND the session_id — and its message reported only the status,
+  // so a bare 401 (invalid_credentials, account_unverified) and a 401 that
+  // lost its handle (mfa_enrollment_required without session_id) printed the
+  // identical sentence; the 22:09 red mint could not be diagnosed for exactly
+  // that reason. The message now names the response's error CODE and whether
+  // session_id was PRESENT — never its value. The condition is unchanged.
   must(
     login.status === 401 && Boolean(login.json.session_id),
-    `${email}: first login want 401+session_id, got ${login.status}`
+    `${email}: first login want 401+session_id, got ${login.status} error=${errorCode(login.json)} session_id=${login.json.session_id ? "present" : "absent"}`
   );
   const sessionId = login.json.session_id as string;
   const init = await api(base, "POST", "/api/v1/auth/login/mfa/enroll/initiate", {
