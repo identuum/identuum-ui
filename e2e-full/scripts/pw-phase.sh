@@ -21,9 +21,10 @@
 # (full-run.sh sets it) it copies the phase's Playwright output directory
 # (traces, error-context.md) and the JSON report under
 # $E2E_EVIDENCE_DIR/<phase>/ before the next phase can wipe them. The
-# "check OK:" prefix on a failure line is the record's only evidence channel
-# (gate-witness.sh's EVIDENCE_RE is the pinned shared master); the phase's
-# exit code, not the prefix, is the verdict.
+# failure lines carry the "check FAILED:" prefix — THE-RECORD-SAYS-FAILED
+# (2026-09-07) taught gate-witness.sh's EVIDENCE_RE to capture it beside
+# "check OK:", so a failure no longer has to say OK to reach the record; the
+# phase's exit code is still the verdict.
 set -u
 
 PHASE="$1"
@@ -67,7 +68,8 @@ const s = j.stats || {};
 const passed = s.expected ?? 0;
 const skipped = s.skipped ?? 0;
 const failed = (s.unexpected ?? 0) + (s.flaky ?? 0);
-console.log(`check OK: ${process.argv[2]} passed=${passed} skipped=${skipped} failed=${failed}`);
+// THE-RECORD-SAYS-FAILED: the summary says FAILED when anything failed.
+console.log(`check ${failed > 0 ? "FAILED" : "OK"}: ${process.argv[2]} passed=${passed} skipped=${skipped} failed=${failed}`);
 ' "$JSON_OUT" "$PHASE"; then
 	echo "pw-phase: $PHASE summary derivation failed" >&2
 	[ "$rc" -eq 0 ] && rc=1
@@ -97,10 +99,10 @@ for (const line of out) console.log(line);
 ' "$JSON_OUT" 2>/dev/null || true)
 if [ -n "$failed_names" ]; then
 	while IFS= read -r line; do
-		echo "check OK: $PHASE failed: $line"
+		echo "check FAILED: $PHASE failed: $line"
 	done <<<"$failed_names"
 elif [ "$rc" -ne 0 ]; then
-	echo "check OK: $PHASE failed: no test is marked failed in the JSON report, but playwright exited $rc — read the phase output above"
+	echo "check FAILED: $PHASE failed: no test is marked failed in the JSON report, but playwright exited $rc — read the phase output above"
 fi
 
 # KEEP THE EVIDENCE of a red phase before the next Playwright invocation wipes
