@@ -1,48 +1,51 @@
 schema: gate-run.v1
 gate: identuum-ui make verify
 note: evidence lines are the tools' own summary lines; a summary format this script does not match is recorded only as an exit code
-repo-head: a08860b
-started: 2026-09-06T14:35:42Z
-plan: tool-versions wiki-fresh image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory ci-witness toolchain-parity rulefloor ledger-diff-gate biome tsc vitest
-tool: node       v24.18.0  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/node
-tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/pnpm
+repo-head: e60c29d
+started: 2026-09-06T15:03:37Z
+plan: tool-versions wiki-fresh image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory ci-witness toolchain-parity rulefloor ledger-diff-gate grype-scan biome tsc vitest
+tool: node       v26.8.1  /Users/odemir/.local/state/fnm_multishells/55454_1788707017322/bin/node
+tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/55454_1788707017322/bin/pnpm
 tool: rulefloor  {"schema_version":"rulefloor.version.v1","version":"v0.9.1","toolchain_version":"v0.9.1","version_agreement":"pass"}  /opt/homebrew/bin/rulefloor
 elapsed: tool-versions 0s
 target: tool-versions exit=0
 elapsed: wiki-fresh 0s
 target: wiki-fresh exit=0
-elapsed: image-base-check 0s
+elapsed: image-base-check 1s
 target: image-base-check exit=0
 elapsed: image-base-parity 0s
 target: image-base-parity exit=0
-elapsed: tracked-binary-check 3s
+elapsed: tracked-binary-check 2s
 target: tracked-binary-check exit=0
 elapsed: credential-transparency 0s
 target: credential-transparency exit=0
 elapsed: frozen-lockfile 0s
 target: frozen-lockfile exit=0
-elapsed: advisory 1s
+elapsed: advisory 3s
 target: advisory exit=0
 evidence: [ci-witness] check OK: ci-witness NO CI RECORD — nothing here evidences a CI run; the workflow's declarations remain declared, unrun
-elapsed: ci-witness 1s
+elapsed: ci-witness 0s
 target: ci-witness exit=0
-evidence: [toolchain-parity] check OK: toolchain-parity 10 pins agree (node 22 in matrix [22 24 ], engines/@types/node 22/22, local node 24, pnpm 11.3.0, go 1.27.1, rulefloor v0.9.1, both vendored digests)
+evidence: [toolchain-parity] check OK: toolchain-parity 11 pins agree (node 26 in matrix [26 ], engines/@types/node 26/26, local node 26, pnpm 11.3.0, go 1.27.1, rulefloor v0.9.1, both vendored digests)
 elapsed: toolchain-parity 0s
 target: toolchain-parity exit=0
 evidence: [rulefloor] check OK: 66 rows (66 armed), FLOOR 66, RED-PROOFS 63 (measured 63)
 elapsed: rulefloor 0s
 target: rulefloor exit=0
-evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=ac753c3dd2753a4e1887d6c351688ab3e3541ea8 status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=da324e1fc86bfbfb3b9508dbe252cf7f3f14d1e6173adc1d2ffd8b07d43cb841
+evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=cbe8cdb0cf92ba91ad30351d00917f48d88e97db status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=6e2de42414c5f84b3452caf5330cd0039fd2f24bccd62d829a1d1dee9f0ce516
 elapsed: ledger-diff-gate 0s
 target: ledger-diff-gate exit=0
+evidence: [grype-scan] check OK: grype-gate matches=1 fixable=0 allowlisted=0 unfixable=1 severe=0
+elapsed: grype-scan 12s
+target: grype-scan exit=0
 elapsed: biome 1s
 target: biome exit=0
 elapsed: tsc 0s
 target: tsc exit=0
 evidence: [vitest]  Test Files  129 passed (129)
 evidence: [vitest]       Tests  3472 passed (3472)
-elapsed: vitest 2s
+elapsed: vitest 1s
 target: vitest exit=0
-finished: 2026-09-06T14:35:50Z
-tree: sha256=1b10887d56c40edb42b0706477c853134687a326a04938f9c1dcc14eb19726ba
+finished: 2026-09-06T15:03:58Z
+tree: sha256=2407b126b3ae74dd19663cc34719dc014d4fc6158e2ee37cfa1367d3f7a0d920
 result: green
