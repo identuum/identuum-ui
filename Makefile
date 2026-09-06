@@ -296,20 +296,20 @@ toolchain-parity:
 ## judges an existing report instead of building and scanning (the judge's own
 ## -scan mode; used for the mutation proofs).
 ##
-## NOT IN THE verify PLAN — a finding, not a gate weakened (THE-UI-GATE-PARITY-2,
-## 2026-09-06). On its first run against the real image the verdict was
-## `check FAILED: grype-gate matches=211 fixable=1 severe=58`: 58 High/Critical
-## CVEs in Debian 12 packages the node:22-bookworm-slim base ships and Debian
-## marks not-fixed or wont-fix (util-linux and its libs, perl-base, libc6,
-## ncurses, gzip, libacl1, libtasn1), plus libpcre2-8-0 CVE-2026-86145 fixed in
-## 10.42-1+deb12u1. The freshly pulled base tag alone scans to matches=230,
-## severe=69, fixable=20; the idp-oss image scans to matches=0. Under this
-## policy no Debian-12-based Node image can pass while Debian will not fix
-## libc6, so wiring this entry into verify would make every ui witness, mint
-## and wiki close impossible until the base image changes — an OWNER decision
-## (a glibc image with a clean CVE record; Alpine is out by IMG-NONALPINE).
-## The policy is not weakened to fit: run `make grype-scan` and read the
-## verdict; the owner adds the plan entry when the image can carry it.
+## IN THE verify PLAN since THE-UI-NODE-26-LATEST (2026-09-06), right after
+## ledger-diff-gate. History, so the reason it was ever outside stays
+## readable: THE-UI-GATE-PARITY-2 landed this target but refused the plan
+## entry on a finding — the node:22-bookworm-slim runner scanned to
+## `check FAILED: grype-gate matches=211 fixable=1 severe=58`, 58 High/Critical
+## CVEs in Debian 12 packages Debian marks not-fixed or wont-fix (util-linux
+## and its libs, perl-base, libc6, ncurses, gzip, libacl1, libtasn1), so a
+## plan entry would have frozen every ui close. THE-UI-BASE-IMAGE and
+## THE-UI-NODE-26 measured five bases on this judge (node:22 fresh 230/69/20,
+## distroless nodejs22-debian12 71/30/41, distroless nodejs22-debian13 20/4/0,
+## chainguard node:latest-dev 3/2/0, chainguard node:latest 1/0/0); the owner
+## ruled for the last, pinned by digest in the Dockerfile, and the entry went
+## in only after `make grype-scan` was GREEN on that image. The policy was
+## never weakened to fit an image.
 grype-scan:
 	@for t in grype docker go; do command -v "$$t" >/dev/null 2>&1 || { echo "grype-scan: $$t is not installed — cannot scan or judge the image; refusing to pass silently" >&2; exit 2; }; done; \
 	test -d "$(IDP_OSS_DIR)/tools/grype-gate" || { echo "grype-scan: sibling judge absent at $(IDP_OSS_DIR)/tools/grype-gate — refusing to pass silently" >&2; exit 2; }; \
@@ -396,6 +396,7 @@ verify:
 		'toolchain-parity=$(MAKE) --no-print-directory toolchain-parity' \
 		'rulefloor=pnpm rulefloor' \
 		'ledger-diff-gate=$(MAKE) --no-print-directory ledger-diff-gate' \
+		'grype-scan=$(MAKE) --no-print-directory grype-scan' \
 		'biome=pnpm exec biome check . --reporter=json --max-diagnostics=none' \
 		'tsc=pnpm exec tsc --noEmit' \
 		'vitest=pnpm exec vitest run'
