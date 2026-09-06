@@ -167,7 +167,12 @@ credential-transparency:
 ## scanner's own error is printed verbatim, and an absent yq is exit 2 by
 ## name, never a silent pass. Sits after credential-transparency, before the
 ## pnpm gates: a workflow that cannot parse is a repo-hygiene fact, cheap
-## and early.
+## and early. In CI too (THE-CI-PARSES-ITS-OWN-WORKFLOWS, 2026-09-06): ci.yml
+## installs yq from a sha256-pinned release binary at the workflow-env
+## YQ_VERSION and runs this target and its parity as recorded steps, and
+## toolchain-parity holds that pin equal to the yq installed here. CI cannot
+## save ci.yml from itself — a ci.yml GitHub cannot parse never starts the
+## job — so the local run catches THIS file, CI every other workflow.
 workflow-yaml:
 	@command -v yq >/dev/null 2>&1 || { echo "workflow-yaml: yq is not installed — cannot parse .github/workflows/*.yml; refusing to pass silently" >&2; exit 2; }; \
 	bad=0; n=0; \
@@ -302,14 +307,17 @@ ci-fetch:
 ##      of the vendored scripts CI verifies with `sha256sum -c`;
 ##  10. every `pnpm@<version>` the Dockerfile installs equals packageManager
 ##      (THE-UI-NODE-26-LATEST: node 26 ships no corepack, so the build
-##      stages install pnpm from npm by an explicit version).
+##      stages install pnpm from npm by an explicit version);
+##  11. ci.yml YQ_VERSION equals the local yq (THE-CI-PARSES-ITS-OWN-WORKFLOWS,
+##      2026-09-06: CI now installs yq from a sha256-pinned release binary so
+##      the workflow-yaml gate runs there too; two declarations, one pin).
 ## Measured at landing (2026-09-06, ten pins): image 22 in matrix 22/24,
 ## engines and @types/node 22, local node 24 in the matrix, pnpm 11.3.0, go
 ## 1.27.1, rulefloor v0.9.1, both digests. A disagreement prints the pin and
 ## the two values and FAILS; an absent tool is exit 2 by name. Local grype is
 ## not a pin here: the ui CI installs no grype.
 toolchain-parity:
-	@for t in node pnpm go rulefloor shasum; do command -v "$$t" >/dev/null 2>&1 || { echo "toolchain-parity: $$t is not installed — cannot compare the pins; refusing to pass silently" >&2; exit 2; }; done; \
+	@for t in node pnpm go rulefloor yq shasum; do command -v "$$t" >/dev/null 2>&1 || { echo "toolchain-parity: $$t is not installed — cannot compare the pins; refusing to pass silently" >&2; exit 2; }; done; \
 	bad=0; agree=0; \
 	img=$$( { grep -E '^FROM node:' Dockerfile | sed -E 's/^FROM node:([0-9]+).*/\1/'; grep -E '^# node-major=[0-9]+' Dockerfile | sed -E 's/^# node-major=([0-9]+).*/\1/'; } | sort -u | tr '\n' ' ' | sed 's/ $$//'); \
 	case "$$img" in *" "*|"") echo "  DISAGREE  Dockerfile node majors (FROM node:<N> lines and # node-major=<N> annotations): '$$img' — every stage must name one major"; bad=1;; *) agree=$$((agree+1));; esac; \
@@ -329,6 +337,8 @@ toolchain-parity:
 	[ "$$cigo" = "$$lgo" ] && agree=$$((agree+1)) || { echo "  DISAGREE  ci.yml GO_VERSION $$cigo vs local go $$lgo"; bad=1; }; \
 	cirf=$$(grep -E '^[[:space:]]+RULEFLOOR_VERSION:' .github/workflows/ci.yml | head -1 | sed -E 's/.*RULEFLOOR_VERSION:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/'); lrf=$$(rulefloor version --json | sed -E 's/.*"version":"([^"]+)".*/\1/'); \
 	[ "$$cirf" = "$$lrf" ] && agree=$$((agree+1)) || { echo "  DISAGREE  ci.yml RULEFLOOR_VERSION $$cirf vs local rulefloor $$lrf"; bad=1; }; \
+	ciyq=$$(grep -E '^[[:space:]]+YQ_VERSION:' .github/workflows/ci.yml | head -1 | sed -E 's/.*YQ_VERSION:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/'); lyq=$$(yq --version | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1); \
+	[ -n "$$ciyq" ] && [ "$$ciyq" = "$$lyq" ] && agree=$$((agree+1)) || { echo "  DISAGREE  ci.yml YQ_VERSION '$$ciyq' vs local yq '$$lyq'"; bad=1; }; \
 	for pair in GATE_WITNESS_SHA256=scripts/gate-witness.sh RULEFLOOR_GATE_SHA256=scripts/rulefloor-install-gate.sh; do \
 		key=$${pair%%=*}; file=$${pair#*=}; \
 		pin=$$(grep -E "^[[:space:]]+$$key:" .github/workflows/ci.yml | head -1 | sed -E 's/.*:[[:space:]]*"?([0-9a-f]{64})"?.*/\1/'); \
@@ -339,7 +349,7 @@ toolchain-parity:
 		echo "check FAILED: toolchain-parity — the pins above disagree; align the declaration or the machine, never the gate"; \
 		exit 1; \
 	fi; \
-	echo "check OK: toolchain-parity $$agree pins agree (node $$img in matrix [$$matrix], engines/@types/node $$eng/$$types, local node $$lnode, pnpm $$lpnpm, go $$lgo, rulefloor $$lrf, both vendored digests)"
+	echo "check OK: toolchain-parity $$agree pins agree (node $$img in matrix [$$matrix], engines/@types/node $$eng/$$types, local node $$lnode, pnpm $$lpnpm, go $$lgo, rulefloor $$lrf, yq $$lyq, both vendored digests)"
 
 ## grype-scan: the published image, judged by the idp-oss policy (tools/grype-gate,
 ## rule GRYPE-FIXABLE-FAILS-1): a finding with an AVAILABLE FIX fails, a
@@ -425,6 +435,7 @@ tool-versions:
 	@printf 'node       %s  %s\n' "$$(node --version 2>/dev/null)" "$$(command -v node || echo MISSING)"
 	@printf 'pnpm       %s  %s\n' "$$(pnpm --version 2>/dev/null)" "$$(command -v pnpm || echo MISSING)"
 	@printf 'rulefloor  %s  %s\n' "$$(rulefloor version --json 2>/dev/null)" "$$(command -v rulefloor || echo MISSING)"
+	@printf 'yq         %s  %s\n' "$$(yq --version 2>/dev/null | grep -oE 'v[0-9.]+' | head -1)" "$$(command -v yq || echo MISSING)"
 
 ## e2e-full: the DISPOSABLE full-behavior suite (THE-DISPOSABLE-HARNESS).
 ## DESTROYS the OSS dev stack's postgres volume, rebuilds the appliance from

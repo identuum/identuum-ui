@@ -1,11 +1,14 @@
 # identuum-ui CI pipeline.
 # Runs on every push and pull request to main / master.
 #
-# This workflow mirrors the repo-local `make verify` target verbatim:
+# This workflow runs the repo-local `make verify` judges it can run on a
+# single-repo checkout, verbatim:
 #
+#   make workflow-yaml / make workflow-yaml-parity   (yq, pinned below)
 #   pnpm exec biome check . --reporter=json --max-diagnostics=none
 #   pnpm exec tsc --noEmit
 #   pnpm exec vitest run
+#   the rulefloor ledger check
 #
 # Scope intent. The first identuum-ui CI workflow is deliberately
 # narrow: no Playwright, no `next build`, no live IDP/AG runtime, no
@@ -53,6 +56,18 @@ env:
   # is written by something else. Held identical to the wiki-side digest
   # (contracts/gate-witness.master.sha256) by gate-witness.sh --sync-check.
   GATE_WITNESS_SHA256: "6592e63cd84ba43f784f16ecd344c8df90515d5f67f4344a6d3cce68a9e6c4e7"
+  # THE-CI-PARSES-ITS-OWN-WORKFLOWS (2026-09-06): yq for the workflow-yaml
+  # gate, which parses every file under .github/workflows the way GitHub
+  # will (this repo shipped an invalid ci.yml through a green verify and a
+  # green mint because the parse ran only on developer machines). Pinned
+  # the rulefloor way — an immutable release artifact plus its sha256, URL
+  # derived from this ONE declaration, version printed and asserted —
+  # never a floating latest. YQ_SHA256 is the linux_amd64 release binary's
+  # digest, verified against the release's published checksums; the same
+  # pair as identuum-idp-oss's ci.yml. toolchain-parity holds YQ_VERSION
+  # equal to the yq installed locally. Bump both together.
+  YQ_VERSION: v4.53.6
+  YQ_SHA256: c5f056448f973ae7d39b5401949648a78f2dc1947d6a8eb65be60d5c504b9385
 
 jobs:
   build-and-test:
@@ -94,13 +109,45 @@ jobs:
         # is the single declared CI step set for this repo.
         env:
           GATE_WITNESS_CITES: "the 'Open the gate run record' step of build-and-test in .github/workflows/ci.yml is the single declared CI step set; the two script-digest steps run before this record opens and sit outside it; checkout/setup-node/setup-go are actions the witness cannot run"
-        run: bash scripts/gate-witness.sh init GATE-RUN.ci.txt "identuum-ui CI build-and-test (node ${{ matrix.node }})" rulefloor-route-scan pnpm-install-tool prove-node pnpm-install biome tsc vitest prove-go rulefloor-gate
+        run: bash scripts/gate-witness.sh init GATE-RUN.ci.txt "identuum-ui CI build-and-test (node ${{ matrix.node }})" rulefloor-route-scan yq-install workflow-yaml workflow-yaml-parity pnpm-install-tool prove-node pnpm-install biome tsc vitest prove-go rulefloor-gate
 
       - name: Reject undeclared rulefloor install routes
         # Vendored at scripts/rulefloor-install-gate.sh because this
         # single-repo CI checkout has no ../wiki sibling. Scanning the full
         # workflow directory makes a second install route fail before tools run.
         run: bash scripts/gate-witness.sh step GATE-RUN.ci.txt 'rulefloor-route-scan=bash scripts/rulefloor-install-gate.sh .github/workflows'
+
+      - name: Install yq (and prove its version)
+        # THE-CI-PARSES-ITS-OWN-WORKFLOWS (2026-09-06): the gate that refuses
+        # an unparseable workflow ran only on developer machines until this
+        # step, because nothing here installed yq — which is exactly how this
+        # repo's ci.yml was invalid YAML for a day behind a green verify and a
+        # green mint. Pinned as rulefloor is: the release BINARY at the
+        # workflow-env tag, its sha256 checked before it is installed, the
+        # printed version asserted against the same declaration. The binary is
+        # removed from the tree after install so the checkout stays exactly the
+        # commit the record ties to. ubuntu-latest is x86_64: linux_amd64. The
+        # multi-line body moves into STEP_CMD so the witness records this step
+        # without re-quoting it.
+        env:
+          STEP_CMD: |
+            curl -sSfL -o yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+            echo "${YQ_SHA256}  yq" | sha256sum -c -
+            sudo install -m 0755 yq /usr/local/bin/yq
+            rm -f yq
+            yq --version
+            yq --version | grep -F "version ${YQ_VERSION}"
+        run: bash scripts/gate-witness.sh step GATE-RUN.ci.txt "yq-install=$STEP_CMD"
+
+      - name: Parse every workflow (make workflow-yaml)
+        # The same target `make verify` runs, so CI refuses what local refuses.
+        # It cannot save THIS file from itself — a ci.yml GitHub cannot parse
+        # never starts this job — but it catches every other workflow, and the
+        # local run catches this one before it is pushed.
+        run: bash scripts/gate-witness.sh step GATE-RUN.ci.txt 'workflow-yaml=make --no-print-directory workflow-yaml'
+
+      - name: Hold the workflow-yaml block to the shared pin
+        run: bash scripts/gate-witness.sh step GATE-RUN.ci.txt 'workflow-yaml-parity=make --no-print-directory workflow-yaml-parity'
 
       # Install pnpm BEFORE setup-node so the `cache: pnpm` option in
       # setup-node finds the binary. Node 25+ no longer bundles corepack
