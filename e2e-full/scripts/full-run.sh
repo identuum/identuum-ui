@@ -10,6 +10,16 @@
 #                     (--workers=1: TOTP replay protection rejects concurrent
 #                     logins minting the same 30-second code)
 #   6. fast-clean   — teardown: stack down, volume gone, no harness residue
+#                     — EXCEPT the evidence of a RED run (THE-RED-MINT-HAS-NO-NAME,
+#                     2026-09-06): when any phase failed, the appliance log,
+#                     the finalized record, every phase's JSON report, the
+#                     role-matrix observations and each failed phase's
+#                     Playwright output (traces, error-context.md) are kept
+#                     under e2e-full/.evidence/<UTC stamp>/ (gitignored), and
+#                     the record names the failing tests. A red run that
+#                     cleaned up after itself forced a re-run to learn
+#                     anything, which is the thing this harness refuses to do
+#                     casually. Green runs keep nothing extra.
 #
 # NEVER wire this into make verify, wiki make check, or CI: step 1 eats the
 # local OSS dev database by design. The Playwright project it runs is not
@@ -154,6 +164,13 @@ export IDENTUUM_TEST_SITE_ADMIN_EMAIL="" IDENTUUM_TEST_SITE_ADMIN_PASSWORD="" \
 
 RECORD="GATE-RUN.e2e-full.txt"
 GW="scripts/gate-witness.sh"
+
+# THE-RED-MINT-HAS-NO-NAME: where this run's evidence goes IF it is red.
+# Named per run (UTC start stamp) so a later run never overwrites the red
+# evidence it was meant to explain; created lazily, only on failure, by
+# pw-phase.sh (per failed phase) and by the red branch before teardown.
+E2E_EVIDENCE_DIR="$UI_DIR/e2e-full/.evidence/$(date -u +%Y%m%dT%H%M%SZ)"
+export E2E_EVIDENCE_DIR
 
 # The plan is fixed at init; the optional MEASURE baseline joins it only when
 # requested, so an absent baseline is a declared subtraction, never INCOMPLETE.
@@ -409,6 +426,20 @@ bash "$GW" step "$RECORD" 'auth503-scan=bash e2e-full/scripts/auth503-scan.sh '"
 # digest; gate-witness check (and thus the wiki's witness-ui-e2e) fails if
 # either repo moved or was dirty at the mint.
 GATE_WITNESS_XREPO="identuum-idp-oss=$IDP_DIR" bash "$GW" finalize "$RECORD" || rc=1
+
+# THE-RED-MINT-HAS-NO-NAME: a RED run keeps its evidence BEFORE the teardown
+# destroys the appliance (and with it the only copy of its log). Kept: the
+# appliance's container log, the finalized record, every phase's JSON report,
+# the role-matrix observations; the failed phases' Playwright output was
+# already copied by pw-phase.sh. Printed by path so the report can cite it.
+if [ "$rc" -ne 0 ]; then
+	mkdir -p "$E2E_EVIDENCE_DIR"
+	docker compose -f "$IDP_DIR/deployment/docker-compose.dev.yml" --profile app logs --no-color --timestamps >"$E2E_EVIDENCE_DIR/appliance.log" 2>&1 || true
+	cp "$RECORD" "$E2E_EVIDENCE_DIR/" 2>/dev/null || true
+	cp e2e/.auth/pw-*.json "$E2E_EVIDENCE_DIR/" 2>/dev/null || true
+	cp "$IDENTUUM_E2E_MATRIX_LOG" "$E2E_EVIDENCE_DIR/" 2>/dev/null || true
+	echo "e2e-full: RED — evidence kept at ${E2E_EVIDENCE_DIR#"$UI_DIR"/} ($(find "$E2E_EVIDENCE_DIR" -type f | wc -l | tr -d ' ') file(s): appliance.log, the record, JSON reports, observations, failed phases' traces)"
+fi
 
 echo "e2e-full: teardown (down --volumes, app profile included)"
 docker compose -f "$IDP_DIR/deployment/docker-compose.dev.yml" --profile app down --volumes

@@ -252,6 +252,13 @@ if (
   console.error(
     `role-matrix-from-run: DENOMINATOR DRIFT — committed matrix says ${committed.endpoints}/${committed.role_endpoints}/${committed.class_endpoints} (total/role/class endpoints), the golden has ${endpoints.length}/${roleEndpoints.length}/${onceEndpoints.length}. Re-derive the matrix deliberately.`
   );
+  // THE-RED-MINT-HAS-NO-NAME: the record's evidence channel is the "check OK:"
+  // prefix (gate-witness.sh's EVIDENCE_RE, the pinned shared master); the exit
+  // code is the verdict. Without this line a red role-matrix step recorded
+  // exit=1 and nothing else.
+  console.log(
+    `check OK: role-matrix RED — DENOMINATOR DRIFT: committed ${committed.endpoints}/${committed.role_endpoints}/${committed.class_endpoints} vs golden ${endpoints.length}/${roleEndpoints.length}/${onceEndpoints.length} (total/role/class endpoints)`
+  );
   process.exit(1);
 }
 const committedCells = [];
@@ -269,11 +276,23 @@ if (missing.length + missingClass.length > 0) {
   console.error(
     `role-matrix-from-run: ROLE-MATRIX DRIFT — ${all.length} committed cell(s) not observed this run (a test stopped exercising them):\n  ${all.slice(0, 20).join("\n  ")}${all.length > 20 ? `\n  … and ${all.length - 20} more` : ""}`
   );
+  // THE-RED-MINT-HAS-NO-NAME (2026-09-06): the record carried `target:
+  // role-matrix exit=1` with NO evidence line, because this verdict went to
+  // stderr under a prefix gate-witness's EVIDENCE_RE does not capture. The
+  // reason now also goes out on the record's own channel — one line, every
+  // missing cell named (the cells are the reason; when a test's setup fails,
+  // they are exactly the rows that setup gated).
+  console.log(
+    `check OK: role-matrix RED — ROLE-MATRIX DRIFT: ${all.length} committed cell(s) not observed this run (a test stopped exercising them): ${all.join("; ")}`
+  );
   process.exit(1);
 }
 if (observedTotal < committed.covered_cells_floor) {
   console.error(
     `role-matrix-from-run: ROLE-MATRIX FLOOR VIOLATION — covered cells ${observedTotal} < floor ${committed.covered_cells_floor}.`
+  );
+  console.log(
+    `check OK: role-matrix RED — FLOOR VIOLATION: covered cells ${observedTotal} < floor ${committed.covered_cells_floor}`
   );
   process.exit(1);
 }
