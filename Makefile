@@ -18,7 +18,7 @@ DEV_PLATFORM_STATUS_URL ?= http://127.0.0.1:7104/platform-status
 # 127.0.0.1:7315 instead of the monolith on 7215.
 AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 
-.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile
+.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
 .PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
 .PHONY: e2e-full
@@ -168,6 +168,18 @@ frozen-lockfile:
 	@command -v pnpm >/dev/null 2>&1 || { echo "frozen-lockfile: pnpm is not installed — cannot prove package.json and pnpm-lock.yaml agree (CI installs with --frozen-lockfile); refusing to pass silently" >&2; exit 2; }; \
 	pnpm install --frozen-lockfile
 
+## advisory: the govulncheck analogue — `pnpm audit` resolves every package in
+## pnpm-lock.yaml against the registry's advisory database and exits non-zero
+## on any known vulnerability, any severity (no --audit-level floor: the
+## strictest reading, and the one a later slice may only tighten). Until
+## THE-UI-GATE-PARITY (2026-09-06) the audit was run by hand and never by
+## verify, so a published advisory could sit in the lockfile across slices
+## with every gate green. A registry that cannot be reached is an error, not
+## a pass. pnpm absent: exit 2 by name, never a silent pass.
+advisory:
+	@command -v pnpm >/dev/null 2>&1 || { echo "advisory: pnpm is not installed — cannot audit pnpm-lock.yaml against the advisory database; refusing to pass silently" >&2; exit 2; }; \
+	pnpm audit
+
 ## verify: THE UI gate set — biome + typecheck + vitest + rulefloor, all
 ## four, every slice (THE-UI-FORMAT-FLOOR). Slices run THIS target, never
 ## an ad-hoc subset: format drift accumulated invisibly across several
@@ -209,6 +221,7 @@ verify:
 		'tracked-binary-check=$(MAKE) --no-print-directory tracked-binary-check' \
 		'credential-transparency=$(MAKE) --no-print-directory credential-transparency' \
 		'frozen-lockfile=$(MAKE) --no-print-directory frozen-lockfile' \
+		'advisory=$(MAKE) --no-print-directory advisory' \
 		'rulefloor=pnpm rulefloor' \
 		'biome=pnpm exec biome check . --reporter=json --max-diagnostics=none' \
 		'tsc=pnpm exec tsc --noEmit' \
