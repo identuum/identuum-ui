@@ -1,9 +1,9 @@
 schema: gate-run.v1
 gate: identuum-ui make verify
 note: evidence lines are the tools' own summary lines; a summary format this script does not match is recorded only as an exit code
-repo-head: ea293f7
-started: 2026-09-06T11:10:59Z
-plan: tool-versions wiki-fresh image-base-check image-base-parity rulefloor biome tsc vitest
+repo-head: 8376a8c
+started: 2026-09-06T11:41:08Z
+plan: tool-versions wiki-fresh image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory rulefloor biome tsc vitest
 tool: node       v24.18.0  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/node
 tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/pnpm
 tool: rulefloor  {"schema_version":"rulefloor.version.v1","version":"v0.9.1","toolchain_version":"v0.9.1","version_agreement":"pass"}  /opt/homebrew/bin/rulefloor
@@ -11,21 +11,29 @@ elapsed: tool-versions 0s
 target: tool-versions exit=0
 elapsed: wiki-fresh 0s
 target: wiki-fresh exit=0
-elapsed: image-base-check 0s
+elapsed: image-base-check 1s
 target: image-base-check exit=0
 elapsed: image-base-parity 0s
 target: image-base-parity exit=0
+elapsed: tracked-binary-check 2s
+target: tracked-binary-check exit=0
+elapsed: credential-transparency 0s
+target: credential-transparency exit=0
+elapsed: frozen-lockfile 0s
+target: frozen-lockfile exit=0
+elapsed: advisory 2s
+target: advisory exit=0
 evidence: [rulefloor] check OK: 66 rows (66 armed), FLOOR 66, RED-PROOFS 63 (measured 63)
 elapsed: rulefloor 0s
 target: rulefloor exit=0
 elapsed: biome 1s
 target: biome exit=0
-elapsed: tsc 0s
+elapsed: tsc 1s
 target: tsc exit=0
 evidence: [vitest]  Test Files  129 passed (129)
 evidence: [vitest]       Tests  3472 passed (3472)
-elapsed: vitest 1s
+elapsed: vitest 2s
 target: vitest exit=0
-finished: 2026-09-06T11:11:01Z
-tree: sha256=bf50e66d40482145e95c8a93bc57053b9a5bf7e6575bcba8d9a42b1a3d9f93e5
+finished: 2026-09-06T11:41:17Z
+tree: sha256=33f023d9eea4a6eddca50e665121b1de5ac3a890cb6283fe7a7e3af993d74788
 result: green
