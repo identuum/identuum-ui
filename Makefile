@@ -18,7 +18,7 @@ DEV_PLATFORM_STATUS_URL ?= http://127.0.0.1:7104/platform-status
 # 127.0.0.1:7315 instead of the monolith on 7215.
 AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 
-.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency
+.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
 .PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
 .PHONY: e2e-full
@@ -155,6 +155,19 @@ credential-transparency:
 	fi; \
 	echo "credential-transparency: every committed credential is fake by construction"
 
+## frozen-lockfile: package.json and pnpm-lock.yaml must agree, exactly as CI
+## demands. ci.yml's "Install dependencies (frozen lockfile)" step runs
+## `pnpm install --frozen-lockfile`, which fails the run when the lockfile is
+## out of date with the manifest; until THE-UI-GATE-PARITY (2026-09-06) local
+## verify never proved that, so a hand edit to package.json could pass every
+## local gate and fail only in CI. The command here is CI's exact one, so
+## local proves what CI assumes (the go-mod-tidy-diff analogue). On a green
+## tree it prints "Already up to date". pnpm absent: exit 2 by name, never a
+## silent pass.
+frozen-lockfile:
+	@command -v pnpm >/dev/null 2>&1 || { echo "frozen-lockfile: pnpm is not installed — cannot prove package.json and pnpm-lock.yaml agree (CI installs with --frozen-lockfile); refusing to pass silently" >&2; exit 2; }; \
+	pnpm install --frozen-lockfile
+
 ## verify: THE UI gate set — biome + typecheck + vitest + rulefloor, all
 ## four, every slice (THE-UI-FORMAT-FLOOR). Slices run THIS target, never
 ## an ad-hoc subset: format drift accumulated invisibly across several
@@ -195,6 +208,7 @@ verify:
 		'image-base-parity=$(MAKE) --no-print-directory image-base-parity' \
 		'tracked-binary-check=$(MAKE) --no-print-directory tracked-binary-check' \
 		'credential-transparency=$(MAKE) --no-print-directory credential-transparency' \
+		'frozen-lockfile=$(MAKE) --no-print-directory frozen-lockfile' \
 		'rulefloor=pnpm rulefloor' \
 		'biome=pnpm exec biome check . --reporter=json --max-diagnostics=none' \
 		'tsc=pnpm exec tsc --noEmit' \
