@@ -108,7 +108,13 @@ jobs:
       # at the ONE version package.json's packageManager declares — derived,
       # never a second literal.
       - name: Install pnpm (packageManager)
-        run: bash scripts/gate-witness.sh step GATE-RUN.ci.txt 'pnpm-install-tool=npm install -g pnpm@$(sed -nE "s/.*\"packageManager\": \"pnpm@([^\"]+)\".*/\1/p" package.json)'
+        # THE-UI-YAML-LINE-111: a block scalar, because the previous plain
+        # scalar carried a colon-space and was invalid YAML (GitHub could not
+        # have parsed this file; make workflow-yaml now refuses that class).
+        # The version is still DERIVED from packageManager — one declaration,
+        # never a second literal.
+        run: |
+          bash scripts/gate-witness.sh step GATE-RUN.ci.txt 'pnpm-install-tool=npm install -g pnpm@$(node -p "require(\"./package.json\").packageManager.split(\"@\")[1]")'
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
