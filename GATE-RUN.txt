@@ -1,8 +1,8 @@
 schema: gate-run.v1
 gate: identuum-ui make verify
 note: evidence lines are the tools' own summary lines; a summary format this script does not match is recorded only as an exit code
-repo-head: 042e669
-started: 2026-09-06T13:53:18Z
+repo-head: 4720e52
+started: 2026-09-06T14:15:25Z
 plan: tool-versions wiki-fresh image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory ci-witness toolchain-parity rulefloor ledger-diff-gate biome tsc vitest
 tool: node       v24.18.0  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/node
 tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/pnpm
@@ -15,13 +15,13 @@ elapsed: image-base-check 0s
 target: image-base-check exit=0
 elapsed: image-base-parity 0s
 target: image-base-parity exit=0
-elapsed: tracked-binary-check 3s
+elapsed: tracked-binary-check 2s
 target: tracked-binary-check exit=0
 elapsed: credential-transparency 0s
 target: credential-transparency exit=0
-elapsed: frozen-lockfile 0s
+elapsed: frozen-lockfile 1s
 target: frozen-lockfile exit=0
-elapsed: advisory 2s
+elapsed: advisory 79s
 target: advisory exit=0
 evidence: [ci-witness] check OK: ci-witness NO CI RECORD — nothing here evidences a CI run; the workflow's declarations remain declared, unrun
 elapsed: ci-witness 0s
@@ -32,7 +32,7 @@ target: toolchain-parity exit=0
 evidence: [rulefloor] check OK: 66 rows (66 armed), FLOOR 66, RED-PROOFS 63 (measured 63)
 elapsed: rulefloor 0s
 target: rulefloor exit=0
-evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=c4c95429be1ee68bef6fdb022dd862742bd47f66 status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=c22786f76691f9d8a7689a5e6e9d2ed94fc632cadc60c6b3ef139a1df288d949
+evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=16c112a72593b3f3a4d92c68629770650e5805a7 status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=9da0d95166e0c3a35fe92f4b50d863738a9e5a00caaa5a425a27fe9a2229a976
 elapsed: ledger-diff-gate 0s
 target: ledger-diff-gate exit=0
 elapsed: biome 1s
@@ -43,6 +43,6 @@ evidence: [vitest]  Test Files  129 passed (129)
 evidence: [vitest]       Tests  3472 passed (3472)
 elapsed: vitest 2s
 target: vitest exit=0
-finished: 2026-09-06T13:53:26Z
-tree: sha256=c59e491ffd1f9f46bfefcf4fda30b78830b2a2c9e69fa1ecbf213d778198fce7
+finished: 2026-09-06T14:16:50Z
+tree: sha256=ad6064b29fa4fc65e33aac4d8a202e57b1a43fe212a7de8a23ab45430415ce81
 result: green
