@@ -226,9 +226,12 @@ ci-fetch:
 ## toolchain-parity: the toolchain this tree declares in four places must AGREE
 ## with each other and with the machine running verify (the idp-oss shape,
 ## rule CI-LOCAL-PARITY-1; THE-UI-GATE-PARITY-2, 2026-09-06). The idp-oss judge
-## reads Go pins, so this repo carries its own comparisons as a recipe — nine
-## rules, ten pins (the last rule holds two digests):
-##   1. every Dockerfile FROM node:<major> names ONE major;
+## reads Go pins, so this repo carries its own comparisons as a recipe — ten
+## rules, eleven pins (rule 9 holds two digests):
+##   1. every Dockerfile FROM node:<major> AND every `# node-major=<N>`
+##      annotation (the digest-pinned runner carries no version text; the
+##      annotation is measured at pin time and re-measured at every bump)
+##      name ONE major;
 ##   2. that major is in ci.yml's matrix.node;
 ##   3. package.json engines.node floor has that major;
 ##   4. @types/node has that major (dependencyNotes: types track the engines
@@ -238,17 +241,20 @@ ci-fetch:
 ##   7. ci.yml GO_VERSION equals the local go;
 ##   8. ci.yml RULEFLOOR_VERSION equals the local rulefloor;
 ##   9. ci.yml GATE_WITNESS_SHA256 and RULEFLOOR_GATE_SHA256 equal the sha256
-##      of the vendored scripts CI verifies with `sha256sum -c`.
-## Measured at landing: all nine agree (image 22 in matrix 22/24, engines and
-## @types/node 22, local node 24 in the matrix, pnpm 11.3.0, go 1.27.1,
-## rulefloor v0.9.1, both digests). A disagreement prints the pin and the two
-## values and FAILS; an absent tool is exit 2 by name. Local grype is not a pin
-## here: the ui CI installs no grype.
+##      of the vendored scripts CI verifies with `sha256sum -c`;
+##  10. every `pnpm@<version>` the Dockerfile installs equals packageManager
+##      (THE-UI-NODE-26-LATEST: node 26 ships no corepack, so the build
+##      stages install pnpm from npm by an explicit version).
+## Measured at landing (2026-09-06, ten pins): image 22 in matrix 22/24,
+## engines and @types/node 22, local node 24 in the matrix, pnpm 11.3.0, go
+## 1.27.1, rulefloor v0.9.1, both digests. A disagreement prints the pin and
+## the two values and FAILS; an absent tool is exit 2 by name. Local grype is
+## not a pin here: the ui CI installs no grype.
 toolchain-parity:
 	@for t in node pnpm go rulefloor shasum; do command -v "$$t" >/dev/null 2>&1 || { echo "toolchain-parity: $$t is not installed — cannot compare the pins; refusing to pass silently" >&2; exit 2; }; done; \
 	bad=0; agree=0; \
-	img=$$(grep -E '^FROM node:' Dockerfile | sed -E 's/^FROM node:([0-9]+).*/\1/' | sort -u | tr '\n' ' ' | sed 's/ $$//'); \
-	case "$$img" in *" "*|"") echo "  DISAGREE  Dockerfile FROM node majors: '$$img' — every stage must name one major"; bad=1;; *) agree=$$((agree+1));; esac; \
+	img=$$( { grep -E '^FROM node:' Dockerfile | sed -E 's/^FROM node:([0-9]+).*/\1/'; grep -E '^# node-major=[0-9]+' Dockerfile | sed -E 's/^# node-major=([0-9]+).*/\1/'; } | sort -u | tr '\n' ' ' | sed 's/ $$//'); \
+	case "$$img" in *" "*|"") echo "  DISAGREE  Dockerfile node majors (FROM node:<N> lines and # node-major=<N> annotations): '$$img' — every stage must name one major"; bad=1;; *) agree=$$((agree+1));; esac; \
 	matrix=$$(grep -E '^[[:space:]]+node: \[' .github/workflows/ci.yml | head -1 | grep -oE '[0-9]+' | tr '\n' ' '); \
 	case " $$matrix" in *" $$img "*) agree=$$((agree+1));; *) echo "  DISAGREE  Dockerfile node $$img is not in ci.yml matrix.node [$$matrix]"; bad=1;; esac; \
 	eng=$$(node -p "require('./package.json').engines.node" | sed -E 's/^[^0-9]*([0-9]+).*/\1/'); \
@@ -259,6 +265,8 @@ toolchain-parity:
 	case " $$matrix" in *" $$lnode "*) agree=$$((agree+1));; *) echo "  DISAGREE  local node major $$lnode is not in ci.yml matrix.node [$$matrix]"; bad=1;; esac; \
 	pm=$$(node -p "require('./package.json').packageManager"); lpnpm=$$(pnpm --version); \
 	[ "$$pm" = "pnpm@$$lpnpm" ] && agree=$$((agree+1)) || { echo "  DISAGREE  packageManager $$pm vs local pnpm $$lpnpm"; bad=1; }; \
+	dpnpm=$$(grep -oE 'pnpm@[0-9][0-9.]*' Dockerfile | sort -u | tr '\n' ' ' | sed 's/ $$//'); \
+	[ "$$dpnpm" = "$$pm" ] && agree=$$((agree+1)) || { echo "  DISAGREE  Dockerfile installs '$$dpnpm' vs packageManager $$pm"; bad=1; }; \
 	cigo=$$(grep -E '^[[:space:]]+GO_VERSION:' .github/workflows/ci.yml | head -1 | sed -E 's/.*GO_VERSION:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/'); lgo=$$(go version | awk '{print $$3}' | sed 's/^go//'); \
 	[ "$$cigo" = "$$lgo" ] && agree=$$((agree+1)) || { echo "  DISAGREE  ci.yml GO_VERSION $$cigo vs local go $$lgo"; bad=1; }; \
 	cirf=$$(grep -E '^[[:space:]]+RULEFLOOR_VERSION:' .github/workflows/ci.yml | head -1 | sed -E 's/.*RULEFLOOR_VERSION:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/'); lrf=$$(rulefloor version --json | sed -E 's/.*"version":"([^"]+)".*/\1/'); \

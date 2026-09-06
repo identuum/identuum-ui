@@ -59,17 +59,16 @@ jobs:
     name: Build & Unit Tests (node ${{ matrix.node }})
     runs-on: ubuntu-latest
     strategy:
-      # THE-UNBOUND-STAMP (2026-08-27): node has TWO truths and CI now
-      # tests BOTH. 22 is the DEPLOYED runtime — the Dockerfile's three
-      # stages run node:22-bookworm-slim, and @types/node is held at 22
-      # by the recorded dependency-currency note — so the engines floor
-      # ">=22.15.0" stays and is finally exercised instead of asserted.
-      # 24 is the local dev runtime that green-lights closes. The
-      # previous single pin (22, then 24) always left one of the two
-      # untested; the floor moves only when the image base and
-      # @types/node move with it, together.
+      # THE-UNBOUND-STAMP (2026-08-27): CI tests the DEPLOYED runtime, not
+      # an asserted one. THE-UI-NODE-26-LATEST (2026-09-06, owner ruling):
+      # the runner is cgr.dev/chainguard/node at a digest measured to ship
+      # Node v26.8.1, the build stages are node:26-bookworm-slim, engines
+      # is ">=26.0.0", @types/node is 26 — and the local dev runtime is 26
+      # too (toolchain-parity holds the local node major inside this
+      # matrix). One truth now, so one matrix entry; it moves only when the
+      # image digest, engines and @types/node move with it, together.
       matrix:
-        node: ['22', '24']
+        node: ['26']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -95,7 +94,7 @@ jobs:
         # is the single declared CI step set for this repo.
         env:
           GATE_WITNESS_CITES: "the 'Open the gate run record' step of build-and-test in .github/workflows/ci.yml is the single declared CI step set; the two script-digest steps run before this record opens and sit outside it; checkout/setup-node/setup-go are actions the witness cannot run"
-        run: bash scripts/gate-witness.sh init GATE-RUN.ci.txt "identuum-ui CI build-and-test (node ${{ matrix.node }})" rulefloor-route-scan corepack-enable prove-node pnpm-install biome tsc vitest prove-go rulefloor-gate
+        run: bash scripts/gate-witness.sh init GATE-RUN.ci.txt "identuum-ui CI build-and-test (node ${{ matrix.node }})" rulefloor-route-scan pnpm-install-tool prove-node pnpm-install biome tsc vitest prove-go rulefloor-gate
 
       - name: Reject undeclared rulefloor install routes
         # Vendored at scripts/rulefloor-install-gate.sh because this
@@ -103,10 +102,13 @@ jobs:
         # workflow directory makes a second install route fail before tools run.
         run: bash scripts/gate-witness.sh step GATE-RUN.ci.txt 'rulefloor-route-scan=bash scripts/rulefloor-install-gate.sh .github/workflows'
 
-      # Activate pnpm via corepack BEFORE setup-node so the
-      # `cache: pnpm` option in setup-node finds the binary.
-      - name: Enable corepack (pnpm)
-        run: bash scripts/gate-witness.sh step GATE-RUN.ci.txt 'corepack-enable=corepack enable'
+      # Install pnpm BEFORE setup-node so the `cache: pnpm` option in
+      # setup-node finds the binary. Node 25+ no longer bundles corepack
+      # (THE-UI-NODE-26-LATEST, 2026-09-06), so pnpm comes straight from npm
+      # at the ONE version package.json's packageManager declares — derived,
+      # never a second literal.
+      - name: Install pnpm (packageManager)
+        run: bash scripts/gate-witness.sh step GATE-RUN.ci.txt 'pnpm-install-tool=npm install -g pnpm@$(sed -nE "s/.*\"packageManager\": \"pnpm@([^\"]+)\".*/\1/p" package.json)'
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
