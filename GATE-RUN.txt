@@ -1,22 +1,22 @@
 schema: gate-run.v1
 gate: identuum-ui make verify
 note: evidence lines are the tools' own summary lines; a summary format this script does not match is recorded only as an exit code
-repo-head: 970dbd3
-started: 2026-09-07T00:05:36Z
+repo-head: 854115d
+started: 2026-09-07T09:34:49Z
 plan: tool-versions wiki-fresh image-base-check image-base-parity tracked-binary-check credential-transparency workflow-yaml workflow-yaml-parity frozen-lockfile advisory ci-witness toolchain-parity rulefloor ledger-diff-gate grype-scan biome tsc vitest
-tool: node       v26.8.1  /Users/odemir/.local/state/fnm_multishells/14714_1788739536497/bin/node
-tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/14714_1788739536497/bin/pnpm
+tool: node       v26.8.1  /Users/odemir/.local/state/fnm_multishells/50944_1788773689298/bin/node
+tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/50944_1788773689298/bin/pnpm
 tool: rulefloor  {"schema_version":"rulefloor.version.v1","version":"v0.9.1","toolchain_version":"v0.9.1","version_agreement":"pass"}  /opt/homebrew/bin/rulefloor
 tool: yq         v4.53.6  /opt/homebrew/bin/yq
 elapsed: tool-versions 0s
 target: tool-versions exit=0
 elapsed: wiki-fresh 0s
 target: wiki-fresh exit=0
-elapsed: image-base-check 1s
+elapsed: image-base-check 0s
 target: image-base-check exit=0
 elapsed: image-base-parity 0s
 target: image-base-parity exit=0
-elapsed: tracked-binary-check 2s
+elapsed: tracked-binary-check 3s
 target: tracked-binary-check exit=0
 elapsed: credential-transparency 0s
 target: credential-transparency exit=0
@@ -30,7 +30,7 @@ elapsed: frozen-lockfile 0s
 target: frozen-lockfile exit=0
 elapsed: advisory 2s
 target: advisory exit=0
-evidence: [ci-witness] check OK: ci-witness identuum-ui CI build-and-test (node 26) green, 12 planned target(s) all exit=0, ties commit 6dfca4e, 2 commit(s) behind HEAD — the CI claim covers that tree, not this one, run https://github.com/identuum/identuum-ui/actions/runs/34068539987 attempt=1 sha=6dfca4e28dd265c7170b6a73113526a0117bdb9c
+evidence: [ci-witness] check OK: ci-witness identuum-ui CI build-and-test (node 26) green, 12 planned target(s) all exit=0, ties commit 4dc1ea1, 2 commit(s) behind HEAD — the CI claim covers that tree, not this one, run https://github.com/identuum/identuum-ui/actions/runs/34106518823 attempt=1 sha=4dc1ea1f9a9210e2ec5667ac02ca6447aac3ac1d
 elapsed: ci-witness 0s
 target: ci-witness exit=0
 evidence: [toolchain-parity] check OK: toolchain-parity 12 pins agree (node 26 in matrix [26 ], engines/@types/node 26/26, local node 26, pnpm 11.3.0, go 1.27.1, rulefloor v0.9.1, yq v4.53.6, both vendored digests)
@@ -39,11 +39,11 @@ target: toolchain-parity exit=0
 evidence: [rulefloor] check OK: 66 rows (66 armed), FLOOR 66, RED-PROOFS 63 (measured 63)
 elapsed: rulefloor 0s
 target: rulefloor exit=0
-evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=6dfca4e28dd265c7170b6a73113526a0117bdb9c status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=b061962355e28689f7451409e6498e5c567e228572cb6c96c3b686c092bbaee9
-elapsed: ledger-diff-gate 1s
+evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=4dc1ea1f9a9210e2ec5667ac02ca6447aac3ac1d status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=76d85d6a54b148259da4a62a5f257c78c01f692dbdbf215edba854f216841577
+elapsed: ledger-diff-gate 0s
 target: ledger-diff-gate exit=0
 evidence: [grype-scan] check OK: grype-gate matches=1 fixable=0 allowlisted=0 unfixable=1 severe=0
-elapsed: grype-scan 12s
+elapsed: grype-scan 14s
 target: grype-scan exit=0
 elapsed: biome 0s
 target: biome exit=0
@@ -53,6 +53,6 @@ evidence: [vitest]  Test Files  129 passed (129)
 evidence: [vitest]       Tests  3472 passed (3472)
 elapsed: vitest 2s
 target: vitest exit=0
-finished: 2026-09-07T00:05:57Z
-tree: sha256=79bddb3191f5a1e4f10c90c0dc625032e093b540e35cc68b1d7385755f98f70b
+finished: 2026-09-07T09:35:10Z
+tree: sha256=b492401bf95cc76c14b473fe08377a345c514f40b4956c697319a3652767ec9f
 result: green
