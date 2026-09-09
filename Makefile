@@ -273,17 +273,28 @@ ci-witness:
 ## newest" is a record nobody chose. NODE picks the matrix job's artifact
 ## (default 22, the runtime the image ships). Read what came back, then commit
 ## it; only then does ci-witness see a claim.
+## THE-UI-AUDIT-IN-CI (2026-09-09): the NODE default follows ci.yml's matrix
+## instead of a literal. The literal said 22 after the matrix had moved to
+## ['26'] (THE-NODE-26 move), so a bare `make ci-fetch RUN=<id>` asked for
+## gate-run-ci-node22, an artifact no run produces. yq reads the first matrix
+## entry (toolchain-parity already requires yq); an explicit NODE=<major>
+## still wins; an unreadable matrix refuses by name rather than guessing.
+CI_MATRIX_NODE := $(shell yq '.jobs.build-and-test.strategy.matrix.node[0]' .github/workflows/ci.yml 2>/dev/null)
 ci-fetch:
 	@if [ -z "$(RUN)" ]; then \
-		echo "ci-fetch: name the run — make ci-fetch RUN=<id> [NODE=22|24]"; \
+		echo "ci-fetch: name the run — make ci-fetch RUN=<id> [NODE=<major>; default: ci.yml's matrix, currently $(CI_MATRIX_NODE)]"; \
 		echo "ci-fetch: refusing to fetch 'whatever is newest'; a record nobody chose witnesses nothing."; \
 		echo "ci-fetch: list them with: gh run list"; \
 		exit 1; \
 	fi
+	@if [ -z "$(or $(NODE),$(CI_MATRIX_NODE))" ]; then \
+		echo "ci-fetch: cannot read the matrix node from .github/workflows/ci.yml (yq missing or the matrix moved) — pass NODE=<major>"; \
+		exit 2; \
+	fi
 	@rm -rf .ci-fetch && mkdir -p .ci-fetch
-	gh run download $(RUN) -n gate-run-ci-node$(or $(NODE),22) -D .ci-fetch
+	gh run download $(RUN) -n gate-run-ci-node$(or $(NODE),$(CI_MATRIX_NODE)) -D .ci-fetch
 	@cp .ci-fetch/GATE-RUN.ci.txt CI-WITNESS.txt && rm -rf .ci-fetch
-	@echo "ci-fetch: wrote CI-WITNESS.txt from run $(RUN) (node $(or $(NODE),22)) — READ IT, then commit it."
+	@echo "ci-fetch: wrote CI-WITNESS.txt from run $(RUN) (node $(or $(NODE),$(CI_MATRIX_NODE))) — READ IT, then commit it."
 	@$(MAKE) --no-print-directory ci-witness || true
 
 ## toolchain-parity: the toolchain this tree declares in four places must AGREE

@@ -109,7 +109,7 @@ jobs:
         # is the single declared CI step set for this repo.
         env:
           GATE_WITNESS_CITES: "the 'Open the gate run record' step of build-and-test in .github/workflows/ci.yml is the single declared CI step set; the two script-digest steps run before this record opens and sit outside it; checkout/setup-node/setup-go are actions the witness cannot run"
-        run: bash scripts/gate-witness.sh init GATE-RUN.ci.txt "identuum-ui CI build-and-test (node ${{ matrix.node }})" rulefloor-route-scan yq-install workflow-yaml workflow-yaml-parity pnpm-install-tool prove-node pnpm-install biome tsc vitest prove-go rulefloor-gate
+        run: bash scripts/gate-witness.sh init GATE-RUN.ci.txt "identuum-ui CI build-and-test (node ${{ matrix.node }})" rulefloor-route-scan yq-install workflow-yaml workflow-yaml-parity pnpm-install-tool prove-node pnpm-install advisory biome tsc vitest prove-go rulefloor-gate
 
       - name: Reject undeclared rulefloor install routes
         # Vendored at scripts/rulefloor-install-gate.sh because this
@@ -179,6 +179,18 @@ jobs:
         # --frozen-lockfile fails the run if pnpm-lock.yaml is out of
         # date with package.json; this catches accidental hand edits.
         run: bash scripts/gate-witness.sh step GATE-RUN.ci.txt 'pnpm-install=pnpm install --frozen-lockfile'
+
+      - name: Advisory audit (pnpm audit)
+        # THE-UI-AUDIT-IN-CI (2026-09-09): the SAME command as the local
+        # `advisory` gate (Makefile) — `pnpm audit`, no --audit-level, no
+        # allowlist, no continue-on-error. Until this step existed the audit
+        # ran only in `make verify`: the sharp advisory that stopped
+        # THE-THIRD-COPY (wiki log/0085) was catchable on a laptop and nowhere
+        # else. THE COST, deliberate: an advisory published tomorrow turns this
+        # job red on unrelated work — the contract the local gate already has.
+        # A later slice may only tighten it. A planned entry, so the record
+        # carries its own `target: advisory exit=` line and attests it.
+        run: bash scripts/gate-witness.sh step GATE-RUN.ci.txt 'advisory=pnpm audit'
 
       - name: Biome check (lint + format)
         run: bash scripts/gate-witness.sh step GATE-RUN.ci.txt 'biome=pnpm exec biome check . --reporter=json --max-diagnostics=none'
