@@ -1,8 +1,8 @@
 schema: gate-run.v1
 gate: identuum-ui make verify
 note: evidence lines are the tools' own summary lines; a summary format this script does not match is recorded only as an exit code
-repo-head: 47a82bf
-started: 2026-09-10T13:26:02Z
+repo-head: a3e2169
+started: 2026-09-10T16:44:04Z
 plan: tool-versions wiki-fresh image-base-check image-base-parity witness-parity tracked-binary-check credential-transparency workflow-yaml workflow-yaml-parity frozen-lockfile advisory ci-witness toolchain-parity rulefloor ledger-diff-gate grype-scan biome tsc vitest
 tool: node       v26.8.1  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/node
 tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/pnpm
@@ -31,18 +31,18 @@ elapsed: workflow-yaml-parity 0s
 target: workflow-yaml-parity exit=0
 elapsed: frozen-lockfile 0s
 target: frozen-lockfile exit=0
-elapsed: advisory 2s
+elapsed: advisory 3s
 target: advisory exit=0
-evidence: [ci-witness] check OK: ci-witness identuum-ui CI build-and-test (node 26) green, 13 planned target(s) all exit=0, ties commit 3c00134, 2 commit(s) behind HEAD — the CI claim covers that tree, not this one, run https://github.com/identuum/identuum-ui/actions/runs/34482021444 attempt=1 sha=3c00134e356c53d80295cbd2ae8f98660e23dd1a
+evidence: [ci-witness] check OK: ci-witness identuum-ui CI build-and-test (node 26) green, 13 planned target(s) all exit=0, ties commit 3c00134, 6 commit(s) behind HEAD — the CI claim covers that tree, not this one, run https://github.com/identuum/identuum-ui/actions/runs/34482021444 attempt=1 sha=3c00134e356c53d80295cbd2ae8f98660e23dd1a
 elapsed: ci-witness 0s
 target: ci-witness exit=0
 evidence: [toolchain-parity] check OK: toolchain-parity 12 pins agree (node 26 in matrix [26 ], engines/@types/node 26/26, local node 26, pnpm 11.3.0, go 1.27.1, rulefloor v0.9.1, yq v4.53.6, both vendored digests)
 elapsed: toolchain-parity 0s
 target: toolchain-parity exit=0
 evidence: [rulefloor] check OK: 66 rows (66 armed), FLOOR 66, RED-PROOFS 63 (measured 63)
-elapsed: rulefloor 1s
+elapsed: rulefloor 0s
 target: rulefloor exit=0
-evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=3c00134e356c53d80295cbd2ae8f98660e23dd1a status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=127e58102e88f47c1ea91bccc9031e7d93413dc5c03377030e7a1d7a5428fe4b
+evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=c80bfee8bff324fbc9d45437dd91cb4c4210b6f4 status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=78c0495b18aae611e2d7817f8a5e2b5074b127df53c59bf95abf6a14e86f4c13
 elapsed: ledger-diff-gate 0s
 target: ledger-diff-gate exit=0
 evidence: [grype-scan] check OK: grype-gate matches=1 fixable=0 allowlisted=0 unfixable=1 severe=0
@@ -52,10 +52,10 @@ elapsed: biome 0s
 target: biome exit=0
 elapsed: tsc 1s
 target: tsc exit=0
-evidence: [vitest]  Test Files  131 passed (131)
-evidence: [vitest]       Tests  3494 passed (3494)
+evidence: [vitest]  Test Files  132 passed (132)
+evidence: [vitest]       Tests  3501 passed (3501)
 elapsed: vitest 1s
 target: vitest exit=0
-finished: 2026-09-10T13:26:23Z
-tree: sha256=6b87f26db79452819a261114466d80258f902c3b52fcd412c92a3b4d999350a7
+finished: 2026-09-10T16:44:25Z
+tree: sha256=d6f6e8edb83bdb4d4ba5dca5ffcc40960b79abd4514a18ec5091c57bc1ec770b
 result: green
