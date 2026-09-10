@@ -1,8 +1,8 @@
 schema: gate-run.v1
 gate: identuum-ui make verify
 note: evidence lines are the tools' own summary lines; a summary format this script does not match is recorded only as an exit code
-repo-head: be2a196
-started: 2026-09-10T08:36:00Z
+repo-head: 3d6cb7a
+started: 2026-09-10T09:13:11Z
 plan: tool-versions wiki-fresh image-base-check image-base-parity witness-parity tracked-binary-check credential-transparency workflow-yaml workflow-yaml-parity frozen-lockfile advisory ci-witness toolchain-parity rulefloor ledger-diff-gate grype-scan biome tsc vitest
 tool: node       v26.8.1  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/node
 tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/1900_1787004792882/bin/pnpm
@@ -29,33 +29,33 @@ target: workflow-yaml exit=0
 evidence: [workflow-yaml-parity] check OK: workflow-yaml-parity block md5 d63f3fdb5cd211c38abe98a03ecb1544 matches the shared pin
 elapsed: workflow-yaml-parity 0s
 target: workflow-yaml-parity exit=0
-elapsed: frozen-lockfile 0s
+elapsed: frozen-lockfile 1s
 target: frozen-lockfile exit=0
-elapsed: advisory 3s
+elapsed: advisory 1s
 target: advisory exit=0
-evidence: [ci-witness] check OK: ci-witness identuum-ui CI build-and-test (node 26) green, 13 planned target(s) all exit=0, ties commit b1def45, 5 commit(s) behind HEAD — the CI claim covers that tree, not this one, run https://github.com/identuum/identuum-ui/actions/runs/34376678607 attempt=1 sha=b1def459816b8ac40140a9c1c647fdfbdf82fc02
+evidence: [ci-witness] check OK: ci-witness identuum-ui CI build-and-test (node 26) green, 13 planned target(s) all exit=0, ties commit e6192c2, 2 commit(s) behind HEAD — the CI claim covers that tree, not this one, run https://github.com/identuum/identuum-ui/actions/runs/34459037502 attempt=1 sha=e6192c26c83e29c0a8379fa60864f51ef0eddfb7
 elapsed: ci-witness 0s
 target: ci-witness exit=0
 evidence: [toolchain-parity] check OK: toolchain-parity 12 pins agree (node 26 in matrix [26 ], engines/@types/node 26/26, local node 26, pnpm 11.3.0, go 1.27.1, rulefloor v0.9.1, yq v4.53.6, both vendored digests)
-elapsed: toolchain-parity 0s
+elapsed: toolchain-parity 1s
 target: toolchain-parity exit=0
 evidence: [rulefloor] check OK: 66 rows (66 armed), FLOOR 66, RED-PROOFS 63 (measured 63)
 elapsed: rulefloor 0s
 target: rulefloor exit=0
-evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=976439b138f199192e9db7ac4884e313def3ed30 status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=b7c38b93a338a36b86d06d7cf50dfc5f7fe79a685fe6a78fd4c56e7b4fc0b210
-elapsed: ledger-diff-gate 1s
+evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=e6192c26c83e29c0a8379fa60864f51ef0eddfb7 status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=7ebef3f13648e5e7b0f95d6d8a39621b5ae21ef97d46a183be0f04619b9c6d6e
+elapsed: ledger-diff-gate 0s
 target: ledger-diff-gate exit=0
 evidence: [grype-scan] check OK: grype-gate matches=1 fixable=0 allowlisted=0 unfixable=1 severe=0
-elapsed: grype-scan 47s
+elapsed: grype-scan 14s
 target: grype-scan exit=0
-elapsed: biome 1s
+elapsed: biome 0s
 target: biome exit=0
-elapsed: tsc 0s
+elapsed: tsc 1s
 target: tsc exit=0
 evidence: [vitest]  Test Files  130 passed (130)
 evidence: [vitest]       Tests  3487 passed (3487)
-elapsed: vitest 2s
+elapsed: vitest 1s
 target: vitest exit=0
-finished: 2026-09-10T08:36:57Z
-tree: sha256=f6adec8455615151ba32988f6c5175b735759823665c4bd8479f3e5c390fed2a
+finished: 2026-09-10T09:13:33Z
+tree: sha256=9dbe3cbfe0b1b9f35e3cc213aa6a77d8d6ecf7fe8defea7a1e855c3f4da6e846
 result: green
