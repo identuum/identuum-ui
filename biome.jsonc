@@ -47,8 +47,11 @@
       // envelopes plus the harness's Playwright JSON reports (minified by
       // Playwright itself — not formattable source). THE-WITNESSED-COVERAGE:
       // biome flagged the reports the moment the harness started writing them.
+      // THE-SELF-REPLENISHING-CODES: a RED mint keeps its evidence (the same
+      // reports) under e2e-full/.evidence and a green one leaves none there.
       "!**/e2e/.auth",
-      "!**/e2e-full/.auth"
+      "!**/e2e-full/.auth",
+      "!**/e2e-full/.evidence"
     ]
   }
 }
