@@ -73,10 +73,16 @@ export type DisableMfaState =
   | { phase: "error"; error: string; fieldErrors?: { confirm?: string; proof?: string } }
   | { phase: "success" };
 
+// THE-STALE-PROOF (2026-09-10): the IdP verifies the disable ONLY through
+// the second factor — identuum-idp-ce's HandleMeMFADisable runs
+// mfaService.ValidateCode(code) and discards the password field (f89ca88).
+// A password-only submission is a guaranteed 401 invalid_proof that also
+// counts against the user's step-up lockout, so this action requires a
+// code and reads no password. The wire shape is unchanged: disableOwnMfa
+// still sends {code, password: ""}, both keys known to the IdP's decoder.
 const disableSchema = z.object({
   confirm: z.string(),
   code: z.string(),
-  password: z.string(),
 });
 
 export async function disableMfaAction(
@@ -88,7 +94,6 @@ export async function disableMfaAction(
   const parsed = disableSchema.safeParse({
     confirm: ((formData.get("confirm") as string | null) ?? "").trim(),
     code: ((formData.get("code") as string | null) ?? "").trim(),
-    password: (formData.get("password") as string | null) ?? "",
   });
   if (!parsed.success) {
     return { phase: "error", error: "Invalid request." };
@@ -100,18 +105,15 @@ export async function disableMfaAction(
       fieldErrors: { confirm: "Doesn't match." },
     };
   }
-  if (!parsed.data.code && !parsed.data.password) {
+  if (!parsed.data.code) {
     return {
       phase: "error",
-      error: "Enter an authenticator/recovery code or your current password.",
+      error: "Enter an authenticator or recovery code.",
       fieldErrors: { proof: "Required." },
     };
   }
 
-  const result = await disableOwnMfa({
-    code: parsed.data.code,
-    password: parsed.data.password,
-  });
+  const result = await disableOwnMfa({ code: parsed.data.code });
 
   if (!result.ok) {
     if (result.unavailable) {
@@ -130,8 +132,7 @@ export async function disableMfaAction(
     if (result.invalidProof) {
       return {
         phase: "error",
-        error:
-          "Could not verify the proof. Try a current authenticator code, recovery code, or password.",
+        error: "Could not verify the code. Try a current authenticator code or recovery code.",
         fieldErrors: { proof: "Invalid proof." },
       };
     }

@@ -82,8 +82,8 @@ export function DisableMfaForm() {
       <div>
         <p className="text-xs font-semibold text-red-700">Disable MFA</p>
         <p className="text-xs text-red-700 mt-1 leading-relaxed">
-          Requires a current authenticator code, recovery code, or password. Successful disable
-          signs out active sessions.
+          Requires a current authenticator code or recovery code. Successful disable signs out
+          active sessions.
         </p>
       </div>
       <label className="block text-[11px] font-medium text-red-700">
@@ -96,28 +96,20 @@ export function DisableMfaForm() {
           className="mt-1 w-full rounded-lg border border-red-100 bg-white px-2 py-1.5 text-xs font-mono text-stone-800 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100 disabled:opacity-50"
         />
       </label>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block text-[11px] font-medium text-red-700">
-          Authenticator or recovery code
-          <input
-            name="code"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            disabled={isPending}
-            className="mt-1 w-full rounded-lg border border-red-100 bg-white px-2 py-1.5 text-xs font-mono text-stone-800 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100 disabled:opacity-50"
-          />
-        </label>
-        <label className="block text-[11px] font-medium text-red-700">
-          Current password
-          <input
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            disabled={isPending}
-            className="mt-1 w-full rounded-lg border border-red-100 bg-white px-2 py-1.5 text-xs text-stone-800 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100 disabled:opacity-50"
-          />
-        </label>
-      </div>
+      {/* THE-STALE-PROOF: the second factor is the only proof the IdP
+          accepts here (identuum-idp-ce f89ca88 discards the password), so
+          the form asks for nothing else — a password field would walk the
+          user into a guaranteed 401 that spends their step-up budget. */}
+      <label className="block text-[11px] font-medium text-red-700">
+        Authenticator or recovery code
+        <input
+          name="code"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          disabled={isPending}
+          className="mt-1 w-full rounded-lg border border-red-100 bg-white px-2 py-1.5 text-xs font-mono text-stone-800 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100 disabled:opacity-50"
+        />
+      </label>
       {state.phase === "error" && <p className="text-xs text-red-700">{state.error}</p>}
       <Button type="submit" variant="danger" size="sm" loading={isPending} disabled={disabled}>
         Disable MFA
