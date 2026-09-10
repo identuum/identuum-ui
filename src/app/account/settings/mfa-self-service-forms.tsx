@@ -22,7 +22,8 @@ export function RecoveryCodesRegenerateForm() {
       <div>
         <p className="text-xs font-semibold text-sky-950">Regenerate recovery codes</p>
         <p className="text-xs text-stone-500 mt-1 leading-relaxed">
-          Replaces your existing recovery codes. Existing unused codes stop working.
+          Replaces your existing recovery codes. Existing unused codes stop working. Requires a
+          current authenticator code. A recovery code cannot be used to generate new recovery codes.
         </p>
       </div>
       <label className="block text-[11px] font-medium text-stone-500">
@@ -31,6 +32,20 @@ export function RecoveryCodesRegenerateForm() {
           name="confirm"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
+          disabled={isPending || state.phase === "success"}
+          className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-xs font-mono text-stone-800 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:opacity-50"
+        />
+      </label>
+      {/* THE-SELF-REPLENISHING-CODES: the IdP accepts ONLY a current
+          authenticator code here — a recovery code is refused with a
+          cause-neutral 401, so the form states the rule the server
+          enforces (the THE-STALE-PROOF lesson). */}
+      <label className="block text-[11px] font-medium text-stone-500">
+        Authenticator code
+        <input
+          name="code"
+          inputMode="numeric"
+          autoComplete="one-time-code"
           disabled={isPending || state.phase === "success"}
           className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-xs font-mono text-stone-800 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:opacity-50"
         />

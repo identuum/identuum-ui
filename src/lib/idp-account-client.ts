@@ -218,14 +218,22 @@ export type RecoveryCodesResult =
   | { ok: true; recoveryCodes: string[]; count: number }
   | AccountMutationFailure;
 
-export async function regenerateOwnMfaRecoveryCodes(): Promise<RecoveryCodesResult> {
+// THE-SELF-REPLENISHING-CODES (2026-09-10): identuum-idp-ce's regenerate
+// takes a current authenticator (TOTP) code as its only proof — a
+// recovery code is refused, so that a stolen session cannot mint fresh
+// disable proofs. The code travels as the JSON body {code}; the IdP's
+// refusal is one cause-neutral 401 invalid_proof.
+export async function regenerateOwnMfaRecoveryCodes(input: {
+  code: string;
+}): Promise<RecoveryCodesResult> {
   const cfg = loadRuntimeConfig();
   if (!cfg || !cfg.idp.enabled) return failedMutation(503);
 
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/me/mfa/recovery-codes/regenerate`, {
       method: "POST",
-      headers: await idpAuthHeaders(),
+      headers: await idpAuthHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ code: input.code }),
       cache: "no-store",
     });
 

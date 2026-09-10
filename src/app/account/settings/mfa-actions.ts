@@ -30,8 +30,17 @@ export type RegenerateRecoveryCodesState =
   | { phase: "error"; error: string }
   | { phase: "success"; recoveryCodes: string[]; count: number };
 
+// THE-SELF-REPLENISHING-CODES (2026-09-10): identuum-idp-ce's regenerate
+// verifies ONLY a current authenticator (TOTP) code — a recovery code is
+// refused, so that a stolen session cannot mint ten fresh disable proofs
+// (the disable accepts recovery codes). The IdP's refusal is deliberately
+// cause-neutral (one 401 invalid_proof for absent, empty, wrong, recovery
+// and locked alike), so this action and its form are where the user
+// learns the rule: the code is required before any request, and the 401
+// message names the authenticator code and the recovery-code exclusion.
 const regenerateSchema = z.object({
   confirm: z.string(),
+  code: z.string(),
 });
 
 export async function regenerateRecoveryCodesAction(
@@ -42,12 +51,16 @@ export async function regenerateRecoveryCodesAction(
 
   const parsed = regenerateSchema.safeParse({
     confirm: ((formData.get("confirm") as string | null) ?? "").trim(),
+    code: ((formData.get("code") as string | null) ?? "").trim(),
   });
   if (!parsed.success || parsed.data.confirm !== "REGENERATE") {
     return { phase: "error", error: "Type REGENERATE to confirm." };
   }
+  if (!parsed.data.code) {
+    return { phase: "error", error: "Enter your authenticator code." };
+  }
 
-  const result = await regenerateOwnMfaRecoveryCodes();
+  const result = await regenerateOwnMfaRecoveryCodes({ code: parsed.data.code });
   if (!result.ok) {
     if (result.unavailable) {
       return {
@@ -58,8 +71,12 @@ export async function regenerateRecoveryCodesAction(
     if (result.notEnrolled) {
       return { phase: "error", error: "MFA is not enrolled on this account." };
     }
-    if (result.unauthorized) {
-      return { phase: "error", error: "Your session has expired. Sign in again." };
+    if (result.invalidProof) {
+      return {
+        phase: "error",
+        error:
+          "Could not verify the code. Enter a current authenticator code; recovery codes cannot regenerate recovery codes.",
+      };
     }
     return { phase: "error", error: "Could not regenerate recovery codes. Try again." };
   }
