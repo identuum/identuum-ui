@@ -69,14 +69,19 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
   let orgId = "";
   let myId = "";
   let saId = "";
-  // The org_admin's TOTP seed, kept for [ROW 21]'s live-code rotation;
-  // never logged or asserted by value.
+  // The three principals' TOTP seeds, kept for the live-code rotations in
+  // [ROW 21] (oa) and [ROW 203]'s closers (sa, ou); never logged or
+  // asserted by value.
   let oaTotpSecret = "";
+  let saTotpSecret = "";
+  let ouTotpSecret = "";
 
   test.beforeAll(async () => {
     const bootstrapPassword = process.env.IDENTUUM_E2E_FULL_ADMIN_PASSWORD ?? "";
     if (!bootstrapPassword) throw new Error("harness must pass the bootstrap password");
-    sa = (await siteAdminSession(IDP_BASE, SITE_ADMIN_EMAIL, bootstrapPassword)).bearer;
+    const saSession = await siteAdminSession(IDP_BASE, SITE_ADMIN_EMAIL, bootstrapPassword);
+    sa = saSession.bearer;
+    saTotpSecret = saSession.totpSecret;
 
     const fx = loadOrgAdminFixture();
     if (!fx) throw new Error("org_admin envelope missing — phase must run after the provisioner");
@@ -89,6 +94,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     const ufx = loadOrgUserFixture();
     if (!ufx) throw new Error("org_user envelope missing — phase must run after the provisioner");
     ou = await bearerFor(ufx.email, ufx.password, ufx.totpSecret);
+    ouTotpSecret = ufx.totpSecret;
 
     const prof = await api(IDP_BASE, "GET", "/api/v1/profile", undefined, oa);
     if (prof.status !== 200) throw new Error(`profile bootstrap read: ${prof.status}`);
@@ -598,8 +604,9 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     // Closes the measured remainder of the matrix with probes that are safe
     // on the disposable appliance: reads, benign-FAILING mutations (wrong
     // current password, empty MFA proof, empty/invalid bodies — nothing
-    // changes), the ROW-21-style recovery-code regenerations (really rotate,
-    // harness logins never use recovery codes), and anonymous probes on the
+    // changes), the ROW-21-style recovery-code regenerations (really rotate
+    // with a live TOTP as their proof, after the table; harness logins never
+    // use recovery codes), and anonymous probes on the
     // public/M2M class endpoints. Every probe asserts an expected status set
     // — never 5xx — so a fault cannot count as coverage. MUST STAY THE LAST
     // TEST IN THIS FILE: the session-revocation probes at the end kill the
@@ -805,20 +812,6 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
         label: "users-bulk sa (row refused per contract, created 0)",
       },
       // ── role cells: ROW-21-style regenerations (really rotate; disposable) ──
-      {
-        method: "POST",
-        path: "/api/v1/me/mfa/recovery-codes/regenerate",
-        bearer: sa,
-        ok: [200],
-        label: "recovery-regen sa",
-      },
-      {
-        method: "POST",
-        path: "/api/v1/me/mfa/recovery-codes/regenerate",
-        bearer: ou,
-        ok: [200],
-        label: "recovery-regen ou",
-      },
       // ── class cells: anonymous probes on the public/M2M surface ──
       {
         method: "GET",
@@ -918,6 +911,36 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       if (!pr.ok.includes(res.status)) {
         faults.push(
           `${pr.label}: ${pr.method} ${pr.path} → ${res.status} (wanted ${pr.ok.join("/")})`
+        );
+      }
+    }
+    // The two recovery-code regenerations, out of the static table because
+    // their proof is a LIVE TOTP (THE-OSS-HALF-OF-THE-RULING, owner ruling
+    // (c): the regenerate takes a current TOTP as its only proof, so a
+    // body-less call is refused 401 invalid_code and these must still
+    // REALLY rotate). A table entry's body is built before the loop runs
+    // and cannot ride a step boundary; here each call mints its code at
+    // request time and tries the next window once, as [ROW 21] does. Three
+    // principals (oa in ROW 21, sa and ou here), so no code is consumed
+    // twice. Same fault semantics as the table: a non-200 is a fault.
+    for (const live of [
+      { bearer: sa, secret: saTotpSecret, label: "recovery-regen sa" },
+      { bearer: ou, secret: ouTotpSecret, label: "recovery-regen ou" },
+    ]) {
+      let res: { status: number; json: Json } = { status: 0, json: {} };
+      for (let win = 0; win <= 1; win++) {
+        res = await api(
+          IDP_BASE,
+          "POST",
+          "/api/v1/me/mfa/recovery-codes/regenerate",
+          { code: generateTOTP(live.secret, win) },
+          live.bearer
+        );
+        if (res.status === 200) break;
+      }
+      if (res.status !== 200) {
+        faults.push(
+          `${live.label}: POST /api/v1/me/mfa/recovery-codes/regenerate (live TOTP) → ${res.status} (wanted 200)`
         );
       }
     }
