@@ -16,10 +16,12 @@
  * payload (wrong current password, empty MFA proof, random UUIDs, invalid
  * body, invite-shaped bulk row that the backend refuses per row) EXCEPT
  * [ROW 21] recovery-codes/regenerate, which really rotates the fixture
- * org_admin's recovery codes — confined to THIS disposable appliance (torn
- * down at run end; codes are never used by any harness login, which are all
- * TOTP). No durable fixture is ever mutated. No secret, code, or token value
- * is logged or asserted by value.
+ * org_admin's recovery codes with a live TOTP as its proof (since
+ * THE-OSS-HALF-OF-THE-RULING the body-less call is refused 401 invalid_code,
+ * and the row pins both contracts) — confined to THIS disposable appliance
+ * (torn down at run end; codes are never used by any harness login, which
+ * are all TOTP). No durable fixture is ever mutated. No secret, code, or
+ * token value is logged or asserted by value.
  */
 
 import { readFileSync } from "node:fs";
@@ -67,6 +69,9 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
   let orgId = "";
   let myId = "";
   let saId = "";
+  // The org_admin's TOTP seed, kept for [ROW 21]'s live-code rotation;
+  // never logged or asserted by value.
+  let oaTotpSecret = "";
 
   test.beforeAll(async () => {
     const bootstrapPassword = process.env.IDENTUUM_E2E_FULL_ADMIN_PASSWORD ?? "";
@@ -76,6 +81,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     const fx = loadOrgAdminFixture();
     if (!fx) throw new Error("org_admin envelope missing — phase must run after the provisioner");
     oa = await bearerFor(fx.email, fx.password, fx.totpSecret);
+    oaTotpSecret = fx.totpSecret;
 
     // THE-ROLE-CENSUS T4-1: the org_user is the third credential type the
     // suite must cover — the fixture org's REQUIRED MFA policy means it is
@@ -233,14 +239,39 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     expect(r.json).toHaveProperty("error");
   });
 
-  test("[ROW 21] POST /me/mfa/recovery-codes/regenerate — 200 (REALLY rotates; disposable appliance only)", async () => {
-    const r = await api(
+  test("[ROW 21] POST /me/mfa/recovery-codes/regenerate — 401 invalid_code with no proof; 200 with a live TOTP (REALLY rotates; disposable appliance only)", async () => {
+    // THE-OSS-HALF-OF-THE-RULING (2026-09-10, owner ruling (c) — both
+    // contracts pinned): the regenerate takes a current TOTP code as its
+    // ONLY proof (a recovery code must not buy more recovery codes), so the
+    // body-less call the row used to make is now REFUSED with the route
+    // family's cause-neutral 401 invalid_code — and a rotation that sends a
+    // live code still answers 200 and still really rotates. The status
+    // alone would have read this hardening as drift; the row says which.
+    const bare = await api(
       IDP_BASE,
       "POST",
       "/api/v1/me/mfa/recovery-codes/regenerate",
       undefined,
       oa
     );
+    expect(bare.status).toBe(401);
+    expect(bare.json.error).toBe("invalid_code");
+
+    // The rotation half. OSS verifies the regenerate's TOTP in a ±1-step
+    // window with no last-accepted-step guard, so the current window's code
+    // is accepted even though the login consumed one; the next window is
+    // tried only to ride out a step boundary between the two calls.
+    let r: { status: number; json: Json } = { status: 0, json: {} };
+    for (let win = 0; win <= 1; win++) {
+      r = await api(
+        IDP_BASE,
+        "POST",
+        "/api/v1/me/mfa/recovery-codes/regenerate",
+        { code: generateTOTP(oaTotpSecret, win) },
+        oa
+      );
+      if (r.status === 200) break;
+    }
     expect(r.status).toBe(200);
     expect(Array.isArray(r.json.recovery_codes)).toBe(true);
     expect(Number(r.json.count)).toBeGreaterThan(0);
