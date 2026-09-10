@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,23 @@ import { ApiError } from "@/lib/ui-api";
  *   - When the IdP returns HTTP 409 ErrMFAAlreadyEnrolled, the form
  *     refuses to re-issue a secret and instructs the operator to use
  *     `/mfa/disable` first.
+ *   - THE-ENROLL-PASSWORD: enrollment starts with the operator's CURRENT
+ *     PASSWORD (identuum-idp-ce d9ca9fe requires it on initiate — a
+ *     hijacked session alone must not be able to arm an authenticator on
+ *     an account with no active factor). The password is asked for ONCE,
+ *     at initiate; complete takes only the code. It lives in react-hook-
+ *     form state until the secret is issued and is cleared then. The
+ *     server collapses absent, empty and wrong (and its step-up lockout)
+ *     into one 401, so the form shows one cause-neutral message; an
+ *     empty password is refused client-side too, but the server stays
+ *     the authority.
  */
+
+const passwordSchema = z.object({
+  password: z.string().min(1, "Enter your current password"),
+});
+
+type PasswordFormData = z.infer<typeof passwordSchema>;
 
 const schema = z.object({
   code: z
@@ -43,7 +59,7 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-type Phase = "loading" | "display" | "error" | "already_enrolled" | "success";
+type Phase = "password" | "display" | "error" | "already_enrolled" | "success";
 
 export function AccountMFAEnrollForm({
   onSuccess,
@@ -59,12 +75,20 @@ export function AccountMFAEnrollForm({
    */
   onDone?: () => void;
 }) {
-  const [phase, setPhase] = useState<Phase>("loading");
+  const [phase, setPhase] = useState<Phase>("password");
   // SECURITY: secret, otpauthUrl, recoveryCodes kept ONLY in component state.
   const [secret, setSecret] = useState("");
   const [otpauthUrl, setOtpauthUrl] = useState("");
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [serverError, setServerError] = useState<string | null>(null);
+
+  // The password step (THE-ENROLL-PASSWORD): its own form so the typed
+  // password can be cleared the moment the secret is issued, independent
+  // of the code form below.
+  const passwordForm = useForm<PasswordFormData>({
+    resolver: zodResolver(passwordSchema),
+  });
+  const { reset: resetPasswordForm } = passwordForm;
 
   const {
     register,
@@ -75,31 +99,40 @@ export function AccountMFAEnrollForm({
     resolver: zodResolver(schema),
   });
 
-  // Fetch a fresh enrollment secret on mount. The effect runs once per
-  // mount; reloading the page produces a new ceremony (and overwrites the
-  // server-side secret, which is acceptable because the previous one was
-  // not yet verified).
-  useEffect(() => {
-    let cancelled = false;
-    accountMfaSetupInitiate()
-      .then((data) => {
-        if (cancelled) return;
-        setSecret(data.secret);
-        setOtpauthUrl(data.otpauthUrl);
-        setPhase("display");
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        if (err instanceof AccountMFAAlreadyEnrolledError) {
-          setPhase("already_enrolled");
+  // Initiate ONLY on the operator's submit, with their current password.
+  // Nothing runs on mount any more; reloading the page returns to this
+  // step (the previous server-side secret, if any, was never verified and
+  // is overwritten by the next initiate).
+  const onPasswordSubmit = async (data: PasswordFormData) => {
+    setServerError(null);
+    try {
+      const issued = await accountMfaSetupInitiate(data.password);
+      // The password has done its work; do not keep it in state alongside
+      // the secret.
+      resetPasswordForm();
+      setSecret(issued.secret);
+      setOtpauthUrl(issued.otpauthUrl);
+      setPhase("display");
+    } catch (err) {
+      if (err instanceof AccountMFAAlreadyEnrolledError) {
+        setPhase("already_enrolled");
+        return;
+      }
+      if (err instanceof ApiError) {
+        // The server deliberately answers ONE 401 whether the password was
+        // absent, empty or mistaken, or its step-up lockout fired, and ONE
+        // 503 for a step-up outage or an unwritable audit chain. The form
+        // does not guess which; it says only what it knows.
+        if (err.status === 503) {
+          setServerError("Two-factor enrollment is temporarily unavailable. Try again later.");
           return;
         }
-        setPhase("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+        setServerError("Could not verify your password. Try again.");
+        return;
+      }
+      setPhase("error");
+    }
+  };
 
   const onSubmit = async (data: FormData) => {
     setServerError(null);
@@ -127,8 +160,42 @@ export function AccountMFAEnrollForm({
     }
   };
 
-  if (phase === "loading") {
-    return <p className="text-xs text-stone-500">Setting up two-factor authentication…</p>;
+  if (phase === "password") {
+    // Step 0 — the operator proves the first factor before a secret is
+    // issued. Same field shape as the disable form's password input.
+    return (
+      <form
+        onSubmit={passwordForm.handleSubmit(onPasswordSubmit)}
+        className="space-y-3 rounded-xl border border-stone-200 bg-stone-50 p-4"
+      >
+        <div>
+          <p className="text-xs font-semibold text-sky-950">Confirm your password to begin</p>
+          <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+            Enrolling an authenticator app requires your current password. You will not be asked for
+            it again during enrollment.
+          </p>
+        </div>
+
+        <Input
+          id="account-enroll-password"
+          label="Current password"
+          type="password"
+          autoComplete="current-password"
+          error={passwordForm.formState.errors.password?.message}
+          {...passwordForm.register("password")}
+        />
+
+        {serverError && (
+          <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            {serverError}
+          </div>
+        )}
+
+        <Button type="submit" loading={passwordForm.formState.isSubmitting}>
+          Continue
+        </Button>
+      </form>
+    );
   }
 
   if (phase === "error") {

@@ -285,13 +285,24 @@ export class AccountMFAAlreadyEnrolledError extends Error {
 /**
  * Initiates authenticated TOTP enrollment for the calling user. Throws
  * AccountMFAAlreadyEnrolledError when the IdP returns HTTP 409.
+ *
+ * THE-ENROLL-PASSWORD: the route requires the caller's CURRENT PASSWORD
+ * since identuum-idp-ce d9ca9fe (CE log/0100) — a hijacked session alone
+ * could otherwise arm an attacker's authenticator on an account with no
+ * active factor. The wire body is exactly {"password": …}. The server
+ * collapses an absent, empty or wrong password (and its step-up lockout)
+ * into ONE 401 invalid_proof; a step-up outage or an unwritable audit
+ * chain is a 503. Both surface here as ApiError with the status — the
+ * caller must not read more into them than the server gives.
  */
-export async function accountMfaSetupInitiate(): Promise<{ secret: string; otpauthUrl: string }> {
+export async function accountMfaSetupInitiate(
+  password: string
+): Promise<{ secret: string; otpauthUrl: string }> {
   const res = await fetch(IDP.mfaSetupInitiate, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: "{}",
+    body: JSON.stringify({ password }),
   });
   if (res.status === 409) {
     throw new AccountMFAAlreadyEnrolledError();

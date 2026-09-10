@@ -549,13 +549,40 @@ describe("accountMfaSetupInitiate() — wire-path + response parsing", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await accountMfaSetupInitiate();
+    await accountMfaSetupInitiate("PLACEHOLDER_PASSWORD");
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/idp/api/v1/mfa/setup/initiate");
     expect(init?.method).toBe("POST");
     expect(init?.credentials).toBe("include");
+  });
+
+  // THE-ENROLL-PASSWORD: identuum-idp-ce d9ca9fe requires the caller's
+  // current password on this route (a hijacked session alone could arm an
+  // attacker's authenticator on a factorless account — CE log/0100). The
+  // wire body is exactly {"password": …} and nothing else; the old `{}`
+  // is refused 401 invalid_proof by the server.
+  it("sends the current password as the JSON body {password} (CE d9ca9fe contract)", async () => {
+    const fetchMock = makeFetchMock(200, {
+      secret: "PLACEHOLDER_SECRET",
+      otpauth_url: "otpauth://totp/test?secret=PLACEHOLDER",
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await accountMfaSetupInitiate("PLACEHOLDER_PASSWORD");
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init?.headers).toMatchObject({ "Content-Type": "application/json" });
+    expect(init?.body).toBe(JSON.stringify({ password: "PLACEHOLDER_PASSWORD" }));
+  });
+
+  it("surfaces the server's 401 invalid_proof as an ApiError carrying the status (never a success)", async () => {
+    vi.stubGlobal("fetch", makeFetchMock(401, { error: "invalid_proof" }));
+
+    const err = await accountMfaSetupInitiate("PLACEHOLDER_PASSWORD").catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(401);
   });
 
   it("parses body.otpauth_url (CE / OSS field) into otpauthUrl", async () => {
@@ -567,7 +594,7 @@ describe("accountMfaSetupInitiate() — wire-path + response parsing", () => {
       })
     );
 
-    const result = await accountMfaSetupInitiate();
+    const result = await accountMfaSetupInitiate("PLACEHOLDER_PASSWORD");
 
     expect(result.otpauthUrl).toBe("otpauth://totp/ce?secret=PLACEHOLDER&issuer=ce");
     expect(result.secret).toBe("PLACEHOLDER_SECRET");
@@ -582,7 +609,7 @@ describe("accountMfaSetupInitiate() — wire-path + response parsing", () => {
       })
     );
 
-    const result = await accountMfaSetupInitiate();
+    const result = await accountMfaSetupInitiate("PLACEHOLDER_PASSWORD");
 
     expect(result.otpauthUrl).toBe("otpauth://totp/mono?secret=PLACEHOLDER&issuer=mono");
   });
@@ -590,7 +617,7 @@ describe("accountMfaSetupInitiate() — wire-path + response parsing", () => {
   it("throws on non-2xx, non-409 (ApiError)", async () => {
     vi.stubGlobal("fetch", makeFetchMock(500, { error: "mfa_initiate_failed" }));
 
-    await expect(accountMfaSetupInitiate()).rejects.toBeInstanceOf(ApiError);
+    await expect(accountMfaSetupInitiate("PLACEHOLDER_PASSWORD")).rejects.toBeInstanceOf(ApiError);
   });
 });
 
