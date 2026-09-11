@@ -457,6 +457,25 @@ tool-versions:
 e2e-full:
 	@bash e2e-full/scripts/full-run.sh
 
+## WHY wiki-fresh RUNS LAST (THE-SEVENTEEN-MASKED-TARGETS, 2026-09-11; the
+## rule is THE-SEALED-GATES, identuum-idp-oss, 2026-08-04)
+## --------------------------------------------------------------------
+## wiki-fresh is SIBLING-COUPLED: its subject is the pin in ../wiki, not this
+## tree, and it goes red for the entirely expected reason that a slice has
+## just added commits here. gate-witness stops at the first red target, so
+## every target placed BELOW it is silently unrun whenever the pin lags.
+## Until 2026-09-11 it sat at position 2 of 19, and a pin one commit behind
+## masked SEVENTEEN targets — image-base-check through ledger-diff-gate,
+## grype-scan, biome, tsc and vitest: the whole lint and test suite under a
+## documentation-freshness gate. Measured on the real plan that day: the
+## record stopped at 2 of 19 (tool-versions, wiki-fresh exit=2). OSS learned
+## the same lesson in THE-SEALED-GATES when commit 032737c landed with a
+## non-compiling tree because verify stopped at wiki-fresh and never reached
+## vet. A gate that judges THIS repository's code or dependencies must never
+## run after one whose subject lives elsewhere, so wiki-fresh is the LAST
+## plan entry, after vitest, with nothing below it. It stays fatal — nothing
+## here is downgraded — it simply no longer masks what it is not about.
+## No RULE-FLOOR row pins this order; this comment is its record.
 verify:
 	# THE-UNWITNESSED-GREEN: the same targets as before, driven through
 	# scripts/gate-witness.sh so the run leaves a committed record
@@ -465,7 +484,6 @@ verify:
 	# record itself). A run that stops early reads INCOMPLETE, never green.
 	@bash scripts/gate-witness.sh run GATE-RUN.txt "identuum-ui make verify" \
 		'tool-versions=$(MAKE) --no-print-directory tool-versions' \
-		'wiki-fresh=$(MAKE) --no-print-directory wiki-fresh' \
 		'image-base-check=$(MAKE) --no-print-directory image-base-check' \
 		'image-base-parity=$(MAKE) --no-print-directory image-base-parity' \
 		'witness-parity=$(MAKE) --no-print-directory witness-parity' \
@@ -482,7 +500,8 @@ verify:
 		'grype-scan=$(MAKE) --no-print-directory grype-scan' \
 		'biome=pnpm exec biome check . --reporter=json --max-diagnostics=none' \
 		'tsc=pnpm exec tsc --noEmit' \
-		'vitest=pnpm exec vitest run'
+		'vitest=pnpm exec vitest run' \
+		'wiki-fresh=$(MAKE) --no-print-directory wiki-fresh'
 
 ## image-base-check: fail if any Dockerfile builds FROM an Alpine base.
 ##
