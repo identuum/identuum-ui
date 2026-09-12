@@ -77,7 +77,8 @@ jobs:
       # THE-UNBOUND-STAMP (2026-08-27): CI tests the DEPLOYED runtime, not
       # an asserted one. THE-UI-NODE-26-LATEST (2026-09-06, owner ruling):
       # the runner is cgr.dev/chainguard/node at a digest measured to ship
-      # Node v26.8.1, the build stages are node:26-bookworm-slim, engines
+      # Node v26.8.2 (THE-PATCHED-BASE, 2026-09-12; v26.8.1 at the previous
+      # digest), the build stages are node:26-bookworm-slim, engines
       # is ">=26.0.0", @types/node is 26 — and the local dev runtime is 26
       # too (toolchain-parity holds the local node major inside this
       # matrix). One truth now, so one matrix entry; it moves only when the

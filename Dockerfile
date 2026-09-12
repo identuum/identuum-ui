@@ -43,11 +43,19 @@ RUN mkdir -p /app/config-mount
 # Stage 3: production runner (Next.js standalone)
 ##############################################################################
 # cgr.dev/chainguard/node, pinned by DIGEST (owner ruling THE-UI-NODE-26-LATEST,
-# 2026-09-06). Measured AT THIS DIGEST: node v26.8.1; busybox /bin/sh PRESENT
-# (/bin/sh -> /bin/busybox, 231 entries in /bin); ENTRYPOINT ["/usr/bin/node"];
-# USER 65532 (`node`); WORKDIR /app; npm at /usr/bin/npm; grype through the
-# idp-oss judge (tools/grype-gate): matches=1 severe=0 fixable=0, the one
-# match a Medium in glibc. glibc (Wolfi), not Alpine: IMG-NONALPINE holds.
+# 2026-09-06; moved digest-to-digest by THE-PATCHED-BASE, 2026-09-12).
+# Measured AT THIS DIGEST (sha256:4a274a26…, image created 2026-09-10): node
+# v26.8.2; busybox /bin/sh PRESENT (/bin/sh -> /bin/busybox, 231 entries in
+# /bin); ENTRYPOINT ["/usr/bin/node"]; USER 65532 (`node`); WORKDIR /app; npm
+# at /usr/bin/npm; grype through the idp-oss judge (tools/grype-gate):
+# matches=0 fixable=0 severe=0. glibc (Wolfi), not Alpine: IMG-NONALPINE holds.
+#
+# WHY IT MOVED: the previous digest (sha256:753a6601…) shipped glibc 2.44-r5,
+# and on 2026-09-12 the vulnerability database attached CVE-2026-18374 and
+# GHSA-qg52-8pr2-xj9v to it with a published fix in 2.44-r6 — eight fixable
+# findings across glibc, glibc-locale-posix, ld-linux and libcrypt1. The judge
+# fails a finding WITH A FIX by design, so the pin moved to a digest that
+# carries the fix; nothing was suppressed.
 #
 # THE SHELL BELONGS TO THIS DIGEST, NOT TO THE TAG. A bump must re-measure
 # both the scan (`make grype-scan`) and the shell
@@ -56,7 +64,7 @@ RUN mkdir -p /app/config-mount
 # toolchain-parity reads that annotation and holds it equal to the build
 # stages, engines, @types/node and the CI matrix.
 # node-major=26
-FROM cgr.dev/chainguard/node@sha256:753a66014b1310b8f93c76d4cac41d039958b9a86dd44a245289d6cb85455582 AS runner
+FROM cgr.dev/chainguard/node@sha256:4a274a26acabd969b086b5a4840c5286f915d6ce43b8c2e74155a7061a30cd87 AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
