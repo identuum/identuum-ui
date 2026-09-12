@@ -51,7 +51,14 @@
       // reports) under e2e-full/.evidence and a green one leaves none there.
       "!**/e2e/.auth",
       "!**/e2e-full/.auth",
-      "!**/e2e-full/.evidence"
+      "!**/e2e-full/.evidence",
+      // Legattus per-checkout state, machine-written and gitignored
+      // (THE-PATCHED-BASE, 2026-09-12): `legattus init` writes minified JSON
+      // here and biome scans the working tree, not the index — three format
+      // errors turned the whole verify red the first time a Legattus
+      // project existed in this checkout.
+      "!**/.legattus.json",
+      "!**/.legattus"
     ]
   }
 }
