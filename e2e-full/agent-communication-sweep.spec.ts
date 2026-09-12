@@ -21,7 +21,7 @@
  * one org_user in A. Serial by --workers=1.
  */
 import { expect, test } from "@playwright/test";
-import { api, firstLoginBearerAsync } from "../e2e/helpers/appliance-fixture";
+import { api, expectStatus, firstLoginBearerAsync } from "../e2e/helpers/appliance-fixture";
 import { siteAdminSession } from "./helpers/session";
 
 const IDP_BASE = process.env.IDENTUUM_E2E_FULL_IDP_BASE ?? "http://127.0.0.1:7113";
@@ -155,7 +155,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       },
       site.bearer
     );
-    expect(c.status, `create org ${n} → 201`).toBe(201);
+    expectStatus(c, 201, `create org ${n} → 201`);
     const id = (c.json.organization as { id?: string })?.id ?? "";
     const rs = await api(
       IDP_BASE,
@@ -183,7 +183,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       { name: `${name}-${runId}`, description: "AYGHU e2e agent identity" },
       bearer
     );
-    expect(sa.status, `create service account ${name} → 201`).toBe(201);
+    expectStatus(sa, 201, `create service account ${name} → 201`);
     const saId = sa.json.id as string;
     const { generateKeyPairSync } = await import("node:crypto");
     const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -204,7 +204,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       },
       bearer
     );
-    expect(cl.status, `create private_key_jwt client for ${name} → 201`).toBe(201);
+    expectStatus(cl, 201, `create private_key_jwt client for ${name} → 201`);
     const clientId = (cl.json.client as { client_id?: string })?.client_id ?? "";
     expect(clientId.length, "client_id present").toBeGreaterThan(0);
     return {
@@ -304,7 +304,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       { email: userEmail, password: userPw, role: "org_user", organization_id: A.id },
       A.bearer
     );
-    expect(uc.status, "create org_user in A → 201").toBe(201);
+    expectStatus(uc, 201, "create org_user in A → 201");
     await api(
       IDP_BASE,
       "PUT",
@@ -320,7 +320,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       email: userEmail,
       password: userPw,
     });
-    expect(login.status, "org_user plain login → 200").toBe(200);
+    expectStatus(login, 200, "org_user plain login → 200");
     userA = { bearer: (login.json.access_token as string) ?? "" };
     expect(userA.bearer.length, "org_user bearer").toBeGreaterThan(0);
   });
@@ -334,7 +334,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     });
     (body.participants[0] as Record<string, unknown>).aci = "00000000-0000-0000-0000-000000000003";
     const r = await api(IDP_BASE, "POST", BASE, body, A.bearer);
-    expect(r.status, `create → 201 (${JSON.stringify(r.json)})`).toBe(201);
+    expectStatus(r, 201, `create → 201 (${JSON.stringify(r.json)})`);
     const j = r.json as Record<string, unknown>;
     authA = j.id as string;
     expect(authA).not.toBe("00000000-0000-0000-0000-000000000001");
@@ -368,7 +368,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     const one = createBody(agentsA);
     one.participants = one.participants.slice(0, 1);
     const r1 = await api(IDP_BASE, "POST", BASE, one, A.bearer);
-    expect(r1.status).toBe(400);
+    expectStatus(r1, 400);
     expect(r1.json.reason).toBe("participant_count");
 
     const cap = createBody(agentsA);
@@ -377,13 +377,13 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       "repository.delete",
     ];
     const r2 = await api(IDP_BASE, "POST", BASE, cap, A.bearer);
-    expect(r2.status).toBe(400);
+    expectStatus(r2, 400);
     expect(r2.json.reason).toBe("unknown_capability");
 
     const dup = createBody(agentsA);
     (dup.participants[1] as { role: string }).role = "initiator";
     const r3 = await api(IDP_BASE, "POST", BASE, dup, A.bearer);
-    expect(r3.status).toBe(400);
+    expectStatus(r3, 400);
     expect(r3.json.reason).toBe("duplicate_role");
 
     const foreignOrg = await api(
@@ -393,7 +393,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       createBody(agentsA, { organization_id: B.id }),
       A.bearer
     );
-    expect(foreignOrg.status, "an explicit foreign organization → 403").toBe(403);
+    expectStatus(foreignOrg, 403, "an explicit foreign organization → 403");
 
     // B's agents are another organization's: indistinguishable from absent.
     const foreignSA = await api(
@@ -403,7 +403,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       createBody([agentsB[0], agentsA[1]]),
       A.bearer
     );
-    expect(foreignSA.status).toBe(400);
+    expectStatus(foreignSA, 400);
     expect(foreignSA.json.reason).toBe("participant_service_account_not_found");
     const absentSA = await api(
       IDP_BASE,
@@ -418,41 +418,41 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
 
   test("ROW list + get: own-org → 200; cross-tenant get → 404 identical to an absent id", async () => {
     const list = await api(IDP_BASE, "GET", BASE, undefined, A.bearer);
-    expect(list.status).toBe(200);
+    expectStatus(list, 200);
     expect(list.json.count).toBe(1);
     const ids = (list.json.authorizations as Array<{ id: string }>).map((x) => x.id);
     expect(ids).toEqual([authA]);
 
     const get = await api(IDP_BASE, "GET", `${BASE}/${authA}`, undefined, A.bearer);
-    expect(get.status).toBe(200);
+    expectStatus(get, 200);
     expect(get.json.id).toBe(authA);
 
     // B has its own authorization and sees only it.
     const bCreate = await api(IDP_BASE, "POST", BASE, createBody(agentsB), B.bearer);
-    expect(bCreate.status, "B creates its own → 201").toBe(201);
+    expectStatus(bCreate, 201, "B creates its own → 201");
     authB = bCreate.json.id as string;
     const bList = await api(IDP_BASE, "GET", BASE, undefined, B.bearer);
-    expect(bList.status).toBe(200);
+    expectStatus(bList, 200);
     expect((bList.json.authorizations as Array<{ id: string }>).map((x) => x.id)).toEqual([authB]);
 
     const foreign = await api(IDP_BASE, "GET", `${BASE}/${authA}`, undefined, B.bearer);
     const absent = await api(IDP_BASE, "GET", `${BASE}/${GHOST}`, undefined, B.bearer);
-    expect(foreign.status, "cross-tenant read → 404").toBe(404);
+    expectStatus(foreign, 404, "cross-tenant read → 404");
     expect(absent.status).toBe(foreign.status);
     expect(absent.json).toEqual(foreign.json);
     const malformed = await api(IDP_BASE, "GET", `${BASE}/not-a-uuid`, undefined, A.bearer);
-    expect(malformed.status).toBe(400);
+    expectStatus(malformed, 400);
   });
 
   test("TOKEN: participant grant → 200 token_type DPoP, cnf.jkt = enrolled thumbprint, no refresh_token, ≤ 5 min", async () => {
     const authz = await api(IDP_BASE, "GET", `${BASE}/${authA}`, undefined, A.bearer);
-    expect(authz.status).toBe(200);
+    expectStatus(authz, 200);
     const parts = authz.json.participants as Array<Record<string, unknown>>;
     const initiator = parts.find((p) => p.role === "initiator") as Record<string, unknown>;
     const responder = parts.find((p) => p.role === "responder") as Record<string, unknown>;
 
     const r = await tokenRequest(agentsA[0], authA, initiator.aci as string);
-    expect(r.status, `participant grant → 200 (${JSON.stringify(r.json)})`).toBe(200);
+    expectStatus(r, 200, `participant grant → 200 (${JSON.stringify(r.json)})`);
     expect(r.json.token_type, "sender-constrained, never Bearer").toBe("DPoP");
     expect(r.json).not.toHaveProperty("refresh_token");
     expect(r.json.scope).toBe("agent_communication");
@@ -474,7 +474,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
 
     // The responder, with its own key and ACI.
     const r2 = await tokenRequest(agentsA[1], authA, responder.aci as string);
-    expect(r2.status, "responder grant → 200").toBe(200);
+    expectStatus(r2, 200, "responder grant → 200");
     expect(r2.json.token_type).toBe("DPoP");
   });
 
@@ -487,27 +487,27 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       .aci as string;
 
     const noProof = await tokenRequest(agentsA[0], authA, initiatorAci, { proof: null });
-    expect(noProof.status, "no DPoP proof → 400").toBe(400);
+    expectStatus(noProof, 400, "no DPoP proof → 400");
     expect(noProof.json.error, "never a Bearer downgrade").toBe("invalid_dpop_proof");
     expect(noProof.json).not.toHaveProperty("access_token");
 
     const foreign = await tokenRequest(agentsA[0], authA, initiatorAci, {
       proofKey: agentsB[0].key,
     });
-    expect(foreign.status).toBe(400);
+    expectStatus(foreign, 400);
     expect(foreign.json.error, "a proof key that is not the enrolled one").toBe(
       "invalid_dpop_proof"
     );
 
     const proof = await dpopProof(agentsA[0].key, tokenEndpoint);
     const first = await tokenRequest(agentsA[0], authA, initiatorAci, { proof });
-    expect(first.status, "first use of a proof → 200").toBe(200);
+    expectStatus(first, 200, "first use of a proof → 200");
     const replay = await tokenRequest(agentsA[0], authA, initiatorAci, { proof });
-    expect(replay.status, "the same proof again → 400").toBe(400);
+    expectStatus(replay, 400, "the same proof again → 400");
     expect(replay.json.error).toBe("invalid_dpop_proof");
 
     const otherAci = await tokenRequest(agentsA[0], authA, responderAci);
-    expect(otherAci.status).toBe(400);
+    expectStatus(otherAci, 400);
     expect(otherAci.json.error, "the caller cannot request the other participant's token").toBe(
       "invalid_grant"
     );
@@ -515,7 +515,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     const audience = await tokenRequest(agentsA[0], authA, initiatorAci, {
       audience: "https://other-relay.test/x",
     });
-    expect(audience.status).toBe(400);
+    expectStatus(audience, 400);
     expect(audience.json.error).toBe("invalid_target");
 
     const unknownType = await tokenRequest(agentsA[0], authA, initiatorAci, {
@@ -523,11 +523,11 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
         { type: "openid_credential", authorization_id: authA, aci: initiatorAci },
       ]),
     });
-    expect(unknownType.status).toBe(400);
+    expectStatus(unknownType, 400);
     expect(unknownType.json.error).toBe("invalid_authorization_details");
 
     const absent = await tokenRequest(agentsA[0], GHOST.replace(/^0{8}/, "01900000"), initiatorAci);
-    expect(absent.status).toBe(400);
+    expectStatus(absent, 400);
     expect(["invalid_grant", "invalid_authorization_details"]).toContain(absent.json.error);
   });
 
@@ -552,11 +552,11 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     const initiatorAci = (parts.find((p) => p.role === "initiator") as Record<string, unknown>)
       .aci as string;
     const grant = await tokenRequest(agentsA[0], authA, initiatorAci);
-    expect(grant.status).toBe(200);
+    expectStatus(grant, 200);
     liveTokenA = grant.json.access_token as string;
 
     const r = await introspect(agentsA[0], liveTokenA);
-    expect(r.status, `introspect → 200 (${JSON.stringify(r.json)})`).toBe(200);
+    expectStatus(r, 200, `introspect → 200 (${JSON.stringify(r.json)})`);
     expect(r.json.active).toBe(true);
     expect(r.json.token_type).toBe("DPoP");
     expect(r.json.cnf, "cnf carries the thumbprint only").toEqual({ jkt: agentsA[0].thumbprint });
@@ -572,7 +572,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     }
 
     const malformed = await introspect(agentsA[0], "not.a.token");
-    expect(malformed.status).toBe(200);
+    expectStatus(malformed, 200);
     expect(malformed.json).toEqual({ active: false });
 
     // A second authorization that expires in ~20 s: its token's exp is capped
@@ -597,12 +597,12 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       createBody(agentsA, { expires_at: new Date(Date.now() + 20_000).toISOString() }),
       A.bearer
     );
-    expect(short.status, "short-lived authorization → 201").toBe(201);
+    expectStatus(short, 201, "short-lived authorization → 201");
     const shortParts = short.json.participants as Array<Record<string, unknown>>;
     const shortAci = (shortParts.find((p) => p.role === "initiator") as Record<string, unknown>)
       .aci as string;
     const shortGrant = await tokenRequest(agentsA[0], short.json.id as string, shortAci);
-    expect(shortGrant.status, "token on the short-lived authorization → 200").toBe(200);
+    expectStatus(shortGrant, 200, "token on the short-lived authorization → 200");
     shortToken = shortGrant.json.access_token as string;
     shortExp = Number(decodeJwtPayload(shortToken).exp);
     expect(shortExp * 1000, "exp capped at the authorization's expiry").toBeLessThanOrEqual(
@@ -627,7 +627,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       { reason: "probe" },
       B.bearer
     );
-    expect(foreign.status, "cross-tenant revoke → 404").toBe(404);
+    expectStatus(foreign, 404, "cross-tenant revoke → 404");
     expect(absent.status).toBe(foreign.status);
     expect(absent.json).toEqual(foreign.json);
     const stillActive = await api(IDP_BASE, "GET", `${BASE}/${authA}`, undefined, A.bearer);
@@ -640,7 +640,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       { reason: "x".repeat(257) },
       A.bearer
     );
-    expect(long.status).toBe(400);
+    expectStatus(long, 400);
     expect(long.json.reason).toBe("revocation_reason_too_long");
 
     const rev = await api(
@@ -650,7 +650,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       { reason: "  e2e sweep  " },
       A.bearer
     );
-    expect(rev.status, `revoke → 200 (${JSON.stringify(rev.json)})`).toBe(200);
+    expectStatus(rev, 200, `revoke → 200 (${JSON.stringify(rev.json)})`);
     expect(rev.json.status).toBe("revoked");
     expect(rev.json.revocation_reason).toBe("e2e sweep");
     firstRevokedAt = rev.json.revoked_at as string;
@@ -663,20 +663,20 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       { reason: "later" },
       A.bearer
     );
-    expect(again.status, "repeat is idempotent").toBe(200);
+    expectStatus(again, 200, "repeat is idempotent");
     expect(again.json.revoked_at).toBe(firstRevokedAt);
     expect(again.json.revocation_reason, "a later reason never overwrites the first stamp").toBe(
       "e2e sweep"
     );
 
     const noBody = await api(IDP_BASE, "POST", `${BASE}/${authB}/revoke`, undefined, B.bearer);
-    expect(noBody.status, "revoke without a body → 200").toBe(200);
+    expectStatus(noBody, 200, "revoke without a body → 200");
     expect(noBody.json.status).toBe("revoked");
     expect(noBody.json).not.toHaveProperty("revocation_reason");
 
     // Revocation makes the already-issued token inactive IMMEDIATELY (AYGHU-4).
     const afterRevoke = await introspect(agentsA[0], liveTokenA);
-    expect(afterRevoke.status).toBe(200);
+    expectStatus(afterRevoke, 200);
     expect(
       afterRevoke.json,
       "introspection after revocation → inactive, long before expiry"
@@ -689,7 +689,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     for (const agent of agentsA) {
       const p = parts.find((x) => x.service_account_id === agent.saId) as Record<string, unknown>;
       const denied = await tokenRequest(agent, authA, p.aci as string);
-      expect(denied.status, "token after revocation → 400").toBe(400);
+      expectStatus(denied, 400, "token after revocation → 400");
       expect(denied.json.error).toBe("invalid_grant");
       expect(denied.json).not.toHaveProperty("access_token");
     }
@@ -701,21 +701,21 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       ["org_user", userA.bearer],
     ] as const) {
       const create = await api(IDP_BASE, "POST", BASE, createBody(agentsA), bearer);
-      expect(create.status, `${who} create → 403`).toBe(403);
+      expectStatus(create, 403, `${who} create → 403`);
       const list = await api(IDP_BASE, "GET", BASE, undefined, bearer);
-      expect(list.status, `${who} list → 403`).toBe(403);
+      expectStatus(list, 403, `${who} list → 403`);
       const getOwn = await api(IDP_BASE, "GET", `${BASE}/${authA}`, undefined, bearer);
       const getAbsent = await api(IDP_BASE, "GET", `${BASE}/${GHOST}`, undefined, bearer);
-      expect(getOwn.status, `${who} get → 403`).toBe(403);
+      expectStatus(getOwn, 403, `${who} get → 403`);
       expect(
         getAbsent.status,
         `${who} get absent → 403 (caller-dependent, not target-dependent)`
       ).toBe(403);
       const revoke = await api(IDP_BASE, "POST", `${BASE}/${authB}/revoke`, {}, bearer);
-      expect(revoke.status, `${who} revoke → 403`).toBe(403);
+      expectStatus(revoke, 403, `${who} revoke → 403`);
     }
     const anon = await api(IDP_BASE, "GET", BASE);
-    expect(anon.status, "no bearer → 401").toBe(401);
+    expectStatus(anon, 401, "no bearer → 401");
   });
 
   test("LIFECYCLE: create → tokens for BOTH participants → both introspect active → revoke → issuance refused AND introspection inactive for both → audit trail", async () => {
@@ -730,14 +730,14 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
         undefined,
         site.bearer
       );
-      expect(r.status, `audit read ${eventType} → 200`).toBe(200);
+      expectStatus(r, 200, `audit read ${eventType} → 200`);
       return (r.json.events as Array<Record<string, unknown>>).length;
     };
     const refusedBefore = await auditCount("agent_communication.token.refused");
 
     // 1. create
     const created = await api(IDP_BASE, "POST", BASE, createBody(agentsA), A.bearer);
-    expect(created.status, `lifecycle create → 201 (${JSON.stringify(created.json)})`).toBe(201);
+    expectStatus(created, 201, `lifecycle create → 201 (${JSON.stringify(created.json)})`);
     const authL = created.json.id as string;
     const partsL = created.json.participants as Array<Record<string, unknown>>;
     const byRole = (role: string) => partsL.find((p) => p.role === role) as Record<string, unknown>;
@@ -750,7 +750,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       [agentsA[1], "responder"],
     ] as const) {
       const grant = await tokenRequest(agent, authL, byRole(role).aci as string);
-      expect(grant.status, `${role} grant → 200 (${JSON.stringify(grant.json)})`).toBe(200);
+      expectStatus(grant, 200, `${role} grant → 200 (${JSON.stringify(grant.json)})`);
       expect(grant.json.token_type).toBe("DPoP");
       expect(grant.json).not.toHaveProperty("refresh_token");
       tokenOf[role] = grant.json.access_token as string;
@@ -783,7 +783,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       { reason: "lifecycle" },
       A.bearer
     );
-    expect(rev.status, "revoke → 200").toBe(200);
+    expectStatus(rev, 200, "revoke → 200");
     expect(rev.json.status).toBe("revoked");
     expect(await auditCount("agent_communication_authorization.revoked", authL)).toBe(1);
 
@@ -793,7 +793,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       [agentsA[1], "responder"],
     ] as const) {
       const denied = await tokenRequest(agent, authL, byRole(role).aci as string);
-      expect(denied.status, `${role} issuance after revocation → 400`).toBe(400);
+      expectStatus(denied, 400, `${role} issuance after revocation → 400`);
       expect(denied.json.error).toBe("invalid_grant");
       const r = await introspect(agent, tokenOf[role]);
       expect(r.json, `${role} token inactive after revocation`).toEqual({ active: false });
@@ -831,7 +831,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       },
       A.bearer
     );
-    expect(succ.status, "create a second org_admin in A → 201").toBe(201);
+    expectStatus(succ, 201, "create a second org_admin in A → 201");
     const successorId = succ.json.id as string;
 
     // A live authorization naming both accounts.
@@ -842,7 +842,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       createBody(pair, { relay_audience: `https://relay.${runId}.test/owner-row` }),
       A.bearer
     );
-    expect(created.status, "create authorization for the owner row → 201").toBe(201);
+    expectStatus(created, 201, "create authorization for the owner row → 201");
     const liveAuth = created.json.id as string;
 
     // Transfer is refused while it stands — for BOTH participants.
@@ -854,7 +854,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
         { owner_user_id: successorId },
         A.bearer
       );
-      expect(blocked.status, "transfer while a live authorization names it → 409").toBe(409);
+      expectStatus(blocked, 409, "transfer while a live authorization names it → 409");
       expect(blocked.json.reason).toBe("agent_communication_authorization_active");
     }
 
@@ -867,7 +867,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       { owner_user_id: successorId },
       userA.bearer
     );
-    expect(byUser.status, "org_user → 403").toBe(403);
+    expectStatus(byUser, 403, "org_user → 403");
     const bySite = await api(
       IDP_BASE,
       "POST",
@@ -875,11 +875,11 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       { owner_user_id: successorId },
       site.bearer
     );
-    expect(bySite.status, "site_admin → 403 (tenant-owned resource)").toBe(403);
+    expectStatus(bySite, 403, "site_admin → 403 (tenant-owned resource)");
     const foreign = await api(IDP_BASE, "POST", ownerRoute(pair[0].saId), {}, B.bearer);
     const absent = await api(IDP_BASE, "POST", ownerRoute(GHOST), {}, B.bearer);
-    expect(foreign.status, "another tenant's account → 404").toBe(404);
-    expect(absent.status, "an absent account → 404").toBe(404);
+    expectStatus(foreign, 404, "another tenant's account → 404");
+    expectStatus(absent, 404, "an absent account → 404");
     expect(JSON.stringify(foreign.json), "identical bodies — no existence oracle").toBe(
       JSON.stringify(absent.json)
     );
@@ -892,13 +892,13 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       { owner_user_id: GHOST },
       A.bearer
     );
-    expect(ineligible.status, "unknown candidate → 400").toBe(400);
+    expectStatus(ineligible, 400, "unknown candidate → 400");
     expect(ineligible.json.reason).toBe("owner_not_eligible");
 
     // Revoke the authorization — the owner's own remedy — and the same
     // transfer now lands, with the before and after owner ids on the wire.
     const revoked = await api(IDP_BASE, "POST", `${BASE}/${liveAuth}/revoke`, {}, A.bearer);
-    expect(revoked.status, "revoke → 200").toBe(200);
+    expectStatus(revoked, 200, "revoke → 200");
     const moved = await api(
       IDP_BASE,
       "POST",
@@ -906,7 +906,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       { owner_user_id: successorId },
       A.bearer
     );
-    expect(moved.status, "transfer after revocation → 200").toBe(200);
+    expectStatus(moved, 200, "transfer after revocation → 200");
     expect(moved.json.result).toBe("transferred");
     expect(moved.json.owner_user_id).toBe(successorId);
     expect(typeof moved.json.previous_owner_user_id, "the previous owner is on the wire").toBe(
@@ -921,7 +921,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       { owner_user_id: successorId },
       A.bearer
     );
-    expect(again.status).toBe(200);
+    expectStatus(again, 200);
     expect(again.json.result).toBe("unchanged");
   });
 
@@ -934,7 +934,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
     const waitMs = shortExp * 1000 + 2_000 - Date.now();
     if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs));
     const r = await introspect(agentsA[0], shortToken);
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(r.json, "expired participant token → inactive").toEqual({ active: false });
   });
 });

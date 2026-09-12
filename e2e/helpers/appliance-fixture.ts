@@ -258,6 +258,54 @@ function must(cond: boolean, msg: string): void {
 }
 
 /**
+ * THE-SILENT-REFUSAL (2026-09-12): a status expectation that fails must carry
+ * the response BODY, because the body is where the appliance names its
+ * verdict (`reason`, `error`) and the record kept only the status — the
+ * 2026-09-12 mint went red on a 401 nobody could name. The body is REDACTED
+ * before it can reach a message: any key that could hold a credential
+ * (tokens, secrets, passwords, codes, session ids, keys, assertions,
+ * challenges, cookies) is replaced by "[redacted]", strings are clipped, and
+ * the whole rendering is bounded. Values are still never recorded in the
+ * api() ring; they surface ONLY inside a failing assertion's message.
+ */
+const REDACTED_KEY =
+  /token|secret|password|passphrase|code|session_id|jwks?|assertion|challenge|cookie|otpauth|private|key|credential|authorization/i;
+
+export function redactForLog(v: unknown, depth = 0): unknown {
+  if (depth > 6) return "[depth]";
+  if (Array.isArray(v)) return v.slice(0, 20).map((x) => redactForLog(x, depth + 1));
+  if (v !== null && typeof v === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      out[k] = REDACTED_KEY.test(k) ? "[redacted]" : redactForLog(val, depth + 1);
+    }
+    return out;
+  }
+  if (typeof v === "string" && v.length > 200) return `${v.slice(0, 200)}…`;
+  return v;
+}
+
+/** The redacted, bounded rendering of a response body for a failure message. */
+export function bodyForLog(json: unknown): string {
+  const s = JSON.stringify(redactForLog(json)) ?? String(json);
+  return s.length > 800 ? `${s.slice(0, 800)}…` : s;
+}
+
+/**
+ * expect(res.status, label).toBe(want), with the redacted body appended to the
+ * message so a failure names the appliance's verdict. Same assertion, same
+ * expectation — only the failure output grows.
+ */
+export function expectStatus(
+  res: { status: number; json?: unknown },
+  want: number,
+  label = ""
+): void {
+  const prefix = label === "" ? "" : `${label} — `;
+  expect(res.status, `${prefix}body: ${bodyForLog(res.json)}`).toBe(want);
+}
+
+/**
  * The response's `error` field, printed ONLY if it is a bare code — the shape
  * every branch of the appliance's login handler answers with
  * (invalid_credentials, account_unverified, mfa_required,

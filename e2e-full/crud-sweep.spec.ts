@@ -39,7 +39,7 @@
  *    empty-table branches (400/404/403) are reachable.
  */
 import { expect, test } from "@playwright/test";
-import { api, firstLoginBearerAsync } from "../e2e/helpers/appliance-fixture";
+import { api, expectStatus, firstLoginBearerAsync } from "../e2e/helpers/appliance-fixture";
 import { siteAdminSession } from "./helpers/session";
 
 const IDP_BASE = process.env.IDENTUUM_E2E_FULL_IDP_BASE ?? "http://127.0.0.1:7113";
@@ -76,7 +76,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       },
       site.bearer
     );
-    expect(c.status).toBe(201);
+    expectStatus(c, 201);
     const id = (c.json.organization as { id?: string })?.id ?? "";
     const rs = await api(
       IDP_BASE,
@@ -118,7 +118,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       },
       A.bearer
     );
-    expect(uc.status).toBe(201);
+    expectStatus(uc, 201);
     uId = uc.json.id as string;
     await api(IDP_BASE, "PUT", `/api/v1/users/${uId}`, { email_verified: true }, A.bearer);
     const ucB = await api(
@@ -133,7 +133,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       },
       B.bearer
     );
-    expect(ucB.status).toBe(201);
+    expectStatus(ucB, 201);
     uIdB = ucB.json.id as string;
 
     // THE-INVERTED-GUARD: api-resources answer to the org's own org_admin.
@@ -150,7 +150,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       },
       A.bearer
     );
-    expect(ar.status).toBe(201);
+    expectStatus(ar, 201);
     resId = (ar.json.api_resource as { id?: string })?.id ?? "";
     const role = await api(
       IDP_BASE,
@@ -159,7 +159,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { name: `role-${runId}` },
       A.bearer
     );
-    expect(role.status).toBe(201);
+    expectStatus(role, 201);
     roleId = (role.json.id as string) ?? "";
   });
 
@@ -172,9 +172,9 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { role_id: roleId },
       A.bearer
     );
-    expect(assign.status, "role assign → 200").toBe(200);
+    expectStatus(assign, 200, "role assign → 200");
     const badBody = await api(IDP_BASE, "POST", `/api/v1/users/${uId}/roles`, {}, A.bearer);
-    expect(badBody.status, "assign without role_id → 400").toBe(400);
+    expectStatus(badBody, 400, "assign without role_id → 400");
     const ghostUser = await api(
       IDP_BASE,
       "POST",
@@ -182,7 +182,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { role_id: roleId },
       A.bearer
     );
-    expect(ghostUser.status, "assign to a nonexistent user → 400").toBe(400);
+    expectStatus(ghostUser, 400, "assign to a nonexistent user → 400");
     const xtenant = await api(
       IDP_BASE,
       "POST",
@@ -202,7 +202,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       A.bearer
     );
-    expect(unassign.status, "unassign → 200").toBe(200);
+    expectStatus(unassign, 200, "unassign → 200");
     const ghostRole = await api(
       IDP_BASE,
       "DELETE",
@@ -210,7 +210,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       A.bearer
     );
-    expect(ghostRole.status, "unassign a nonexistent role → 404").toBe(404);
+    expectStatus(ghostRole, 404, "unassign a nonexistent role → 404");
     const unassignXtenant = await api(
       IDP_BASE,
       "DELETE",
@@ -229,11 +229,11 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
     // pending self-registered user (public registration + approval-required
     // org), not built here — the error branches are the coverage.
     const notPending = await api(IDP_BASE, "POST", `/api/v1/users/${uId}/approve`, {}, A.bearer);
-    expect(notPending.status, "approve a non-pending user → 409").toBe(409);
+    expectStatus(notPending, 409, "approve a non-pending user → 409");
     const badId = await api(IDP_BASE, "POST", "/api/v1/users/not-a-uuid/approve", {}, A.bearer);
-    expect(badId.status, "malformed id → 400").toBe(400);
+    expectStatus(badId, 400, "malformed id → 400");
     const xtenant = await api(IDP_BASE, "POST", `/api/v1/users/${uIdB}/approve`, {}, A.bearer);
-    expect(xtenant.status, "approve B's user → 404 (anti-enumeration)").toBe(404);
+    expectStatus(xtenant, 404, "approve B's user → 404 (anti-enumeration)");
     const ghost = await api(IDP_BASE, "POST", `/api/v1/users/${GHOST}/approve`, {}, A.bearer);
     expect(
       ghost.status,
@@ -244,7 +244,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
   test("users/:id/recovery/reset-mfa — happy, ghost-500, cross-tenant", async () => {
     // ROW POST /users/:id/recovery/reset-mfa (D)
     const ok = await api(IDP_BASE, "POST", `/api/v1/users/${uId}/recovery/reset-mfa`, {}, A.bearer);
-    expect(ok.status, "reset-mfa on an own-tenant user → 200").toBe(200);
+    expectStatus(ok, 200, "reset-mfa on an own-tenant user → 200");
     const xtenant = await api(
       IDP_BASE,
       "POST",
@@ -252,7 +252,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       {},
       A.bearer
     );
-    expect(xtenant.status, "reset-mfa on B's user → 404 (anti-enumeration)").toBe(404);
+    expectStatus(xtenant, 404, "reset-mfa on B's user → 404 (anti-enumeration)");
     const ghost = await api(
       IDP_BASE,
       "POST",
@@ -274,14 +274,14 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
     // the service-level cross-tenant refusal is pinned in the Go teeth test
     // TestRestoreUserForActor_CrossTenantStillRefused.
     const del = await api(IDP_BASE, "DELETE", `/api/v1/users/${uId}`, undefined, site.bearer);
-    expect(del.status, "soft-delete → 200").toBe(200);
+    expectStatus(del, 200, "soft-delete → 200");
     const restore = await api(IDP_BASE, "POST", `/api/v1/users/${uId}/restore`, {}, site.bearer);
-    expect(restore.status, "restore of a soft-deleted user → 200 (recovered)").toBe(200);
+    expectStatus(restore, 200, "restore of a soft-deleted user → 200 (recovered)");
     expect(restore.json.restored, "response names the restored id").toBe(uId);
     const ghost = await api(IDP_BASE, "POST", `/api/v1/users/${GHOST}/restore`, {}, site.bearer);
-    expect(ghost.status, "restore of a nonexistent user → 404").toBe(404);
+    expectStatus(ghost, 404, "restore of a nonexistent user → 404");
     const orgAdmin = await api(IDP_BASE, "POST", `/api/v1/users/${uId}/restore`, {}, A.bearer);
-    expect(orgAdmin.status, "restore by org_admin (site_admin-only route) → 403").toBe(403);
+    expectStatus(orgAdmin, 403, "restore by org_admin (site_admin-only route) → 403");
   });
 
   test("clients — put/regen/delete, cross-tenant scoped, B survives", async () => {
@@ -292,7 +292,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { name: `cl-${runId}`, redirect_uris: ["https://ui.example.test/cb"] },
       A.bearer
     );
-    expect(cl.status).toBe(201);
+    expectStatus(cl, 201);
     const clId = (cl.json.client as { id?: string })?.id ?? "";
     const clB = await api(
       IDP_BASE,
@@ -301,7 +301,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { name: `clb-${runId}`, redirect_uris: ["https://ui.example.test/cb"] },
       B.bearer
     );
-    expect(clB.status).toBe(201);
+    expectStatus(clB, 201);
     const clIdB = (clB.json.client as { id?: string })?.id ?? "";
 
     // ROW PUT /clients/:id (SM)
@@ -312,7 +312,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { name: `cl2-${runId}` },
       A.bearer
     );
-    expect(put.status, "own client update → 200").toBe(200);
+    expectStatus(put, 200, "own client update → 200");
     const putXtenant = await api(
       IDP_BASE,
       "PUT",
@@ -320,7 +320,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { name: "x" },
       A.bearer
     );
-    expect(putXtenant.status, "update B's client → 404 (scoped, anti-enumeration)").toBe(404);
+    expectStatus(putXtenant, 404, "update B's client → 404 (scoped, anti-enumeration)");
     const putGhost = await api(
       IDP_BASE,
       "PUT",
@@ -328,7 +328,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { name: "x" },
       A.bearer
     );
-    expect(putGhost.status, "update a nonexistent client → 404").toBe(404);
+    expectStatus(putGhost, 404, "update a nonexistent client → 404");
 
     // ROW POST /clients/:id/secret/regenerate (D)
     const regen = await api(
@@ -338,7 +338,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       {},
       A.bearer
     );
-    expect(regen.status, "own client secret rotate → 200").toBe(200);
+    expectStatus(regen, 200, "own client secret rotate → 200");
     const regenXtenant = await api(
       IDP_BASE,
       "POST",
@@ -346,7 +346,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       {},
       A.bearer
     );
-    expect(regenXtenant.status, "rotate B's client secret → 404").toBe(404);
+    expectStatus(regenXtenant, 404, "rotate B's client secret → 404");
 
     // ROW DELETE /clients/:id (D) — idempotent by ruling (P3-14): 200 even
     // cross-tenant, but the WHERE scopes to the actor's org so B's client
@@ -358,13 +358,13 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       A.bearer
     );
-    expect(delXtenant.status, "delete B's client → 200 (idempotent no-op, scoped WHERE)").toBe(200);
+    expectStatus(delXtenant, 200, "delete B's client → 200 (idempotent no-op, scoped WHERE)");
     const bSurvives = await api(IDP_BASE, "GET", `/api/v1/clients/${clIdB}`, undefined, B.bearer);
-    expect(bSurvives.status, "…and B's client SURVIVES (no cross-tenant delete) → 200").toBe(200);
+    expectStatus(bSurvives, 200, "…and B's client SURVIVES (no cross-tenant delete) → 200");
     const del = await api(IDP_BASE, "DELETE", `/api/v1/clients/${clId}`, undefined, A.bearer);
-    expect(del.status, "own client delete → 200").toBe(200);
+    expectStatus(del, 200, "own client delete → 200");
     const badId = await api(IDP_BASE, "DELETE", "/api/v1/clients/not-a-uuid", undefined, A.bearer);
-    expect(badId.status, "malformed id → 400").toBe(400);
+    expectStatus(badId, 400, "malformed id → 400");
   });
 
   test("api-resources — org_admin CRUD in its own org; site_admin 403; cross-org reads as miss", async () => {
@@ -374,7 +374,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
     // refused, and a foreign org's id is indistinguishable from a miss.
     // ROW GET /api-resources/:id (SR)
     const get = await api(IDP_BASE, "GET", `/api/v1/api-resources/${resId}`, undefined, A.bearer);
-    expect(get.status, "own org_admin get → 200").toBe(200);
+    expectStatus(get, 200, "own org_admin get → 200");
     const getSite = await api(
       IDP_BASE,
       "GET",
@@ -382,7 +382,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       site.bearer
     );
-    expect(getSite.status, "site_admin get (tenant-owned surface) → 403").toBe(403);
+    expectStatus(getSite, 403, "site_admin get (tenant-owned surface) → 403");
     const getForeign = await api(
       IDP_BASE,
       "GET",
@@ -390,7 +390,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       B.bearer
     );
-    expect(getForeign.status, "ANOTHER org's admin → 404, never a confirming 403").toBe(404);
+    expectStatus(getForeign, 404, "ANOTHER org's admin → 404, never a confirming 403");
     const getGhost = await api(
       IDP_BASE,
       "GET",
@@ -398,7 +398,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       A.bearer
     );
-    expect(getGhost.status, "get nonexistent → 404").toBe(404);
+    expectStatus(getGhost, 404, "get nonexistent → 404");
 
     // ROW PUT /api-resources/:id (SM)
     const put = await api(
@@ -408,7 +408,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { name: `res2-${runId}`, audience: `https://api.${runId}.test`, token_ttl_secs: 7200 },
       A.bearer
     );
-    expect(put.status, "own update → 200").toBe(200);
+    expectStatus(put, 200, "own update → 200");
     const putGhost = await api(
       IDP_BASE,
       "PUT",
@@ -416,7 +416,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { name: "x", audience: "https://x.test", token_ttl_secs: 3600 },
       A.bearer
     );
-    expect(putGhost.status, "update nonexistent → 404").toBe(404);
+    expectStatus(putGhost, 404, "update nonexistent → 404");
 
     // [API-RESOURCE-REFUSAL-STATUS-1] THE-UNVALIDATED-REST (2026-08-31): the
     // update path DID validate — resource.Validate() and ValidateAPIScopes
@@ -441,7 +441,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       },
     ]) {
       const bad = await api(IDP_BASE, "PUT", `/api/v1/api-resources/${resId}`, c.body, A.bearer);
-      expect(bad.status, `api-resource update must refuse with 400, not 500: ${c.why}`).toBe(400);
+      expectStatus(bad, 400, `api-resource update must refuse with 400, not 500: ${c.why}`);
     }
 
     // The refusals must have left the resource exactly as the 200 above left it.
@@ -452,7 +452,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       A.bearer
     );
-    expect(afterRefusals.status).toBe(200);
+    expectStatus(afterRefusals, 200);
     const resRow =
       (afterRefusals.json as { api_resource?: Record<string, unknown> }).api_resource ??
       afterRefusals.json;
@@ -468,7 +468,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       {},
       A.bearer
     );
-    expect(regen.status, "own secret rotate → 200").toBe(200);
+    expectStatus(regen, 200, "own secret rotate → 200");
     const regenGhost = await api(
       IDP_BASE,
       "POST",
@@ -476,7 +476,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       {},
       A.bearer
     );
-    expect(regenGhost.status, "rotate nonexistent → 404").toBe(404);
+    expectStatus(regenGhost, 404, "rotate nonexistent → 404");
 
     // ROW DELETE /api-resources/:id (D)
     const delSite = await api(
@@ -486,7 +486,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       site.bearer
     );
-    expect(delSite.status, "site_admin delete → 403").toBe(403);
+    expectStatus(delSite, 403, "site_admin delete → 403");
     // A FOREIGN org's admin gets the documented idempotent success — and
     // the row SURVIVES: the org-scoped DELETE cannot match it.
     const delForeign = await api(
@@ -496,7 +496,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       B.bearer
     );
-    expect(delForeign.status, "foreign delete → idempotent 200, confirms nothing").toBe(200);
+    expectStatus(delForeign, 200, "foreign delete → idempotent 200, confirms nothing");
     const survived = await api(
       IDP_BASE,
       "GET",
@@ -504,7 +504,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       A.bearer
     );
-    expect(survived.status, "the row SURVIVES the foreign delete").toBe(200);
+    expectStatus(survived, 200, "the row SURVIVES the foreign delete");
     const del = await api(
       IDP_BASE,
       "DELETE",
@@ -512,7 +512,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       A.bearer
     );
-    expect(del.status, "own delete → 200").toBe(200);
+    expectStatus(del, 200, "own delete → 200");
     const badId = await api(
       IDP_BASE,
       "DELETE",
@@ -520,7 +520,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       A.bearer
     );
-    expect(badId.status, "malformed id → 400").toBe(400);
+    expectStatus(badId, 400, "malformed id → 400");
   });
 
   test("scope-templates — org_admin CRUD in its own org; site_admin 403; cross-org 404; reserved prefix refused", async () => {
@@ -535,7 +535,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { name: `st-${runId}`, scopes: ["read", "write"] },
       A.bearer
     );
-    expect(create.status, "own org_admin create -> 201").toBe(201);
+    expectStatus(create, 201, "own org_admin create -> 201");
     const stId = (create.json.id as string) ?? "";
     expect(stId.length).toBeGreaterThan(0);
     const createSite = await api(
@@ -545,7 +545,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { name: `sts-${runId}`, scopes: ["read"] },
       site.bearer
     );
-    expect(createSite.status, "site_admin create (tenant resource) -> 403").toBe(403);
+    expectStatus(createSite, 403, "site_admin create (tenant resource) -> 403");
     const createReserved = await api(
       IDP_BASE,
       "POST",
@@ -553,12 +553,12 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { name: `str-${runId}`, scopes: ["system:admin"] },
       A.bearer
     );
-    expect(createReserved.status, "org_admin reserved-prefix create -> 400").toBe(400);
+    expectStatus(createReserved, 400, "org_admin reserved-prefix create -> 400");
     const createBad = await api(IDP_BASE, "POST", "/api/v1/scope-templates", {}, A.bearer);
-    expect(createBad.status, "empty body -> 400").toBe(400);
+    expectStatus(createBad, 400, "empty body -> 400");
 
     const get = await api(IDP_BASE, "GET", `/api/v1/scope-templates/${stId}`, undefined, A.bearer);
-    expect(get.status, "own get -> 200").toBe(200);
+    expectStatus(get, 200, "own get -> 200");
     const getGhost = await api(
       IDP_BASE,
       "GET",
@@ -566,7 +566,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       A.bearer
     );
-    expect(getGhost.status, "get nonexistent -> 404").toBe(404);
+    expectStatus(getGhost, 404, "get nonexistent -> 404");
     const getForeign = await api(
       IDP_BASE,
       "GET",
@@ -574,7 +574,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       B.bearer
     );
-    expect(getForeign.status, "ANOTHER org admin -> 404, never a confirming 403").toBe(404);
+    expectStatus(getForeign, 404, "ANOTHER org admin -> 404, never a confirming 403");
     const getSite = await api(
       IDP_BASE,
       "GET",
@@ -582,7 +582,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       site.bearer
     );
-    expect(getSite.status, "site_admin get (tenant resource) -> 403").toBe(403);
+    expectStatus(getSite, 403, "site_admin get (tenant resource) -> 403");
 
     const put = await api(
       IDP_BASE,
@@ -591,7 +591,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { name: `st2-${runId}`, scopes: ["read"] },
       A.bearer
     );
-    expect(put.status, "own update -> 200").toBe(200);
+    expectStatus(put, 200, "own update -> 200");
     const putReserved = await api(
       IDP_BASE,
       "PUT",
@@ -599,7 +599,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { scopes: ["keys:rotate"] },
       A.bearer
     );
-    expect(putReserved.status, "org_admin reserved-prefix update -> 400").toBe(400);
+    expectStatus(putReserved, 400, "org_admin reserved-prefix update -> 400");
     const putGhost = await api(
       IDP_BASE,
       "PUT",
@@ -607,7 +607,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { name: "x", scopes: ["read"] },
       A.bearer
     );
-    expect(putGhost.status, "update nonexistent -> 404").toBe(404);
+    expectStatus(putGhost, 404, "update nonexistent -> 404");
 
     const del = await api(
       IDP_BASE,
@@ -616,7 +616,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       A.bearer
     );
-    expect(del.status, "own delete -> 200").toBe(200);
+    expectStatus(del, 200, "own delete -> 200");
     const badId = await api(
       IDP_BASE,
       "DELETE",
@@ -624,7 +624,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       A.bearer
     );
-    expect(badId.status, "malformed id -> 400").toBe(400);
+    expectStatus(badId, 400, "malformed id -> 400");
   });
 
   test("admin backchannel deliveries — list, get, replay (outbound unreachable)", async () => {
@@ -636,7 +636,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       site.bearer
     );
-    expect(list.status, "list → 200").toBe(200);
+    expectStatus(list, 200, "list → 200");
     const listOrgAdmin = await api(
       IDP_BASE,
       "GET",
@@ -644,7 +644,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       A.bearer
     );
-    expect(listOrgAdmin.status, "org_admin list (site_admin-only) → 403").toBe(403);
+    expectStatus(listOrgAdmin, 403, "org_admin list (site_admin-only) → 403");
 
     // ROW GET /admin/backchannel-logout-deliveries/:id (SR)
     const getGhost = await api(
@@ -654,7 +654,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       site.bearer
     );
-    expect(getGhost.status, "get nonexistent → 404").toBe(404);
+    expectStatus(getGhost, 404, "get nonexistent → 404");
     const getBadId = await api(
       IDP_BASE,
       "GET",
@@ -662,7 +662,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       site.bearer
     );
-    expect(getBadId.status, "malformed id → 400").toBe(400);
+    expectStatus(getBadId, 400, "malformed id → 400");
 
     // ROW POST /admin/backchannel-logout-deliveries/:id/replay (D). The
     // outbound-delivery branch (202/409/503) is environment-unreachable: no
@@ -675,7 +675,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       {},
       site.bearer
     );
-    expect(replayGhost.status, "replay a nonexistent delivery → 404").toBe(404);
+    expectStatus(replayGhost, 404, "replay a nonexistent delivery → 404");
     const replayBadId = await api(
       IDP_BASE,
       "POST",
@@ -683,7 +683,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       {},
       site.bearer
     );
-    expect(replayBadId.status, "replay malformed id → 400").toBe(400);
+    expectStatus(replayBadId, 400, "replay malformed id → 400");
     const replayOrgAdmin = await api(
       IDP_BASE,
       "POST",
@@ -691,6 +691,6 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       {},
       A.bearer
     );
-    expect(replayOrgAdmin.status, "org_admin replay → 403").toBe(403);
+    expectStatus(replayOrgAdmin, 403, "org_admin replay → 403");
   });
 });

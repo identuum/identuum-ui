@@ -30,7 +30,7 @@
  * enrollment-complete needs a clean session per code attempt.
  */
 import { expect, test } from "@playwright/test";
-import { api } from "../e2e/helpers/appliance-fixture";
+import { api, expectStatus } from "../e2e/helpers/appliance-fixture";
 import { generateTOTP } from "../e2e/helpers/totp";
 import { siteAdminSession } from "./helpers/session";
 
@@ -99,7 +99,7 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
       },
       site.bearer
     );
-    expect(c1.status).toBe(201);
+    expectStatus(c1, 201);
     org = (c1.json.id as string) ?? "";
     const oaEmail = `oa@${runId}.test`;
     const adminPw = `Adm!${runId}9wqX`;
@@ -147,7 +147,7 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
       },
       orgBearer
     );
-    expect(bundle.status).toBe(201);
+    expectStatus(bundle, 201);
     m2mId = (bundle.json.client as { client_id?: string })?.client_id ?? "";
     m2mSecret = (bundle.json.client_secret as string) ?? "";
     expect(m2mId.length).toBeGreaterThan(0);
@@ -376,7 +376,7 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
       { name: `sa-${runId}` },
       orgBearer
     );
-    expect(sa.status).toBe(201);
+    expectStatus(sa, 201);
     const saId = (sa.json as { id?: string }).id ?? "";
     // THE-REMAINING-FOUR (2026-08-30): service accounts are the org's own
     // org_admin's — site_admin can no longer create org B's SA. Delegate an
@@ -407,7 +407,7 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
       { name: `sab-${runId}` },
       orgBearerB
     );
-    expect(saB.status).toBe(201);
+    expectStatus(saB, 201);
     const saIdB = (saB.json as { id?: string }).id ?? "";
 
     // ROW GET /service-accounts/:id (SR)
@@ -474,7 +474,7 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
       { expires_at: wantExpiry },
       orgBearer
     );
-    expect(setExpiry.status, "expiry-only SA update → 200").toBe(200);
+    expectStatus(setExpiry, 200, "expiry-only SA update → 200");
     const readBack = await api(
       IDP_BASE,
       "GET",
@@ -482,7 +482,7 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
       undefined,
       orgBearer
     );
-    expect(readBack.status, "read back → 200").toBe(200);
+    expectStatus(readBack, 200, "read back → 200");
     const storedExpiry = (readBack.json as { expires_at?: string }).expires_at ?? "";
     expect(storedExpiry.length, "the expiry is PERSISTED, not silently dropped").toBeGreaterThan(0);
     expect(
@@ -565,7 +565,7 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
   test("webauthn register — begin reachable, finish env-unreachable", async ({ request }) => {
     // ROW POST /webauthn/register/begin (SM)
     const begin = await api(IDP_BASE, "POST", "/api/v1/webauthn/register/begin", {}, userBearer);
-    expect(begin.status, "begin with a user bearer → 200").toBe(200);
+    expectStatus(begin, 200, "begin with a user bearer → 200");
     expect(
       (begin.json as { publicKey?: unknown }).publicKey,
       "…returns creation options"
@@ -655,7 +655,7 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
       { algorithm: "EdDSA", state: "active" },
       site.bearer
     );
-    expect(gen.status, "generate → 201").toBe(201);
+    expectStatus(gen, 201, "generate → 201");
     const newKid = (gen.json.kid as string) ?? "";
     expect(
       (

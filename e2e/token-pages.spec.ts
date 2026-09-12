@@ -26,7 +26,7 @@
  * only.
  */
 import { expect, test } from "@playwright/test";
-import { api } from "./helpers/appliance-fixture";
+import { api, expectStatus } from "./helpers/appliance-fixture";
 import {
   loginAsOrgUser,
   SITE_ADMIN_EMAIL,
@@ -150,7 +150,7 @@ test.describe("token-landing + static pages (NINE-DARK-PAGES)", () => {
       },
       bearer
     );
-    expect(org.status, "disposable org for the activation link → 201").toBe(201);
+    expectStatus(org, 201, "disposable org for the activation link → 201");
     const orgId = ((org.json.organization as { id?: string })?.id ?? org.json.id) as string;
     const reissue = await api(
       IDP_BASE,
@@ -159,7 +159,7 @@ test.describe("token-landing + static pages (NINE-DARK-PAGES)", () => {
       {},
       bearer
     );
-    expect(reissue.status, "re-issue activation token → 200").toBe(200);
+    expectStatus(reissue, 200, "re-issue activation token → 200");
     const token = (reissue.json.activation_token as string) ?? "";
     expect(token.length).toBeGreaterThan(0);
 

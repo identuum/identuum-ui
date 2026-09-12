@@ -27,6 +27,7 @@ import { expect, test } from "@playwright/test";
 import {
   api,
   assertActivationEnvelope,
+  expectStatus,
   firstLoginBearerAsync,
 } from "../e2e/helpers/appliance-fixture";
 import { siteAdminSession } from "./helpers/session";
@@ -66,7 +67,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       },
       site.bearer
     );
-    expect(created.status, "create org+pending admin → 201").toBe(201);
+    expectStatus(created, 201, "create org+pending admin → 201");
     org1 = (created.json.organization as { id?: string })?.id ?? "";
     expect(org1.length).toBeGreaterThan(0);
 
@@ -78,7 +79,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       {},
       site.bearer
     );
-    expect(resend.status, "resend-activation on pending org → 200").toBe(200);
+    expectStatus(resend, 200, "resend-activation on pending org → 200");
     const token = resend.json.activation_token as string;
     expect(token.length).toBeGreaterThan(0);
 
@@ -101,7 +102,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       token: linkToken,
       password: adminPw,
     });
-    expect(activate.status, "the token FROM THE LINK activates → 200").toBe(200);
+    expectStatus(activate, 200, "the token FROM THE LINK activates → 200");
     orgAdmin = await firstLoginBearerAsync(IDP_BASE, `admin@${runId}-1.test`, adminPw);
   });
 
@@ -138,7 +139,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
         },
         site.bearer
       );
-      expect(res.status, `create must refuse: ${c.why}`).toBe(400);
+      expectStatus(res, 400, `create must refuse: ${c.why}`);
     }
 
     // The control: the SAME request shape with every field well-formed is
@@ -152,7 +153,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: `Good ${okId}`, slug: okId, domain: `${okId}.test` },
       site.bearer
     );
-    expect(good.status, "a well-formed organization is still created").toBe(201);
+    expectStatus(good, 201, "a well-formed organization is still created");
   });
 
   test("field validation on UPDATE: malformed renames are refused, and accepted ones are normalized", async () => {
@@ -170,7 +171,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: `Update Subject ${subjectId}`, slug: subjectId, domain: `${subjectId}.test` },
       site.bearer
     );
-    expect(created.status, "subject org created").toBe(201);
+    expectStatus(created, 201, "subject org created");
     const subject =
       ((created.json as { organization?: { id?: string } }).organization?.id ??
         (created.json as { id?: string }).id) ||
@@ -200,7 +201,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
         c.body,
         site.bearer
       );
-      expect(res.status, `update must refuse: ${c.why}`).toBe(400);
+      expectStatus(res, 400, `update must refuse: ${c.why}`);
     }
 
     // The subject must be UNCHANGED by every refusal above.
@@ -211,7 +212,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       site.bearer
     );
-    expect(after.status).toBe(200);
+    expectStatus(after, 200);
     expect((after.json as { domain?: string }).domain, "no refused update touched the row").toBe(
       `${subjectId}.test`
     );
@@ -226,7 +227,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { domain: `  ${renamed.toUpperCase()}.  ` },
       site.bearer
     );
-    expect(ok.status, "a well-formed rename is accepted").toBe(200);
+    expectStatus(ok, 200, "a well-formed rename is accepted");
     const reread = await api(
       IDP_BASE,
       "GET",
@@ -258,7 +259,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: "Renamed System" },
       site.bearer
     );
-    expect(renamed.status, "renaming the System organization is a REFUSAL, not a miss").toBe(403);
+    expectStatus(renamed, 403, "renaming the System organization is a REFUSAL, not a miss");
 
     // The three statuses must stay distinguishable from one another —
     // a 403 that swallowed the other two would pass the line above alone.
@@ -269,7 +270,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: "Ghost" },
       site.bearer
     );
-    expect(ghost.status, "a genuinely absent organization is still 404").toBe(404);
+    expectStatus(ghost, 404, "a genuinely absent organization is still 404");
 
     const malformed = await api(
       IDP_BASE,
@@ -278,7 +279,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { domain: "lexus" },
       site.bearer
     );
-    expect(malformed.status, "an invalid field is still 400").toBe(400);
+    expectStatus(malformed, 400, "an invalid field is still 400");
   });
 
   test("[USER-UPDATE-VALIDATION-1] field validation on user UPDATE: malformed fields are refused with 400, not 500", async () => {
@@ -300,7 +301,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       },
       orgAdmin.bearer
     );
-    expect(created.status, "subject user created").toBe(201);
+    expectStatus(created, 201, "subject user created");
     const uid =
       ((created.json as { user?: { id?: string } }).user?.id ??
         (created.json as { id?: string }).id) ||
@@ -314,11 +315,11 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { why: "role outside the user_role enum", body: { role: "wizard" } },
     ]) {
       const res = await api(IDP_BASE, "PUT", `/api/v1/users/${uid}`, c.body, orgAdmin.bearer);
-      expect(res.status, `user update must refuse with 400: ${c.why}`).toBe(400);
+      expectStatus(res, 400, `user update must refuse with 400: ${c.why}`);
     }
 
     const after = await api(IDP_BASE, "GET", `/api/v1/users/${uid}`, undefined, orgAdmin.bearer);
-    expect(after.status).toBe(200);
+    expectStatus(after, 200);
     const row = (after.json as { user?: Record<string, unknown> }).user ?? after.json;
     expect((row as { email?: string }).email, "no refused update touched the row").toBe(
       `${tag}@${runId}-1.test`
@@ -333,7 +334,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: "Renamed Subject" },
       orgAdmin.bearer
     );
-    expect(ok.status, "a well-formed user update is accepted").toBe(200);
+    expectStatus(ok, 200, "a well-formed user update is accepted");
   });
 
   test("[CLIENT-UPDATE-VALIDATION-1] field validation on client UPDATE: a blank name and an empty redirect list are refused, not persisted", async () => {
@@ -350,7 +351,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name, redirect_uris: ["https://app.example.test/callback"] },
       orgAdmin.bearer
     );
-    expect(created.status, "subject client created").toBe(201);
+    expectStatus(created, 201, "subject client created");
     const cid =
       ((created.json as { client?: { id?: string } }).client?.id ??
         (created.json as { id?: string }).id) ||
@@ -362,11 +363,11 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { why: "an EMPTY redirect-URI list", body: { redirect_uris: [] } },
     ]) {
       const res = await api(IDP_BASE, "PUT", `/api/v1/clients/${cid}`, c.body, orgAdmin.bearer);
-      expect(res.status, `client update must refuse: ${c.why}`).toBe(400);
+      expectStatus(res, 400, `client update must refuse: ${c.why}`);
     }
 
     const after = await api(IDP_BASE, "GET", `/api/v1/clients/${cid}`, undefined, orgAdmin.bearer);
-    expect(after.status).toBe(200);
+    expectStatus(after, 200);
     const row = (after.json as { client?: Record<string, unknown> }).client ?? after.json;
     expect((row as { name?: string }).name, "no refused update touched the name").toBe(name);
     expect(
@@ -382,7 +383,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: `${name} Renamed` },
       orgAdmin.bearer
     );
-    expect(ok.status, "a well-formed client update is accepted").toBe(200);
+    expectStatus(ok, 200, "a well-formed client update is accepted");
   });
 
   test("[ORG-ROLE-UPDATE-BLANK-1] a blank rename is refused, never a 200 that changes nothing", async () => {
@@ -399,7 +400,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: `auditor-${runId}`, description: "reads audit logs" },
       orgAdmin.bearer
     );
-    expect(created.status, "subject role created").toBe(201);
+    expectStatus(created, 201, "subject role created");
     const roleId =
       ((created.json.role as { id?: string })?.id ?? (created.json as { id?: string }).id) || "";
     expect(roleId.length).toBeGreaterThan(0);
@@ -407,12 +408,12 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
 
     for (const blank of ["   ", "\t", ""]) {
       const res = await api(IDP_BASE, "PUT", rolePath, { name: blank }, orgAdmin.bearer);
-      expect(res.status, `a blank rename (${JSON.stringify(blank)}) must be refused`).toBe(400);
+      expectStatus(res, 400, `a blank rename (${JSON.stringify(blank)}) must be refused`);
 
       // THE ASSERTION THAT WOULD HAVE CAUGHT IT: re-read and prove the row
       // did not quietly stay as it was behind a success status.
       const after = await api(IDP_BASE, "GET", rolePath, undefined, orgAdmin.bearer);
-      expect(after.status).toBe(200);
+      expectStatus(after, 200);
       const row = (after.json.role as Record<string, unknown>) ?? after.json;
       expect(
         (row as { name?: string }).name,
@@ -428,7 +429,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: `  security-auditor-${runId}  ` },
       orgAdmin.bearer
     );
-    expect(renamed.status, "a real rename is accepted").toBe(200);
+    expectStatus(renamed, 200, "a real rename is accepted");
     const reread = await api(IDP_BASE, "GET", rolePath, undefined, orgAdmin.bearer);
     const rerow = (reread.json.role as Record<string, unknown>) ?? reread.json;
     expect(
@@ -439,7 +440,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
     // And a supplied EMPTY description now clears it — an operation the
     // plain-string form could not express, so it was silently kept.
     const cleared = await api(IDP_BASE, "PUT", rolePath, { description: "" }, orgAdmin.bearer);
-    expect(cleared.status, "clearing the description is accepted").toBe(200);
+    expectStatus(cleared, 200, "clearing the description is accepted");
     const afterClear = await api(IDP_BASE, "GET", rolePath, undefined, orgAdmin.bearer);
     const clearedRow = (afterClear.json.role as Record<string, unknown>) ?? afterClear.json;
     expect(
@@ -460,7 +461,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: `ci-${runId}`, role: "org_user" },
       orgAdmin.bearer
     );
-    expect(sa.status, "subject service account created").toBe(201);
+    expectStatus(sa, 201, "subject service account created");
     const saId =
       ((sa.json.service_account as { id?: string })?.id ?? (sa.json as { id?: string }).id) || "";
     expect(saId.length).toBeGreaterThan(0);
@@ -497,7 +498,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: `reader-${runId}`, scopes: ["read:things"] },
       orgAdmin.bearer
     );
-    expect(tpl.status, "subject scope template created").toBe(201);
+    expectStatus(tpl, 201, "subject scope template created");
     const tplId =
       ((tpl.json.scope_template as { id?: string })?.id ?? (tpl.json as { id?: string }).id) || "";
     expect(tplId.length).toBeGreaterThan(0);
@@ -561,14 +562,14 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
         { ...base(), ...c.extra },
         orgAdmin.bearer
       );
-      expect(res.status, `client create must refuse ${c.why}`).toBe(400);
+      expectStatus(res, 400, `client create must refuse ${c.why}`);
     }
 
     // CONTROLS: listed values still create — including the private_key_jwt
     // shape with exactly one key source, which the census once measured
     // failing only at the database.
     const okPlain = await api(IDP_BASE, "POST", "/api/v1/clients", base(), orgAdmin.bearer);
-    expect(okPlain.status, "a defaults-only client is still created").toBe(201);
+    expectStatus(okPlain, 201, "a defaults-only client is still created");
     const okPkj = await api(
       IDP_BASE,
       "POST",
@@ -580,7 +581,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       },
       orgAdmin.bearer
     );
-    expect(okPkj.status, "a private_key_jwt client with one key source is created").toBe(201);
+    expectStatus(okPkj, 201, "a private_key_jwt client with one key source is created");
   });
 
   test("[CLIENT-UPDATE-DOCUMENT-1] an update that would leave an inconsistent document is refused by the service", async () => {
@@ -599,13 +600,13 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       },
       orgAdmin.bearer
     );
-    expect(created.status, "subject client created").toBe(201);
+    expectStatus(created, 201, "subject client created");
     const cid =
       ((created.json.client as { id?: string })?.id ?? (created.json as { id?: string }).id) || "";
     expect(cid.length).toBeGreaterThan(0);
     const readClient = async () => {
       const r = await api(IDP_BASE, "GET", `/api/v1/clients/${cid}`, undefined, orgAdmin.bearer);
-      expect(r.status).toBe(200);
+      expectStatus(r, 200);
       return (r.json.client as Record<string, unknown>) ?? (r.json as Record<string, unknown>);
     };
 
@@ -621,7 +622,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       },
     ]) {
       const res = await api(IDP_BASE, "PUT", `/api/v1/clients/${cid}`, c.body, orgAdmin.bearer);
-      expect(res.status, `the inconsistent document must be refused: ${c.why}`).toBe(400);
+      expectStatus(res, 400, `the inconsistent document must be refused: ${c.why}`);
       const row = await readClient();
       expect(
         (row as { token_endpoint_auth_method?: string }).token_endpoint_auth_method,
@@ -641,7 +642,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       },
       orgAdmin.bearer
     );
-    expect(ok.status, "the coherent pkj switch is accepted").toBe(200);
+    expectStatus(ok, 200, "the coherent pkj switch is accepted");
     const after = await readClient();
     expect(
       (after as { token_endpoint_auth_method?: string }).token_endpoint_auth_method,
@@ -669,13 +670,13 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       },
       orgAdmin.bearer
     );
-    expect(created.status, "subject client created").toBe(201);
+    expectStatus(created, 201, "subject client created");
     const cid =
       ((created.json.client as { id?: string })?.id ?? (created.json as { id?: string }).id) || "";
     expect(cid.length).toBeGreaterThan(0);
     const readClient = async () => {
       const r = await api(IDP_BASE, "GET", `/api/v1/clients/${cid}`, undefined, orgAdmin.bearer);
-      expect(r.status).toBe(200);
+      expectStatus(r, 200);
       return (r.json.client as Record<string, unknown>) ?? (r.json as Record<string, unknown>);
     };
 
@@ -691,7 +692,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { scope: "" },
       orgAdmin.bearer
     );
-    expect(cleared.status, "clearing scope is accepted").toBe(200);
+    expectStatus(cleared, 200, "clearing scope is accepted");
     const afterClear = await readClient();
     expect(
       (afterClear as { scope?: string }).scope ?? "",
@@ -708,7 +709,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { why: "an unlisted signing alg", body: { token_endpoint_auth_signing_alg: "HS256" } },
     ]) {
       const res = await api(IDP_BASE, "PUT", `/api/v1/clients/${cid}`, c.body, orgAdmin.bearer);
-      expect(res.status, `client update must refuse ${c.why}`).toBe(400);
+      expectStatus(res, 400, `client update must refuse ${c.why}`);
     }
     const afterRefusals = await readClient();
     expect(
@@ -724,7 +725,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { token_endpoint_auth_method: "client_secret_basic" },
       orgAdmin.bearer
     );
-    expect(ok.status, "a listed auth method is accepted").toBe(200);
+    expectStatus(ok, 200, "a listed auth method is accepted");
     const afterOk = await readClient();
     expect(
       (afterOk as { token_endpoint_auth_method?: string }).token_endpoint_auth_method,
@@ -744,7 +745,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: `desc-role-${runId}`, description: "original text" },
       orgAdmin.bearer
     );
-    expect(role.status, "subject role created").toBe(201);
+    expectStatus(role, 201, "subject role created");
     const roleId =
       ((role.json.role as { id?: string })?.id ?? (role.json as { id?: string }).id) || "";
 
@@ -755,7 +756,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: `desc-sa-${runId}`, role: "org_user", description: "original text" },
       orgAdmin.bearer
     );
-    expect(sa.status, "subject service account created").toBe(201);
+    expectStatus(sa, 201, "subject service account created");
     const saId =
       ((sa.json.service_account as { id?: string })?.id ?? (sa.json as { id?: string }).id) || "";
 
@@ -767,7 +768,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
         { description: supplied },
         orgAdmin.bearer
       );
-      expect(rRole.status, "org role accepts a description clear").toBe(200);
+      expectStatus(rRole, 200, "org role accepts a description clear");
       const rSa = await api(
         IDP_BASE,
         "PUT",
@@ -775,7 +776,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
         { description: supplied },
         orgAdmin.bearer
       );
-      expect(rSa.status, "service account accepts a description clear").toBe(200);
+      expectStatus(rSa, 200, "service account accepts a description clear");
 
       const roleRow = await api(
         IDP_BASE,
@@ -828,7 +829,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       },
       orgAdmin.bearer
     );
-    expect(created.status, "subject api resource created").toBe(201);
+    expectStatus(created, 201, "subject api resource created");
     const resId =
       ((created.json.api_resource as { id?: string })?.id ??
         (created.json as { id?: string }).id) ||
@@ -848,7 +849,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
         { ...c.body, token_ttl_secs: 3600 },
         orgAdmin.bearer
       );
-      expect(res.status, `api-resource ${c.why} must be refused`).toBe(400);
+      expectStatus(res, 400, `api-resource ${c.why} must be refused`);
     }
 
     const after = await api(
@@ -873,7 +874,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { domain: `extra-${runId}.test` },
       orgAdmin.bearer
     );
-    expect(add.status, "domain add → 201").toBe(201);
+    expectStatus(add, 201, "domain add → 201");
     const domId = (add.json.organization_domain as { id?: string })?.id ?? "";
     expect(domId.length).toBeGreaterThan(0);
     expect(
@@ -887,7 +888,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       {},
       orgAdmin.bearer
     );
-    expect(addBad.status, "domain add without a domain → 400").toBe(400);
+    expectStatus(addBad, 400, "domain add without a domain → 400");
 
     // ROW POST .../domains/:domain_id/primary (SM)
     const primary = await api(
@@ -897,7 +898,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       {},
       orgAdmin.bearer
     );
-    expect(primary.status, "set primary → 200").toBe(200);
+    expectStatus(primary, 200, "set primary → 200");
 
     // ROW POST .../domains/:domain_id/verify (D) — MEASURED: the DNS TXT
     // lookup for a .test domain fails wholesale, so the live answer is 503
@@ -910,7 +911,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       {},
       orgAdmin.bearer
     );
-    expect(verify.status, "verify on a .test domain → 503 (dns lookup failed)").toBe(503);
+    expectStatus(verify, 503, "verify on a .test domain → 503 (dns lookup failed)");
     expect(verify.json.error).toBe("dns lookup failed");
 
     // ROW DELETE .../domains/:domain_id (D)
@@ -921,7 +922,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       orgAdmin.bearer
     );
-    expect(del.status, "domain delete → 200").toBe(200);
+    expectStatus(del, 200, "domain delete → 200");
     const delAgain = await api(
       IDP_BASE,
       "DELETE",
@@ -929,7 +930,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       orgAdmin.bearer
     );
-    expect(delAgain.status, "second domain delete → 404").toBe(404);
+    expectStatus(delAgain, 404, "second domain delete → 404");
     const primaryGone = await api(
       IDP_BASE,
       "POST",
@@ -937,7 +938,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       {},
       orgAdmin.bearer
     );
-    expect(primaryGone.status, "primary on a deleted domain → 404").toBe(404);
+    expectStatus(primaryGone, 404, "primary on a deleted domain → 404");
   });
 
   test("identity provider: full CRUD and its error branches", async () => {
@@ -949,7 +950,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       orgAdmin.bearer
     );
-    expect(getBefore.status, "get with none configured → 404").toBe(404);
+    expectStatus(getBefore, 404, "get with none configured → 404");
 
     // ROW POST /organizations/:id/identity-provider (SM)
     const createBadType = await api(
@@ -959,7 +960,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { type: "carrier-pigeon", name: "x", slug: "x", config: {} },
       orgAdmin.bearer
     );
-    expect(createBadType.status, "create with an unknown type → 400").toBe(400);
+    expectStatus(createBadType, 400, "create with an unknown type → 400");
     const create = await api(
       IDP_BASE,
       "POST",
@@ -977,7 +978,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       },
       orgAdmin.bearer
     );
-    expect(create.status, "create OIDC provider → 201").toBe(201);
+    expectStatus(create, 201, "create OIDC provider → 201");
 
     const get = await api(
       IDP_BASE,
@@ -986,7 +987,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       orgAdmin.bearer
     );
-    expect(get.status, "get configured provider → 200").toBe(200);
+    expectStatus(get, 200, "get configured provider → 200");
 
     // ROW PUT /organizations/:id/identity-provider (SM) — a PUT is the whole
     // document: name-only is refused on the issuer validation, full passes.
@@ -997,7 +998,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: "Sweep IdP 2" },
       orgAdmin.bearer
     );
-    expect(updateBad.status, "name-only update → 400 (issuer required)").toBe(400);
+    expectStatus(updateBad, 400, "name-only update → 400 (issuer required)");
     const update = await api(
       IDP_BASE,
       "PUT",
@@ -1015,7 +1016,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       },
       orgAdmin.bearer
     );
-    expect(update.status, "full-document update → 200").toBe(200);
+    expectStatus(update, 200, "full-document update → 200");
 
     // ROW DELETE /organizations/:id/identity-provider (D)
     const del = await api(
@@ -1025,7 +1026,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       orgAdmin.bearer
     );
-    expect(del.status, "delete provider → 200").toBe(200);
+    expectStatus(del, 200, "delete provider → 200");
     const delAgain = await api(
       IDP_BASE,
       "DELETE",
@@ -1033,7 +1034,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       orgAdmin.bearer
     );
-    expect(delAgain.status, "second delete → 404").toBe(404);
+    expectStatus(delAgain, 404, "second delete → 404");
   });
 
   test("protocol settings: upsert and its refusals", async () => {
@@ -1047,7 +1048,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { dynamic_client_registration_enabled: true, scim_enabled: false },
       orgAdmin.bearer
     );
-    expect(put.status, "org_admin upsert of OWN org → 200").toBe(200);
+    expectStatus(put, 200, "org_admin upsert of OWN org → 200");
     expect(put.json.source, "explicit settings report their source").toBe("explicit");
     const putEmpty = await api(
       IDP_BASE,
@@ -1056,7 +1057,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       {},
       orgAdmin.bearer
     );
-    expect(putEmpty.status, "empty upsert → 400 (both fields required)").toBe(400);
+    expectStatus(putEmpty, 400, "empty upsert → 400 (both fields required)");
     const putSiteAdmin = await api(
       IDP_BASE,
       "PUT",
@@ -1085,7 +1086,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       },
       orgAdmin.bearer
     );
-    expect(resource.status, "api-resource for scope binding → 201").toBe(201);
+    expectStatus(resource, 201, "api-resource for scope binding → 201");
     const resId = (resource.json.api_resource as { id?: string })?.id ?? "";
     expect(resId.length).toBeGreaterThan(0);
 
@@ -1097,7 +1098,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: `sweep-role-${runId}` },
       orgAdmin.bearer
     );
-    expect(role.status, "role create → 201").toBe(201);
+    expectStatus(role, 201, "role create → 201");
     const roleId = (role.json.id as string) ?? "";
     expect(roleId.length).toBeGreaterThan(0);
     const roleBad = await api(
@@ -1107,7 +1108,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       {},
       orgAdmin.bearer
     );
-    expect(roleBad.status, "role create without a name → 400").toBe(400);
+    expectStatus(roleBad, 400, "role create without a name → 400");
 
     // ROW GET /organizations/:id/roles/:role_id (SR)
     const get = await api(
@@ -1117,7 +1118,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       orgAdmin.bearer
     );
-    expect(get.status, "role get → 200").toBe(200);
+    expectStatus(get, 200, "role get → 200");
 
     // ROW PUT /organizations/:id/roles/:role_id (SM)
     const update = await api(
@@ -1127,7 +1128,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: `sweep-role2-${runId}` },
       orgAdmin.bearer
     );
-    expect(update.status, "role update → 200").toBe(200);
+    expectStatus(update, 200, "role update → 200");
 
     // ROW POST .../roles/:role_id/scopes (SM)
     const scopeAdd = await api(
@@ -1137,7 +1138,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { resource_id: resId, scope_name: "read" },
       orgAdmin.bearer
     );
-    expect(scopeAdd.status, "scope add → 200").toBe(200);
+    expectStatus(scopeAdd, 200, "scope add → 200");
     // MEASURED: an empty body BINDS (zero UUID) and fails on resource
     // ownership first — 403, not 400.
     const scopeAddBad = await api(
@@ -1147,7 +1148,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       {},
       orgAdmin.bearer
     );
-    expect(scopeAddBad.status, "scope add with empty body → 403 (zero UUID not owned)").toBe(403);
+    expectStatus(scopeAddBad, 403, "scope add with empty body → 403 (zero UUID not owned)");
 
     // ROW DELETE .../roles/:role_id/scopes/:scope_name (D)
     const scopeDel = await api(
@@ -1157,7 +1158,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       orgAdmin.bearer
     );
-    expect(scopeDel.status, "scope remove → 200").toBe(200);
+    expectStatus(scopeDel, 200, "scope remove → 200");
 
     // ROW DELETE /organizations/:id/roles/:role_id (D)
     const roleDel = await api(
@@ -1167,7 +1168,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       orgAdmin.bearer
     );
-    expect(roleDel.status, "role delete → 200").toBe(200);
+    expectStatus(roleDel, 200, "role delete → 200");
     const getGone = await api(
       IDP_BASE,
       "GET",
@@ -1175,7 +1176,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       orgAdmin.bearer
     );
-    expect(getGone.status, "role get after delete → 404").toBe(404);
+    expectStatus(getGone, 404, "role get after delete → 404");
     const updateGone = await api(
       IDP_BASE,
       "PUT",
@@ -1183,7 +1184,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: "ghost" },
       orgAdmin.bearer
     );
-    expect(updateGone.status, "role update after delete → 404").toBe(404);
+    expectStatus(updateGone, 404, "role update after delete → 404");
     const roleDelAgain = await api(
       IDP_BASE,
       "DELETE",
@@ -1191,7 +1192,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       orgAdmin.bearer
     );
-    expect(roleDelAgain.status, "second role delete → 404").toBe(404);
+    expectStatus(roleDelAgain, 404, "second role delete → 404");
     const scopeDelGone = await api(
       IDP_BASE,
       "DELETE",
@@ -1199,7 +1200,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       orgAdmin.bearer
     );
-    expect(scopeDelGone.status, "scope remove on a deleted role → 404").toBe(404);
+    expectStatus(scopeDelGone, 404, "scope remove on a deleted role → 404");
   });
 
   test("service accounts: create, bundle, refusals", async () => {
@@ -1211,7 +1212,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: `sweep-sa-${runId}` },
       orgAdmin.bearer
     );
-    expect(sa.status, "service-account create → 201").toBe(201);
+    expectStatus(sa, 201, "service-account create → 201");
     const saBad = await api(
       IDP_BASE,
       "POST",
@@ -1219,7 +1220,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       {},
       orgAdmin.bearer
     );
-    expect(saBad.status, "service-account create without a name → 400").toBe(400);
+    expectStatus(saBad, 400, "service-account create without a name → 400");
 
     // ROW POST /organizations/:id/service-accounts/with-client (SM)
     const bundle = await api(
@@ -1232,7 +1233,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       },
       orgAdmin.bearer
     );
-    expect(bundle.status, "bundle create → 201").toBe(201);
+    expectStatus(bundle, 201, "bundle create → 201");
     const bundleBad = await api(
       IDP_BASE,
       "POST",
@@ -1240,7 +1241,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       {},
       orgAdmin.bearer
     );
-    expect(bundleBad.status, "bundle create with empty body → 400").toBe(400);
+    expectStatus(bundleBad, 400, "bundle create with empty body → 400");
   });
 
   test("lifecycle: delete, restore, and the reads — with their refusals", async () => {
@@ -1251,7 +1252,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       { name: `sweep2 ${runId}`, slug: `${runId}-2`, domain: `${runId}-2.test`, active: true },
       site.bearer
     );
-    expect(c2.status).toBe(201);
+    expectStatus(c2, 201);
     const org2 = (c2.json.id as string) ?? (c2.json.organization as { id?: string })?.id ?? "";
     expect(org2.length).toBeGreaterThan(0);
 
@@ -1263,7 +1264,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       orgAdmin.bearer
     );
-    expect(delAsOrgAdmin.status, "org delete by org_admin (other org) → 403").toBe(403);
+    expectStatus(delAsOrgAdmin, 403, "org delete by org_admin (other org) → 403");
     const del = await api(
       IDP_BASE,
       "DELETE",
@@ -1271,7 +1272,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       site.bearer
     );
-    expect(del.status, "org soft-delete → 200").toBe(200);
+    expectStatus(del, 200, "org soft-delete → 200");
 
     // ROW POST /organizations/:id/restore (D)
     const restore = await api(
@@ -1281,7 +1282,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       {},
       site.bearer
     );
-    expect(restore.status, "org restore → 200").toBe(200);
+    expectStatus(restore, 200, "org restore → 200");
     const restoreAgain = await api(
       IDP_BASE,
       "POST",
@@ -1299,7 +1300,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       site.bearer
     );
-    expect(delGhost.status, "delete of a nonexistent org → 404").toBe(404);
+    expectStatus(delGhost, 404, "delete of a nonexistent org → 404");
 
     // ROW resend-activation error branch: an ACTIVE org refuses re-issue.
     const resendActive = await api(
@@ -1309,7 +1310,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       {},
       site.bearer
     );
-    expect(resendActive.status, "resend-activation on an active org → 409").toBe(409);
+    expectStatus(resendActive, 409, "resend-activation on an active org → 409");
 
     // ROW GET /organizations/:id/admin-recovery-candidates (SR)
     const rec = await api(
@@ -1319,7 +1320,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       site.bearer
     );
-    expect(rec.status, "recovery candidates → 200").toBe(200);
+    expectStatus(rec, 200, "recovery candidates → 200");
     const recBad = await api(
       IDP_BASE,
       "GET",
@@ -1327,7 +1328,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       site.bearer
     );
-    expect(recBad.status, "recovery candidates with a malformed id → 400").toBe(400);
+    expectStatus(recBad, 400, "recovery candidates with a malformed id → 400");
 
     // ROW GET /organizations/export-candidates (SR)
     const exp = await api(
@@ -1337,7 +1338,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       site.bearer
     );
-    expect(exp.status, "export candidates (site_admin) → 200").toBe(200);
+    expectStatus(exp, 200, "export candidates (site_admin) → 200");
     const expOrgAdmin = await api(
       IDP_BASE,
       "GET",
@@ -1345,12 +1346,12 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       orgAdmin.bearer
     );
-    expect(expOrgAdmin.status, "export candidates (org_admin) → 200, tenant-scoped").toBe(200);
+    expectStatus(expOrgAdmin, 200, "export candidates (org_admin) → 200, tenant-scoped");
     expect(
       (expOrgAdmin.json.organizations as unknown[]).length,
       "org_admin sees exactly their own org"
     ).toBe(1);
     const expNoAuth = await api(IDP_BASE, "GET", "/api/v1/organizations/export-candidates");
-    expect(expNoAuth.status, "export candidates unauthenticated → 401").toBe(401);
+    expectStatus(expNoAuth, 401, "export candidates unauthenticated → 401");
   });
 });

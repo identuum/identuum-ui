@@ -81,3 +81,9 @@ src/.tsgraph
 # here (appliance log, record, JSON reports, observations, failed phases'
 # traces), one directory per run stamp. Run-local, never committed.
 /e2e-full/.evidence/
+
+# Legattus per-checkout state (THE-SILENT-REFUSAL, 2026-09-12; mirrors
+# identuum-idp-oss f70fd1a): `legattus init` writes these into the root,
+# and an untracked file here makes gate-witness refuse to mint.
+.legattus.json
+/.legattus/

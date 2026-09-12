@@ -33,7 +33,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
-import { api, firstLoginBearerAsync } from "../e2e/helpers/appliance-fixture";
+import { api, expectStatus, firstLoginBearerAsync } from "../e2e/helpers/appliance-fixture";
 import { loadOrgAdminFixture, loadOrgUserFixture } from "../e2e/helpers/fixture";
 import { generateTOTP } from "../e2e/helpers/totp";
 import { siteAdminSession } from "./helpers/session";
@@ -87,16 +87,16 @@ test.describe("admin reset without customer data loss (destructive, last phase)"
     // ── 1. PRE: seeded tenant inventory, by id ──────────────────────────
     const oa = await totpBearer(fx.email, fx.password, fx.totpSecret);
     const prof = await api(IDP_BASE, "GET", "/api/v1/profile", undefined, oa);
-    expect(prof.status).toBe(200);
+    expectStatus(prof, 200);
     const orgId = String(
       (prof.json as Json).organization_id ?? (prof.json as Json).user?.organization_id
     );
 
     const clientsPre = await api(IDP_BASE, "GET", "/api/v1/clients", undefined, oa);
-    expect(clientsPre.status).toBe(200);
+    expectStatus(clientsPre, 200);
     const clientIdsPre = ((clientsPre.json as Json).clients ?? []).map((c: Json) => String(c.id));
     const resourcesPre = await api(IDP_BASE, "GET", "/api/v1/api-resources", undefined, oa);
-    expect(resourcesPre.status).toBe(200);
+    expectStatus(resourcesPre, 200);
     const resourceIdsPre = ((resourcesPre.json as Json).api_resources ?? []).map((r: Json) =>
       String(r.id)
     );
@@ -107,7 +107,7 @@ test.describe("admin reset without customer data loss (destructive, last phase)"
       undefined,
       oa
     );
-    expect(domainsPre.status).toBe(200);
+    expectStatus(domainsPre, 200);
     expect(clientIdsPre.length, "provisioner seeded OAuth clients").toBeGreaterThan(0);
     expect(resourceIdsPre.length, "provisioner seeded an api-resource").toBeGreaterThan(0);
 
@@ -154,12 +154,12 @@ test.describe("admin reset without customer data loss (destructive, last phase)"
       email: SITE_ADMIN_EMAIL,
       password: oldPassword,
     });
-    expect(oldLogin.status, "old site_admin password refused after reset").toBe(401);
+    expectStatus(oldLogin, 401, "old site_admin password refused after reset");
     expect(oldLogin.json.session_id, "and no MFA session is opened for it").toBeFalsy();
 
     const recovered = await firstLoginBearerAsync(IDP_BASE, SITE_ADMIN_EMAIL, newPassword);
     const validate = await api(IDP_BASE, "GET", "/api/v1/validate", undefined, recovered.bearer);
-    expect(validate.status, "recovered site_admin bearer is live").toBe(200);
+    expectStatus(validate, 200, "recovered site_admin bearer is live");
     const orgRead = await api(
       IDP_BASE,
       "GET",
@@ -167,13 +167,13 @@ test.describe("admin reset without customer data loss (destructive, last phase)"
       undefined,
       recovered.bearer
     );
-    expect(orgRead.status, "recovered site_admin exercises org-lifecycle authority").toBe(200);
+    expectStatus(orgRead, 200, "recovered site_admin exercises org-lifecycle authority");
     expect((orgRead.json as Json).active, "the tenant org is still active").toBe(true);
 
     // ── 4. POST: customer data intact, by id; tenant logins unaffected ──
     const oa2 = await totpBearer(fx.email, fx.password, fx.totpSecret);
     const clientsPost = await api(IDP_BASE, "GET", "/api/v1/clients", undefined, oa2);
-    expect(clientsPost.status).toBe(200);
+    expectStatus(clientsPost, 200);
     const clientIdsPost = ((clientsPost.json as Json).clients ?? []).map((c: Json) => String(c.id));
     for (const id of clientIdsPre) {
       expect(clientIdsPost, `client ${id} survived the reset`).toContain(id);
@@ -192,7 +192,7 @@ test.describe("admin reset without customer data loss (destructive, last phase)"
       undefined,
       oa2
     );
-    expect(domainsPost.status).toBe(200);
+    expectStatus(domainsPost, 200);
     expect(
       ((domainsPost.json as Json).organization_domains ?? []).length,
       "domain rows survived the reset"
@@ -200,7 +200,7 @@ test.describe("admin reset without customer data loss (destructive, last phase)"
 
     const ouLogin = await totpBearer(ufx.email, ufx.password, ufx.totpSecret);
     const ouValidate = await api(IDP_BASE, "GET", "/api/v1/validate", undefined, ouLogin);
-    expect(ouValidate.status, "org_user login and session unaffected").toBe(200);
+    expectStatus(ouValidate, 200, "org_user login and session unaffected");
 
     // ── 5. MEASURED PIN: pre-reset site_admin sessions SURVIVE the reset ──
     // recoverSiteAdminCore updates the user row only — nothing revokes the

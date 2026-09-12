@@ -32,6 +32,7 @@ import {
   api,
   assertActivationEnvelope,
   expectHonestAuthBody,
+  expectStatus,
   firstLoginBearerAsync,
 } from "../e2e/helpers/appliance-fixture";
 import { siteAdminSession } from "./helpers/session";
@@ -71,7 +72,7 @@ test.describe("delete-user cascade (census row: DELETE /api/v1/users/:id)", () =
       },
       site.bearer
     );
-    expect(created.status, "create org+admin → 201").toBe(201);
+    expectStatus(created, 201, "create org+admin → 201");
     const orgId =
       (created.json.id as string) ?? (created.json.organization as { id?: string })?.id ?? "";
     expect(orgId.length).toBeGreaterThan(0);
@@ -85,7 +86,7 @@ test.describe("delete-user cascade (census row: DELETE /api/v1/users/:id)", () =
       {},
       site.bearer
     );
-    expect(resend.status, "resend-activation → 200").toBe(200);
+    expectStatus(resend, 200, "resend-activation → 200");
     const activationToken = resend.json.activation_token as string;
     expect(activationToken.length).toBeGreaterThan(0);
     // THE-UNUSABLE-TOKEN: a second, independent site asserting the envelope
@@ -97,7 +98,7 @@ test.describe("delete-user cascade (census row: DELETE /api/v1/users/:id)", () =
       token: activationToken,
       password: orgAdminPassword,
     });
-    expect(activate.status, "activation consume → 200").toBe(200);
+    expectStatus(activate, 200, "activation consume → 200");
 
     // org_admin first login → TOTP enrolment → bearer.
     const orgAdmin = await firstLoginBearerAsync(IDP_BASE, orgAdminEmail, orgAdminPassword);
@@ -112,7 +113,7 @@ test.describe("delete-user cascade (census row: DELETE /api/v1/users/:id)", () =
       { email: victimEmail, password: victimPassword, role: "org_user", organization_id: orgId },
       orgAdmin.bearer
     );
-    expect(victim.status, "create victim → 201").toBe(201);
+    expectStatus(victim, 201, "create victim → 201");
     const victimId = victim.json.id as string;
     expect(victimId.length).toBeGreaterThan(0);
     const verified = await api(
@@ -122,7 +123,7 @@ test.describe("delete-user cascade (census row: DELETE /api/v1/users/:id)", () =
       { email_verified: true },
       orgAdmin.bearer
     );
-    expect(verified.status, "verify victim email → 200").toBe(200);
+    expectStatus(verified, 200, "verify victim email → 200");
 
     // The victim logs in and holds a LIVE bearer. MEASURED (run 4): with the
     // org's default mfa_policy an org_user login is a plain 200 + access
@@ -132,11 +133,11 @@ test.describe("delete-user cascade (census row: DELETE /api/v1/users/:id)", () =
       email: victimEmail,
       password: victimPassword,
     });
-    expect(victimLogin.status, "victim plain login → 200").toBe(200);
+    expectStatus(victimLogin, 200, "victim plain login → 200");
     const victimBearer = (victimLogin.json.access_token as string) ?? "";
     expect(victimBearer.length).toBeGreaterThan(0);
     const preDelete = await api(IDP_BASE, "GET", "/api/v1/validate", undefined, victimBearer);
-    expect(preDelete.status, "victim bearer valid pre-delete → 200").toBe(200);
+    expectStatus(preDelete, 200, "victim bearer valid pre-delete → 200");
 
     // ── THE ROW: DELETE /api/v1/users/:id ────────────────────────────────
     // The org_admin destroys their OWN org's user — the actor
@@ -152,7 +153,7 @@ test.describe("delete-user cascade (census row: DELETE /api/v1/users/:id)", () =
       undefined,
       orgAdmin.bearer
     );
-    expect(del.status, "org_admin soft-delete of a same-org user → 200").toBe(200);
+    expectStatus(del, 200, "org_admin soft-delete of a same-org user → 200");
     expect(del.json.deleted, "response names the deleted id").toBe(victimId);
 
     // Its OWN error branch: deleting the already-deleted user is NOT 2xx.
@@ -175,18 +176,18 @@ test.describe("delete-user cascade (census row: DELETE /api/v1/users/:id)", () =
         "second delete"
       );
     }
-    expect(delAgain.status, "second delete of the same user → 404").toBe(404);
+    expectStatus(delAgain, 404, "second delete of the same user → 404");
 
     // The cascade: the victim's live bearer dies with the delete…
     const postDelete = await api(IDP_BASE, "GET", "/api/v1/validate", undefined, victimBearer);
-    expect(postDelete.status, "victim bearer revoked by delete cascade → 401").toBe(401);
+    expectStatus(postDelete, 401, "victim bearer revoked by delete cascade → 401");
 
     // …and the deleted account cannot log back in.
     const reLogin = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
       email: victimEmail,
       password: victimPassword,
     });
-    expect(reLogin.status, "deleted user login refused → 401").toBe(401);
+    expectStatus(reLogin, 401, "deleted user login refused → 401");
     expect(reLogin.json.session_id, "and no enrolment session is offered").toBeUndefined();
   });
 });

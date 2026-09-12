@@ -29,7 +29,12 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { api, firstLoginBearerAsync, observeRaw } from "../e2e/helpers/appliance-fixture";
+import {
+  api,
+  expectStatus,
+  firstLoginBearerAsync,
+  observeRaw,
+} from "../e2e/helpers/appliance-fixture";
 import { generateTOTP } from "../e2e/helpers/totp";
 import { siteAdminSession } from "./helpers/session";
 
@@ -75,7 +80,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       },
       site.bearer
     );
-    expect(c1.status).toBe(201);
+    expectStatus(c1, 201);
     const org = (c1.json.organization as { id?: string })?.id ?? "";
     expect(org.length).toBeGreaterThan(0);
     orgId = org;
@@ -87,13 +92,13 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       {},
       site.bearer
     );
-    expect(rs.status).toBe(200);
+    expectStatus(rs, 200);
     const adminPw = `Adm!${runId}9wqX`;
     const act = await api(IDP_BASE, "POST", "/api/v1/auth/organizations/activate", {
       token: rs.json.activation_token,
       password: adminPw,
     });
-    expect(act.status).toBe(200);
+    expectStatus(act, 200);
     const orgAdmin = await firstLoginBearerAsync(IDP_BASE, `admin@${runId}.test`, adminPw);
     orgAdminBearer = orgAdmin.bearer;
 
@@ -106,7 +111,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       { email: userEmail, password: userPw, role: "org_user", organization_id: org },
       orgAdmin.bearer
     );
-    expect(uc.status).toBe(201);
+    expectStatus(uc, 201);
     userId = uc.json.id as string;
     const uv = await api(
       IDP_BASE,
@@ -115,7 +120,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       { email_verified: true },
       orgAdmin.bearer
     );
-    expect(uv.status).toBe(200);
+    expectStatus(uv, 200);
 
     // A confidential authorization_code client (site_admin DCR). Confidential
     // (no token_endpoint_auth_method=none) → the response carries client_secret.
@@ -132,7 +137,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       },
       site.bearer
     );
-    expect(dcr.status, "site_admin DCR of a confidential client → 201").toBe(201);
+    expectStatus(dcr, 201, "site_admin DCR of a confidential client → 201");
     clientId = (dcr.json.client_id as string) ?? "";
     clientSecret = (dcr.json.client_secret as string) ?? "";
     expect(clientId.length, "client_id issued").toBeGreaterThan(0);
@@ -259,13 +264,13 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     // HandleListOwnSessions has an explicit IsSiteAdmin() → 403 branch (the
     // self-service surface follows the tenant-resource philosophy). Pinned.
     const saSessions = await api(IDP_BASE, "GET", "/api/v1/sessions", undefined, site.bearer);
-    expect(saSessions.status, "site_admin bearer on the self-service list → 403").toBe(403);
+    expectStatus(saSessions, 403, "site_admin bearer on the self-service list → 403");
     // The real positive: an ordinary user's bearer lists their own sessions.
     const ouLogin = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
       email: userEmail,
       password: userPw,
     });
-    expect(ouLogin.status, "ceremony org_user plain login → 200").toBe(200);
+    expectStatus(ouLogin, 200, "ceremony org_user plain login → 200");
     const mySessions = await api(
       IDP_BASE,
       "GET",
@@ -273,7 +278,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       undefined,
       ouLogin.json.access_token as string
     );
-    expect(mySessions.status, "GET /sessions with the user's bearer → 200").toBe(200);
+    expectStatus(mySessions, 200, "GET /sessions with the user's bearer → 200");
     expect(
       Array.isArray((mySessions.json as { sessions?: unknown[] }).sessions)
         ? ((mySessions.json as { sessions: unknown[] }).sessions?.length ?? -1)
@@ -426,7 +431,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       undefined,
       ouLogin.json.access_token as string
     );
-    expect(afterSecond.status, "GET /sessions after the second login → 200").toBe(200);
+    expectStatus(afterSecond, 200, "GET /sessions after the second login → 200");
     expect(
       (afterSecond.json as { sessions: unknown[] }).sessions.length,
       "the second login ADDED a session and the first survived it (count grew by exactly one)"
@@ -505,7 +510,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       { name: `Ceremony User ${runId}` },
       orgAdminBearer
     );
-    expect(named.status, "org_admin sets the user's display name").toBe(200);
+    expectStatus(named, 200, "org_admin sets the user's display name");
 
     // Each test owns a fresh cookie jar: establish the browser-login session
     // for THIS request context (honest CSRF double-submit), as the first
@@ -662,7 +667,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       email: userEmail,
       password: userPw,
     });
-    expect(ouLogin.status, "org_user login → 200").toBe(200);
+    expectStatus(ouLogin, 200, "org_user login → 200");
     const ouBearer = ouLogin.json.access_token as string;
     const put = await api(
       IDP_BASE,
@@ -671,7 +676,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       { given_name: "Ceremony", locale: "en-GB", website: "https://ceremony.example" },
       ouBearer
     );
-    expect(put.status, "PUT /profile (self-service) → 200").toBe(200);
+    expectStatus(put, 200, "PUT /profile (self-service) → 200");
     expect((put.json as { given_name?: string }).given_name).toBe("Ceremony");
     const badPut = await api(
       IDP_BASE,
@@ -680,7 +685,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       { website: "not a url" },
       ouBearer
     );
-    expect(badPut.status, "a malformed website → 400 naming the field").toBe(400);
+    expectStatus(badPut, 400, "a malformed website → 400 naming the field");
     expect(String((badPut.json as { message?: string }).message ?? "")).toContain("website");
 
     // Browser-login session for this request context, then authorize with
@@ -805,7 +810,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       },
       site.bearer
     );
-    expect(dcr.status, "DCR of a backchannel-logout client → 201").toBe(201);
+    expectStatus(dcr, 201, "DCR of a backchannel-logout client → 201");
     const bcClientId = (dcr.json.client_id as string) ?? "";
     expect(bcClientId.length).toBeGreaterThan(0);
 
@@ -855,7 +860,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       undefined,
       site.bearer
     );
-    expect(listRes.status, "admin list → 200").toBe(200);
+    expectStatus(listRes, 200, "admin list → 200");
     const rows =
       (listRes.json.deliveries as Array<{
         id: string;
@@ -879,7 +884,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       undefined,
       site.bearer
     );
-    expect(getRes.status, "admin GET /:id → 200").toBe(200);
+    expectStatus(getRes, 200, "admin GET /:id → 200");
     expect(getRes.json.id, "…the same row").toBe(row.id);
 
     // REPLAY re-mints a fresh logout_token and re-attempts. The dead URI fails
@@ -892,7 +897,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       {},
       site.bearer
     );
-    expect(replay.status, "replay of a dead-target delivery → 202").toBe(202);
+    expectStatus(replay, 202, "replay of a dead-target delivery → 202");
     expect(replay.json.delivered, "…delivered:false").toBe(false);
 
     // Replay of a non-existent delivery id → 404 (the admin not-found branch).
@@ -989,7 +994,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       { mfa_policy: "required" },
       site.bearer
     );
-    expect(requirePolicy.status, "site_admin sets org mfa_policy=required").toBe(200);
+    expectStatus(requirePolicy, 200, "site_admin sets org mfa_policy=required");
     const pending = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
       email: userEmail,
       password: userPw,
@@ -1002,7 +1007,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     const init = await api(IDP_BASE, "POST", "/api/v1/auth/login/mfa/enroll/initiate", {
       session_id: pendingId,
     });
-    expect(init.status, "enroll/initiate → 200").toBe(200);
+    expectStatus(init, 200, "enroll/initiate → 200");
     const totpSecret = (init.json as { secret?: string }).secret ?? "";
     userTotpSecret = totpSecret;
     expect(totpSecret.length).toBeGreaterThan(0);
@@ -1017,7 +1022,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
         code: generateTOTP(totpSecret, 1),
       });
     }
-    expect(complete.status, "enroll/complete → 200 (user now TOTP-enrolled)").toBe(200);
+    expectStatus(complete, 200, "enroll/complete → 200 (user now TOTP-enrolled)");
     const restorePolicy = await api(
       IDP_BASE,
       "PUT",
@@ -1025,7 +1030,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       { mfa_policy: "optional" },
       site.bearer
     );
-    expect(restorePolicy.status, "org mfa_policy restored to optional").toBe(200);
+    expectStatus(restorePolicy, 200, "org mfa_policy restored to optional");
 
     // ── S1 is STILL a password-level session. The same request now finds a
     // user who CAN perform the TOTP rung → the OP's step-up ceremony.
@@ -1234,7 +1239,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       },
       site.bearer
     );
-    expect(dcr2.status, "DCR of the passkey-ceremony client → 201").toBe(201);
+    expectStatus(dcr2, 201, "DCR of the passkey-ceremony client → 201");
     const client2 = (dcr2.json.client_id as string) ?? "";
     const client2Secret = (dcr2.json.client_secret as string) ?? "";
     expect(client2.length).toBeGreaterThan(0);
@@ -1321,12 +1326,12 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       email: userEmail,
       password: userPw,
     });
-    expect(pending.status, "TOTP-enrolled JSON login → 401 pending").toBe(401);
+    expectStatus(pending, 401, "TOTP-enrolled JSON login → 401 pending");
     const verify = await api(IDP_BASE, "POST", "/api/v1/auth/login/mfa", {
       session_id: (pending.json as { session_id?: string }).session_id ?? "",
       code: generateTOTP(userTotpSecret, 0),
     });
-    expect(verify.status, "TOTP verify → 200 bearer").toBe(200);
+    expectStatus(verify, 200, "TOTP verify → 200 bearer");
     const bearer = (verify.json as { access_token?: string }).access_token ?? "";
     expect(bearer.length).toBeGreaterThan(0);
 
@@ -1477,12 +1482,12 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       email: userEmail,
       password: userPw,
     });
-    expect(pending.status, "TOTP-enrolled JSON login → 401 pending").toBe(401);
+    expectStatus(pending, 401, "TOTP-enrolled JSON login → 401 pending");
     const verify = await api(IDP_BASE, "POST", "/api/v1/auth/login/mfa", {
       session_id: (pending.json as { session_id?: string }).session_id ?? "",
       code: generateTOTP(userTotpSecret, 0),
     });
-    expect(verify.status, "TOTP verify → 200 bearer").toBe(200);
+    expectStatus(verify, 200, "TOTP verify → 200 bearer");
     const ouBearer = (verify.json as { access_token?: string }).access_token ?? "";
 
     const put = await api(
@@ -1498,7 +1503,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       },
       ouBearer
     );
-    expect(put.status, "PUT /profile with phone + partial address → 200").toBe(200);
+    expectStatus(put, 200, "PUT /profile with phone + partial address → 200");
     expect((put.json as { phone_number?: string }).phone_number).toBe("+442079460000");
     expect(
       (put.json as { address_region?: string }).address_region,
@@ -1511,7 +1516,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       { phone_number: "020 7946 0000" },
       ouBearer
     );
-    expect(badPhone.status, "non-E.164 phone → 400 naming the field").toBe(400);
+    expectStatus(badPhone, 400, "non-E.164 phone → 400 naming the field");
     expect(String((badPhone.json as { message?: string }).message ?? "")).toContain("phone_number");
 
     // ── A client registered for the address + phone scopes.
@@ -1528,7 +1533,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       },
       site.bearer
     );
-    expect(dcr.status, "DCR of the address/phone client → 201").toBe(201);
+    expectStatus(dcr, 201, "DCR of the address/phone client → 201");
     const apClient = (dcr.json.client_id as string) ?? "";
     const apSecret = (dcr.json.client_secret as string) ?? "";
     const basic = {
@@ -1719,7 +1724,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       },
       site.bearer
     );
-    expect(dcr.status, "DCR of a private_key_jwt client with an inline jwks → 201").toBe(201);
+    expectStatus(dcr, 201, "DCR of a private_key_jwt client with an inline jwks → 201");
     const roClient = (dcr.json.client_id as string) ?? "";
 
     const signRS256 = (claims: Record<string, unknown>) => {
@@ -1946,7 +1951,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       undefined,
       site.bearer
     );
-    expect(events.status).toBe(200);
+    expectStatus(events, 200);
     // The audit wire shape names the action `event_type` (auditEventView).
     const actions = ((events.json as { events?: Array<{ event_type?: string }> }).events ?? []).map(
       (e) => e.event_type ?? ""

@@ -24,7 +24,7 @@
  *    endpoint, so valid:true is unreachable here (findings, not skips).
  */
 import { expect, test } from "@playwright/test";
-import { api, firstLoginBearerAsync } from "../e2e/helpers/appliance-fixture";
+import { api, expectStatus, firstLoginBearerAsync } from "../e2e/helpers/appliance-fixture";
 import { siteAdminSession } from "./helpers/session";
 
 const IDP_BASE = process.env.IDENTUUM_E2E_FULL_IDP_BASE ?? "http://127.0.0.1:7113";
@@ -51,7 +51,7 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
       email: userEmail,
       password: userPw,
     });
-    expect(r.status, "org_user plain login → 200").toBe(200);
+    expectStatus(r, 200, "org_user plain login → 200");
     return {
       bearer: (r.json.access_token as string) ?? "",
       refresh: (r.json.refresh_token as string) ?? "",
@@ -75,7 +75,7 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
       },
       site.bearer
     );
-    expect(c1.status).toBe(201);
+    expectStatus(c1, 201);
     org1 = (c1.json.organization as { id?: string })?.id ?? "";
     const rs = await api(
       IDP_BASE,
@@ -84,13 +84,13 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
       {},
       site.bearer
     );
-    expect(rs.status).toBe(200);
+    expectStatus(rs, 200);
     const adminPw = `Adm!${runId}9wqX`;
     const act = await api(IDP_BASE, "POST", "/api/v1/auth/organizations/activate", {
       token: rs.json.activation_token,
       password: adminPw,
     });
-    expect(act.status).toBe(200);
+    expectStatus(act, 200);
     orgAdmin = await firstLoginBearerAsync(IDP_BASE, `admin@${runId}-1.test`, adminPw);
     userEmail = `user@${runId}-1.test`;
     userPw = `Usr!${runId}3kpZ`;
@@ -101,7 +101,7 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
       { email: userEmail, password: userPw, role: "org_user", organization_id: org1 },
       orgAdmin.bearer
     );
-    expect(uc.status).toBe(201);
+    expectStatus(uc, 201);
     const uv = await api(
       IDP_BASE,
       "PUT",
@@ -109,7 +109,7 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
       { email_verified: true },
       orgAdmin.bearer
     );
-    expect(uv.status).toBe(200);
+    expectStatus(uv, 200);
   });
 
   test("browser-login: form renders, honest CSRF submit logs in", async ({ request }) => {
@@ -146,7 +146,7 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
       email: userEmail,
       password: userPw,
     });
-    expect(noCsrf.status, "JSON submit without CSRF → 403").toBe(403);
+    expectStatus(noCsrf, 403, "JSON submit without CSRF → 403");
     expect(noCsrf.json.error).toBe("csrf_failed");
   });
 
@@ -157,7 +157,7 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
     const r1 = await api(IDP_BASE, "POST", "/api/v1/auth/session/refresh", {
       refresh_token: s1.refresh,
     });
-    expect(r1.status, "refresh → 200").toBe(200);
+    expectStatus(r1, 200, "refresh → 200");
     const rt2 = (r1.json.refresh_token as string) ?? "";
     expect(rt2.length).toBeGreaterThan(0);
 
@@ -166,7 +166,7 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
     const graceReuse = await api(IDP_BASE, "POST", "/api/v1/auth/session/refresh", {
       refresh_token: s1.refresh,
     });
-    expect(graceReuse.status, "reuse within the 10s grace window → 200").toBe(200);
+    expectStatus(graceReuse, 200, "reuse within the 10s grace window → 200");
 
     // Aged reuse: wait out the grace window, then present the burned token
     // — the transition item 2 demands: one-shot burns once, the second use
@@ -175,7 +175,7 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
     const theft = await api(IDP_BASE, "POST", "/api/v1/auth/session/refresh", {
       refresh_token: s1.refresh,
     });
-    expect(theft.status, "aged reuse of a rotated token → 401").toBe(401);
+    expectStatus(theft, 401, "aged reuse of a rotated token → 401");
     expect(theft.json.error).toBe("refresh_reuse_detected");
 
     // MEASURED: theft detection revokes the SESSION, not just the refresh
@@ -183,12 +183,12 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
     // is dead on the next request (fail-closed; pre-theft the old access
     // token still validated 200 in the probe runs).
     const oldAccess = await api(IDP_BASE, "GET", "/api/v1/validate", undefined, s1.bearer);
-    expect(oldAccess.status, "access token dies with the theft-revoked session → 401").toBe(401);
+    expectStatus(oldAccess, 401, "access token dies with the theft-revoked session → 401");
 
     const garbage = await api(IDP_BASE, "POST", "/api/v1/auth/session/refresh", {
       refresh_token: "deadbeef",
     });
-    expect(garbage.status, "garbage refresh token → 401").toBe(401);
+    expectStatus(garbage, 401, "garbage refresh token → 401");
     expect(garbage.json.error).toBe("invalid_grant");
   });
 
@@ -198,7 +198,7 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
 
     // ROW GET /me/sessions (SR)
     const list = await api(IDP_BASE, "GET", "/api/v1/me/sessions", undefined, sA.bearer);
-    expect(list.status, "own session list → 200").toBe(200);
+    expectStatus(list, 200, "own session list → 200");
     expect(
       (list.json.sessions as unknown[]).length,
       "both live sessions are listed"
@@ -212,7 +212,7 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
       {},
       sA.bearer
     );
-    expect(withBody.status, "revoke-others WITH a body → 400 (strict no-body)").toBe(400);
+    expectStatus(withBody, 400, "revoke-others WITH a body → 400 (strict no-body)");
     const others = await api(
       IDP_BASE,
       "POST",
@@ -220,11 +220,11 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
       undefined,
       sA.bearer
     );
-    expect(others.status, "revoke-others → 204").toBe(204);
+    expectStatus(others, 204, "revoke-others → 204");
     const bDead = await api(IDP_BASE, "GET", "/api/v1/validate", undefined, sB.bearer);
-    expect(bDead.status, "sibling session died with revoke-others → 401").toBe(401);
+    expectStatus(bDead, 401, "sibling session died with revoke-others → 401");
     const aAlive = await api(IDP_BASE, "GET", "/api/v1/validate", undefined, sA.bearer);
-    expect(aAlive.status, "the revoking session survives → 200").toBe(200);
+    expectStatus(aAlive, 200, "the revoking session survives → 200");
 
     // ROW POST /me/sessions/revoke-current (D)
     const current = await api(
@@ -234,18 +234,18 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
       undefined,
       sA.bearer
     );
-    expect(current.status, "revoke-current → 204").toBe(204);
+    expectStatus(current, 204, "revoke-current → 204");
     const aDead = await api(IDP_BASE, "GET", "/api/v1/validate", undefined, sA.bearer);
-    expect(aDead.status, "the session is gone on the very next request → 401").toBe(401);
+    expectStatus(aDead, 401, "the session is gone on the very next request → 401");
     const listDead = await api(IDP_BASE, "GET", "/api/v1/me/sessions", undefined, sA.bearer);
-    expect(listDead.status, "session list with the dead bearer → 401").toBe(401);
+    expectStatus(listDead, 401, "session list with the dead bearer → 401");
 
     // ROW POST /me/sessions/revoke-all (D)
     const sC = await login();
     const all = await api(IDP_BASE, "POST", "/api/v1/me/sessions/revoke-all", undefined, sC.bearer);
-    expect(all.status, "revoke-all → 204").toBe(204);
+    expectStatus(all, 204, "revoke-all → 204");
     const cDead = await api(IDP_BASE, "GET", "/api/v1/validate", undefined, sC.bearer);
-    expect(cDead.status, "own session included in revoke-all → 401").toBe(401);
+    expectStatus(cDead, 401, "own session included in revoke-all → 401");
     const deadRevoke = await api(
       IDP_BASE,
       "POST",
@@ -253,18 +253,18 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
       undefined,
       sC.bearer
     );
-    expect(deadRevoke.status, "revoke-all with a dead bearer → 401").toBe(401);
+    expectStatus(deadRevoke, 401, "revoke-all with a dead bearer → 401");
     const unauth = await api(IDP_BASE, "GET", "/api/v1/me/sessions");
-    expect(unauth.status, "session list unauthenticated → 401").toBe(401);
+    expectStatus(unauth, 401, "session list unauthenticated → 401");
   });
 
   test("me/roles: read + unauth branch", async () => {
     const s = await login();
     // ROW GET /me/roles (SR)
     const roles = await api(IDP_BASE, "GET", "/api/v1/me/roles", undefined, s.bearer);
-    expect(roles.status, "own roles → 200").toBe(200);
+    expectStatus(roles, 200, "own roles → 200");
     const unauth = await api(IDP_BASE, "GET", "/api/v1/me/roles");
-    expect(unauth.status, "own roles unauthenticated → 401").toBe(401);
+    expectStatus(unauth, 401, "own roles unauthenticated → 401");
   });
 
   test("claim/validate: oracle-hardened, mint-less on OSS", async () => {
@@ -274,10 +274,10 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
     // valid:true is unreachable in this environment. Both recorded as
     // findings, not skips.
     const garbage = await api(IDP_BASE, "GET", "/api/v1/auth/claim/validate?token=deadbeefdead");
-    expect(garbage.status, "garbage token → 200 (oracle-hardened)").toBe(200);
+    expectStatus(garbage, 200, "garbage token → 200 (oracle-hardened)");
     expect(garbage.json.valid, "…and valid:false").toBe(false);
     const missing = await api(IDP_BASE, "GET", "/api/v1/auth/claim/validate");
-    expect(missing.status, "missing token → the same 200 shape").toBe(200);
+    expectStatus(missing, 200, "missing token → the same 200 shape");
     expect(missing.json.valid).toBe(false);
   });
 
@@ -294,13 +294,13 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
       },
       site.bearer
     );
-    expect(c3.status).toBe(201);
+    expectStatus(c3, 201);
     const org3 = (c3.json.organization as { id?: string })?.id ?? "";
     const t1 = c3.json.activation_token as string;
 
     // ROW GET /auth/organizations/activate/:token (SR)
     const preview1 = await api(IDP_BASE, "GET", `/api/v1/auth/organizations/activate/${t1}`);
-    expect(preview1.status, "preview of a live token → 200").toBe(200);
+    expectStatus(preview1, 200, "preview of a live token → 200");
     expect(preview1.json.email, "preview names the pending admin").toBe(`admin@${runId}-3.test`);
 
     // resend SUPERSEDES: the old token stops previewing — the transition.
@@ -311,31 +311,31 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
       {},
       site.bearer
     );
-    expect(rs3.status).toBe(200);
+    expectStatus(rs3, 200);
     const t2 = rs3.json.activation_token as string;
     const preview1After = await api(IDP_BASE, "GET", `/api/v1/auth/organizations/activate/${t1}`);
-    expect(preview1After.status, "superseded token previews → 400").toBe(400);
+    expectStatus(preview1After, 400, "superseded token previews → 400");
     expect(preview1After.json.error).toBe("invalid_token");
     const previewGarbage = await api(
       IDP_BASE,
       "GET",
       "/api/v1/auth/organizations/activate/nonsense"
     );
-    expect(previewGarbage.status, "garbage token previews → 400").toBe(400);
+    expectStatus(previewGarbage, 400, "garbage token previews → 400");
 
     // Consume, then prove the burn BOTH ways: preview and second consume.
     const consume = await api(IDP_BASE, "POST", "/api/v1/auth/organizations/activate", {
       token: t2,
       password: `Adm!${runId}3x9Q`,
     });
-    expect(consume.status, "consume → 200").toBe(200);
+    expectStatus(consume, 200, "consume → 200");
     const previewBurned = await api(IDP_BASE, "GET", `/api/v1/auth/organizations/activate/${t2}`);
-    expect(previewBurned.status, "consumed token previews → 400").toBe(400);
+    expectStatus(previewBurned, 400, "consumed token previews → 400");
     const consumeAgain = await api(IDP_BASE, "POST", "/api/v1/auth/organizations/activate", {
       token: t2,
       password: `Adm!${runId}3x9Q`,
     });
-    expect(consumeAgain.status, "second consume of a one-shot token → 400").toBe(400);
+    expectStatus(consumeAgain, 400, "second consume of a one-shot token → 400");
     expect(consumeAgain.json.error).toBe("invalid_token");
   });
 
@@ -349,8 +349,8 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
     const ghost = await api(IDP_BASE, "POST", "/api/v1/auth/password/reset-request", {
       email: `ghost@${runId}.test`,
     });
-    expect(known.status, "known email → 200").toBe(200);
-    expect(ghost.status, "ghost email → the same 200").toBe(200);
+    expectStatus(known, 200, "known email → 200");
+    expectStatus(ghost, 200, "ghost email → the same 200");
     expect(JSON.stringify(ghost.json), "…with a byte-identical body").toBe(
       JSON.stringify(known.json)
     );
@@ -362,13 +362,13 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
     // FIRST (P0-9: a policy-invalid password must never burn a valid link),
     // so garbage-token requests read weak_password.
     const missing = await api(IDP_BASE, "POST", "/api/v1/auth/password/reset", {});
-    expect(missing.status).toBe(400);
+    expectStatus(missing, 400);
     expect(missing.json.error).toBe("invalid_reset_token");
     const garbage = await api(IDP_BASE, "POST", "/api/v1/auth/password/reset", {
       token: "deadbeef",
       password: `Nw!Str0ng-${runId}-pQz7x`,
     });
-    expect(garbage.status).toBe(400);
+    expectStatus(garbage, 400);
     expect(garbage.json.error).toBe("weak_password");
   });
 
@@ -376,10 +376,10 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
     // ROW GET /auth/verify-email (SM) — the raw token is emailed; SMTP is
     // dead here, so the happy path is environment-unreachable (finding).
     const garbage = await api(IDP_BASE, "GET", "/api/v1/auth/verify-email?token=deadbeef");
-    expect(garbage.status, "garbage token → 400").toBe(400);
+    expectStatus(garbage, 400, "garbage token → 400");
     expect(garbage.json.error).toBe("invalid_token");
     const missing = await api(IDP_BASE, "GET", "/api/v1/auth/verify-email");
-    expect(missing.status, "missing token → 400").toBe(400);
+    expectStatus(missing, 400, "missing token → 400");
     expect(missing.json.error).toBe("invalid_request");
 
     // ROW POST /auth/resend-verification (SM) — anti-enumeration pair.
@@ -389,8 +389,8 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
     const ghost = await api(IDP_BASE, "POST", "/api/v1/auth/resend-verification", {
       email: `ghost@${runId}.test`,
     });
-    expect(known.status).toBe(200);
-    expect(ghost.status).toBe(200);
+    expectStatus(known, 200);
+    expectStatus(ghost, 200);
     expect(JSON.stringify(ghost.json), "indistinguishable bodies").toBe(JSON.stringify(known.json));
   });
 
@@ -414,7 +414,7 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
       },
       orgAdmin.bearer
     );
-    expect(idp.status).toBe(201);
+    expectStatus(idp, 201);
     const provId = (idp.json.identity_provider as { id?: string })?.id ?? "";
     expect(provId.length).toBeGreaterThan(0);
 
@@ -452,13 +452,13 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
     const ghost = await api(IDP_BASE, "POST", "/api/v1/auth/login/webauthn/begin", {
       email: `ghost@${runId}.test`,
     });
-    expect(known.status, "begin (known) → 200").toBe(200);
-    expect(ghost.status, "begin (ghost) → the same 200").toBe(200);
+    expectStatus(known, 200, "begin (known) → 200");
+    expectStatus(ghost, 200, "begin (ghost) → the same 200");
     expect(Object.keys(ghost.json).sort(), "identical response shape").toEqual(
       Object.keys(known.json).sort()
     );
     const noEmail = await api(IDP_BASE, "POST", "/api/v1/auth/login/webauthn/begin", {});
-    expect(noEmail.status, "begin without an email → 400").toBe(400);
+    expectStatus(noEmail, 400, "begin without an email → 400");
 
     // ROW POST /auth/login/webauthn/finish (SM): no authenticator exists in
     // this environment, so the happy path is unreachable (finding); the
@@ -469,7 +469,7 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
       "/api/v1/auth/login/webauthn/finish?session_id=deadbeef",
       {}
     );
-    expect(finish.status, "finish with an unminted session → 401").toBe(401);
+    expectStatus(finish, 401, "finish with an unminted session → 401");
     expect(finish.json.error).toBe("invalid_credentials");
   });
 });

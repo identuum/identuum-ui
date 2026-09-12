@@ -27,7 +27,7 @@
 import { readFileSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import { expect, test } from "@playwright/test";
-import { api } from "../e2e/helpers/appliance-fixture";
+import { api, expectStatus } from "../e2e/helpers/appliance-fixture";
 import { loadOrgAdminFixture, loadOrgUserFixture } from "../e2e/helpers/fixture";
 import { generateTOTP } from "../e2e/helpers/totp";
 import { siteAdminSession } from "./helpers/session";
@@ -107,34 +107,34 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
   // ── org_admin reads ──
   test("[ROW 82] GET /profile — 200, identity shape", async () => {
     const r = await api(IDP_BASE, "GET", "/api/v1/profile", undefined, oa);
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(r.json).toHaveProperty("email");
     expect(r.json).toHaveProperty("role");
   });
 
   test("[ROW 9] GET /audit/events — 200 {events,has_more}", async () => {
     const r = await api(IDP_BASE, "GET", "/api/v1/audit/events?limit=5", undefined, oa);
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(Array.isArray(r.json.events)).toBe(true);
     expect(r.json).toHaveProperty("has_more");
   });
 
   test("[ROW 22] GET /me/mfa/status — 200, status shape", async () => {
     const r = await api(IDP_BASE, "GET", "/api/v1/me/mfa/status", undefined, oa);
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(r.json).toHaveProperty("mfa_enabled");
     expect(r.json).toHaveProperty("totp_enrolled");
   });
 
   test("[ROW 36] GET /clients — 200 for org_admin (own org), 403 for site_admin (THE-CLIENTS-GUARD)", async () => {
     const r = await api(IDP_BASE, "GET", "/api/v1/clients", undefined, oa);
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(Array.isArray(r.json.clients)).toBe(true);
     expect(r.json).toHaveProperty("total");
     // THE-CLIENTS-GUARD (2026-08-30): site_admin had listed EVERY org's
     // clients (unscoped) before the fix — now refused. Pinned every run.
     const refused = await api(IDP_BASE, "GET", "/api/v1/clients", undefined, sa);
-    expect(refused.status).toBe(403);
+    expectStatus(refused, 403);
   });
 
   test("[ROW 39] GET /clients/:id — 200 full client shape (real id)", async () => {
@@ -142,14 +142,14 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     const id = (list.json as Json).clients?.[0]?.id;
     expect(id, "provisioner seeds at least one OAuth client").toBeTruthy();
     const r = await api(IDP_BASE, "GET", `/api/v1/clients/${id}`, undefined, oa);
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(r.json).toHaveProperty("client_id");
     expect(r.json).toHaveProperty("redirect_uris");
   });
 
   test("[ROW 61] GET /organizations/:id/domains — 200 org_admin, 403 site_admin (THE-REMAINING-FOUR)", async () => {
     const r = await api(IDP_BASE, "GET", `/api/v1/organizations/${orgId}/domains`, undefined, oa);
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(r.json).toHaveProperty("organization_domains");
     const refused = await api(
       IDP_BASE,
@@ -158,12 +158,12 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       undefined,
       sa
     );
-    expect(refused.status).toBe(403);
+    expectStatus(refused, 403);
   });
 
   test("[ROW 84] GET /organizations/:id/roles — 200 org_admin, 403 site_admin (THE-REMAINING-FOUR)", async () => {
     const r = await api(IDP_BASE, "GET", `/api/v1/organizations/${orgId}/roles`, undefined, oa);
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(r.json).toHaveProperty("roles");
     const refused = await api(
       IDP_BASE,
@@ -172,15 +172,15 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       undefined,
       sa
     );
-    expect(refused.status).toBe(403);
+    expectStatus(refused, 403);
   });
 
   test("[ROW 91] GET /users/:id/roles — 200 org_admin, 403 site_admin (THE-REMAINING-FOUR)", async () => {
     const r = await api(IDP_BASE, "GET", `/api/v1/users/${myId}/roles`, undefined, oa);
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(r.json).toHaveProperty("roles");
     const refused = await api(IDP_BASE, "GET", `/api/v1/users/${myId}/roles`, undefined, sa);
-    expect(refused.status).toBe(403);
+    expectStatus(refused, 403);
   });
 
   test("[ROW 94] GET /scope-templates — 200 org_admin, 403 site_admin (THE-SCOPE-TEMPLATES)", async () => {
@@ -189,10 +189,10 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     // templates (200); site_admin — which used to be the only allowed role —
     // is refused.
     const r = await api(IDP_BASE, "GET", "/api/v1/scope-templates", undefined, oa);
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(Array.isArray(r.json.scope_templates)).toBe(true);
     const refused = await api(IDP_BASE, "GET", "/api/v1/scope-templates", undefined, sa);
-    expect(refused.status).toBe(403);
+    expectStatus(refused, 403);
   });
 
   test("[ROW 99] GET /organizations/:id/service-accounts — 200 org_admin, 403 site_admin (THE-REMAINING-FOUR)", async () => {
@@ -203,7 +203,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       undefined,
       oa
     );
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     const refused = await api(
       IDP_BASE,
       "GET",
@@ -211,18 +211,18 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       undefined,
       sa
     );
-    expect(refused.status).toBe(403);
+    expectStatus(refused, 403);
   });
 
   test("[ROW 118] GET /users — 200 paged list", async () => {
     const r = await api(IDP_BASE, "GET", "/api/v1/users?limit=1", undefined, oa);
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(Array.isArray(r.json.users)).toBe(true);
   });
 
   test("[ROW 121] GET /users/:id — 200 (own id; the row THE-REMAINING-CLICKS opened via its dead resend wire)", async () => {
     const r = await api(IDP_BASE, "GET", `/api/v1/users/${myId}`, undefined, oa);
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(String((r.json as Json).id ?? (r.json as Json).user?.id)).toBe(myId);
   });
 
@@ -235,13 +235,13 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       { current_password: "Wrong!Password123", new_password: "NeverApplied!123" },
       oa
     );
-    expect(r.status).toBe(403);
+    expectStatus(r, 403);
     expect(r.json).toHaveProperty("error");
   });
 
   test("[ROW 20] POST /me/mfa/disable — 403 on empty proof (enforcing; MFA stays on)", async () => {
     const r = await api(IDP_BASE, "POST", "/api/v1/me/mfa/disable", { code: "", password: "" }, oa);
-    expect(r.status).toBe(403);
+    expectStatus(r, 403);
     expect(r.json).toHaveProperty("error");
   });
 
@@ -260,7 +260,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       undefined,
       oa
     );
-    expect(bare.status).toBe(401);
+    expectStatus(bare, 401);
     expect(bare.json.error).toBe("invalid_code");
 
     // The rotation half. OSS verifies the regenerate's TOTP in a ±1-step
@@ -278,20 +278,20 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       );
       if (r.status === 200) break;
     }
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(Array.isArray(r.json.recovery_codes)).toBe(true);
     expect(Number(r.json.count)).toBeGreaterThan(0);
   });
 
   test("[ROW 102] DELETE /service-accounts/:id — 404 JSON on unknown id (mounted, scoped; nothing deleted)", async () => {
     const r = await api(IDP_BASE, "DELETE", `/api/v1/service-accounts/${RAND}`, undefined, oa);
-    expect(r.status).toBe(404);
+    expectStatus(r, 404);
     expect(r.json).toHaveProperty("error");
   });
 
   test("[ROW 107] POST /revoke — 200 for an unknown session_id (anti-enumeration contract; nothing revoked)", async () => {
     const r = await api(IDP_BASE, "POST", "/api/v1/revoke", { session_id: RAND }, oa);
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(r.json.success).toBe(true);
   });
 
@@ -303,7 +303,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       { users: [{ email: "static-rows-sweep@example.com", name: "Never Created" }] },
       oa
     );
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(r.json.created_count).toBe(0);
     expect(r.json.failed_count).toBe(1);
     expect(r.json).not.toHaveProperty("job_id");
@@ -316,30 +316,30 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
   // (AdminPermissionsModel.md). Both directions pinned per row.
   test("[ROW 3] GET /api-resources — 200 for org_admin, 403 for site_admin (the inverted guard, fixed)", async () => {
     const own = await api(IDP_BASE, "GET", "/api/v1/api-resources", undefined, oa);
-    expect(own.status).toBe(200);
+    expectStatus(own, 200);
     expect(Array.isArray(own.json.api_resources)).toBe(true);
     const refused = await api(IDP_BASE, "GET", "/api/v1/api-resources", undefined, sa);
-    expect(refused.status).toBe(403);
+    expectStatus(refused, 403);
     expect(refused.json).toHaveProperty("error");
   });
 
   test("[ROW 4] POST /api-resources — 400 for org_admin invalid body (validating), 403 for site_admin (nothing created)", async () => {
     const invalid = await api(IDP_BASE, "POST", "/api/v1/api-resources", {}, oa);
-    expect(invalid.status).toBe(400);
+    expectStatus(invalid, 400);
     expect(invalid.json).toHaveProperty("error");
     const refused = await api(IDP_BASE, "POST", "/api/v1/api-resources", {}, sa);
-    expect(refused.status).toBe(403);
+    expectStatus(refused, 403);
   });
 
   test("[ROW 42] GET /keys — 200 {count,keys} (site_admin)", async () => {
     const r = await api(IDP_BASE, "GET", "/api/v1/keys", undefined, sa);
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(Array.isArray(r.json.keys)).toBe(true);
   });
 
   test("[ROW 75] GET /organizations/:id — 200 full org shape (site_admin)", async () => {
     const r = await api(IDP_BASE, "GET", `/api/v1/organizations/${orgId}`, undefined, sa);
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(r.json).toHaveProperty("domain");
     expect(r.json).toHaveProperty("active");
   });
@@ -355,7 +355,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       undefined,
       oa
     );
-    expect(r.status).toBe(200);
+    expectStatus(r, 200);
     expect(r.json).toHaveProperty("organization_id");
     const refused = await api(
       IDP_BASE,
@@ -364,7 +364,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       undefined,
       sa
     );
-    expect(refused.status).toBe(403);
+    expectStatus(refused, 403);
   });
 
   // ── THE-PER-VERB-SWEEP (2026-08-30) ──
@@ -903,7 +903,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     ];
 
     const orgBefore = await api(IDP_BASE, "GET", `/api/v1/organizations/${orgId}`, undefined, sa);
-    expect(orgBefore.status).toBe(200);
+    expectStatus(orgBefore, 200);
 
     const faults: string[] = [];
     for (const pr of probes) {
@@ -948,7 +948,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
 
     // The empty-body org update above answered 200 — prove it was a NO-OP.
     const orgAfter = await api(IDP_BASE, "GET", `/api/v1/organizations/${orgId}`, undefined, sa);
-    expect(orgAfter.status).toBe(200);
+    expectStatus(orgAfter, 200);
     expect((orgAfter.json as Json).name, "empty update mutated nothing").toBe(
       (orgBefore.json as Json).name
     );
@@ -970,7 +970,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       undefined,
       throwSa
     );
-    expect(rc.status, "revoke-current sa (throwaway session)").toBe(204);
+    expectStatus(rc, 204, "revoke-current sa (throwaway session)");
     const fx2 = loadOrgAdminFixture();
     if (!fx2) throw new Error("envelope vanished mid-phase");
     const throwOa = await bearerFor(fx2.email, fx2.password, fx2.totpSecret);
@@ -981,14 +981,14 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       undefined,
       throwOa
     );
-    expect(rc2.status, "revoke-current oa (throwaway session)").toBe(204);
+    expectStatus(rc2, 204, "revoke-current oa (throwaway session)");
     const ro = await api(IDP_BASE, "POST", "/api/v1/me/sessions/revoke-others", undefined, sa);
-    expect(ro.status, "revoke-others sa").toBe(204);
+    expectStatus(ro, 204, "revoke-others sa");
     const ro2 = await api(IDP_BASE, "POST", "/api/v1/me/sessions/revoke-others", undefined, oa);
-    expect(ro2.status, "revoke-others oa").toBe(204);
+    expectStatus(ro2, 204, "revoke-others oa");
     const ra = await api(IDP_BASE, "POST", "/api/v1/me/sessions/revoke-all", undefined, sa);
-    expect(ra.status, "revoke-all sa (kills own bearer; nothing follows)").toBe(204);
+    expectStatus(ra, 204, "revoke-all sa (kills own bearer; nothing follows)");
     const ra2 = await api(IDP_BASE, "POST", "/api/v1/me/sessions/revoke-all", undefined, oa);
-    expect(ra2.status, "revoke-all oa (kills own bearer; nothing follows)").toBe(204);
+    expectStatus(ra2, 204, "revoke-all oa (kills own bearer; nothing follows)");
   });
 });
