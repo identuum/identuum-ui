@@ -33,7 +33,7 @@
 import { statSync } from "node:fs";
 import type { BrowserContext, Page } from "@playwright/test";
 import { loadOrgAdminFixture, loadOrgUserFixture, loadSiteAdminFixture } from "./fixture";
-import { generateTOTP } from "./totp";
+import { unconsumedTOTP } from "./totp";
 
 // ── Site-admin credentials ────────────────────────────────────────────────────
 //
@@ -581,7 +581,8 @@ async function completeTOTPWithRetry(
 ): Promise<void> {
   const codeInput = page.getByLabel("Verification code");
   await codeInput.waitFor({ state: "visible" });
-  await codeInput.fill(generateTOTP(secret));
+  // THE-SUITE-THAT-REPLAYED: a code from a window this run has not presented.
+  await codeInput.fill(await unconsumedTOTP(secret));
   await page.getByRole("button", { name: "Verify" }).click();
 
   // Wait up to 8 seconds for successful navigation. If still on TOTP page,
@@ -623,7 +624,9 @@ async function completeTOTPWithRetry(
         "TOTP retry: MFA input gone and success URL not reached; partial session may have expired"
       );
     }
-    await inputAfterWait.fill(generateTOTP(secret));
+    // The window boundary above has passed, so the current step is fresh;
+    // the ledger still guarantees it was never presented.
+    await inputAfterWait.fill(await unconsumedTOTP(secret));
     await page.getByRole("button", { name: "Verify" }).click();
     // Race the success navigation against a persistent rejection banner so a
     // wrong TOTP SECRET fails FAST with an actionable diagnostic instead of

@@ -9,13 +9,29 @@
  * written on enrolment, read by every subsequent login, always overwritten
  * by a fresh enrolment so a stale file from a previous run can never win.
  *
+ * THE-SUITE-THAT-REPLAYED (2026-09-13): the appliance accepts a TOTP code
+ * ONCE per (user, step) since identuum-idp-oss's THE-CODE-THAT-WORKS-TWICE,
+ * and this helper's first red mint showed the suite had depended on
+ * replaying one — three site_admin logins inside a single 30-second step
+ * through a window walk (0, 1, 2) that could serve only two of them, then a
+ * seed deletion that took four later specs down with the diagnosis. Every
+ * code presented here now comes from unconsumedTOTP(): a step this run has
+ * never presented, waiting for the next step only when all three windows
+ * are spent. A refusal gets exactly one retry from a fresh step; a second
+ * refusal is a wrong seed, named as such, and NOTHING is deleted — a
+ * failure that destroys its own evidence is not a diagnosis.
+ *
  * Shared building blocks, not forks: api() + firstLoginBearerAsync() from
- * e2e/helpers/appliance-fixture, generateTOTP() from e2e/helpers/totp.
+ * e2e/helpers/appliance-fixture, unconsumedTOTP() from e2e/helpers/totp.
  */
-import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { api, firstLoginBearerAsync } from "../../e2e/helpers/appliance-fixture";
-import { generateTOTP } from "../../e2e/helpers/totp";
+import {
+  refusedAfterFreshStepMessage,
+  unconsumedTOTP,
+  unconsumedTOTPAfterFreshStep,
+} from "../../e2e/helpers/totp";
 
 const SECRET_FILE = resolve(__dirname, "..", ".auth", "full-site-admin-totp");
 
@@ -30,54 +46,45 @@ export async function siteAdminSession(
     writeFileSync(SECRET_FILE, first.totpSecret, { mode: 0o600 });
     return first;
   } catch (enrolErr) {
-    // Already enrolled in THIS run — verify with the captured secret.
-    //
-    // THE-GREEN-CI-BASELINE: this catch used to swallow the error entirely
-    // and then blame a "replay guard" when the cached secret failed. Both
-    // were wrong, and together they cost two mints and hid the cause.
-    //
-    // The secret file PERSISTS on disk between runs. It is only valid for
-    // the appliance that issued it, so when the enrolment path above fails
-    // against a FRESH appliance for any reason, this fallback reads a
-    // secret from a PREVIOUS one — and then no TOTP window can ever match,
-    // because the seed is simply wrong. That is not replay protection (this
-    // server has none: both login paths end in a plain RFC 6238 window
-    // match, measured in THE-THIRTY-SECOND-WAIT). It is a stale seed.
-    const secret = readFileSync(SECRET_FILE, "utf-8").trim();
+    // Already enrolled in THIS run — verify with the captured secret. The
+    // enrolment error stays BOUND: every failure below carries it.
+    let secret: string;
+    try {
+      secret = readFileSync(SECRET_FILE, "utf-8").trim();
+    } catch (readErr) {
+      throw new Error(
+        "site_admin mfa login: the enrolment path failed and no captured seed exists to verify with " +
+          `(${SECRET_FILE}: ${String(readErr)}). THE ENROLMENT PATH FAILED FIRST, and this is why: ${String(enrolErr)}`
+      );
+    }
     const login = await api(base, "POST", "/api/v1/auth/login", { email, password });
     if (login.status !== 401 || !login.json.session_id) {
       throw new Error(`site_admin mfa login: want 401+session_id, got ${login.status}`);
     }
     const sessionId = login.json.session_id as string;
-    for (let win = 0; win <= 2; win++) {
-      const v = await api(base, "POST", "/api/v1/auth/login/mfa", {
-        session_id: sessionId,
-        code: generateTOTP(secret, win),
-      });
-      if (v.status === 200) {
-        const bearer = (v.json.access_token as string) ?? "";
-        if (bearer.length > 0) return { bearer, totpSecret: secret };
-      }
-      // Walk a couple of windows for ordinary clock skew between this
-      // machine and the appliance — not for a replay guard, which does not
-      // exist here.
+    const verify = async (code: string) =>
+      api(base, "POST", "/api/v1/auth/login/mfa", { session_id: sessionId, code });
+
+    // One attempt from an unconsumed window; on refusal exactly one more from
+    // a fresh step, which cannot be a replay by construction.
+    let v = await verify(await unconsumedTOTP(secret));
+    if (v.status !== 200) {
+      v = await verify(await unconsumedTOTPAfterFreshStep(secret));
     }
-    // Every window failed, so the seed does not belong to this appliance.
-    // Remove it: a secret that cannot log in is worthless, and leaving it
-    // makes the NEXT run fail identically instead of re-enrolling.
-    let removalNote = "the stale seed file was removed";
-    try {
-      unlinkSync(SECRET_FILE);
-    } catch (rmErr) {
-      // NO BARE CATCH ON THIS PATH: a cleanup that fails silently is how the
-      // next run inherits the same bad seed and fails the same way. Name it.
-      removalNote = `the stale seed file could NOT be removed (${String(rmErr)}) — delete ${SECRET_FILE} by hand`;
+    if (v.status === 200) {
+      const bearer = (v.json.access_token as string) ?? "";
+      if (bearer.length > 0) return { bearer, totpSecret: secret };
+      throw new Error("site_admin mfa login: verify answered 200 without an access_token");
     }
+    // A code from a never-presented step was refused: the seed is stale, not
+    // replayed. It is NOT deleted — full-run.sh removes it at RUN START, ahead
+    // of the teardown, which is what keeps a seed from outliving its
+    // appliance; a deletion here would only destroy the evidence and take
+    // every later spec down with a missing-file error.
     throw new Error(
-      "site_admin mfa login: the cached TOTP seed does not belong to this appliance — " +
-        `no window matched, so it is stale, not replayed. ${removalNote}, so ` +
-        "the next run re-enrols. THE ENROLMENT PATH FAILED FIRST, and this is why: " +
-        String(enrolErr)
+      `${refusedAfterFreshStepMessage("site_admin mfa login", secret)} ` +
+        `The seed is stale, not replayed. Last verify status: ${v.status}. Seed file left in place: ${SECRET_FILE}. ` +
+        `THE ENROLMENT PATH FAILED FIRST, and this is why: ${String(enrolErr)}`
     );
   }
 }

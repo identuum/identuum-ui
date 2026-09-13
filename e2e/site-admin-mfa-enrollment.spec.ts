@@ -56,7 +56,7 @@
 
 import { expect, test } from "@playwright/test";
 import { loginAsSiteAdminMFAOptional } from "./helpers/login";
-import { generateTOTP } from "./helpers/totp";
+import { unconsumedTOTP } from "./helpers/totp";
 
 const ENROLL_ENABLED = process.env.IDENTUUM_E2E_SITE_ADMIN_MFA_ENROLL === "1";
 
@@ -118,7 +118,7 @@ test.describe("/account/settings — site_admin MFA enrollment", () => {
     await expect(page.getByLabel("Verification code")).toBeVisible({ timeout: 15_000 });
 
     // 5. Compute a TOTP for the current window and submit.
-    const code = generateTOTP(secret, 0);
+    const code = await unconsumedTOTP(secret);
     await page.getByLabel("Verification code").fill(code);
     await page.getByRole("button", { name: "Verify and enable MFA" }).click();
 

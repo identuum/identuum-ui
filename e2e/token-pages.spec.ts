@@ -36,7 +36,11 @@ import {
   skipAuthTests,
   skipOrgUserTests,
 } from "./helpers/login";
-import { generateTOTP } from "./helpers/totp";
+import {
+  refusedAfterFreshStepMessage,
+  unconsumedTOTP,
+  unconsumedTOTPAfterFreshStep,
+} from "./helpers/totp";
 
 const IDP_BASE = process.env.IDENTUUM_IDP_BASE_URL ?? "http://localhost:7113";
 
@@ -44,8 +48,8 @@ test.describe.configure({ mode: "serial" });
 
 /**
  * API bearer for an ALREADY-TOTP-enrolled account: login (401 + session_id)
- * then MFA-verify, walking up to three 30-second windows because an adjacent
- * spec's login may have consumed the current window's code (replay guard).
+ * then MFA-verify with a code from a window this run has not presented
+ * (the appliance accepts each step once — THE-SUITE-THAT-REPLAYED).
  */
 async function bearerFor(email: string, password: string, totpSecret: string): Promise<string> {
   const login = await api(IDP_BASE, "POST", "/api/v1/auth/login", { email, password });
@@ -53,14 +57,18 @@ async function bearerFor(email: string, password: string, totpSecret: string): P
     throw new Error(`bearerFor: want 401+session_id, got ${login.status}`);
   }
   const sessionId = login.json.session_id as string;
-  for (let win = 0; win <= 2; win++) {
-    const v = await api(IDP_BASE, "POST", "/api/v1/auth/login/mfa", {
-      session_id: sessionId,
-      code: generateTOTP(totpSecret, win),
-    });
-    if (v.status === 200 && v.json.access_token) return v.json.access_token as string;
+  // THE-SUITE-THAT-REPLAYED: one code from an unconsumed window, then exactly
+  // one retry from a fresh step; a second refusal is a wrong seed, said so.
+  const verify = (code: string) =>
+    api(IDP_BASE, "POST", "/api/v1/auth/login/mfa", { session_id: sessionId, code });
+  let v = await verify(await unconsumedTOTP(totpSecret));
+  if (!(v.status === 200 && v.json.access_token)) {
+    v = await verify(await unconsumedTOTPAfterFreshStep(totpSecret));
   }
-  throw new Error("bearerFor: no TOTP window accepted (replay guard)");
+  if (v.status === 200 && v.json.access_token) return v.json.access_token as string;
+  throw new Error(
+    `${refusedAfterFreshStepMessage("bearerFor", totpSecret)} Last verify status: ${v.status}.`
+  );
 }
 
 test.describe("token-landing + static pages (NINE-DARK-PAGES)", () => {

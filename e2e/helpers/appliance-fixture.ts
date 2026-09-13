@@ -35,7 +35,7 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { expect } from "@playwright/test";
-import { generateTOTP } from "./totp";
+import { unconsumedTOTP, unconsumedTOTPAfterFreshStep } from "./totp";
 
 export const E2E_FIXTURE_MARKER = "identuum-e2e-fixture-v1";
 export const E2E_FIXTURE_SCHEMA_VERSION = 1;
@@ -386,14 +386,14 @@ async function firstLoginBearerAsync(
   const secret = init.json.secret as string;
   let complete = await api(base, "POST", "/api/v1/auth/login/mfa/enroll/complete", {
     session_id: sessionId,
-    code: generateTOTP(secret, 0),
+    code: await unconsumedTOTP(secret),
   });
   if (complete.status !== 200) {
-    // One retry on the next window in case we straddled a 30s boundary.
-    await new Promise((r) => setTimeout(r, 1000));
+    // One retry from a fresh step (THE-SUITE-THAT-REPLAYED): the enrolment
+    // code is single-use like every other, so the retry never re-presents it.
     complete = await api(base, "POST", "/api/v1/auth/login/mfa/enroll/complete", {
       session_id: sessionId,
-      code: generateTOTP(secret, 1),
+      code: await unconsumedTOTPAfterFreshStep(secret),
     });
   }
   must(complete.status === 200, `${email}: enroll/complete → ${complete.status}`);
@@ -422,14 +422,13 @@ export async function totpLoginWorks(
     if (login.status !== 401 || !login.json.session_id) return false;
     const sessionId = login.json.session_id as string;
     // Already-enrolled accounts return mfa_required → verify at /login/mfa.
-    for (const win of [0, 1]) {
-      const verify = await api(base, "POST", "/api/v1/auth/login/mfa", {
-        session_id: sessionId,
-        code: generateTOTP(totpSecret, win),
-      });
-      if (verify.status === 200 && (verify.json.access_token || verify.json.token)) return true;
-    }
-    return false;
+    // One unconsumed window, then one fresh-step retry (THE-SUITE-THAT-REPLAYED).
+    const verifyWith = (code: string) =>
+      api(base, "POST", "/api/v1/auth/login/mfa", { session_id: sessionId, code });
+    const ok = (v: { status: number; json: Record<string, unknown> }) =>
+      v.status === 200 && Boolean(v.json.access_token || v.json.token);
+    if (ok(await verifyWith(await unconsumedTOTP(totpSecret)))) return true;
+    return ok(await verifyWith(await unconsumedTOTPAfterFreshStep(totpSecret)));
   } catch {
     return false;
   }

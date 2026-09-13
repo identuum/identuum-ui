@@ -1,4 +1,6 @@
 import * as crypto from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 
 function base32ToBuffer(base32: string): Buffer {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -19,19 +21,225 @@ function base32ToBuffer(base32: string): Buffer {
   return Buffer.from(bytes);
 }
 
-/**
- * Generates a 6-digit TOTP code (RFC 6238, SHA-1, 30s window).
- * windowOffset shifts the time window: -1 = previous, 0 = current, 1 = next.
- */
-export function generateTOTP(secret: string, windowOffset = 0): string {
+/** RFC 6238 step length the appliance uses (seconds). */
+export const TOTP_PERIOD_SECONDS = 30;
+
+/** The appliance accepts the current step and one on either side. */
+export const TOTP_SERVER_WINDOW = 1;
+
+/** The step number containing the instant nowMs (default: now): RFC 6238, 30 s steps. */
+export function totpStep(nowMs: number = Date.now()): number {
+  return Math.floor(nowMs / 1000 / 30);
+}
+
+/** Milliseconds until the next step boundary, plus a small margin. */
+export function msUntilNextTOTPStep(nowMs: number = Date.now(), marginMs = 250): number {
+  const periodMs = TOTP_PERIOD_SECONDS * 1000;
+  return periodMs - (nowMs % periodMs) + marginMs;
+}
+
+/** The code for an explicit step of a secret. */
+export function totpCodeForStep(secret: string, step: number): string {
   const key = base32ToBuffer(secret);
-  const step = Math.floor(Date.now() / 1000 / 30) + windowOffset;
   const counter = Buffer.alloc(8);
   counter.writeBigUInt64BE(BigInt(step));
   const hmac = crypto.createHmac("sha1", key);
   hmac.update(counter);
   const digest = hmac.digest();
   const offset = digest[digest.length - 1] & 0x0f;
-  const code = ((digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).toString().padStart(6, "0");
-  return code;
+  return ((digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).toString().padStart(6, "0");
+}
+
+/**
+ * Generates a 6-digit TOTP code (RFC 6238, SHA-1, 30s window).
+ * windowOffset shifts the time window: -1 = previous, 0 = current, 1 = next.
+ *
+ * This is the raw generator. A code that is going to be PRESENTED for
+ * acceptance must come from unconsumedTOTP() below: since
+ * THE-CODE-THAT-WORKS-TWICE (identuum-idp-oss, 2026-09-13) the appliance
+ * accepts each (user, step) once, and a suite that computed the same step
+ * twice inside one 30-second window was replaying a one-time password.
+ */
+export function generateTOTP(secret: string, windowOffset = 0): string {
+  return totpCodeForStep(secret, totpStep() + windowOffset);
+}
+
+// ── Issued-step ledger (THE-SUITE-THAT-REPLAYED, 2026-09-13) ─────────────────
+//
+// The appliance accepts a TOTP code once per (user, step). This ledger remembers,
+// per secret, every step this suite has already PRESENTED, so a later login with
+// the same secret picks a window it has not used: the current step, then the
+// next, then the previous — all three inside the server's ±1 window — and, when
+// all three are spent, waits for the next step boundary, after which a fresh
+// step exists by construction. Steps are marked when a code is ISSUED, not when
+// the server answers (pessimistic): a wasted step costs at most one wait, a
+// reused step costs a red run.
+//
+// The ledger is keyed by a digest of the secret, never the secret, and is
+// mirrored to a run-local file under the gitignored e2e/.auth directory so the
+// separate Playwright processes of one harness run (api-suite, provisioner,
+// devloop) share it. Entries older than the server window are dropped on load.
+
+export type TOTPLedger = Map<string, Set<number>>;
+
+const LEDGER_FILE = resolve(__dirname, "..", ".auth", "totp-issued-steps.json");
+
+let ledger: TOTPLedger | null = null;
+let ledgerPath: string | null = LEDGER_FILE;
+
+function secretKey(secret: string): string {
+  return crypto.createHash("sha256").update(secret).digest("hex").slice(0, 16);
+}
+
+function loadLedger(nowMs: number): TOTPLedger {
+  if (ledger) return ledger;
+  const fresh: TOTPLedger = new Map();
+  if (ledgerPath && existsSync(ledgerPath)) {
+    try {
+      const raw = JSON.parse(readFileSync(ledgerPath, "utf-8")) as Record<string, number[]>;
+      const floor = totpStep(nowMs) - TOTP_SERVER_WINDOW - 1;
+      for (const [key, steps] of Object.entries(raw)) {
+        const live = steps.filter((s) => Number.isInteger(s) && s >= floor);
+        if (live.length > 0) fresh.set(key, new Set(live));
+      }
+    } catch {
+      // An unreadable ledger is an empty ledger: the fresh-step retry in
+      // unconsumedTOTP still guarantees a never-presented step, one wait later.
+    }
+  }
+  ledger = fresh;
+  return fresh;
+}
+
+function saveLedger(l: TOTPLedger): void {
+  if (!ledgerPath) return;
+  try {
+    mkdirSync(dirname(ledgerPath), { recursive: true });
+    const out: Record<string, number[]> = {};
+    for (const [key, steps] of l) out[key] = [...steps].sort((a, b) => a - b);
+    writeFileSync(ledgerPath, JSON.stringify(out), { mode: 0o600 });
+  } catch {
+    // Best effort, like the login cooldown file: the in-memory ledger still
+    // governs this process, and the fresh-step retry covers the rest.
+  }
+}
+
+/**
+ * Test seam: point the ledger at another file (or null for memory only) and
+ * forget what this process has issued.
+ */
+export function resetTOTPLedgerForTests(path: string | null = null): void {
+  ledger = null;
+  ledgerPath = path;
+}
+
+/** The steps this suite has already presented for a secret (for diagnostics). */
+export function presentedTOTPSteps(secret: string, nowMs: number = Date.now()): number[] {
+  const steps = loadLedger(nowMs).get(secretKey(secret));
+  return steps ? [...steps].sort((a, b) => a - b) : [];
+}
+
+export interface ClaimedTOTP {
+  code: string;
+  step: number;
+  /** Offset from the current step: 0, +1 or -1. */
+  offset: number;
+}
+
+/**
+ * Claims the first window in [current, next, previous] whose step this suite
+ * has not presented yet, marks it as presented, and returns its code. Returns
+ * null when all three are spent — the caller waits for the next step.
+ */
+export function claimUnconsumedTOTPWindow(
+  secret: string,
+  nowMs: number = Date.now()
+): ClaimedTOTP | null {
+  const l = loadLedger(nowMs);
+  const key = secretKey(secret);
+  const used = l.get(key) ?? new Set<number>();
+  const current = totpStep(nowMs);
+  for (const offset of [0, 1, -1]) {
+    const step = current + offset;
+    if (used.has(step)) continue;
+    used.add(step);
+    l.set(key, used);
+    saveLedger(l);
+    return { code: totpCodeForStep(secret, step), step, offset };
+  }
+  return null;
+}
+
+/** Thrown when even a fresh step yielded no unconsumed window (a bug, not a race). */
+export class NoUnconsumedTOTPWindowError extends Error {
+  constructor(secret: string, nowMs: number) {
+    const current = totpStep(nowMs);
+    super(
+      `no unconsumed TOTP window: steps ${current - 1}, ${current} and ${current + 1} were all already presented in this run ` +
+        `(presented steps for this secret: ${presentedTOTPSteps(secret, nowMs).join(", ") || "none"}); ` +
+        "a fresh step was waited for and still yielded nothing — the ledger is inconsistent, this is not a replay and not a stale seed"
+    );
+    this.name = "NoUnconsumedTOTPWindowError";
+  }
+}
+
+export interface TOTPClock {
+  now: () => number;
+  sleep: (ms: number) => Promise<void>;
+}
+
+const realClock: TOTPClock = {
+  now: () => Date.now(),
+  sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+};
+
+/**
+ * A code for a step this suite has NOT presented before. Prefers the current
+ * step, then the next, then the previous; when all three are spent it waits
+ * for the next step boundary — the only case in which waiting is the honest
+ * answer — and claims again. Never returns a code that was already presented.
+ */
+export async function unconsumedTOTP(
+  secret: string,
+  clock: TOTPClock = realClock
+): Promise<string> {
+  const first = claimUnconsumedTOTPWindow(secret, clock.now());
+  if (first) return first.code;
+  await clock.sleep(msUntilNextTOTPStep(clock.now()));
+  const second = claimUnconsumedTOTPWindow(secret, clock.now());
+  if (second) return second.code;
+  throw new NoUnconsumedTOTPWindowError(secret, clock.now());
+}
+
+/**
+ * Waits for the next step boundary FIRST, then claims — for a retry after the
+ * appliance refused a code: the result is from a step that did not exist as
+ * "current or next" when the refused code was issued, so a second refusal can
+ * only mean the secret is not this appliance's. Callers use exactly one of
+ * these per refusal and then fail loudly.
+ */
+export async function unconsumedTOTPAfterFreshStep(
+  secret: string,
+  clock: TOTPClock = realClock
+): Promise<string> {
+  await clock.sleep(msUntilNextTOTPStep(clock.now()));
+  return unconsumedTOTP(secret, clock);
+}
+
+/**
+ * The sentence a helper throws when a code from a never-presented step is
+ * refused: it names what was tried so the failure explains itself, and it
+ * says what it did NOT do — nothing is deleted on this path.
+ */
+export function refusedAfterFreshStepMessage(
+  who: string,
+  secret: string,
+  nowMs: number = Date.now()
+): string {
+  return (
+    `${who}: the appliance refused a TOTP code from a step this run had never presented ` +
+    `(presented steps for this secret: ${presentedTOTPSteps(secret, nowMs).join(", ") || "none"}; current step ${totpStep(nowMs)}). ` +
+    "That is not a replay — every code came from an unconsumed window — so the secret does not belong to this appliance " +
+    "(a seed captured from a previous appliance, or a different account). Nothing was deleted: the seed file and the ledger are left for diagnosis."
+  );
 }

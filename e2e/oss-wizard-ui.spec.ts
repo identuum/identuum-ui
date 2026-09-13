@@ -33,7 +33,7 @@
  */
 
 import { expect, test } from "@playwright/test";
-import { generateTOTP } from "./helpers/totp";
+import { unconsumedTOTP, unconsumedTOTPAfterFreshStep } from "./helpers/totp";
 
 const WIZARD_UI_ENABLED = process.env.IDENTUUM_E2E_OSS_WIZARD_UI === "1";
 const SETUP_CODE = process.env.IDENTUUM_E2E_WIZARD_SETUP_CODE ?? "";
@@ -111,7 +111,7 @@ test.describe("/setup — OSS wizard UI end-to-end (fresh appliance → signed-i
     const secret = (await page.locator("code.select-all").innerText()).trim();
     expect(secret.length).toBeGreaterThan(0);
 
-    await page.getByLabel("Verification code").fill(generateTOTP(secret, 0));
+    await page.getByLabel("Verification code").fill(await unconsumedTOTP(secret));
     await page.getByRole("button", { name: /Verify/ }).click();
 
     // OSS enrollment returns recovery codes — the form shows them once
@@ -121,7 +121,7 @@ test.describe("/setup — OSS wizard UI end-to-end (fresh appliance → signed-i
     try {
       await savedCodes.waitFor({ timeout: 10_000 });
     } catch {
-      await page.getByLabel("Verification code").fill(generateTOTP(secret, 1));
+      await page.getByLabel("Verification code").fill(await unconsumedTOTPAfterFreshStep(secret));
       await page.getByRole("button", { name: /Verify/ }).click();
       await savedCodes.waitFor({ timeout: 10_000 });
     }

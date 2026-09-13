@@ -35,7 +35,11 @@ import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
 import { api, expectStatus, firstLoginBearerAsync } from "../e2e/helpers/appliance-fixture";
 import { loadOrgAdminFixture, loadOrgUserFixture } from "../e2e/helpers/fixture";
-import { generateTOTP } from "../e2e/helpers/totp";
+import {
+  refusedAfterFreshStepMessage,
+  unconsumedTOTP,
+  unconsumedTOTPAfterFreshStep,
+} from "../e2e/helpers/totp";
 import { siteAdminSession } from "./helpers/session";
 
 const IDP_BASE = process.env.IDENTUUM_E2E_FULL_IDP_BASE ?? "http://127.0.0.1:7113";
@@ -49,14 +53,18 @@ async function totpBearer(email: string, password: string, secret: string): Prom
   if (login.status !== 401 || !login.json.session_id) {
     throw new Error(`${email}: want 401+session_id (mfa_required), got ${login.status}`);
   }
-  for (let win = 0; win <= 2; win++) {
-    const v = await api(IDP_BASE, "POST", "/api/v1/auth/login/mfa", {
-      session_id: login.json.session_id,
-      code: generateTOTP(secret, win),
-    });
-    if (v.status === 200 && v.json.access_token) return v.json.access_token as string;
+  // THE-SUITE-THAT-REPLAYED: one code from an unconsumed window, then exactly
+  // one retry from a fresh step; a second refusal is a wrong seed, said so.
+  const verify = (code: string) =>
+    api(IDP_BASE, "POST", "/api/v1/auth/login/mfa", { session_id: login.json.session_id, code });
+  let v = await verify(await unconsumedTOTP(secret));
+  if (!(v.status === 200 && v.json.access_token)) {
+    v = await verify(await unconsumedTOTPAfterFreshStep(secret));
   }
-  throw new Error(`${email}: no TOTP window accepted`);
+  if (v.status === 200 && v.json.access_token) return v.json.access_token as string;
+  throw new Error(
+    `${refusedAfterFreshStepMessage(email, secret)} Last verify status: ${v.status}.`
+  );
 }
 
 test.describe.configure({ mode: "serial" });

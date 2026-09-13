@@ -29,7 +29,11 @@ import { resolve as resolvePath } from "node:path";
 import { expect, test } from "@playwright/test";
 import { api, expectStatus } from "../e2e/helpers/appliance-fixture";
 import { loadOrgAdminFixture, loadOrgUserFixture } from "../e2e/helpers/fixture";
-import { generateTOTP } from "../e2e/helpers/totp";
+import {
+  refusedAfterFreshStepMessage,
+  unconsumedTOTP,
+  unconsumedTOTPAfterFreshStep,
+} from "../e2e/helpers/totp";
 import { siteAdminSession } from "./helpers/session";
 
 const IDP_BASE = process.env.IDENTUUM_E2E_FULL_IDP_BASE ?? "http://127.0.0.1:7113";
@@ -44,15 +48,18 @@ async function bearerFor(email: string, password: string, totpSecret: string): P
   if (login.status !== 401 || !login.json.session_id) {
     throw new Error(`org_admin login: want 401+session_id (mfa_required), got ${login.status}`);
   }
-  for (let win = 0; win <= 2; win++) {
-    const v = await api(IDP_BASE, "POST", "/api/v1/auth/login/mfa", {
-      session_id: login.json.session_id,
-      code: generateTOTP(totpSecret, win),
-    });
-    if (v.status === 200 && v.json.access_token) return v.json.access_token as string;
-    // TOTP replay protection refuses a consumed code; walk windows forward.
+  // THE-SUITE-THAT-REPLAYED: one code from an unconsumed window, then exactly
+  // one retry from a fresh step; a second refusal is a wrong seed, said so.
+  const verify = (code: string) =>
+    api(IDP_BASE, "POST", "/api/v1/auth/login/mfa", { session_id: login.json.session_id, code });
+  let v = await verify(await unconsumedTOTP(totpSecret));
+  if (!(v.status === 200 && v.json.access_token)) {
+    v = await verify(await unconsumedTOTPAfterFreshStep(totpSecret));
   }
-  throw new Error("org_admin login: no TOTP window accepted (replay guard)");
+  if (v.status === 200 && v.json.access_token) return v.json.access_token as string;
+  throw new Error(
+    `${refusedAfterFreshStepMessage("org_admin login", totpSecret)} Last verify status: ${v.status}.`
+  );
 }
 
 test.describe.configure({ mode: "serial" });
@@ -268,15 +275,21 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     // is accepted even though the login consumed one; the next window is
     // tried only to ride out a step boundary between the two calls.
     let r: { status: number; json: Json } = { status: 0, json: {} };
-    for (let win = 0; win <= 1; win++) {
+    r = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/me/mfa/recovery-codes/regenerate",
+      { code: await unconsumedTOTP(oaTotpSecret) },
+      oa
+    );
+    if (r.status !== 200) {
       r = await api(
         IDP_BASE,
         "POST",
         "/api/v1/me/mfa/recovery-codes/regenerate",
-        { code: generateTOTP(oaTotpSecret, win) },
+        { code: await unconsumedTOTPAfterFreshStep(oaTotpSecret) },
         oa
       );
-      if (r.status === 200) break;
     }
     expectStatus(r, 200);
     expect(Array.isArray(r.json.recovery_codes)).toBe(true);
@@ -928,15 +941,21 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       { bearer: ou, secret: ouTotpSecret, label: "recovery-regen ou" },
     ]) {
       let res: { status: number; json: Json } = { status: 0, json: {} };
-      for (let win = 0; win <= 1; win++) {
+      res = await api(
+        IDP_BASE,
+        "POST",
+        "/api/v1/me/mfa/recovery-codes/regenerate",
+        { code: await unconsumedTOTP(live.secret) },
+        live.bearer
+      );
+      if (res.status !== 200) {
         res = await api(
           IDP_BASE,
           "POST",
           "/api/v1/me/mfa/recovery-codes/regenerate",
-          { code: generateTOTP(live.secret, win) },
+          { code: await unconsumedTOTPAfterFreshStep(live.secret) },
           live.bearer
         );
-        if (res.status === 200) break;
       }
       if (res.status !== 200) {
         faults.push(

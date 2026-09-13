@@ -1,5 +1,26 @@
 {
   "schema_version": "ledger-amendments.v1",
   "base_commit": "298983dfe2ede92a3fe230d2000b470d57fd5e36",
-  "changes": []
+  "changes": [
+    {
+      "rule_id": "MFA-SA-1",
+      "change_class": "test_fingerprint_changed",
+      "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): the enrolment spec's code entry now draws from unconsumedTOTP() (a step this run has not presented) instead of generateTOTP(secret, 0); the assertion — the site-admin MFA enrolment ceremony completes end-to-end with recovery codes shown — is untouched. Reviewed and rehashed d1b659957e2b -> fa2b4f54f580."
+    },
+    {
+      "rule_id": "WIZARD-1",
+      "change_class": "test_fingerprint_changed",
+      "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): the wizard spec's TOTP entry and its retry now draw from unconsumedTOTP() and unconsumedTOTPAfterFreshStep() instead of generateTOTP(secret, 0) and (secret, 1); the assertion — the OSS setup wizard runs fresh-appliance to signed-in site_admin in one ceremony — is untouched. Reviewed and rehashed 01cc6700c00f -> 25bae8d65d0d."
+    },
+    {
+      "rule_id": "COOKIE-1",
+      "change_class": "test_fingerprint_changed",
+      "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): login.spec's two TOTP entries now draw from unconsumedTOTP() instead of generateTOTP(SITE_ADMIN_TOTP_SECRET); the assertion — a stale cookie never blocks a second sign-in in the same browser context — is untouched. Reviewed and rehashed b86ce557419c -> 9462e71dc58a."
+    },
+    {
+      "rule_id": "PIN-CHIP-1",
+      "change_class": "test_fingerprint_changed",
+      "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): same file as WIZARD-1 (e2e/oss-wizard-ui.spec.ts @ e2e-run), same TOTP-entry change; the assertion — the wizard displays the pinned login read-only and demotes the typed address to contact email — is untouched. Reviewed and rehashed 01cc6700c00f -> 25bae8d65d0d."
+    }
+  ]
 }

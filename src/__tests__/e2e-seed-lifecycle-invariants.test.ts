@@ -19,6 +19,14 @@ import { describe, expect, it } from "vitest";
  *   2. the failure, if it ever happens again, is LOUD — it names the stale
  *      seed and carries the enrolment error that actually failed, instead of
  *      being swallowed by a bare catch.
+ *
+ * THE-SUITE-THAT-REPLAYED (2026-09-13): the fallback used to ALSO delete the
+ * seed on a miss. Under identuum-idp-oss's single-use TOTP guard that miss
+ * was a consumed window, not a stale seed, and the deletion took four later
+ * specs down with a missing-file error — the diagnosis destroyed by the
+ * failure it explained. Mechanism 1 is what keeps a seed from outliving its
+ * appliance; the fallback now presents only never-presented windows, retries
+ * once from a fresh step, and on refusal fails loudly and DELETES NOTHING.
  */
 const UI_ROOT = resolve(__dirname, "..", "..");
 const runner = () => readFileSync(resolve(UI_ROOT, "e2e-full/scripts/full-run.sh"), "utf-8");
@@ -60,9 +68,20 @@ describe("the e2e site_admin seed never outlives its appliance [SEED-NEVER-OUTLI
     ).not.toMatch(/}\s*catch\s*\{/);
   });
 
-  it("the unusable seed is still removed on failure, so the next run re-enrols", () => {
-    expect(session(), "the failing path must remove the seed it could not use").toContain(
-      "unlinkSync(SECRET_FILE)"
+  it("the failing path presents only unconsumed windows, retries once from a fresh step, and deletes NOTHING", () => {
+    const src = session();
+    expect(src, "every presented code must come from a window this run has not used").toContain(
+      "unconsumedTOTP(secret)"
     );
+    expect(src, "a refusal gets exactly one retry, from a fresh step").toContain(
+      "unconsumedTOTPAfterFreshStep(secret)"
+    );
+    expect(src, "the failure must say the seed was left in place").toContain(
+      "Seed file left in place"
+    );
+    expect(
+      src,
+      "the fallback must NOT delete the seed on a miss — that destroyed the diagnosis and four later specs"
+    ).not.toContain("unlinkSync(");
   });
 });

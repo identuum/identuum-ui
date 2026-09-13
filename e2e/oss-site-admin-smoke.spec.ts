@@ -16,7 +16,7 @@
  * NEVER printed/logged/asserted by value. No cookie/session value is read.
  */
 import { expect, test } from "@playwright/test";
-import { generateTOTP } from "./helpers/totp";
+import { unconsumedTOTP } from "./helpers/totp";
 
 const ENABLED = process.env.IDENTUUM_E2E_OSS_SITE_ADMIN_SMOKE === "1";
 const ADMIN_EMAIL = process.env.IDENTUUM_E2E_OSS_SMOKE_ADMIN_EMAIL ?? "site_admin@system.local";
@@ -47,7 +47,7 @@ test.describe("OSS site-admin overview smoke", () => {
       data: {
         email: ADMIN_EMAIL,
         password: ADMIN_PASSWORD,
-        totp_code: generateTOTP(ADMIN_TOTP_SECRET),
+        totp_code: await unconsumedTOTP(ADMIN_TOTP_SECRET),
         remember_me: false,
       },
     });

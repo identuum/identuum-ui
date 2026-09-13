@@ -30,7 +30,7 @@ import {
   SKIP_AUTH_MSG,
   skipAuthTests,
 } from "./helpers/login";
-import { generateTOTP } from "./helpers/totp";
+import { unconsumedTOTP } from "./helpers/totp";
 
 test.describe("identuum-ui login flow", () => {
   test("email step → password step → MFA step → dashboard → logout", async ({ page }) => {
@@ -58,7 +58,7 @@ test.describe("identuum-ui login flow", () => {
     // MFA step — generate code immediately before submission.
     const codeInput = page.getByLabel("Verification code");
     await expect(codeInput).toBeVisible();
-    const code = generateTOTP(SITE_ADMIN_TOTP_SECRET);
+    const code = await unconsumedTOTP(SITE_ADMIN_TOTP_SECRET);
     await codeInput.fill(code);
     await page.getByRole("button", { name: "Verify" }).click();
 
@@ -113,7 +113,7 @@ test.describe("identuum-ui login flow", () => {
       await page.getByRole("button", { name: "Sign in" }).click();
       const codeInput = page.getByLabel("Verification code");
       await expect(codeInput).toBeVisible();
-      await codeInput.fill(generateTOTP(SITE_ADMIN_TOTP_SECRET));
+      await codeInput.fill(await unconsumedTOTP(SITE_ADMIN_TOTP_SECRET));
       await page.getByRole("button", { name: "Verify" }).click();
       await page.waitForURL(/\/(dashboard|site-admin|org-admin)/);
     }
