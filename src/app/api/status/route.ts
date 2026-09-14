@@ -22,13 +22,17 @@ function healthPaths(domain: BackendDomain): string[] {
 async function checkHealth(
   url: string,
   domain: BackendDomain
-): Promise<{ healthy: boolean; product: string }> {
+): Promise<{ healthy: boolean; product: string; brute_force_protection_disabled?: true }> {
   const fallback = domain === "idp" ? "identuum-idp" : "identuum-ag";
+  let disabled = false;
   for (const path of healthPaths(domain)) {
     try {
       const res = await fetch(`${url.replace(/\/$/, "")}${path}`, {
         signal: AbortSignal.timeout(4000),
+        cache: "no-store",
       });
+      disabled ||=
+        domain === "idp" && res.headers.get("X-Identuum-Brute-Force-Protection") === "disabled";
       if (!res.ok) {
         // Try the next tier's path; a later path may still answer.
         continue;
@@ -39,14 +43,21 @@ async function checkHealth(
       } catch {
         // Non-JSON response — fall back to generic label.
       }
-      return { healthy: true, product: deriveProductLabel(domain, body) };
+      return {
+        healthy: true,
+        product: deriveProductLabel(domain, body),
+        ...(disabled ? { brute_force_protection_disabled: true as const } : {}),
+      };
     } catch {
       // Network error on this path — try the next one.
     }
   }
-  return { healthy: false, product: fallback };
+  return {
+    healthy: false,
+    product: fallback,
+    ...(disabled ? { brute_force_protection_disabled: true as const } : {}),
+  };
 }
-
 export async function GET(): Promise<Response> {
   const cfg = loadRuntimeConfig();
 
@@ -55,7 +66,10 @@ export async function GET(): Promise<Response> {
       idp: { enabled: false, healthy: null, product: "identuum-idp" },
       ag: { enabled: false, healthy: null, product: "identuum-ag" },
     };
-    return NextResponse.json(unconfigured, { status: 200 });
+    return NextResponse.json(unconfigured, {
+      status: 200,
+      headers: { "Cache-Control": "no-store" },
+    });
   }
 
   const [idpResult, agResult] = await Promise.all([
@@ -65,6 +79,9 @@ export async function GET(): Promise<Response> {
 
   const status: StatusResponse = {
     idp: {
+      ...(idpResult?.brute_force_protection_disabled
+        ? { brute_force_protection_disabled: true }
+        : {}),
       enabled: cfg.idp.enabled,
       healthy: idpResult?.healthy ?? null,
       product: idpResult?.product ?? "identuum-idp",
@@ -76,5 +93,5 @@ export async function GET(): Promise<Response> {
     },
   };
 
-  return NextResponse.json(status, { status: 200 });
+  return NextResponse.json(status, { status: 200, headers: { "Cache-Control": "no-store" } });
 }

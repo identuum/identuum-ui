@@ -554,7 +554,7 @@ export interface BackendHealthStatus {
 }
 
 export interface StatusResponse {
-  idp: BackendHealthStatus;
+  idp: BackendHealthStatus & { brute_force_protection_disabled?: true };
   ag: BackendHealthStatus;
 }
 
