@@ -101,6 +101,14 @@ jobs:
         # the record and the record's cites line says so.
         run: echo "${GATE_WITNESS_SHA256}  scripts/gate-witness.sh" | sha256sum -c -
 
+      - name: Test the CI record contract
+        # THE-EIGHT-QUICK-ONES, UI 2 (2026-09-16): the offline contract tests of
+        # scripts/ci-record.sh (byte-identical to the servers' copy) run before
+        # the record they guard is opened — present passes; absent, empty,
+        # other run/attempt/head/job, conflicting stamp, duplicate context and
+        # malformed all refuse; the producer binds a real recorder invocation.
+        run: bash scripts/ci-record-test.sh
+
       - name: Open the gate run record
         # THE-UNWITNESSED-MIRROR: this job has no single entry point — it is
         # discrete steps interleaved with setup actions a wrapper cannot run —
@@ -108,9 +116,13 @@ jobs:
         # ONCE, every shell step below routes through `step`, and finalize
         # refuses green unless every planned step recorded exit=0. This plan
         # is the single declared CI step set for this repo.
+        # THE-EIGHT-QUICK-ONES, UI 2: the init runs through `ci-record.sh
+        # produce`, which refuses a pre-existing record and binds this record
+        # to this run, attempt, commit and job in its cites line, so the check
+        # step at the end can refuse any other record.
         env:
           GATE_WITNESS_CITES: "the 'Open the gate run record' step of build-and-test in .github/workflows/ci.yml is the single declared CI step set; the two script-digest steps run before this record opens and sit outside it; checkout/setup-node/setup-go are actions the witness cannot run"
-        run: bash scripts/gate-witness.sh init GATE-RUN.ci.txt "identuum-ui CI build-and-test (node ${{ matrix.node }})" rulefloor-route-scan yq-install workflow-yaml workflow-yaml-parity pnpm-install-tool prove-node pnpm-install advisory biome tsc vitest prove-go rulefloor-gate
+        run: bash scripts/ci-record.sh produce bash scripts/gate-witness.sh init GATE-RUN.ci.txt "identuum-ui CI build-and-test (node ${{ matrix.node }})" rulefloor-route-scan yq-install workflow-yaml workflow-yaml-parity pnpm-install-tool prove-node pnpm-install advisory biome tsc vitest prove-go rulefloor-gate
 
       - name: Reject undeclared rulefloor install routes
         # Vendored at scripts/rulefloor-install-gate.sh because this
@@ -269,25 +281,30 @@ jobs:
             echo "no record to finalize (job died before init)"
           fi
 
-      - name: Stamp CI provenance into the record
-        # THE-UI-GATE-PARITY-2 (2026-09-06), the idp-oss shape: a gate-witness
-        # record cannot say where it came from, and a local run can forge every
-        # other line. This line is the only thing a local run cannot write, and
-        # the ci-witness judge (make ci-witness, after make ci-fetch RUN=<id>)
-        # REFUSES a committed record without it. if: always() — a red record
-        # needs provenance just as much.
+      - name: Require this run's gate record and stamp CI provenance
+        # THE-EIGHT-QUICK-ONES, UI 2 (2026-09-16), the servers' shape
+        # (identuum-idp-oss / -ce, 2026-09-14): the record opened above was
+        # bound to THIS run, attempt, commit and job by `ci-record.sh produce`
+        # (its ci-context is in the record's cites line); `check` refuses a
+        # record that is absent, empty, malformed or belongs to another run,
+        # and appends the one `ci-run:` provenance line the ci-witness judge
+        # (make ci-witness, after make ci-fetch RUN=<id>) REFUSES a committed
+        # record without. Even a red or interrupted run owes its own record:
+        # if: always(), and a missing record fails the job HERE — the old
+        # "stays warn: the job died before init" reason is retired, because
+        # this job promises a record and missing output is a failure of that
+        # promise, not a failure to be repainted as the upload's.
         if: always()
-        run: |
-          if [ -f GATE-RUN.ci.txt ]; then
-            echo "ci-run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} attempt=${GITHUB_RUN_ATTEMPT} sha=${GITHUB_SHA}" >> GATE-RUN.ci.txt
-          fi
+        run: bash scripts/ci-record.sh check GATE-RUN.ci.txt
 
       - name: Upload the gate run record
-        # if-no-files-found stays warn: when the job dies before init there is
-        # no record, and this step must not repaint that failure as its own.
+        # if: always() — a red or half-dead run must still upload its record;
+        # an INCOMPLETE record that names the unrun steps is the point.
+        # if-no-files-found: error — the check step above already failed the
+        # job when the record is missing; this step must never quietly skip.
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gate-run-ci-node${{ matrix.node }}
           path: GATE-RUN.ci.txt
-          if-no-files-found: warn
+          if-no-files-found: error
