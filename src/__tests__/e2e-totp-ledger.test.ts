@@ -113,7 +113,9 @@ describe("unconsumed TOTP windows", () => {
     // secret issued step N again and the appliance refused the enrolment.
     resetTOTPLedgerForTests(null);
     const step = totpStep(T0);
-    const newSecret = "GEZDGNBVGY3TQOJQ";
+    // A second seed that DECLARES itself fake: credential-transparency accepts
+    // only the RFC 6238 test seed or one repeated character as a TOTP seed.
+    const newSecret = "AAAAAAAAAAAAAAAA";
     const before = claimUnconsumedTOTPWindow(SECRET, USER, T0);
     const enrol = claimUnconsumedTOTPWindow(newSecret, USER, T0);
     expect(before?.step).toBe(step);
