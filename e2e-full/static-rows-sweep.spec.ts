@@ -52,13 +52,13 @@ async function bearerFor(email: string, password: string, totpSecret: string): P
   // one retry from a fresh step; a second refusal is a wrong seed, said so.
   const verify = (code: string) =>
     api(IDP_BASE, "POST", "/api/v1/auth/login/mfa", { session_id: login.json.session_id, code });
-  let v = await verify(await unconsumedTOTP(totpSecret));
+  let v = await verify(await unconsumedTOTP(totpSecret, email));
   if (!(v.status === 200 && v.json.access_token)) {
-    v = await verify(await unconsumedTOTPAfterFreshStep(totpSecret));
+    v = await verify(await unconsumedTOTPAfterFreshStep(totpSecret, email));
   }
   if (v.status === 200 && v.json.access_token) return v.json.access_token as string;
   throw new Error(
-    `${refusedAfterFreshStepMessage("org_admin login", totpSecret)} Last verify status: ${v.status}.`
+    `${refusedAfterFreshStepMessage("org_admin login", email)} Last verify status: ${v.status}.`
   );
 }
 
@@ -82,6 +82,10 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
   let oaTotpSecret = "";
   let saTotpSecret = "";
   let ouTotpSecret = "";
+  // Their identities: the issued-step ledger is keyed by the user, like the
+  // appliance's single-use guard (THE-ELEVEN-MISMATCHES).
+  let oaEmail = "";
+  let ouEmail = "";
 
   test.beforeAll(async () => {
     const bootstrapPassword = process.env.IDENTUUM_E2E_FULL_ADMIN_PASSWORD ?? "";
@@ -94,6 +98,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     if (!fx) throw new Error("org_admin envelope missing — phase must run after the provisioner");
     oa = await bearerFor(fx.email, fx.password, fx.totpSecret);
     oaTotpSecret = fx.totpSecret;
+    oaEmail = fx.email;
 
     // THE-ROLE-CENSUS T4-1: the org_user is the third credential type the
     // suite must cover — the fixture org's REQUIRED MFA policy means it is
@@ -102,6 +107,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     if (!ufx) throw new Error("org_user envelope missing — phase must run after the provisioner");
     ou = await bearerFor(ufx.email, ufx.password, ufx.totpSecret);
     ouTotpSecret = ufx.totpSecret;
+    ouEmail = ufx.email;
 
     const prof = await api(IDP_BASE, "GET", "/api/v1/profile", undefined, oa);
     if (prof.status !== 200) throw new Error(`profile bootstrap read: ${prof.status}`);
@@ -279,7 +285,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       IDP_BASE,
       "POST",
       "/api/v1/me/mfa/recovery-codes/regenerate",
-      { code: await unconsumedTOTP(oaTotpSecret) },
+      { code: await unconsumedTOTP(oaTotpSecret, oaEmail) },
       oa
     );
     if (r.status !== 200) {
@@ -287,7 +293,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
         IDP_BASE,
         "POST",
         "/api/v1/me/mfa/recovery-codes/regenerate",
-        { code: await unconsumedTOTPAfterFreshStep(oaTotpSecret) },
+        { code: await unconsumedTOTPAfterFreshStep(oaTotpSecret, oaEmail) },
         oa
       );
     }
@@ -937,15 +943,15 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     // principals (oa in ROW 21, sa and ou here), so no code is consumed
     // twice. Same fault semantics as the table: a non-200 is a fault.
     for (const live of [
-      { bearer: sa, secret: saTotpSecret, label: "recovery-regen sa" },
-      { bearer: ou, secret: ouTotpSecret, label: "recovery-regen ou" },
+      { bearer: sa, secret: saTotpSecret, subject: SITE_ADMIN_EMAIL, label: "recovery-regen sa" },
+      { bearer: ou, secret: ouTotpSecret, subject: ouEmail, label: "recovery-regen ou" },
     ]) {
       let res: { status: number; json: Json } = { status: 0, json: {} };
       res = await api(
         IDP_BASE,
         "POST",
         "/api/v1/me/mfa/recovery-codes/regenerate",
-        { code: await unconsumedTOTP(live.secret) },
+        { code: await unconsumedTOTP(live.secret, live.subject) },
         live.bearer
       );
       if (res.status !== 200) {
@@ -953,7 +959,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
           IDP_BASE,
           "POST",
           "/api/v1/me/mfa/recovery-codes/regenerate",
-          { code: await unconsumedTOTPAfterFreshStep(live.secret) },
+          { code: await unconsumedTOTPAfterFreshStep(live.secret, live.subject) },
           live.bearer
         );
       }

@@ -61,13 +61,13 @@ async function bearerFor(email: string, password: string, totpSecret: string): P
   // one retry from a fresh step; a second refusal is a wrong seed, said so.
   const verify = (code: string) =>
     api(IDP_BASE, "POST", "/api/v1/auth/login/mfa", { session_id: sessionId, code });
-  let v = await verify(await unconsumedTOTP(totpSecret));
+  let v = await verify(await unconsumedTOTP(totpSecret, email));
   if (!(v.status === 200 && v.json.access_token)) {
-    v = await verify(await unconsumedTOTPAfterFreshStep(totpSecret));
+    v = await verify(await unconsumedTOTPAfterFreshStep(totpSecret, email));
   }
   if (v.status === 200 && v.json.access_token) return v.json.access_token as string;
   throw new Error(
-    `${refusedAfterFreshStepMessage("bearerFor", totpSecret)} Last verify status: ${v.status}.`
+    `${refusedAfterFreshStepMessage("bearerFor", email)} Last verify status: ${v.status}.`
   );
 }
 

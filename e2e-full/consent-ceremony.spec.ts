@@ -1013,13 +1013,13 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     expect(totpSecret.length).toBeGreaterThan(0);
     let complete = await api(IDP_BASE, "POST", "/api/v1/auth/login/mfa/enroll/complete", {
       session_id: pendingId,
-      code: await unconsumedTOTP(totpSecret),
+      code: await unconsumedTOTP(totpSecret, userEmail),
     });
     if (complete.status !== 200) {
       await new Promise((r) => setTimeout(r, 1000));
       complete = await api(IDP_BASE, "POST", "/api/v1/auth/login/mfa/enroll/complete", {
         session_id: pendingId,
-        code: await unconsumedTOTPAfterFreshStep(totpSecret),
+        code: await unconsumedTOTPAfterFreshStep(totpSecret, userEmail),
       });
     }
     expectStatus(complete, 200, "enroll/complete → 200 (user now TOTP-enrolled)");
@@ -1099,7 +1099,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       failOnStatusCode: false,
       maxRedirects: 0,
       form: {
-        totp_code: await unconsumedTOTP(totpSecret),
+        totp_code: await unconsumedTOTP(totpSecret, userEmail),
         return_to: returnTo,
         [reCsrf?.[1] ?? "csrf_token"]: reCsrf?.[2] ?? "",
       },
@@ -1113,7 +1113,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
         failOnStatusCode: false,
         maxRedirects: 0,
         form: {
-          totp_code: await unconsumedTOTPAfterFreshStep(totpSecret),
+          totp_code: await unconsumedTOTPAfterFreshStep(totpSecret, userEmail),
           return_to: returnTo,
           [againCsrf?.[1] ?? "csrf_token"]: againCsrf?.[2] ?? "",
         },
@@ -1266,7 +1266,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     await page.goto(`${IDP_ORIGIN}/api/v1/auth/browser-login`);
     await page.fill('input[name="email"]', userEmail);
     await page.fill('input[name="password"]', userPw);
-    await page.fill('input[name="totp_code"]', await unconsumedTOTP(userTotpSecret));
+    await page.fill('input[name="totp_code"]', await unconsumedTOTP(userTotpSecret, userEmail));
     await page.click('button[type="submit"]');
     await page.waitForLoadState("domcontentloaded");
 
@@ -1329,7 +1329,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     expectStatus(pending, 401, "TOTP-enrolled JSON login → 401 pending");
     const verify = await api(IDP_BASE, "POST", "/api/v1/auth/login/mfa", {
       session_id: (pending.json as { session_id?: string }).session_id ?? "",
-      code: await unconsumedTOTP(userTotpSecret),
+      code: await unconsumedTOTP(userTotpSecret, userEmail),
     });
     expectStatus(verify, 200, "TOTP verify → 200 bearer");
     const bearer = (verify.json as { access_token?: string }).access_token ?? "";
@@ -1485,7 +1485,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     expectStatus(pending, 401, "TOTP-enrolled JSON login → 401 pending");
     const verify = await api(IDP_BASE, "POST", "/api/v1/auth/login/mfa", {
       session_id: (pending.json as { session_id?: string }).session_id ?? "",
-      code: await unconsumedTOTP(userTotpSecret),
+      code: await unconsumedTOTP(userTotpSecret, userEmail),
     });
     expectStatus(verify, 200, "TOTP verify → 200 bearer");
     const ouBearer = (verify.json as { access_token?: string }).access_token ?? "";
@@ -1554,7 +1554,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       form: {
         email: userEmail,
         password: userPw,
-        totp_code: await unconsumedTOTP(userTotpSecret),
+        totp_code: await unconsumedTOTP(userTotpSecret, userEmail),
         [loginCsrf?.[1] ?? "csrf_token"]: loginCsrf?.[2] ?? "",
       },
     });
@@ -1766,7 +1766,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       form: {
         email: userEmail,
         password: userPw,
-        totp_code: await unconsumedTOTP(userTotpSecret),
+        totp_code: await unconsumedTOTP(userTotpSecret, userEmail),
         [loginCsrf?.[1] ?? "csrf_token"]: loginCsrf?.[2] ?? "",
       },
     });
@@ -1923,7 +1923,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       form: {
         email: userEmail,
         password: userPw,
-        totp_code: await unconsumedTOTP(userTotpSecret),
+        totp_code: await unconsumedTOTP(userTotpSecret, userEmail),
         [loginCsrf?.[1] ?? "csrf_token"]: loginCsrf?.[2] ?? "",
       },
     });

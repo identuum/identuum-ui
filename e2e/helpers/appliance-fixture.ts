@@ -386,14 +386,16 @@ async function firstLoginBearerAsync(
   const secret = init.json.secret as string;
   let complete = await api(base, "POST", "/api/v1/auth/login/mfa/enroll/complete", {
     session_id: sessionId,
-    code: await unconsumedTOTP(secret),
+    // Keyed by the USER (THE-ELEVEN-MISMATCHES): a re-enrolment mints a new
+    // secret for an account that may have presented a code seconds ago.
+    code: await unconsumedTOTP(secret, email),
   });
   if (complete.status !== 200) {
     // One retry from a fresh step (THE-SUITE-THAT-REPLAYED): the enrolment
     // code is single-use like every other, so the retry never re-presents it.
     complete = await api(base, "POST", "/api/v1/auth/login/mfa/enroll/complete", {
       session_id: sessionId,
-      code: await unconsumedTOTPAfterFreshStep(secret),
+      code: await unconsumedTOTPAfterFreshStep(secret, email),
     });
   }
   must(complete.status === 200, `${email}: enroll/complete → ${complete.status}`);
@@ -427,8 +429,8 @@ export async function totpLoginWorks(
       api(base, "POST", "/api/v1/auth/login/mfa", { session_id: sessionId, code });
     const ok = (v: { status: number; json: Record<string, unknown> }) =>
       v.status === 200 && Boolean(v.json.access_token || v.json.token);
-    if (ok(await verifyWith(await unconsumedTOTP(totpSecret)))) return true;
-    return ok(await verifyWith(await unconsumedTOTPAfterFreshStep(totpSecret)));
+    if (ok(await verifyWith(await unconsumedTOTP(totpSecret, email)))) return true;
+    return ok(await verifyWith(await unconsumedTOTPAfterFreshStep(totpSecret, email)));
   } catch {
     return false;
   }

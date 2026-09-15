@@ -5,22 +5,22 @@
     {
       "rule_id": "MFA-SA-1",
       "change_class": "test_fingerprint_changed",
-      "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): the enrolment spec's code entry now draws from unconsumedTOTP() (a step this run has not presented) instead of generateTOTP(secret, 0); the assertion — the site-admin MFA enrolment ceremony completes end-to-end with recovery codes shown — is untouched. Reviewed and rehashed d1b659957e2b -> fa2b4f54f580."
+      "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): the enrolment spec's code entry now draws from unconsumedTOTP() (a step this run has not presented) instead of generateTOTP(secret, 0); reviewed and rehashed d1b659957e2b -> fa2b4f54f580. THE-ELEVEN-MISMATCHES (2026-09-15): the same call names the user whose code it presents (the ledger is keyed by the user, like the appliance's guard); rehashed fa2b4f54f580 -> 546b3ab06577. The assertion — the site-admin MFA enrolment ceremony completes end-to-end with recovery codes shown — is untouched."
     },
     {
       "rule_id": "WIZARD-1",
       "change_class": "test_fingerprint_changed",
-      "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): the wizard spec's TOTP entry and its retry now draw from unconsumedTOTP() and unconsumedTOTPAfterFreshStep() instead of generateTOTP(secret, 0) and (secret, 1); the assertion — the OSS setup wizard runs fresh-appliance to signed-in site_admin in one ceremony — is untouched. Reviewed and rehashed 01cc6700c00f -> 25bae8d65d0d."
+      "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): the wizard spec's TOTP entry and its retry now draw from unconsumedTOTP() and unconsumedTOTPAfterFreshStep() instead of generateTOTP(secret, 0) and (secret, 1); rehashed 01cc6700c00f -> 25bae8d65d0d. THE-ELEVEN-MISMATCHES (2026-09-15): both calls name the pinned login as the user; rehashed 25bae8d65d0d -> 04602ccc358b. The assertion — the OSS setup wizard runs fresh-appliance to signed-in site_admin in one ceremony — is untouched."
     },
     {
       "rule_id": "COOKIE-1",
       "change_class": "test_fingerprint_changed",
-      "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): login.spec's two TOTP entries now draw from unconsumedTOTP() instead of generateTOTP(SITE_ADMIN_TOTP_SECRET); the assertion — a stale cookie never blocks a second sign-in in the same browser context — is untouched. Reviewed and rehashed b86ce557419c -> 9462e71dc58a."
+      "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): login.spec's two TOTP entries now draw from unconsumedTOTP() instead of generateTOTP(SITE_ADMIN_TOTP_SECRET); rehashed b86ce557419c -> 9462e71dc58a. THE-ELEVEN-MISMATCHES (2026-09-15): both name SITE_ADMIN_EMAIL as the user; rehashed 9462e71dc58a -> ba1d30c15861. The assertion — a stale cookie never blocks a second sign-in in the same browser context — is untouched."
     },
     {
       "rule_id": "PIN-CHIP-1",
       "change_class": "test_fingerprint_changed",
-      "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): same file as WIZARD-1 (e2e/oss-wizard-ui.spec.ts @ e2e-run), same TOTP-entry change; the assertion — the wizard displays the pinned login read-only and demotes the typed address to contact email — is untouched. Reviewed and rehashed 01cc6700c00f -> 25bae8d65d0d."
+      "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): same file as WIZARD-1 (e2e/oss-wizard-ui.spec.ts @ e2e-run), same TOTP-entry change; rehashed 01cc6700c00f -> 25bae8d65d0d. THE-ELEVEN-MISMATCHES (2026-09-15): same file, same user-argument change; rehashed 25bae8d65d0d -> 04602ccc358b. The assertion — the wizard displays the pinned login read-only and demotes the typed address to contact email — is untouched."
     }
   ]
 }

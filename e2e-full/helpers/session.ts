@@ -67,9 +67,9 @@ export async function siteAdminSession(
 
     // One attempt from an unconsumed window; on refusal exactly one more from
     // a fresh step, which cannot be a replay by construction.
-    let v = await verify(await unconsumedTOTP(secret));
+    let v = await verify(await unconsumedTOTP(secret, email));
     if (v.status !== 200) {
-      v = await verify(await unconsumedTOTPAfterFreshStep(secret));
+      v = await verify(await unconsumedTOTPAfterFreshStep(secret, email));
     }
     if (v.status === 200) {
       const bearer = (v.json.access_token as string) ?? "";
@@ -82,7 +82,7 @@ export async function siteAdminSession(
     // appliance; a deletion here would only destroy the evidence and take
     // every later spec down with a missing-file error.
     throw new Error(
-      `${refusedAfterFreshStepMessage("site_admin mfa login", secret)} ` +
+      `${refusedAfterFreshStepMessage("site_admin mfa login", email)} ` +
         `The seed is stale, not replayed. Last verify status: ${v.status}. Seed file left in place: ${SECRET_FILE}. ` +
         `THE ENROLMENT PATH FAILED FIRST, and this is why: ${String(enrolErr)}`
     );

@@ -111,7 +111,7 @@ test.describe("/setup — OSS wizard UI end-to-end (fresh appliance → signed-i
     const secret = (await page.locator("code.select-all").innerText()).trim();
     expect(secret.length).toBeGreaterThan(0);
 
-    await page.getByLabel("Verification code").fill(await unconsumedTOTP(secret));
+    await page.getByLabel("Verification code").fill(await unconsumedTOTP(secret, PINNED_LOGIN));
     await page.getByRole("button", { name: /Verify/ }).click();
 
     // OSS enrollment returns recovery codes — the form shows them once
@@ -121,7 +121,9 @@ test.describe("/setup — OSS wizard UI end-to-end (fresh appliance → signed-i
     try {
       await savedCodes.waitFor({ timeout: 10_000 });
     } catch {
-      await page.getByLabel("Verification code").fill(await unconsumedTOTPAfterFreshStep(secret));
+      await page
+        .getByLabel("Verification code")
+        .fill(await unconsumedTOTPAfterFreshStep(secret, PINNED_LOGIN));
       await page.getByRole("button", { name: /Verify/ }).click();
       await savedCodes.waitFor({ timeout: 10_000 });
     }

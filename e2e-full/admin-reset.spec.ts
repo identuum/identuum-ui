@@ -57,14 +57,12 @@ async function totpBearer(email: string, password: string, secret: string): Prom
   // one retry from a fresh step; a second refusal is a wrong seed, said so.
   const verify = (code: string) =>
     api(IDP_BASE, "POST", "/api/v1/auth/login/mfa", { session_id: login.json.session_id, code });
-  let v = await verify(await unconsumedTOTP(secret));
+  let v = await verify(await unconsumedTOTP(secret, email));
   if (!(v.status === 200 && v.json.access_token)) {
-    v = await verify(await unconsumedTOTPAfterFreshStep(secret));
+    v = await verify(await unconsumedTOTPAfterFreshStep(secret, email));
   }
   if (v.status === 200 && v.json.access_token) return v.json.access_token as string;
-  throw new Error(
-    `${refusedAfterFreshStepMessage(email, secret)} Last verify status: ${v.status}.`
-  );
+  throw new Error(`${refusedAfterFreshStepMessage(email, email)} Last verify status: ${v.status}.`);
 }
 
 test.describe.configure({ mode: "serial" });

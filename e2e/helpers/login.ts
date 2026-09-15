@@ -292,7 +292,7 @@ export async function loginAsSiteAdmin(page: Page): Promise<void> {
   await passwordInput.fill(SITE_ADMIN_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
 
-  await completeTOTPWithRetry(page, SITE_ADMIN_TOTP_SECRET, /\/site-admin/);
+  await completeTOTPWithRetry(page, SITE_ADMIN_EMAIL, SITE_ADMIN_TOTP_SECRET, /\/site-admin/);
 
   // Save session for future runs and record TOTP cooldown
   await saveSession(ctx, SITE_ADMIN_SESSION_FILE);
@@ -365,7 +365,7 @@ export async function loginAsSiteAdminMFAOptional(page: Page): Promise<void> {
       .then(() => true)
       .catch(() => false);
     if (hasTOTP) {
-      await completeTOTPWithRetry(page, SITE_ADMIN_TOTP_SECRET, /\/site-admin/);
+      await completeTOTPWithRetry(page, SITE_ADMIN_EMAIL, SITE_ADMIN_TOTP_SECRET, /\/site-admin/);
       await saveSession(ctx, SITE_ADMIN_SESSION_FILE);
       totpLastSuccessMs.set(SITE_ADMIN_EMAIL, Date.now());
       saveCooldownState(totpLastSuccessMs);
@@ -515,7 +515,7 @@ export async function loginAsOrgAdmin(page: Page): Promise<void> {
       .then(() => true)
       .catch(() => false);
     if (hasTOTP) {
-      await completeTOTPWithRetry(page, ORG_ADMIN_TOTP_SECRET, /\/org-admin/);
+      await completeTOTPWithRetry(page, ORG_ADMIN_EMAIL, ORG_ADMIN_TOTP_SECRET, /\/org-admin/);
       await saveSession(ctx, ORG_ADMIN_SESSION_FILE);
       totpLastSuccessMs.set(ORG_ADMIN_EMAIL, Date.now());
       saveCooldownState(totpLastSuccessMs);
@@ -556,7 +556,7 @@ export async function loginAsOrgUser(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Sign in" }).click();
 
   // The fixture org requires MFA, so the TOTP step is mandatory for org_users.
-  await completeTOTPWithRetry(page, ORG_USER_TOTP_SECRET, /\/dashboard/);
+  await completeTOTPWithRetry(page, ORG_USER_EMAIL, ORG_USER_TOTP_SECRET, /\/dashboard/);
 
   await saveSession(ctx, ORG_USER_SESSION_FILE);
   totpLastSuccessMs.set(ORG_USER_EMAIL, Date.now());
@@ -576,13 +576,15 @@ export async function loginAsOrgUser(page: Page): Promise<void> {
  */
 async function completeTOTPWithRetry(
   page: Page,
+  email: string,
   secret: string,
   successPattern: RegExp
 ): Promise<void> {
   const codeInput = page.getByLabel("Verification code");
   await codeInput.waitFor({ state: "visible" });
-  // THE-SUITE-THAT-REPLAYED: a code from a window this run has not presented.
-  await codeInput.fill(await unconsumedTOTP(secret));
+  // THE-SUITE-THAT-REPLAYED: a code from a window this run has not presented
+  // for this user (the ledger is keyed by the user, like the appliance's guard).
+  await codeInput.fill(await unconsumedTOTP(secret, email));
   await page.getByRole("button", { name: "Verify" }).click();
 
   // Wait up to 8 seconds for successful navigation. If still on TOTP page,
@@ -626,7 +628,7 @@ async function completeTOTPWithRetry(
     }
     // The window boundary above has passed, so the current step is fresh;
     // the ledger still guarantees it was never presented.
-    await inputAfterWait.fill(await unconsumedTOTP(secret));
+    await inputAfterWait.fill(await unconsumedTOTP(secret, email));
     await page.getByRole("button", { name: "Verify" }).click();
     // Race the success navigation against a persistent rejection banner so a
     // wrong TOTP SECRET fails FAST with an actionable diagnostic instead of

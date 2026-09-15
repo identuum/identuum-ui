@@ -47,7 +47,7 @@ test.describe("OSS site-admin overview smoke", () => {
       data: {
         email: ADMIN_EMAIL,
         password: ADMIN_PASSWORD,
-        totp_code: await unconsumedTOTP(ADMIN_TOTP_SECRET),
+        totp_code: await unconsumedTOTP(ADMIN_TOTP_SECRET, ADMIN_EMAIL),
         remember_me: false,
       },
     });

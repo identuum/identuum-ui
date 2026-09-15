@@ -66,19 +66,30 @@ export function generateTOTP(secret: string, windowOffset = 0): string {
 
 // ── Issued-step ledger (THE-SUITE-THAT-REPLAYED, 2026-09-13) ─────────────────
 //
-// The appliance accepts a TOTP code once per (user, step). This ledger remembers,
-// per secret, every step this suite has already PRESENTED, so a later login with
-// the same secret picks a window it has not used: the current step, then the
-// next, then the previous — all three inside the server's ±1 window — and, when
-// all three are spent, waits for the next step boundary, after which a fresh
-// step exists by construction. Steps are marked when a code is ISSUED, not when
-// the server answers (pessimistic): a wasted step costs at most one wait, a
-// reused step costs a red run.
+// The appliance accepts a TOTP code once per (USER, step). This ledger
+// remembers, per user, every step this suite has already PRESENTED, so a later
+// login by the same user picks a window it has not used: the current step,
+// then the next, then the previous — all three inside the server's ±1 window —
+// and, when all three are spent, waits for the next step boundary, after which
+// a fresh step exists by construction. Steps are marked when a code is ISSUED,
+// not when the server answers (pessimistic): a wasted step costs at most one
+// wait, a reused step costs a red run.
 //
-// The ledger is keyed by a digest of the secret, never the secret, and is
-// mirrored to a run-local file under the gitignored e2e/.auth directory so the
-// separate Playwright processes of one harness run (api-suite, provisioner,
-// devloop) share it. Entries older than the server window are dropped on load.
+// KEYED BY THE USER, NOT THE SECRET (THE-ELEVEN-MISMATCHES, 2026-09-15). The
+// first cut keyed this ledger by a digest of the secret, and the appliance
+// keys its guard by the user: when site_admin was reset and re-enrolled with a
+// NEW secret inside the same 30-second step as its pre-reset login, the new
+// secret's ledger was empty, the current step was issued again for the same
+// user, and the appliance refused the enrolment as the replay it was
+// (admin-reset, mint of 2026-09-15). Every caller names the user whose code it
+// presents — every login helper already has the email in hand — so a user's
+// steps are one set across every secret that user ever holds in a run.
+//
+// The ledger is keyed by a digest of the identity, never the identity or the
+// secret, and is mirrored to a run-local file under the gitignored e2e/.auth
+// directory so the separate Playwright processes of one harness run
+// (api-suite, provisioner, devloop) share it. Entries older than the server
+// window are dropped on load.
 
 export type TOTPLedger = Map<string, Set<number>>;
 
@@ -87,8 +98,9 @@ const LEDGER_FILE = resolve(__dirname, "..", ".auth", "totp-issued-steps.json");
 let ledger: TOTPLedger | null = null;
 let ledgerPath: string | null = LEDGER_FILE;
 
-function secretKey(secret: string): string {
-  return crypto.createHash("sha256").update(secret).digest("hex").slice(0, 16);
+/** The ledger key for a user (a digest — the identity itself is never written). */
+function ledgerKey(subject: string): string {
+  return crypto.createHash("sha256").update(`user:${subject}`).digest("hex").slice(0, 16);
 }
 
 function loadLedger(nowMs: number): TOTPLedger {
@@ -133,9 +145,9 @@ export function resetTOTPLedgerForTests(path: string | null = null): void {
   ledgerPath = path;
 }
 
-/** The steps this suite has already presented for a secret (for diagnostics). */
-export function presentedTOTPSteps(secret: string, nowMs: number = Date.now()): number[] {
-  const steps = loadLedger(nowMs).get(secretKey(secret));
+/** The steps this suite has already presented for a user (for diagnostics). */
+export function presentedTOTPSteps(subject: string, nowMs: number = Date.now()): number[] {
+  const steps = loadLedger(nowMs).get(ledgerKey(subject));
   return steps ? [...steps].sort((a, b) => a - b) : [];
 }
 
@@ -148,15 +160,17 @@ export interface ClaimedTOTP {
 
 /**
  * Claims the first window in [current, next, previous] whose step this suite
- * has not presented yet, marks it as presented, and returns its code. Returns
- * null when all three are spent — the caller waits for the next step.
+ * has not presented for the user yet, marks it as presented, and returns its
+ * code computed from the secret. Returns null when all three are spent — the
+ * caller waits for the next step.
  */
 export function claimUnconsumedTOTPWindow(
   secret: string,
+  subject: string,
   nowMs: number = Date.now()
 ): ClaimedTOTP | null {
   const l = loadLedger(nowMs);
-  const key = secretKey(secret);
+  const key = ledgerKey(subject);
   const used = l.get(key) ?? new Set<number>();
   const current = totpStep(nowMs);
   for (const offset of [0, 1, -1]) {
@@ -172,11 +186,11 @@ export function claimUnconsumedTOTPWindow(
 
 /** Thrown when even a fresh step yielded no unconsumed window (a bug, not a race). */
 export class NoUnconsumedTOTPWindowError extends Error {
-  constructor(secret: string, nowMs: number) {
+  constructor(subject: string, nowMs: number) {
     const current = totpStep(nowMs);
     super(
       `no unconsumed TOTP window: steps ${current - 1}, ${current} and ${current + 1} were all already presented in this run ` +
-        `(presented steps for this secret: ${presentedTOTPSteps(secret, nowMs).join(", ") || "none"}); ` +
+        `(presented steps for this user: ${presentedTOTPSteps(subject, nowMs).join(", ") || "none"}); ` +
         "a fresh step was waited for and still yielded nothing — the ledger is inconsistent, this is not a replay and not a stale seed"
     );
     this.name = "NoUnconsumedTOTPWindowError";
@@ -194,21 +208,26 @@ const realClock: TOTPClock = {
 };
 
 /**
- * A code for a step this suite has NOT presented before. Prefers the current
- * step, then the next, then the previous; when all three are spent it waits
- * for the next step boundary — the only case in which waiting is the honest
- * answer — and claims again. Never returns a code that was already presented.
+ * A code for a step this suite has NOT presented for the user before. Prefers
+ * the current step, then the next, then the previous; when all three are
+ * spent it waits for the next step boundary — the only case in which waiting
+ * is the honest answer — and claims again. Never returns a code for a step
+ * the user already presented, whatever secret it was computed from.
+ *
+ * `subject` is the user the code will be presented for (the login email):
+ * the appliance's single-use guard is keyed by the user, so the ledger is too.
  */
 export async function unconsumedTOTP(
   secret: string,
+  subject: string,
   clock: TOTPClock = realClock
 ): Promise<string> {
-  const first = claimUnconsumedTOTPWindow(secret, clock.now());
+  const first = claimUnconsumedTOTPWindow(secret, subject, clock.now());
   if (first) return first.code;
   await clock.sleep(msUntilNextTOTPStep(clock.now()));
-  const second = claimUnconsumedTOTPWindow(secret, clock.now());
+  const second = claimUnconsumedTOTPWindow(secret, subject, clock.now());
   if (second) return second.code;
-  throw new NoUnconsumedTOTPWindowError(secret, clock.now());
+  throw new NoUnconsumedTOTPWindowError(subject, clock.now());
 }
 
 /**
@@ -220,10 +239,11 @@ export async function unconsumedTOTP(
  */
 export async function unconsumedTOTPAfterFreshStep(
   secret: string,
+  subject: string,
   clock: TOTPClock = realClock
 ): Promise<string> {
   await clock.sleep(msUntilNextTOTPStep(clock.now()));
-  return unconsumedTOTP(secret, clock);
+  return unconsumedTOTP(secret, subject, clock);
 }
 
 /**
@@ -233,12 +253,12 @@ export async function unconsumedTOTPAfterFreshStep(
  */
 export function refusedAfterFreshStepMessage(
   who: string,
-  secret: string,
+  subject: string,
   nowMs: number = Date.now()
 ): string {
   return (
-    `${who}: the appliance refused a TOTP code from a step this run had never presented ` +
-    `(presented steps for this secret: ${presentedTOTPSteps(secret, nowMs).join(", ") || "none"}; current step ${totpStep(nowMs)}). ` +
+    `${who}: the appliance refused a TOTP code from a step this run had never presented for this user ` +
+    `(presented steps for this user: ${presentedTOTPSteps(subject, nowMs).join(", ") || "none"}; current step ${totpStep(nowMs)}). ` +
     "That is not a replay — every code came from an unconsumed window — so the secret does not belong to this appliance " +
     "(a seed captured from a previous appliance, or a different account). Nothing was deleted: the seed file and the ledger are left for diagnosis."
   );

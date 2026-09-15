@@ -70,11 +70,13 @@ describe("the e2e site_admin seed never outlives its appliance [SEED-NEVER-OUTLI
 
   it("the failing path presents only unconsumed windows, retries once from a fresh step, and deletes NOTHING", () => {
     const src = session();
-    expect(src, "every presented code must come from a window this run has not used").toContain(
-      "unconsumedTOTP(secret)"
+    // The ledger is keyed by the USER, like the appliance's guard
+    // (THE-ELEVEN-MISMATCHES): every code names whose it is.
+    expect(src, "every presented code must come from a window this user has not used").toContain(
+      "unconsumedTOTP(secret, email)"
     );
     expect(src, "a refusal gets exactly one retry, from a fresh step").toContain(
-      "unconsumedTOTPAfterFreshStep(secret)"
+      "unconsumedTOTPAfterFreshStep(secret, email)"
     );
     expect(src, "the failure must say the seed was left in place").toContain(
       "Seed file left in place"
