@@ -258,14 +258,17 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
     expect(r.json).toHaveProperty("error");
   });
 
-  test("[ROW 21] POST /me/mfa/recovery-codes/regenerate — 401 invalid_code with no proof; 200 with a live TOTP (REALLY rotates; disposable appliance only)", async () => {
+  test("[ROW 21] POST /me/mfa/recovery-codes/regenerate — 400 code_required with no proof; 200 with a live TOTP (REALLY rotates; disposable appliance only)", async () => {
     // THE-OSS-HALF-OF-THE-RULING (2026-09-10, owner ruling (c) — both
     // contracts pinned): the regenerate takes a current TOTP code as its
     // ONLY proof (a recovery code must not buy more recovery codes), so the
-    // body-less call the row used to make is now REFUSED with the route
-    // family's cause-neutral 401 invalid_code — and a rotation that sends a
-    // live code still answers 200 and still really rotates. The status
-    // alone would have read this hardening as drift; the row says which.
+    // body-less call the row used to make is REFUSED — and a rotation that
+    // sends a live code still answers 200 and still really rotates. Since
+    // THE-EIGHT-QUICK-ONES (OSS 1, 2026-09-16) a code nobody sent is 400
+    // code_required BEFORE the service is consulted, the shape identuum-idp-ce
+    // has had since 8fbb6a0 (until then: the route family's cause-neutral 401
+    // invalid_code, which a PRESENT wrong code still gets). The status alone
+    // would have read this as drift; the row says which.
     const bare = await api(
       IDP_BASE,
       "POST",
@@ -273,8 +276,8 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       undefined,
       oa
     );
-    expectStatus(bare, 401);
-    expect(bare.json.error).toBe("invalid_code");
+    expectStatus(bare, 400);
+    expect(bare.json.error).toBe("code_required");
 
     // The rotation half. OSS verifies the regenerate's TOTP in a ±1-step
     // window with no last-accepted-step guard, so the current window's code
