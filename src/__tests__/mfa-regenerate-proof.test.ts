@@ -78,12 +78,17 @@ describe("regenerateRecoveryCodesAction — the code is required and sent", () =
     expect(action).toMatch(/regenerateOwnMfaRecoveryCodes\(\{\s*code:\s*parsed\.data\.code\s*\}\)/);
   });
 
-  it("has one 401 message naming the authenticator code and the recovery-code exclusion", () => {
+  it("has one refused-proof message naming the authenticator code and the recovery-code exclusion, and a separate signed-out one", () => {
+    // THE-SIX-SMALL-ONES, UI 1 (2026-09-16): this pin used to assert the
+    // ABSENCE of the signed-out message, which pinned the defect — every 401
+    // read as a refused proof. The two truths a 401 can carry now each have
+    // their own branch and message; the refused-proof copy is unchanged.
     expect(action).toMatch(/result\.invalidProof/);
     expect(action).toMatch(
       /Could not verify the code\. Enter a current authenticator code; recovery codes cannot regenerate recovery codes\./
     );
-    expect(action).not.toMatch(/Your session has expired\. Sign in again\./);
+    expect(action).toMatch(/result\.unauthorized/);
+    expect(action).toMatch(/Your session has expired\. Sign in again\./);
   });
 
   it("has one 503 message", () => {

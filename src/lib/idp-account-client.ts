@@ -114,15 +114,39 @@ export type AccountMutationResult =
 
 type AccountMutationFailure = Extract<AccountMutationResult, { ok: false }>;
 
-function failedMutation(status: number): AccountMutationFailure {
+// THE-SIX-SMALL-ONES, UI 1 (2026-09-16): a 401 is one of two truths, and the
+// IdP says which in its body. A refused PROOF is named — identuum-idp-oss
+// answers `invalid_code`, identuum-idp-ce `invalid_proof` (both routes, both
+// cause-neutral about WHY the proof failed, never about whether it was a
+// proof at all). Anything else on a 401 — OSS `unauthorized` with a reason,
+// CE `not_authenticated`, or no JSON body — is a session that is gone.
+// Before this, every 401 set both flags and the forms told a signed-out
+// user their code was wrong.
+const PROOF_REFUSED_CODES = new Set(["invalid_code", "invalid_proof"]);
+
+/** The IdP's `error` code from a refusal body, or undefined when there is none. */
+async function serverErrorCode(res: Response): Promise<string | undefined> {
+  try {
+    const data: unknown = await res.json();
+    const code = (data as { error?: unknown } | null)?.error;
+    return typeof code === "string" ? code : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function failedMutation(status: number, serverError?: string): AccountMutationFailure {
+  const invalidProof =
+    status === 401 && serverError !== undefined && PROOF_REFUSED_CODES.has(serverError);
   return {
     ok: false,
     status,
     unavailable: routeUnavailable(status),
-    unauthorized: status === 401,
+    // On a 401 the two are exclusive: a refused proof is not a lost session.
+    unauthorized: status === 401 && !invalidProof,
     forbidden: status === 403,
     notEnrolled: status === 400,
-    invalidProof: status === 401,
+    invalidProof,
   };
 }
 
@@ -237,7 +261,7 @@ export async function regenerateOwnMfaRecoveryCodes(input: {
       cache: "no-store",
     });
 
-    if (!res.ok) return failedMutation(res.status);
+    if (!res.ok) return failedMutation(res.status, await serverErrorCode(res));
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json();
@@ -266,7 +290,7 @@ export async function disableOwnMfa(input: {
       cache: "no-store",
     });
 
-    if (!res.ok) return failedMutation(res.status);
+    if (!res.ok) return failedMutation(res.status, await serverErrorCode(res));
     return { ok: true };
   } catch {
     return failedMutation(0);

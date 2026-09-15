@@ -71,6 +71,13 @@ export async function regenerateRecoveryCodesAction(
     if (result.notEnrolled) {
       return { phase: "error", error: "MFA is not enrolled on this account." };
     }
+    // THE-SIX-SMALL-ONES, UI 1 (2026-09-16): a session that expired between
+    // requireHumanSession and the IdP's answer is a 401 too — the client now
+    // tells it from a refused proof by what the IdP said, and the message
+    // that is true is "signed out", not "wrong code".
+    if (result.unauthorized) {
+      return { phase: "error", error: "Your session has expired. Sign in again." };
+    }
     if (result.invalidProof) {
       return {
         phase: "error",
@@ -145,6 +152,10 @@ export async function disableMfaAction(
     }
     if (result.notEnrolled) {
       return { phase: "error", error: "MFA is not enrolled on this account." };
+    }
+    // THE-SIX-SMALL-ONES, UI 1: a signed-out session is not an invalid proof.
+    if (result.unauthorized) {
+      return { phase: "error", error: "Your session has expired. Sign in again." };
     }
     if (result.invalidProof) {
       return {
