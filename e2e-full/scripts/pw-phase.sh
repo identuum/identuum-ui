@@ -105,6 +105,97 @@ elif [ "$rc" -ne 0 ]; then
 	echo "check FAILED: $PHASE failed: no test is marked failed in the JSON report, but playwright exited $rc — read the phase output above"
 fi
 
+# THE-ELEVEN-MISMATCHES (2026-09-15): READ THE BROWSER CONSOLE. For four days
+# every mint's dev server printed "Hydration failed because the server
+# rendered HTML didn't match the client" eleven times while every spec
+# passed, because nothing in this harness looked at the console — a React
+# hydration mismatch (server markup ≠ the client's first render) was
+# invisible to every gate. The phase's OWN traces (--trace on) carry every
+# console message the browser emitted; this scan reads them and FAILS the
+# phase on a React rendering or hydration error, one "check FAILED:" line per
+# hit naming the page (pathname only — never a query string) and the test.
+#
+# SCOPE, precisely — a message React's renderer wrote about markup or
+# rendering, whether the browser surfaced it as an UNCAUGHT PAGE ERROR (the
+# trace's pageError event — how React 19 under next dev reports a hydration
+# mismatch: measured, all eleven of 2026-09-15 were pageError, none console)
+# or as a console message of type error: it says "Hydration failed", "didn't
+# match the client", "while hydrating", "The above error occurred in", or
+# carries React's own https://react.dev/link/ pointer (every React 19 renderer
+# error and warning ends with one). NOT every console line, NOT every page
+# error. These classes are TOLERATED — counted in the evidence line, never
+# failed on — because the suite provokes them on purpose:
+#   - "Failed to load resource: the server responded with a status of NNN":
+#     Chromium logs every non-2xx fetch as a console error, and this suite
+#     sends wrong passwords, unauthenticated probes and a deliberate 503 stub.
+#   - everything else that is not React's (Next dev-overlay, HMR, app logs,
+#     a page error a spec injects on purpose): counted as "other" console
+#     errors and "other" page errors so a new kind is visible in the record
+#     and can be promoted to a failure by name.
+# A phase without traces (a browser-less api phase, or --trace off) is NOT
+# judged and says so instead of reading OK.
+if ! node -e '
+const { execFileSync } = require("node:child_process");
+const path = require("node:path");
+const j = require(path.resolve(process.argv[1]));
+const phase = process.argv[2];
+const traces = [];
+const walk = (s, file) => {
+  const f = (s.file || file || "").replace(/^(\.\.\/)+/, "");
+  for (const spec of s.specs || []) for (const t of spec.tests || []) for (const r of t.results || []) for (const a of r.attachments || []) {
+    if (a.name === "trace" && a.path) traces.push({ zip: a.path, test: `${f}:${spec.line} › ${spec.title}` });
+  }
+  for (const c of s.suites || []) walk(c, f);
+};
+for (const s of j.suites || []) walk(s, s.file);
+if (traces.length === 0) {
+  console.log(`browser-console: ${phase} recorded no traces (a browser-less phase, or --trace off) — the console was NOT judged`);
+  process.exit(0);
+}
+const REACT = [/Hydration failed/, /didn.t match the client/, /while hydrating/, /^The above error occurred in/, /https:\/\/react\.dev\/link\//];
+const NETWORK = /^Failed to load resource: the server responded with a status of \d+/;
+let reactHits = 0, network = 0, other = 0, otherPageErrors = 0, unreadable = 0;
+const lines = [];
+for (const { zip, test } of traces) {
+  let text;
+  try { text = execFileSync("unzip", ["-p", zip, "*.trace"], { maxBuffer: 256 * 1024 * 1024 }).toString(); }
+  catch { unreadable++; continue; }
+  let where = "?";
+  for (const line of text.split("\n")) {
+    if (!line.startsWith("{")) continue;
+    let e; try { e = JSON.parse(line); } catch { continue; }
+    if (e.type === "before" && e.params && typeof e.params.url === "string") { try { where = new URL(e.params.url, "http://x").pathname; } catch {} continue; }
+    if (e.type === "frame-snapshot" && e.snapshot && typeof e.snapshot.frameUrl === "string") { try { where = new URL(e.snapshot.frameUrl).pathname; } catch {} continue; }
+    let msg; let kind;
+    if (e.type === "event" && e.method === "pageError") {
+      msg = String(e.params?.error?.error?.message ?? e.params?.error?.message ?? "");
+      kind = "page error";
+    } else if (e.type === "console" && e.messageType === "error") {
+      msg = String(e.text ?? "");
+      kind = "console error";
+    } else continue;
+    if (REACT.some((re) => re.test(msg))) {
+      reactHits++;
+      const first = msg.split("\n")[0].slice(0, 160);
+      const tail = msg.split("https://react.dev/link/hydration-mismatch")[1] ?? "";
+      const diff = tail.split("\n").filter((l) => /^\s*[+-] /.test(l)).slice(0, 2).map((l) => l.replace(/\s+/g, " ").trim().slice(0, 100)).join(" ");
+      lines.push(`check FAILED: ${phase} browser-console: React error on ${where} in ${test} (${kind}) — ${first}${diff ? ` [diff: ${diff}]` : ""}`);
+    } else if (kind === "page error") otherPageErrors++;
+    else if (NETWORK.test(msg)) network++;
+    else other++;
+  }
+}
+for (const l of lines) console.log(l);
+// FAIL CLOSED: a trace the scan could not open is evidence it did not judge,
+// and a gate that judged nothing must not read OK (measured: every trace of a
+// kept report unreadable at a moved path read "react-errors=0").
+const red = reactHits > 0 || unreadable > 0;
+console.log(`check ${red ? "FAILED" : "OK"}: ${phase} browser-console react-errors=${reactHits} over ${traces.length} trace(s)${unreadable ? ` (${unreadable} UNREADABLE — not judged, so not green)` : ""}; tolerated: console network-resource=${network} console other=${other} page-errors other=${otherPageErrors}`);
+process.exit(red ? 1 : 0);
+' "$JSON_OUT" "$PHASE"; then
+	[ "$rc" -eq 0 ] && rc=1
+fi
+
 # KEEP THE EVIDENCE of a red phase before the next Playwright invocation wipes
 # its output directory: the traces and error-context.md under the phase's
 # output dir, and the JSON report, copied under $E2E_EVIDENCE_DIR/<phase>/.

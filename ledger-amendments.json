@@ -21,6 +21,11 @@
       "rule_id": "PIN-CHIP-1",
       "change_class": "test_fingerprint_changed",
       "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): same file as WIZARD-1 (e2e/oss-wizard-ui.spec.ts @ e2e-run), same TOTP-entry change; rehashed 01cc6700c00f -> 25bae8d65d0d. THE-ELEVEN-MISMATCHES (2026-09-15): same file, same user-argument change; rehashed 25bae8d65d0d -> 04602ccc358b. The assertion — the wizard displays the pinned login read-only and demotes the typed address to contact email — is untouched."
+    },
+    {
+      "rule_id": "BROWSER-CONSOLE-GATE-1",
+      "change_class": "rule_added",
+      "reason": "THE-ELEVEN-MISMATCHES (2026-09-15): e2e-full fails on a React rendering or hydration error in the browser console — pw-phase.sh reads every browser phase's own traces (page errors and console errors) and fails the phase on one React's renderer wrote, naming the page and the test, failing closed on an unreadable trace; network-resource console errors the suite provokes on purpose are tolerated by name. A hydration mismatch had been invisible to every gate for four days, eleven per mint. Pinned by src/__tests__/browser-console-gate-source-invariants.test.ts (red first: three of four pins failed before the scan existed), mutation red-proved on the neutralised verdict, and shown red on the runner over the pre-fix tree (react-errors=11) before the fix."
     }
   ]
 }
