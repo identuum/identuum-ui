@@ -262,10 +262,26 @@ IDP_OSS_DIR ?= ../identuum-idp-oss
 ## carry provenance, tie by commit (not digest), be finalized clean, green,
 ## complete, and name a commit on HEAD's ancestry. Being behind HEAD is
 ## reported, never failed. Fetch with `make ci-fetch RUN=<id> [NODE=22]`.
+## THE-TWO-THINGS-YESTERDAY-BROKE (2026-09-16): the shared judge (idp-oss
+## tools/ci-witness since e437b0c) REFUSES a caller that does not declare
+## which gate it is asking about and what plan it expects — and this recipe
+## declared neither, so verify stopped here. The ui's CI record is PRODUCED by
+## one line: the "Open the gate run record" step of build-and-test in
+## .github/workflows/ci.yml, whose init call names the gate label and lists
+## the plan. That line is the single definition, so the judge's expectation
+## is READ from it here (yq, already a verify tool; the matrix node in the
+## label resolves the way ci-fetch resolves it) and never written out a
+## second time: the producer and the judge cannot drift, because the judge
+## quotes the producer. A missing or unreadable step refuses by name.
 ci-witness:
 	@command -v go >/dev/null 2>&1 || { echo "ci-witness: go is not installed — the judge is a Go tool in $(IDP_OSS_DIR)/tools/ci-witness; refusing to pass silently" >&2; exit 2; }; \
 	test -d "$(IDP_OSS_DIR)/tools/ci-witness" || { echo "ci-witness: sibling judge absent at $(IDP_OSS_DIR)/tools/ci-witness — refusing to pass silently" >&2; exit 2; }; \
-	go run -C "$(IDP_OSS_DIR)" ./tools/ci-witness --repo "$(CURDIR)"
+	init=$$(yq '.jobs.build-and-test.steps[] | select(.name == "Open the gate run record") | .run' .github/workflows/ci.yml 2>/dev/null); \
+	case "$$init" in *"gate-witness.sh init GATE-RUN.ci.txt "*) ;; *) echo "ci-witness: cannot read the 'Open the gate run record' step of build-and-test from .github/workflows/ci.yml — the ui declares its CI gate and plan there and nowhere else; refusing to guess" >&2; exit 2;; esac; \
+	[ -n "$(CI_MATRIX_NODE)" ] || { echo "ci-witness: cannot read the matrix node from .github/workflows/ci.yml — the gate label names it; refusing to guess" >&2; exit 2; }; \
+	gate=$$(printf '%s' "$$init" | sed -E 's/^.*GATE-RUN\.ci\.txt "([^"]*)".*$$/\1/; s/\$$\{\{ matrix\.node \}\}/$(CI_MATRIX_NODE)/'); \
+	plan=$$(printf '%s' "$$init" | sed -E 's/^.*GATE-RUN\.ci\.txt "[^"]*" *//'); \
+	go run -C "$(IDP_OSS_DIR)" ./tools/ci-witness --repo "$(CURDIR)" --expect-gate "$$gate" --expect-plan "$$plan"
 
 ## ci-fetch: the OPERATOR step — download one NAMED CI run's record so
 ## ci-witness has something to judge. Not part of verify (a gate must not reach
