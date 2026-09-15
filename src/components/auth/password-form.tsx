@@ -127,8 +127,14 @@ export function PasswordForm({
         </a>
       </div>
 
+      {/* THE-SIX-SMALL-ONES, UI 2 (2026-09-16): announced as an alert, so a
+          screen reader hears the refusal and the e2e helpers can match the
+          role scoped to this form rather than a styling class. */}
       {serverError && (
-        <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div
+          role="alert"
+          className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+        >
           {serverError}
         </div>
       )}

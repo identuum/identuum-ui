@@ -303,8 +303,21 @@ export function LoginFlow({ onSuccess }: LoginFlowProps) {
           error={errors.email?.message}
           {...register("email")}
         />
-        {serverError && <p className="text-sm text-red-600 text-center">{serverError}</p>}
-        {passkeyError && <p className="text-sm text-red-600 text-center">{passkeyError}</p>}
+        {/* THE-SIX-SMALL-ONES, UI 2 (2026-09-16): the form's errors are
+            announced (role="alert") — a screen reader is told a login failed,
+            and the e2e helpers match the role scoped to this form instead of
+            a styling class. The page-wide brute-force banner keeps its own
+            alert outside every form. */}
+        {serverError && (
+          <p role="alert" className="text-sm text-red-600 text-center">
+            {serverError}
+          </p>
+        )}
+        {passkeyError && (
+          <p role="alert" className="text-sm text-red-600 text-center">
+            {passkeyError}
+          </p>
+        )}
         <Button type="submit" className="w-full" size="lg" loading={isSubmitting}>
           Continue
           <ChevronRight className="h-4 w-4" />

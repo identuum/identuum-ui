@@ -98,21 +98,21 @@ async function loginViaForm(page: Page, email: string, password: string): Promis
   // still navigating.
   //
   // THE-TWO-THINGS-YESTERDAY-BROKE (2026-09-16): a login ERROR is what the
-  // login FORM renders — the email step's red paragraph (login-flow.tsx),
-  // the password step's red box (password-form.tsx), a field error — or any
-  // alert the form itself may render; all of them live inside the <form>.
-  // The page-wide brute-force warning is role="alert" by design, outside
-  // every form, and always present on the harness appliance (INSECURE_DEV_MODE
-  // by design); matching ANY alert on the page let it win this race against a
-  // login that had succeeded. Scoped to the form, an alert is an error only
-  // when the form says so.
+  // login FORM renders, inside the <form>. The page-wide brute-force
+  // warning is role="alert" by design, outside every form, and always
+  // present on the harness appliance (INSECURE_DEV_MODE by design);
+  // matching ANY alert on the page let it win this race against a login
+  // that had succeeded. THE-SIX-SMALL-ONES, UI 2: the form's error region
+  // now carries role="alert" itself (login-flow.tsx, password-form.tsx),
+  // so the matcher is the role scoped to the form — semantics, never a
+  // styling class.
   const outcome = await Promise.race([
     page
       .waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 10_000 })
       .then(() => "ok" as const)
       .catch(() => "timeout" as const),
     page
-      .locator('form [role="alert"], form [class*="text-red-"]')
+      .locator('form [role="alert"]')
       .filter({ hasText: /\S/ })
       .first()
       .waitFor({ state: "visible", timeout: 10_000 })

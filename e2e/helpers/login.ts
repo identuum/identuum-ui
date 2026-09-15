@@ -419,22 +419,20 @@ export async function loginAsSiteAdminMFAOptional(page: Page): Promise<void> {
   // the page (the IDP's standard login error messages). No credential
   // value is read or printed.
   const observedURL = page.url();
-  // Common non-secret error selectors in the bundled UI, all INSIDE the
-  // login <form>:
-  //   .text-red-* — Tailwind error-text classes the form uses for inline
-  //                 "Invalid credentials." + field errors;
-  //   role="alert" — any alert the form itself renders.
+  // The login form's error region is role="alert" INSIDE the <form>
+  // (THE-SIX-SMALL-ONES, UI 2: login-flow.tsx and password-form.tsx announce
+  // "Invalid credentials." and their siblings; no styling class is matched).
   // THE-TWO-THINGS-YESTERDAY-BROKE (2026-09-16): scoped to the form, because
   // the page-wide brute-force warning is role="alert" by design, outside
   // every form, always present on the harness appliance, and its copy says
   // "disabled" — an unscoped alert read, or an unscoped regex, reports the
   // banner instead of the login error. A form-scoped first pass + a
-  // form-scoped regex fallback so a class rename can't silently break the
+  // form-scoped regex fallback so a role-less copy change still yields a
   // diagnostic.
   let bannerText = "";
   try {
     const alertText = await page
-      .locator('form [role="alert"], form [class*="text-red-"]')
+      .locator('form [role="alert"]')
       .first()
       .textContent({ timeout: 1000 });
     bannerText = (alertText ?? "").trim();
