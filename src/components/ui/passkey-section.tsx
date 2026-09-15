@@ -49,8 +49,21 @@ export function PasskeySection() {
   const [isAdding, setIsAdding] = useState(false);
   const [nickname, setNickname] = useState("");
 
-  const isSupported =
-    typeof window !== "undefined" && typeof window.PublicKeyCredential !== "undefined";
+  // Hydration-safe WebAuthn capability probe (THE-ELEVEN-MISMATCHES,
+  // 2026-09-15). This read `typeof window !== "undefined" && …` at RENDER
+  // time: false on the server, true on the browser's first render, so the
+  // server HTML had no "Add passkey" button and the client's did — React's
+  // "Hydration failed because the server rendered HTML didn't match the
+  // client", once per visit of the passkeys tab, eleven per e2e mint from
+  // 2026-09-10, invisible to every gate. WebAuthn capability is GENUINELY
+  // client-only — no server can know the browser's authenticator — so the
+  // honest server render is "not yet known" (no button) and the client's
+  // first render must agree. useEffect runs after hydration; the button
+  // appears post-mount on capable browsers, exactly as LoginFlow does it.
+  const [isSupported, setIsSupported] = useState(false);
+  useEffect(() => {
+    setIsSupported(typeof window.PublicKeyCredential !== "undefined");
+  }, []);
 
   // refresh reloads the credential list. By default it resets phase to
   // "idle" so the initial mount transitions out of the "loading" state.
