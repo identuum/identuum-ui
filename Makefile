@@ -244,13 +244,19 @@ advisory:
 	pnpm audit
 
 ## The idp-oss sibling holds the Go judges these gates reuse (tools/ci-witness,
-## tools/ledger-diff-gate, tools/grype-gate). This repo is not a Go module, so
+## tools/ledger-diff-gate). This repo is not a Go module, so
 ## `go run -C $(IDP_OSS_DIR) ./tools/<judge> --repo $(CURDIR)` runs the sibling's
 ## tool against THIS tree, read-only for the sibling. An absent sibling or an
 ## absent Go toolchain is exit 2 by name, never a silent pass (the same
 ## sibling-coupled shape as wiki-fresh, with the loud branch this slice's owner
-## ruled for absent tools). THE-UI-GATE-PARITY-2, 2026-09-06.
+## ruled for absent tools). THE-UI-GATE-PARITY-2, 2026-09-06. grype-scan
+## borrowed tools/grype-gate this way until THE-SECOND-CONSUMER (2026-09-19);
+## it now runs the installed lictor and consults no sibling.
 IDP_OSS_DIR ?= ../identuum-idp-oss
+## LICTOR names the pinned judge binary (lictor, `brew install ozgurcd/tap/lictor`);
+## overridable so grype-scan's refusals can be exercised
+## (`make grype-scan LICTOR=/nonexistent/lictor` → exit 2 by name).
+LICTOR ?= lictor
 
 ## ci-witness: judge the CI record a human fetched and COMMITTED here as
 ## CI-WITNESS.txt. What CI uploads today (ci.yml): per matrix job an artifact
@@ -378,18 +384,32 @@ toolchain-parity:
 	fi; \
 	echo "check OK: toolchain-parity $$agree pins agree (node $$img in matrix [$$matrix], engines/@types/node $$eng/$$types, local node $$lnode, pnpm $$lpnpm, go $$lgo, rulefloor $$lrf, yq $$lyq, both vendored digests)"
 
-## grype-scan: the published image, judged by the idp-oss policy (tools/grype-gate,
-## rule GRYPE-FIXABLE-FAILS-1): a finding with an AVAILABLE FIX fails, a
-## High/Critical finding fails whether or not a fix exists, an allowlist entry
-## (grype-allowlist.json, absent today = empty) needs a reason AND a ruling and
-## can excuse "you have not taken the fix", never severity. Builds
+## grype-scan: the published image, judged by lictor (`lictor grype --repo
+## $(CURDIR) -scan <report>`), the INSTALLED, PINNED port of identuum-idp-oss's
+## judge tools/grype-gate (byte-faithful to OSS 1cbe9f6; lictor v0.1.0,
+## github.com/ozgurcd/lictor, `brew install ozgurcd/tap/lictor`) — rule
+## GRYPE-FIXABLE-FAILS-1 (OSS RULE-FLOOR.md): a finding with an AVAILABLE FIX
+## fails, a High/Critical finding fails whether or not a fix exists, an
+## allowlist entry (grype-allowlist.json, absent today = empty; lictor's
+## default path under --repo, so not passed) needs a reason AND a ruling and
+## can excuse "you have not taken the fix", never severity. An IMAGE subject
+## keeps its NOT APPLICABLE clauses (GRYPE-SUBJECT-1). Builds
 ## identuum-ui:verify from the repo-root Dockerfile (the tag publish-image.yml
 ## builds), scans it through the docker context's endpoint (grype does not read
 ## `docker context`; on this machine the socket is colima's, not
-## /var/run/docker.sock), and hands the JSON to the judge. Absent grype, docker,
-## go or the sibling judge: exit 2 by name, never a silent pass. SCAN=<json>
-## judges an existing report instead of building and scanning (the judge's own
-## -scan mode; used for the mutation proofs).
+## /var/run/docker.sock), and hands the JSON to the judge. Absent grype, docker
+## or lictor: exit 2 by name (lictor's with the brew line), never a silent
+## pass; a lictor whose `version --json` is not the ci.yml LICTOR_VERSION pin:
+## refused by name (recipe exit 1; make reports 2 for any failing recipe).
+## SCAN=<json> judges an existing report instead of building and scanning (the
+## judge's own -scan mode; used for the mutation and identity proofs).
+## THE-SECOND-CONSUMER (2026-09-19): from THE-UI-GATE-PARITY-2 (2026-09-06)
+## until this slice the judge was borrowed from the sibling checkout as
+## `go run -C $(IDP_OSS_DIR) ./tools/grype-gate -scan …` — a coupling a
+## borrowed tree or a machine without the OSS checkout could not satisfy; the
+## target now consults NO sibling (`make grype-scan IDP_OSS_DIR=/nonexistent`
+## reaches the verdict) and needs no Go toolchain. No job installs or runs
+## lictor; the verdict is unchanged — who computes it is.
 ##
 ## IN THE verify PLAN since THE-UI-NODE-26-LATEST (2026-09-06), right after
 ## ledger-diff-gate. History, so the reason it was ever outside stays
@@ -406,8 +426,21 @@ toolchain-parity:
 ## in only after `make grype-scan` was GREEN on that image. The policy was
 ## never weakened to fit an image.
 grype-scan:
-	@for t in grype docker go; do command -v "$$t" >/dev/null 2>&1 || { echo "grype-scan: $$t is not installed — cannot scan or judge the image; refusing to pass silently" >&2; exit 2; }; done; \
-	test -d "$(IDP_OSS_DIR)/tools/grype-gate" || { echo "grype-scan: sibling judge absent at $(IDP_OSS_DIR)/tools/grype-gate — refusing to pass silently" >&2; exit 2; }; \
+	@for t in grype docker; do command -v "$$t" >/dev/null 2>&1 || { echo "grype-scan: $$t is not installed — cannot scan or judge the image; refusing to pass silently" >&2; exit 2; }; done; \
+	ci=.github/workflows/ci.yml; \
+	li_want="$$(sed -nE 's/^  LICTOR_VERSION:[[:space:]]*(v[0-9][0-9.]*).*/\1/p' $$ci | head -1)"; \
+	[ -n "$$li_want" ] || { echo "grype-scan: LICTOR_VERSION is not declared in $$ci env — the judge has no pin; refusing to pass silently" >&2; exit 1; }; \
+	command -v "$(LICTOR)" >/dev/null 2>&1 || { \
+		echo "grype-scan: lictor is not installed ($(LICTOR)) — the judge is lictor $$li_want (ci.yml LICTOR_VERSION); refusing to pass silently. Install it:" >&2; \
+		echo "  brew install ozgurcd/tap/lictor" >&2; \
+		exit 2; \
+	}; \
+	li_have="$$("$(LICTOR)" version --json 2>/dev/null | head -1)"; \
+	printf '%s' "$$li_have" | grep -qF "\"version\":\"$$li_want\"" || { \
+		echo "grype-scan: installed lictor reports '$$li_have', declared $$li_want (ci.yml LICTOR_VERSION) — install the declared version:" >&2; \
+		echo "  brew install ozgurcd/tap/lictor" >&2; \
+		exit 1; \
+	}; \
 	if [ -n "$(SCAN)" ]; then \
 		report="$(SCAN)"; tmp=""; \
 	else \
@@ -416,7 +449,7 @@ grype-scan:
 		host=$$(docker context inspect --format '{{(index .Endpoints "docker").Host}}' 2>/dev/null); \
 		DOCKER_HOST="$${host:-$$DOCKER_HOST}" grype identuum-ui:verify -o json > "$$tmp" 2>/dev/null || { echo "grype-scan: grype could not scan identuum-ui:verify — nothing to judge" >&2; rm -f "$$tmp"; exit 2; }; \
 	fi; \
-	go run -C "$(IDP_OSS_DIR)" ./tools/grype-gate -scan "$$report" -allowlist "$(CURDIR)/grype-allowlist.json"; rc=$$?; \
+	"$(LICTOR)" grype --repo "$(CURDIR)" -scan "$$report"; rc=$$?; \
 	[ -z "$$tmp" ] || rm -f "$$tmp"; \
 	exit $$rc
 

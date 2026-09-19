@@ -68,6 +68,15 @@ env:
   # equal to the yq installed locally. Bump both together.
   YQ_VERSION: v4.53.6
   YQ_SHA256: c5f056448f973ae7d39b5401949648a78f2dc1947d6a8eb65be60d5c504b9385
+  # THE-SECOND-CONSUMER (2026-09-19): lictor is the pinned judge `make
+  # grype-scan` hands the image scan to (`lictor grype --repo … -scan …`,
+  # the installed port of identuum-idp-oss tools/grype-gate;
+  # github.com/ozgurcd/lictor, `brew install ozgurcd/tap/lictor`). Declared
+  # HERE so the recipe reads one pin and asserts `lictor version --json`
+  # against it where it runs. NO JOB INSTALLS OR RUNS IT: grype-scan is in the
+  # local verify plan only (ci.yml names no grype), and a runner install would
+  # need a private-release token — not this slice.
+  LICTOR_VERSION: v0.1.0
 
 jobs:
   build-and-test:
