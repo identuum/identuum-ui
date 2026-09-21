@@ -47,7 +47,8 @@ RUN mkdir -p /app/config-mount
 # Measured AT THIS DIGEST (sha256:4a274a26…, image created 2026-09-10): node
 # v26.8.2; busybox /bin/sh PRESENT (/bin/sh -> /bin/busybox, 231 entries in
 # /bin); ENTRYPOINT ["/usr/bin/node"]; USER 65532 (`node`); WORKDIR /app; npm
-# at /usr/bin/npm; grype through the idp-oss judge (tools/grype-gate):
+# at /usr/bin/npm; grype through the pinned judge lictor (`lictor grype`; the
+# idp-oss tools/grype-gate it was ported from is retired since OSS 63ee215):
 # matches=0 fixable=0 severe=0. glibc (Wolfi), not Alpine: IMG-NONALPINE holds.
 #
 # WHY IT MOVED: the previous digest (sha256:753a6601…) shipped glibc 2.44-r5,

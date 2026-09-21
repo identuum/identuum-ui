@@ -399,8 +399,12 @@ toolchain-parity:
 ## `docker context`; on this machine the socket is colima's, not
 ## /var/run/docker.sock), and hands the JSON to the judge. Absent grype, docker
 ## or lictor: exit 2 by name (lictor's with the brew line), never a silent
-## pass; a lictor whose `version --json` is not the ci.yml LICTOR_VERSION pin:
-## refused by name (recipe exit 1; make reports 2 for any failing recipe).
+## pass. THE PIN IS THE JUDGE'S OWN (THE-JUDGE-OWNS-ITS-PIN, 2026-09-21):
+## since v0.3.0 lictor reads this repository's ci.yml `LICTOR_VERSION` itself
+## and refuses a mismatch or an absent declaration with exit 2 and one stderr
+## line, so the recipe no longer re-reads the pin or re-judges it — the only
+## assertion left here is that lictor is absent, which a missing binary
+## cannot say for itself.
 ## SCAN=<json> judges an existing report instead of building and scanning (the
 ## judge's own -scan mode; used for the mutation and identity proofs).
 ## THE-SECOND-CONSUMER (2026-09-19): from THE-UI-GATE-PARITY-2 (2026-09-06)
@@ -427,19 +431,10 @@ toolchain-parity:
 ## never weakened to fit an image.
 grype-scan:
 	@for t in grype docker; do command -v "$$t" >/dev/null 2>&1 || { echo "grype-scan: $$t is not installed — cannot scan or judge the image; refusing to pass silently" >&2; exit 2; }; done; \
-	ci=.github/workflows/ci.yml; \
-	li_want="$$(sed -nE 's/^  LICTOR_VERSION:[[:space:]]*(v[0-9][0-9.]*).*/\1/p' $$ci | head -1)"; \
-	[ -n "$$li_want" ] || { echo "grype-scan: LICTOR_VERSION is not declared in $$ci env — the judge has no pin; refusing to pass silently" >&2; exit 1; }; \
 	command -v "$(LICTOR)" >/dev/null 2>&1 || { \
-		echo "grype-scan: lictor is not installed ($(LICTOR)) — the judge is lictor $$li_want (ci.yml LICTOR_VERSION); refusing to pass silently. Install it:" >&2; \
+		echo "grype-scan: lictor is not installed ($(LICTOR)) — refusing to pass silently. Install it:" >&2; \
 		echo "  brew install ozgurcd/tap/lictor" >&2; \
 		exit 2; \
-	}; \
-	li_have="$$("$(LICTOR)" version --json 2>/dev/null | head -1)"; \
-	printf '%s' "$$li_have" | grep -qF "\"version\":\"$$li_want\"" || { \
-		echo "grype-scan: installed lictor reports '$$li_have', declared $$li_want (ci.yml LICTOR_VERSION) — install the declared version:" >&2; \
-		echo "  brew install ozgurcd/tap/lictor" >&2; \
-		exit 1; \
 	}; \
 	if [ -n "$(SCAN)" ]; then \
 		report="$(SCAN)"; tmp=""; \
