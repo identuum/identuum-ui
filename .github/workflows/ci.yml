@@ -76,7 +76,7 @@ env:
   # against it where it runs. NO JOB INSTALLS OR RUNS IT: grype-scan is in the
   # local verify plan only (ci.yml names no grype), and a runner install would
   # need a private-release token — not this slice.
-  LICTOR_VERSION: v0.1.0
+  LICTOR_VERSION: v0.2.0
 
 jobs:
   build-and-test:
