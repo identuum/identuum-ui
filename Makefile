@@ -521,12 +521,21 @@ e2e-full:
 ## here is downgraded — it simply no longer masks what it is not about.
 ## No RULE-FLOOR row pins this order; this comment is its record.
 verify:
-	# THE-UNWITNESSED-GREEN: the same targets as before, driven through
-	# scripts/gate-witness.sh so the run leaves a committed record
-	# (GATE-RUN.txt): per-target exit codes, the tool versions, the tools'
-	# own count lines, and a digest of the tree the run saw (minus the
-	# record itself). A run that stops early reads INCOMPLETE, never green.
-	@bash scripts/gate-witness.sh run GATE-RUN.txt "identuum-ui make verify" \
+	# THE-UNWITNESSED-GREEN: the same targets as before, driven through the
+	# pinned judge (`lictor witness run`, THE-RUN-HALF 2026-09-21) so the run
+	# leaves a committed record (GATE-RUN.txt): per-target exit codes, the tool
+	# versions, the tools' own count lines, and a digest of the tree the run
+	# saw (minus the record itself). A run that stops early reads INCOMPLETE,
+	# never green. The recipe asserts only what the judge cannot — that the
+	# judge is ABSENT; the version pin is the judge's own, read from this
+	# repository's ci.yml LICTOR_VERSION and refused on a mismatch.
+	@command -v "$(LICTOR)" >/dev/null 2>&1 || { \
+		echo "verify: lictor is not installed ($(LICTOR)) — refusing to pass silently. Install it:" >&2; \
+		echo "  brew install ozgurcd/tap/lictor" >&2; \
+		exit 2; \
+	}; \
+	"$(LICTOR)" witness run --repo "$(CURDIR)" --record GATE-RUN.txt \
+		--label "identuum-ui make verify" -- \
 		'tool-versions=$(MAKE) --no-print-directory tool-versions' \
 		'image-base-check=$(MAKE) --no-print-directory image-base-check' \
 		'image-base-parity=$(MAKE) --no-print-directory image-base-parity' \
