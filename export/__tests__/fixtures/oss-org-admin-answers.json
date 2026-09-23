@@ -1,0 +1,256 @@
+{
+  "_about": "GET answers recorded from the OSS Plan-C binary (identuum-idp-oss d053ded) on 2026-09-23 through /bff, for one disposable tenant with one application, API resource and service account created through the shared pages. GET only: no create answer (one-time secrets) is recorded. PLAN-D-2.",
+  "paths": {
+    "app": "/org-admin/applications/01a0cf07-de3d-7196-bde5-eec378e059c5",
+    "api": "/org-admin/api-resources/01a0cf07-e472-735b-a938-5a1f9191e0df",
+    "sa": "/org-admin/service-accounts/01a0cf07-ea9d-7e81-b140-4b495b915d9c"
+  },
+  "answers": {
+    "GET /api/v1/validate": {
+      "status": 200,
+      "json": {
+        "success": true,
+        "role": "org_admin",
+        "user": {
+          "id": "01a0cf07-dbcd-700b-b577-3ebe762e0f4f",
+          "email": "admin@capture.test",
+          "role": "org_admin",
+          "organization_id": "01a0cf07-dbdc-747e-ae80-b29b5641124e",
+          "active": true,
+          "deleted": false,
+          "mfa_enabled": true,
+          "email_verified": true
+        }
+      }
+    },
+    "GET /api/v1/users": {
+      "status": 200,
+      "json": {
+        "page": 1,
+        "page_size": 200,
+        "total": 1,
+        "users": [
+          {
+            "id": "01a0cf07-dbcd-700b-b577-3ebe762e0f4f",
+            "organization_id": "01a0cf07-dbdc-747e-ae80-b29b5641124e",
+            "email": "admin@capture.test",
+            "role": "org_admin",
+            "auth_source": "local",
+            "email_verified": true,
+            "mfa_enabled": true,
+            "banned": false,
+            "oidc_linked": false,
+            "requires_password_change": false,
+            "organization_name": "Plan D proof capture.test",
+            "domain": "capture.test",
+            "created_at": "2026-09-23T17:09:53.883432+01:00",
+            "updated_at": "2026-09-23T17:09:54.321233+01:00"
+          }
+        ]
+      }
+    },
+    "GET /api/v1/organizations/current": {
+      "status": 200,
+      "json": {
+        "id": "01a0cf07-dbdc-747e-ae80-b29b5641124e",
+        "name": "Plan D proof capture.test",
+        "domain": "capture.test",
+        "org_slug": "plan-d-proof-capture-test",
+        "active": true,
+        "max_sessions_per_user": 10,
+        "mfa_policy": "optional",
+        "auth_policy": "local_only",
+        "api_authorization_policy": "STRICT",
+        "allow_public_registration": false,
+        "require_registration_approval": false,
+        "require_strict_reauth": false,
+        "local_admin_only": false,
+        "password_complexity_enabled": true,
+        "service_account_expiry_days": 0,
+        "m2m_anomaly_limit": 0,
+        "m2m_anomaly_window_seconds": 0,
+        "tier": "TierBase",
+        "created_at": "2026-09-23T17:09:53.883432+01:00",
+        "updated_at": "2026-09-23T17:09:53.915352+01:00"
+      }
+    },
+    "GET /api/v1/organizations/01a0cf07-dbdc-747e-ae80-b29b5641124e/domains": {
+      "status": 200,
+      "json": {
+        "count": 1,
+        "organization_domains": [
+          {
+            "id": "01a0cf07-dbdd-7eec-b677-1ca341cfa3cd",
+            "organization_id": "01a0cf07-dbdc-747e-ae80-b29b5641124e",
+            "domain": "capture.test",
+            "is_primary": true,
+            "verified": true,
+            "verified_at": "2026-09-23T17:09:53.883432+01:00",
+            "verification_attempts": 0,
+            "created_at": "2026-09-23T17:09:53.883432+01:00",
+            "updated_at": "2026-09-23T17:09:53.883432+01:00"
+          }
+        ]
+      }
+    },
+    "GET /api/v1/scope-templates": {
+      "status": 200,
+      "json": {
+        "count": 0,
+        "scope_templates": []
+      }
+    },
+    "GET /api/v1/organizations/01a0cf07-dbdc-747e-ae80-b29b5641124e/roles": {
+      "status": 200,
+      "json": {
+        "count": 0,
+        "roles": []
+      }
+    },
+    "GET /api/v1/organizations/01a0cf07-dbdc-747e-ae80-b29b5641124e/protocol-settings": {
+      "status": 200,
+      "json": {
+        "organization_id": "01a0cf07-dbdc-747e-ae80-b29b5641124e",
+        "dynamic_client_registration_enabled": false,
+        "scim_enabled": false,
+        "source": "default"
+      }
+    },
+    "GET /api/v1/audit/events": {
+      "status": 200,
+      "json": {
+        "events": [
+          {
+            "id": "01a0cf07-eaa8-7668-86b5-4a2f789eabcc",
+            "created_at": "2026-09-23T16:09:57Z",
+            "event_type": "service_account.created",
+            "outcome": "success",
+            "actor_id": "01a0cf07-dbcd-700b-b577-3ebe762e0f4f",
+            "actor_type": "user",
+            "actor_email": "admin@capture.test",
+            "actor_role": "org_admin",
+            "actor_organization_id": "01a0cf07-dbdc-747e-ae80-b29b5641124e",
+            "subject_id": "01a0cf07-ea9d-7e81-b140-4b495b915d9c",
+            "subject_type": "service_account",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "organization_id": "01a0cf07-dbdc-747e-ae80-b29b5641124e",
+              "role": "org_user",
+              "service_account_id": "01a0cf07-ea9d-7e81-b140-4b495b915d9c"
+            }
+          }
+        ],
+        "has_more": false
+      }
+    },
+    "GET /api/v1/clients": {
+      "status": 200,
+      "json": {
+        "clients": [
+          {
+            "id": "01a0cf07-de3d-7196-bde5-eec378e059c5",
+            "client_id": "44a922c8ca7d5eb75a9a7ef3746e4271",
+            "name": "Captured app",
+            "is_public": false,
+            "organization_id": "01a0cf07-dbdc-747e-ae80-b29b5641124e",
+            "scope": "",
+            "redirect_uris": ["https://rp.example.test/callback"],
+            "token_endpoint_auth_method": "client_secret_basic",
+            "token_endpoint_auth_signing_alg": "EdDSA",
+            "id_token_signed_response_alg": "EdDSA",
+            "created_at": "2026-09-23T17:09:54.493104+01:00",
+            "updated_at": "2026-09-23T17:09:54.493104+01:00"
+          }
+        ],
+        "page": 1,
+        "page_size": 50,
+        "total": 1
+      }
+    },
+    "GET /api/v1/api-resources": {
+      "status": 200,
+      "json": {
+        "api_resources": [
+          {
+            "id": "01a0cf07-e472-735b-a938-5a1f9191e0df",
+            "organization_id": "01a0cf07-dbdc-747e-ae80-b29b5641124e",
+            "name": "Captured API",
+            "audience": "https://api.captured.example.test",
+            "active": true,
+            "token_ttl_secs": 3600,
+            "scopes": [],
+            "created_at": "2026-09-23T17:09:56.08222+01:00",
+            "updated_at": "2026-09-23T17:09:56.08222+01:00"
+          }
+        ],
+        "page": 1,
+        "page_size": 50,
+        "total": 1
+      }
+    },
+    "GET /api/v1/organizations/01a0cf07-dbdc-747e-ae80-b29b5641124e/service-accounts": {
+      "status": 200,
+      "json": [
+        {
+          "created_at": "2026-09-23T17:09:57.661862+01:00",
+          "updated_at": "2026-09-23T17:09:57.661862+01:00",
+          "name": "captured-sa",
+          "description": "",
+          "role": "org_user",
+          "id": "01a0cf07-ea9d-7e81-b140-4b495b915d9c",
+          "organization_id": "01a0cf07-dbdc-747e-ae80-b29b5641124e",
+          "active": true
+        }
+      ]
+    },
+    "GET /api/v1/clients/01a0cf07-de3d-7196-bde5-eec378e059c5": {
+      "status": 200,
+      "json": {
+        "id": "01a0cf07-de3d-7196-bde5-eec378e059c5",
+        "client_id": "44a922c8ca7d5eb75a9a7ef3746e4271",
+        "name": "Captured app",
+        "is_public": false,
+        "organization_id": "01a0cf07-dbdc-747e-ae80-b29b5641124e",
+        "scope": "",
+        "redirect_uris": ["https://rp.example.test/callback"],
+        "token_endpoint_auth_method": "client_secret_basic",
+        "token_endpoint_auth_signing_alg": "EdDSA",
+        "id_token_signed_response_alg": "EdDSA",
+        "created_at": "2026-09-23T17:09:54.493104+01:00",
+        "updated_at": "2026-09-23T17:09:54.493104+01:00"
+      }
+    },
+    "GET /api/v1/api-resources/01a0cf07-e472-735b-a938-5a1f9191e0df": {
+      "status": 200,
+      "json": {
+        "id": "01a0cf07-e472-735b-a938-5a1f9191e0df",
+        "organization_id": "01a0cf07-dbdc-747e-ae80-b29b5641124e",
+        "name": "Captured API",
+        "audience": "https://api.captured.example.test",
+        "active": true,
+        "token_ttl_secs": 3600,
+        "scopes": [],
+        "created_at": "2026-09-23T17:09:56.08222+01:00",
+        "updated_at": "2026-09-23T17:09:56.08222+01:00"
+      }
+    },
+    "GET /api/v1/organizations/01a0cf07-dbdc-747e-ae80-b29b5641124e/identity-providers": {
+      "status": 404,
+      "json": null
+    },
+    "GET /api/v1/organizations/01a0cf07-dbdc-747e-ae80-b29b5641124e/webhooks": {
+      "status": 404,
+      "json": null
+    },
+    "GET /api/v1/organizations/01a0cf07-dbdc-747e-ae80-b29b5641124e/identity-provider": {
+      "status": 404,
+      "json": null
+    },
+    "GET /api/v1/audit/event-types": {
+      "status": 404,
+      "json": null
+    }
+  }
+}

@@ -9,6 +9,16 @@
  * keeps its meaning in the export instead of reading as "page not found".
  */
 import { createContext, type ReactNode, useContext } from "react";
+import ApplicationEditPage, {
+  metadata as applicationEditMeta,
+} from "@/app/org-admin/applications/[id]/edit/page";
+import ApplicationDetailPage, {
+  metadata as applicationDetailMeta,
+} from "@/app/org-admin/applications/[id]/page";
+import ApplicationNewPage, {
+  metadata as applicationNewMeta,
+} from "@/app/org-admin/applications/new/page";
+import ApplicationsPage, { metadata as applicationsMeta } from "@/app/org-admin/applications/page";
 import OrgAdminLayout, { metadata as layoutMeta } from "@/app/org-admin/layout";
 import OrgAdminPage from "@/app/org-admin/page";
 import UserDetailPage, { metadata as userDetailMeta } from "@/app/org-admin/users/[id]/page";
@@ -43,6 +53,20 @@ export const ORG_ADMIN_ROUTES: readonly Route[] = [
   route(/^\/org-admin$/, [], OrgAdminPage, undefined),
   route(/^\/org-admin\/users$/, [], UsersPage, usersMeta),
   route(/^\/org-admin\/users\/([^/]+)$/, ["id"], UserDetailPage, userDetailMeta),
+  route(/^\/org-admin\/applications$/, [], ApplicationsPage, applicationsMeta),
+  route(/^\/org-admin\/applications\/new$/, [], ApplicationNewPage, applicationNewMeta),
+  route(
+    /^\/org-admin\/applications\/([^/]+)$/,
+    ["id"],
+    ApplicationDetailPage,
+    applicationDetailMeta
+  ),
+  route(
+    /^\/org-admin\/applications\/([^/]+)\/edit$/,
+    ["id"],
+    ApplicationEditPage,
+    applicationEditMeta
+  ),
 ];
 
 /** Next's searchParams shape: one value is a string, a repeated key an array. */
