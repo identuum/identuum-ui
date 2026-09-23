@@ -10,7 +10,7 @@
  *                     redirect, no cookie touched, the URL stays so a reload
  *                     retries once the IdP is back.
  */
-import type { SessionState } from "./server-session";
+import type { SessionState } from "./session-validation";
 import type { ValidateResponse } from "./types";
 
 export const LOGIN_SESSION_EXPIRED = "/login?reason=session_expired";
