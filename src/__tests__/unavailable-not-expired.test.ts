@@ -225,7 +225,7 @@ describe("three states, honest retry, no false verdict [UNAVAILABLE-NOT-EXPIRED-
     });
     const res = await POST(req);
     expect(res.status).toBe(303);
-    expect(res.headers.get("location")).toBe("http://ui.test/login?reason=signed_out_locally");
+    expect(res.headers.get("location")).toBe("/login?reason=signed_out_locally");
     const setCookies = res.headers.getSetCookie();
     expect(setCookies.some((c) => c.startsWith("access_token=") && /max-age=0/i.test(c))).toBe(
       true

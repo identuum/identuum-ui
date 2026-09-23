@@ -94,7 +94,10 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   // 303 See Other: POST → GET redirect with OUR OWN Set-Cookie
   // expirations attached — the only response the browser actually sees.
-  const res = NextResponse.redirect(new URL(destination, req.nextUrl.origin), 303);
+  // The Location is RELATIVE: inside the container req.nextUrl.origin is the
+  // listen address (http://0.0.0.0:7104), not the origin the browser is on,
+  // so an absolute URL built from it sent every sign-out to a dead address.
+  const res = new NextResponse(null, { status: 303, headers: { location: destination } });
   for (const name of AUTH_COOKIES) {
     res.cookies.set(name, "", {
       maxAge: 0,
