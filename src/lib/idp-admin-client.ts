@@ -888,16 +888,25 @@ export async function resetUserMFA(
  * The response is sanitized to OrgUserItem — no passwords, MFA secrets,
  * recovery codes, session tokens, or internal fields are included.
  */
+export class UserDetailUnavailable extends Error {
+  constructor(public readonly status: number | null) {
+    super("User details could not be loaded");
+    this.name = "UserDetailUnavailable";
+  }
+}
+
 export async function getOrgUserById(id: string): Promise<OrgUserItem | null> {
   const cfg = loadRuntimeConfig();
-  if (!cfg || !cfg.idp.enabled) return null;
+  if (!cfg || !cfg.idp.enabled) throw new UserDetailUnavailable(null);
 
   try {
     const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(id)}`, {
       headers: await idpAuthHeaders(),
       cache: "no-store",
+      signal: AbortSignal.timeout(5000),
     });
-    if (!res.ok) return null;
+    if (res.status === 403 || res.status === 404) return null;
+    if (!res.ok) throw new UserDetailUnavailable(res.status);
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json();
@@ -921,8 +930,9 @@ export async function getOrgUserById(id: string): Promise<OrgUserItem | null> {
       invitation_email_bound: Boolean(u.invitation_email_bound),
       banned: Boolean(u.banned),
     };
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof UserDetailUnavailable) throw error;
+    throw new UserDetailUnavailable(null);
   }
 }
 

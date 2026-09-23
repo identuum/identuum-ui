@@ -16,6 +16,7 @@
 
 import type { Metadata } from "next";
 import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
+import { UserUnavailable } from "@/components/shared/user-unavailable";
 import type { OrgRoleItem } from "@/lib/idp-admin-client";
 import {
   getOrgUserById,
@@ -24,6 +25,7 @@ import {
   listOrgRoles,
   listOrgUsers,
   listUserRoles,
+  UserDetailUnavailable,
 } from "@/lib/idp-admin-client";
 import { ResetMFAButton, UserRowActions } from "../user-row-actions";
 import { ApproveButton } from "./approve-button";
@@ -87,13 +89,18 @@ export default async function OrgAdminUserDetailPage({
   // dropdown — if there is no org id available we surface that as the
   // available-roles-load error inside the roles card.
   const [user, org, allUsers, assignedRolesResult, recentAuditResult] = await Promise.all([
-    getOrgUserById(id),
+    getOrgUserById(id).catch((error: unknown) => {
+      if (error instanceof UserDetailUnavailable) return error;
+      throw error;
+    }),
     getOwnOrganization(),
     listOrgUsers(),
     listUserRoles(id).catch(() => null),
     listAuditEvents({ subjectId: id, pageSize: 8 }).catch(() => null),
   ]);
 
+  if (user instanceof UserDetailUnavailable)
+    return <UserUnavailable retryHref={`/org-admin/users/${encodeURIComponent(id)}`} />;
   if (!user) {
     return <NotFoundPanel />;
   }
