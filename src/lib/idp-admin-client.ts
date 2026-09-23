@@ -196,7 +196,8 @@ export async function listOrganizations(opts?: {
       domain: String(o.domain ?? ""),
       slug: String(o.org_slug ?? ""),
       active: Boolean(o.active),
-      deleted: Boolean(o.deleted),
+      // OSS marks a soft-deleted row with deleted_at and sends no `deleted`.
+      deleted: o.deleted === true || (typeof o.deleted_at === "string" && o.deleted_at !== ""),
       // is_claimed means "has at least one live org_admin" (see mapping note
       // above). ABSENT stays undefined — never coerced to false.
       has_admin: typeof o.is_claimed === "boolean" ? o.is_claimed : undefined,

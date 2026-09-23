@@ -5,7 +5,7 @@
  */
 
 import type { Metadata } from "next";
-import { getOrganization } from "@/lib/idp-admin-client";
+import { getOrganization, listOrganizations } from "@/lib/idp-admin-client";
 import { RestoreOrgForm } from "./form-client";
 
 export const metadata: Metadata = { title: "Restore Organization — Identuum Admin" };
@@ -23,7 +23,10 @@ export default async function RestoreOrganizationPage({
     return <NotFoundPanel />;
   }
 
-  const org = await getOrganization(id);
+  // OSS answers GET /organizations/:id with 404 for a soft-deleted
+  // organization (RULE-FLOOR ORG-RESTORE-1), so a miss is looked up among
+  // the deleted rows of the list.
+  const org = (await getOrganization(id)) ?? (await findDeletedOrganization(id));
 
   if (!org) {
     return <NotFoundPanel />;
@@ -76,6 +79,30 @@ export default async function RestoreOrganizationPage({
       </div>
     </div>
   );
+}
+
+const DELETED_PAGE_SIZE = 100; // listOrganizations caps the page size at 100
+const DELETED_PAGES_MAX = 20; // at most 2,000 deleted organizations are searched
+
+async function findDeletedOrganization(id: string) {
+  for (let page = 0; page < DELETED_PAGES_MAX; page++) {
+    const res = await listOrganizations({
+      offset: page * DELETED_PAGE_SIZE,
+      limit: DELETED_PAGE_SIZE,
+      deleted: "true",
+      active: "all",
+    });
+    if (!res) return null;
+    const hit = res.organizations.find((o) => o.id === id);
+    if (hit) return hit;
+    if (
+      res.organizations.length < DELETED_PAGE_SIZE ||
+      (page + 1) * DELETED_PAGE_SIZE >= res.total_count
+    ) {
+      return null;
+    }
+  }
+  return null;
 }
 
 function Breadcrumb({ orgName }: { orgName: string }) {
