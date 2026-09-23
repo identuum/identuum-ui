@@ -29,6 +29,7 @@ import ApplicationNewPage, {
   metadata as applicationNewMeta,
 } from "@/app/org-admin/applications/new/page";
 import ApplicationsPage, { metadata as applicationsMeta } from "@/app/org-admin/applications/page";
+import AuditPage, { metadata as auditMeta } from "@/app/org-admin/audit/page";
 import OrgAdminLayout, { metadata as layoutMeta } from "@/app/org-admin/layout";
 import OrgAdminPage from "@/app/org-admin/page";
 import ServiceAccountDetailPage, {
@@ -40,6 +41,7 @@ import ServiceAccountNewPage, {
 import ServiceAccountsPage, {
   metadata as serviceAccountsMeta,
 } from "@/app/org-admin/service-accounts/page";
+import SettingsPage, { metadata as settingsMeta } from "@/app/org-admin/settings/page";
 import UserDetailPage, { metadata as userDetailMeta } from "@/app/org-admin/users/[id]/page";
 import UsersPage, { metadata as usersMeta } from "@/app/org-admin/users/page";
 import UnavailablePage from "@/app/unavailable/page";
@@ -108,6 +110,8 @@ export const ORG_ADMIN_ROUTES: readonly Route[] = [
     ServiceAccountDetailPage,
     serviceAccountDetailMeta
   ),
+  route(/^\/org-admin\/settings$/, [], SettingsPage, settingsMeta),
+  route(/^\/org-admin\/audit$/, [], AuditPage, auditMeta),
 ];
 
 /** Next's searchParams shape: one value is a string, a repeated key an array. */
