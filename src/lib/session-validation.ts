@@ -8,7 +8,7 @@ export type SessionState =
   | { kind: "unauthenticated"; status: number | null; reason: string | null }
   | {
       kind: "unavailable";
-      /** last HTTP status seen (5xx) or null for a network failure */
+      /** last unavailable HTTP status seen or null for a network failure */
       status: number | null;
       /** the IdP's correlation id (X-Request-ID header / body correlation_id) — the join key to its ERROR log */
       correlationId: string | null;
@@ -115,7 +115,7 @@ export async function validateSessionResponse(
       if (res.ok) {
         return { kind: "authenticated", session: (await res.json()) as ValidateResponse };
       }
-      if (res.status < 500) {
+      if (res.status < 500 && res.status !== 429) {
         // A VERDICT. 401 bodies name it (AUTH-503: `reason`); keep it for the guards' logs.
         const body = await readBody(res);
         return {
@@ -124,7 +124,7 @@ export async function validateSessionResponse(
           reason: stringField(body, "reason") ?? stringField(body, "error"),
         };
       }
-      // 5xx — the IdP could not judge. Remember what it said and retry within budget.
+      // 5xx / 429 — the IdP could not judge. Retry within the same bounded budget.
       const body = await readBody(res);
       last = {
         status: res.status,
