@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev --port 7104",
     "build": "next build",
+    "build:export": "vite build --config export/vite.config.mts",
     "start": "PORT=7104 node .next/standalone/server.js",
     "config:idp-only": "node scripts/ui-runtime-preset.mjs idp-only",
     "config:hybrid": "node scripts/ui-runtime-preset.mjs hybrid",
