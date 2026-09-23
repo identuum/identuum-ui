@@ -9,6 +9,16 @@
  * keeps its meaning in the export instead of reading as "page not found".
  */
 import { createContext, type ReactNode, useContext } from "react";
+import ApiResourceEditPage, {
+  metadata as apiResourceEditMeta,
+} from "@/app/org-admin/api-resources/[id]/edit/page";
+import ApiResourceDetailPage, {
+  metadata as apiResourceDetailMeta,
+} from "@/app/org-admin/api-resources/[id]/page";
+import ApiResourceNewPage, {
+  metadata as apiResourceNewMeta,
+} from "@/app/org-admin/api-resources/new/page";
+import ApiResourcesPage, { metadata as apiResourcesMeta } from "@/app/org-admin/api-resources/page";
 import ApplicationEditPage, {
   metadata as applicationEditMeta,
 } from "@/app/org-admin/applications/[id]/edit/page";
@@ -66,6 +76,20 @@ export const ORG_ADMIN_ROUTES: readonly Route[] = [
     ["id"],
     ApplicationEditPage,
     applicationEditMeta
+  ),
+  route(/^\/org-admin\/api-resources$/, [], ApiResourcesPage, apiResourcesMeta),
+  route(/^\/org-admin\/api-resources\/new$/, [], ApiResourceNewPage, apiResourceNewMeta),
+  route(
+    /^\/org-admin\/api-resources\/([^/]+)$/,
+    ["id"],
+    ApiResourceDetailPage,
+    apiResourceDetailMeta
+  ),
+  route(
+    /^\/org-admin\/api-resources\/([^/]+)\/edit$/,
+    ["id"],
+    ApiResourceEditPage,
+    apiResourceEditMeta
   ),
 ];
 
