@@ -278,10 +278,13 @@ export async function getOrganization(id: string): Promise<OrgDetail | null> {
   if (!cfg || !cfg.idp.enabled) return null;
 
   try {
-    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}`, {
-      headers: await idpAuthHeaders(),
-      cache: "no-store",
-    });
+    const res = await idpFetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}`,
+      {
+        headers: await idpAuthHeaders(),
+        cache: "no-store",
+      }
+    );
     if (!res.ok) return null;
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
@@ -416,15 +419,18 @@ export async function updateOrganization(
     body.require_registration_approval = opts.require_registration_approval;
 
   try {
-    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        ...(await idpAuthHeaders()),
-      },
-      body: JSON.stringify(body),
-      cache: "no-store",
-    });
+    const res = await idpFetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await idpAuthHeaders()),
+        },
+        body: JSON.stringify(body),
+        cache: "no-store",
+      }
+    );
 
     if (res.status === 404) return { ok: false, status: 404, notFound: true, conflict: false };
     if (res.status === 409) return { ok: false, status: 409, notFound: false, conflict: true };
@@ -467,11 +473,14 @@ export async function deleteOrganization(id: string): Promise<DeleteOrgResult> {
     return { ok: false, status: 503, notFound: false, hasSiteAdmins: false };
 
   try {
-    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-      headers: await idpAuthHeaders(),
-      cache: "no-store",
-    });
+    const res = await idpFetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+        headers: await idpAuthHeaders(),
+        cache: "no-store",
+      }
+    );
 
     if (res.status === 404) return { ok: false, status: 404, notFound: true, hasSiteAdmins: false };
     // 403 covers both permission errors and ErrOrgHasSiteAdmins — treat as hasSiteAdmins
@@ -3364,11 +3373,14 @@ export async function listUserRoles(userId: string): Promise<ListUserRolesResult
   const cfg = loadRuntimeConfig();
   if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, forbidden: false };
   try {
-    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/roles`, {
-      method: "GET",
-      headers: await idpAuthHeaders(),
-      cache: "no-store",
-    });
+    const res = await idpFetch(
+      `${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/roles`,
+      {
+        method: "GET",
+        headers: await idpAuthHeaders(),
+        cache: "no-store",
+      }
+    );
     if (res.status === 403) return { ok: false, status: 403, forbidden: true };
     if (!res.ok) return { ok: false, status: res.status, forbidden: false };
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
@@ -3409,15 +3421,18 @@ export async function assignUserRole(
     return { ok: false, status: 503, message: "IdP is not configured." };
   }
   try {
-    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/roles`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(await idpAuthHeaders()),
-      },
-      body: JSON.stringify({ role_id: roleId }),
-      cache: "no-store",
-    });
+    const res = await idpFetch(
+      `${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/roles`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await idpAuthHeaders()),
+        },
+        body: JSON.stringify({ role_id: roleId }),
+        cache: "no-store",
+      }
+    );
     if (res.status === 204 || res.ok) return { ok: true };
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json().catch(() => ({}));
@@ -3611,11 +3626,14 @@ export async function getApiResource(id: string): Promise<GetAPIResourceResult> 
       featureUnavailable: false,
     };
   try {
-    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`, {
-      method: "GET",
-      headers: await idpAuthHeaders(),
-      cache: "no-store",
-    });
+    const res = await idpFetch(
+      `${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`,
+      {
+        method: "GET",
+        headers: await idpAuthHeaders(),
+        cache: "no-store",
+      }
+    );
     if (res.status === 400)
       return {
         ok: false,
@@ -3851,15 +3869,18 @@ export async function updateApiResource(
   if (Array.isArray(opts.scopes))
     body.scopes = opts.scopes.map((s) => ({ name: s.name, description: s.description }));
   try {
-    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        ...(await idpAuthHeaders()),
-      },
-      body: JSON.stringify(body),
-      cache: "no-store",
-    });
+    const res = await idpFetch(
+      `${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(await idpAuthHeaders()),
+        },
+        body: JSON.stringify(body),
+        cache: "no-store",
+      }
+    );
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json().catch(() => ({}));
     if (res.ok) {
@@ -4094,11 +4115,14 @@ export async function deleteApiResource(id: string): Promise<DeleteAPIResourceRe
       message: "IdP is not configured.",
     };
   try {
-    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-      headers: await idpAuthHeaders(),
-      cache: "no-store",
-    });
+    const res = await idpFetch(
+      `${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+        headers: await idpAuthHeaders(),
+        cache: "no-store",
+      }
+    );
     if (res.status === 204 || res.ok) return { ok: true };
     if (res.status === 400)
       return {
