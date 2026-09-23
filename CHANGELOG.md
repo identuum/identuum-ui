@@ -6,6 +6,33 @@ first published image. Format roughly follows
 [Semantic Versioning](https://semver.org/). The published artifact is the
 container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
+## `v0.2.4`
+
+Site administrators can restore a deleted organization. Delta
+`v0.2.3..HEAD`: the e2e seed fix `cf8650d` (e2e helpers and a rule-floor
+rehash; no shipped code), the fix commit and this release commit; the
+image build (Dockerfile, runtime base, `.dockerignore`) is unchanged from
+`v0.2.3`.
+
+### Fixed
+
+- **Restoring a deleted organization works on OSS** (`0145be9`). OSS answers
+  a read of a soft-deleted organization by id with 404 by contract, so the
+  restore page always said "Organization not found". The page now finds the
+  organization among the list's deleted rows (pages of 100, at most 20
+  pages, stopping at the first match). The list now reads OSS's
+  `deleted_at`, so deleted rows show Restore; before, every row read as
+  live.
+
+### Security (image)
+
+- Runtime base unchanged from `v0.2.3`
+  (`cgr.dev/chainguard/node@sha256:1f903d44fc11a6f6e74447fc2c6a3c141f112217576be5d96c283210116b5d25`,
+  node v26.9.0 measured in the built image). `make grype-scan` (grype
+  0.119.0 through lictor) on the image built at this release:
+  `matches=1 fixable=0 allowlisted=0 unfixable=1 severe=0` — CVE-2026-89092,
+  Medium, glibc 2.44-r6, fix state `unknown`, as in `v0.2.3`.
+
 ## `v0.2.3`
 
 Three fixes found by the identuum-idp-oss `v0.5.0` release-candidate
