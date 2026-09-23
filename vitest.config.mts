@@ -10,9 +10,9 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "src"),
-      "server-only": path.resolve(__dirname, "src/__mocks__/server-only.ts"),
-      "next/headers": path.resolve(__dirname, "src/__mocks__/next-headers.ts"),
+      "@": path.resolve(import.meta.dirname, "src"),
+      "server-only": path.resolve(import.meta.dirname, "src/__mocks__/server-only.ts"),
+      "next/headers": path.resolve(import.meta.dirname, "src/__mocks__/next-headers.ts"),
     },
   },
 });
