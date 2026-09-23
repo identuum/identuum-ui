@@ -45,6 +45,7 @@ import type { BrowserContext } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { loadOrgAdminFixtureOrgDomain } from "./helpers/fixture";
 import { loginAsOrgAdmin, skipOrgAdminTests } from "./helpers/login";
+import { uiOriginHeader } from "./helpers/ui-origin";
 
 const SKIP_MSG =
   "Set IDENTUUM_TEST_ORG_ADMIN_EMAIL + _PASSWORD (durable) or " +
@@ -242,7 +243,7 @@ test.describe("/org-admin/settings — Organization record (read-only)", () => {
 
       const put = await page.request.put(
         `/api/idp/api/v1/organizations/${encodeURIComponent(org.id as string)}`,
-        { data: { allow_public_registration: true } }
+        { data: { allow_public_registration: true }, headers: uiOriginHeader() }
       );
       expect(
         put.status(),

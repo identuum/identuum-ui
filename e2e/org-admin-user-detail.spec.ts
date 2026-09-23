@@ -44,6 +44,7 @@ import type { BrowserContext } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { loadOrgAdminFixtureUserId } from "./helpers/fixture";
 import { loginAsOrgAdmin, skipOrgAdminTests } from "./helpers/login";
+import { uiOriginHeader } from "./helpers/ui-origin";
 
 const SKIP_MSG =
   "Set IDENTUUM_TEST_ORG_ADMIN_EMAIL + _PASSWORD (durable) or " +
@@ -129,7 +130,8 @@ test.describe("/org-admin/users/[id] — Recent activity card", () => {
       // harmless on the disposable appliance. Then the card MUST render —
       // no skip path left.
       const seeded = await getSharedContext().request.post(
-        "/api/idp/api/v1/me/sessions/revoke-others"
+        "/api/idp/api/v1/me/sessions/revoke-others",
+        { headers: uiOriginHeader() }
       );
       // 204 No Content — measured live in the first unskipped run (the
       // bodiless revoke answers 204, not 200; asserting 200 here was this

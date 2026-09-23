@@ -17,6 +17,7 @@
  */
 import { expect, test } from "@playwright/test";
 import { unconsumedTOTP } from "./helpers/totp";
+import { uiOriginHeader } from "./helpers/ui-origin";
 
 const ENABLED = process.env.IDENTUUM_E2E_OSS_SITE_ADMIN_SMOKE === "1";
 const ADMIN_EMAIL = process.env.IDENTUUM_E2E_OSS_SMOKE_ADMIN_EMAIL ?? "site_admin@system.local";
@@ -44,6 +45,7 @@ test.describe("OSS site-admin overview smoke", () => {
     //    credential or TOTP value is logged.
     expect(ADMIN_TOTP_SECRET, "IDENTUUM_E2E_OSS_SMOKE_ADMIN_TOTP_SECRET must be set").not.toBe("");
     const loginRes = await page.request.post("/api/idp/api/v1/auth/login", {
+      headers: uiOriginHeader(),
       data: {
         email: ADMIN_EMAIL,
         password: ADMIN_PASSWORD,

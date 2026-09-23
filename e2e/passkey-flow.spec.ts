@@ -33,6 +33,7 @@ import {
   SKIP_AUTH_MSG,
   skipAuthTests,
 } from "./helpers/login";
+import { uiOriginHeader } from "./helpers/ui-origin";
 
 const VIRTUAL_AUTHENTICATOR_OPTS = {
   options: {
@@ -135,7 +136,8 @@ test.describe("passkey ceremony — CDP virtual authenticator", () => {
       for (const cred of creds) {
         if (cred?.id) {
           await page.request.delete(
-            `/api/idp/api/v1/webauthn/credentials/${encodeURIComponent(cred.id as string)}`
+            `/api/idp/api/v1/webauthn/credentials/${encodeURIComponent(cred.id as string)}`,
+            { headers: uiOriginHeader() }
           );
         }
       }
@@ -271,7 +273,11 @@ test.describe("passkey ceremony — CDP virtual authenticator", () => {
     // page.evaluate(...) relative fetch so it never depends on the current
     // document origin. Released OSS serves the logout at /api/v1/auth/logout
     // (the bare /api/v1/logout of the pre-split monolith is CALLED-NOT-SERVED).
+    // The UI's own Origin, as a browser sends it (v0.2.3 same-origin guard),
+    // scoped to this one call.
+    await page.context().setExtraHTTPHeaders(uiOriginHeader());
     const logoutRes = await page.request.post("/api/idp/api/v1/auth/logout");
+    await page.context().setExtraHTTPHeaders({});
     if (!logoutRes.ok()) {
       console.log(`[passkey T4] logout → ${logoutRes.status()}`);
     }

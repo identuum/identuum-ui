@@ -26,6 +26,11 @@
       "rule_id": "BROWSER-CONSOLE-GATE-1",
       "change_class": "rule_added",
       "reason": "THE-ELEVEN-MISMATCHES (2026-09-15): e2e-full fails on a React rendering or hydration error in the browser console — pw-phase.sh reads every browser phase's own traces (page errors and console errors) and fails the phase on one React's renderer wrote, naming the page and the test, failing closed on an unreadable trace; network-resource console errors the suite provokes on purpose are tolerated by name. A hydration mismatch had been invisible to every gate for four days, eleven per mint. Pinned by src/__tests__/browser-console-gate-source-invariants.test.ts (red first: three of four pins failed before the scan existed), mutation red-proved on the neutralised verdict, and shown red on the runner over the pre-fix tree (react-errors=11) before the fix."
+    },
+    {
+      "rule_id": "ORGREC-READONLY-1",
+      "change_class": "test_fingerprint_changed",
+      "reason": "UI-E2E-FIX (2026-09-23): the org-record write in e2e/org-admin-settings.spec.ts now sends the UI's own Origin (uiOriginHeader()), as a browser does. Since v0.2.3 (355a22c) the same-origin guard answered a request without Origin with 403 before it reached the IdP, so the test's 403 came from the guard, not from the infrastructure-authority refusal the rule is about; with the Origin it proves that refusal again. Reviewed and rehashed b02bf9e24f4a -> 95923405f495. The assertion (403) is untouched."
     }
   ]
 }

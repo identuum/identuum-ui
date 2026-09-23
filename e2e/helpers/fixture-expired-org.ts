@@ -33,6 +33,7 @@
 
 import { execSync } from "node:child_process";
 import type { BrowserContext } from "@playwright/test";
+import { uiOriginHeader } from "./ui-origin";
 
 const FIXTURE_ORG_DOMAIN = "playwright-expired.local";
 const FIXTURE_ORG_NAME = "Playwright Expired Recovery Org";
@@ -142,6 +143,7 @@ async function findOrgByDomain(ctx: BrowserContext, domain: string): Promise<str
  */
 async function createFixtureOrgWithAdmin(ctx: BrowserContext): Promise<string> {
   const res = await ctx.request.post(`${IDP_PROXY}/api/v1/organizations`, {
+    headers: uiOriginHeader(),
     data: {
       name: FIXTURE_ORG_NAME,
       domain: FIXTURE_ORG_DOMAIN,
@@ -184,6 +186,7 @@ async function createFixtureOrgWithAdmin(ctx: BrowserContext): Promise<string> {
 async function createUserViaClaimConsume(ctx: BrowserContext, orgId: string): Promise<void> {
   // Generate invitation claim
   const invRes = await ctx.request.post(`${IDP_PROXY}/api/v1/organizations/${orgId}/invitations`, {
+    headers: uiOriginHeader(),
     data: { recipient_email: FIXTURE_ADMIN_EMAIL },
   });
   if (!invRes.ok()) {
