@@ -54,7 +54,9 @@ function configFilePath(): string {
 // Returns null when the file is missing or unparseable (setup-required state).
 export function loadRuntimeConfig(): RuntimeConfig | null {
   try {
-    const raw = fs.readFileSync(configFilePath(), "utf-8");
+    // Deployment supplies this external runtime file. It is not a build
+    // dependency: tracing an arbitrary override would copy the checkout.
+    const raw = fs.readFileSync(/* turbopackIgnore: true */ configFilePath(), "utf-8");
     const parsed = JSON.parse(raw) as RuntimeConfig;
     if (!parsed.configured) return null;
     return parsed;
