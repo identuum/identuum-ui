@@ -5,13 +5,13 @@
  * configured). Must never expose internal_base_url, cookies, or tokens to
  * browser-side code or client component props.
  *
- * Server-only: client components may not import this module.
+ * Server-only in the Next deployment: its transport (idp-transport.ts) is
+ * server-only, so client components may not import this module. The static
+ * export swaps in a browser transport through the Go boundary.
  */
-import "server-only";
-
-import { cookies } from "next/headers";
 import { classifyDomainVerifyErrorKind } from "./domain-verification-errors";
 import { classifyIDPStatus, type IDPStatusClassification, type IDPStatusKind } from "./idp-status";
+import { idpAuthHeaders, idpFetch } from "./idp-transport";
 import { idpBaseUrl, loadRuntimeConfig } from "./runtime-config";
 import type {
   CreatedOrgClient,
@@ -77,33 +77,6 @@ export type CreateOrgResult =
       activationUrlUnavailable: string | null;
     }
   | { ok: false; status: number; conflict: boolean };
-
-/**
- * Server-side IdP auth headers for the BFF. Returns BOTH credentials:
- *   - Cookie: the full httpOnly cookie jar — the IdP's cookie-aware endpoints
- *     (e.g. /api/v1/validate) read the session from here.
- *   - Authorization: Bearer <access_token> — released OSS resource endpoints
- *     (clients, users, organizations, service-accounts, …) establish the
- *     request principal ONLY from the Authorization header: mw.BearerPrincipal
- *     never reads the access_token cookie, so a cookie-only call 401s. The
- *     bearer is lifted from the SAME httpOnly access_token cookie.
- *
- * The token stays server-side: this module is `server-only`, and the header is
- * attached only to the server→IdP fetch — it is never returned to the browser,
- * never serialised into a response body, and never logged. Sending both
- * credentials is safe: each endpoint reads only the one it understands.
- * `extra` merges caller-supplied headers (e.g. Content-Type).
- */
-async function idpAuthHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
-  const all = (await cookies()).getAll();
-  const headers: Record<string, string> = {
-    ...extra,
-    Cookie: all.map((c) => `${c.name}=${c.value}`).join("; "),
-  };
-  const accessToken = all.find((c) => c.name === "access_token")?.value;
-  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-  return headers;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -177,7 +150,7 @@ export async function listOrganizations(opts?: {
   params.set("active", opts?.active ?? "true");
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/organizations?${params.toString()}`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/organizations?${params.toString()}`, {
       headers: await idpAuthHeaders(),
       cache: "no-store",
     });
@@ -249,7 +222,7 @@ export async function createOrganization(opts: CreateOrgOptions): Promise<Create
   if (opts.admin_email) body.admin_email = opts.admin_email;
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/organizations`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/organizations`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -305,7 +278,7 @@ export async function getOrganization(id: string): Promise<OrgDetail | null> {
   if (!cfg || !cfg.idp.enabled) return null;
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}`, {
       headers: await idpAuthHeaders(),
       cache: "no-store",
     });
@@ -356,7 +329,7 @@ export async function getOwnOrganization(): Promise<OrgDetail | null> {
   if (!cfg || !cfg.idp.enabled) return null;
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/organizations/current`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/organizations/current`, {
       headers: await idpAuthHeaders(),
       cache: "no-store",
     });
@@ -443,7 +416,7 @@ export async function updateOrganization(
     body.require_registration_approval = opts.require_registration_approval;
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -494,7 +467,7 @@ export async function deleteOrganization(id: string): Promise<DeleteOrgResult> {
     return { ok: false, status: 503, notFound: false, hasSiteAdmins: false };
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}`, {
       method: "DELETE",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -528,7 +501,7 @@ export async function restoreOrganization(id: string): Promise<RestoreOrgResult>
   if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, notFound: false };
 
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(id)}/restore`,
       {
         method: "POST",
@@ -598,7 +571,7 @@ export async function assignOrgAdmin(opts: AssignOrgAdminOptions): Promise<Assig
     return { ok: false, status: 503, notFound: false, alreadyHasAdmin: false };
 
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(opts.orgId)}/resend-activation`,
       {
         method: "POST",
@@ -658,7 +631,7 @@ export async function changeOwnPassword(
   }
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/auth/change-password`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/auth/change-password`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -710,7 +683,7 @@ export async function getOwnProfile(): Promise<UserProfile | null> {
   if (!cfg || !cfg.idp.enabled) return null;
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/profile`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/profile`, {
       headers: await idpAuthHeaders(),
       cache: "no-store",
     });
@@ -795,7 +768,7 @@ export async function listOrgUsers(opts?: {
   params.set("page_size", "200");
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/users?${params.toString()}`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/users?${params.toString()}`, {
       headers: await idpAuthHeaders(),
       cache: "no-store",
     });
@@ -853,7 +826,7 @@ export async function resetUserMFA(
     // THE-TWELVE (2026-08-26): the mounted OSS route is
     // /recovery/reset-mfa; the old /mfa/reset path never existed on
     // identuum-idp-oss and 404'd on every click.
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/recovery/reset-mfa`,
       {
         method: "POST",
@@ -900,7 +873,7 @@ export async function getOrgUserById(id: string): Promise<OrgUserItem | null> {
   if (!cfg || !cfg.idp.enabled) throw new UserDetailUnavailable(null);
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(id)}`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(id)}`, {
       headers: await idpAuthHeaders(),
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
@@ -958,7 +931,7 @@ export async function setUserActive(
   }
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -1019,7 +992,7 @@ export async function listOwnSessions(): Promise<ListSessionsResult> {
   if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, forbidden: false };
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/sessions`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/sessions`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -1067,7 +1040,7 @@ export async function revokeOwnSession(sessionId: string): Promise<RevokeSession
     return { ok: false, status: 503, forbidden: false, notFound: false };
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/revoke`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/revoke`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1170,7 +1143,7 @@ export async function listAuditEvents(opts?: {
   if (opts?.endDate) params.set("end", opts.endDate);
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/audit/events?${params}`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/audit/events?${params}`, {
       headers: await idpAuthHeaders(),
       cache: "no-store",
     });
@@ -1247,7 +1220,7 @@ export async function listAuditEventTypes(): Promise<AuditEventTypeGroupFromAPI[
   if (!cfg || !cfg.idp.enabled) return null;
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/audit/event-types`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/audit/event-types`, {
       headers: await idpAuthHeaders(),
       cache: "no-store",
     });
@@ -1316,7 +1289,7 @@ export async function resetOrgAdminMFA(userID: string): Promise<ResetOrgAdminMFA
   }
 
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userID)}/recovery/reset-mfa`,
       {
         method: "POST",
@@ -1390,7 +1363,7 @@ export async function listOrgAdminsForRecovery(
     return { ok: false, status: 503, message: "IDP is not enabled in this deployment." };
   }
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/admin-recovery-candidates`,
       {
         method: "GET",
@@ -1481,7 +1454,7 @@ export async function listOrganizationDomains(
   if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503 };
 
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/domains`,
       {
         method: "GET",
@@ -1540,7 +1513,7 @@ export async function addOrganizationDomain(
   const body: { domain: string } = { domain: domain.toLowerCase().trim() };
 
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/domains`,
       {
         method: "POST",
@@ -1625,7 +1598,7 @@ export async function verifyOrganizationDomain(
     };
 
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/domains/${encodeURIComponent(domainID)}/verify`,
       {
         method: "POST",
@@ -1707,7 +1680,7 @@ export async function deleteOrganizationDomain(
   if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, notFound: false, primary: false };
 
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/domains/${encodeURIComponent(domainID)}`,
       {
         method: "DELETE",
@@ -1748,7 +1721,7 @@ export async function setPrimaryOrganizationDomain(
     return { ok: false, status: 503, notFound: false, notVerified: false };
 
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/domains/${encodeURIComponent(domainID)}/primary`,
       {
         method: "POST",
@@ -1827,7 +1800,7 @@ export async function listOwnOrganizationClients(opts?: {
   params.set("page_size", String(pageSize));
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/clients?${params.toString()}`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/clients?${params.toString()}`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -1926,7 +1899,7 @@ export async function getOrganizationClientById(
   }
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(id)}`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(id)}`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -2044,7 +2017,7 @@ export async function createOrganizationClient(
   }
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/clients`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/clients`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2198,7 +2171,7 @@ export async function updateOrganizationClient(
   }
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(id)}`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(id)}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -2367,7 +2340,7 @@ export async function deleteOrganizationClient(id: string): Promise<DeleteOrgCli
     // NO `client_secret`, NO `Authorization`-bearer header that
     // didn't already exist on the session cookie. Tenant scope is
     // enforced by the IDP from the actor's session.
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(id)}`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(id)}`, {
       method: "DELETE",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -2485,7 +2458,7 @@ export async function rotateOrganizationClientSecret(
   try {
     // No `body:`, no `Content-Type` header — POST with an empty body.
     // Tenant scope is server-enforced from the actor's session cookie.
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(id)}/secret/regenerate`,
       {
         method: "POST",
@@ -2618,7 +2591,7 @@ export async function listSigningKeys(): Promise<ListSigningKeysResult> {
   const cfg = loadRuntimeConfig();
   if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, forbidden: false };
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/keys`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/keys`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -2663,7 +2636,7 @@ export async function listAnomalyEvents(): Promise<ListAnomalyEventsResult> {
   if (!cfg || !cfg.idp.enabled)
     return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/anomaly/events`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/anomaly/events`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -2709,7 +2682,7 @@ export async function getAnomalyStats(): Promise<GetAnomalyStatsResult> {
   if (!cfg || !cfg.idp.enabled)
     return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/anomaly/stats`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/anomaly/stats`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -2754,7 +2727,7 @@ export async function listAdminSessions(): Promise<ListAdminSessionsResult> {
   if (!cfg || !cfg.idp.enabled)
     return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/system/sessions`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/system/sessions`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -2826,7 +2799,7 @@ export async function verifyAuditChain(): Promise<VerifyAuditChainResult> {
     // it triggers a BFS walk over the audit chain for each tenant
     // org; the response carries hash/signature DIAGNOSTICS only
     // (status counts + per-shard head signature status).
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/system/audit/chain/verify`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/system/audit/chain/verify`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -2896,7 +2869,7 @@ export async function getSystemInfo(): Promise<GetSystemInfoResult> {
   if (!cfg || !cfg.idp.enabled)
     return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/health/details`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/health/details`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -3081,7 +3054,7 @@ export async function listOrganizationIdentityProviders(
   });
   try {
     // 1) List form first (CE, 0..N providers).
-    const listRes = await fetch(`${base}/identity-providers`, {
+    const listRes = await idpFetch(`${base}/identity-providers`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -3106,7 +3079,7 @@ export async function listOrganizationIdentityProviders(
 
     // 2) Singular fallback (OSS — one optional provider). 404 here means "none
     //    configured", which normalizes to an EMPTY list (not an error).
-    const oneRes = await fetch(`${base}/identity-provider`, {
+    const oneRes = await idpFetch(`${base}/identity-provider`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -3178,7 +3151,7 @@ export async function listOrganizationWebhooks(
     return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
   }
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/webhooks`,
       { method: "GET", headers: await idpAuthHeaders(), cache: "no-store" }
     );
@@ -3232,7 +3205,7 @@ export async function listOrgRoles(orgID: string): Promise<ListOrgRolesResult> {
   const cfg = loadRuntimeConfig();
   if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, forbidden: false };
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/roles`,
       { method: "GET", headers: await idpAuthHeaders(), cache: "no-store" }
     );
@@ -3281,7 +3254,7 @@ export async function listScopeTemplates(): Promise<ListScopeTemplatesResult> {
     return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
   }
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/scope-templates`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/scope-templates`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -3346,7 +3319,7 @@ export async function approveUserRegistration(userId: string): Promise<ApproveRe
     return { ok: false, status: 503, message: "IdP is not configured." };
   }
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/approve`,
       {
         method: "POST",
@@ -3391,7 +3364,7 @@ export async function listUserRoles(userId: string): Promise<ListUserRolesResult
   const cfg = loadRuntimeConfig();
   if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, forbidden: false };
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/roles`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/roles`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -3436,7 +3409,7 @@ export async function assignUserRole(
     return { ok: false, status: 503, message: "IdP is not configured." };
   }
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/roles`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/roles`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -3478,7 +3451,7 @@ export async function removeUserRole(
     return { ok: false, status: 503, message: "IdP is not configured." };
   }
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/roles/${encodeURIComponent(roleId)}`,
       {
         method: "DELETE",
@@ -3588,7 +3561,7 @@ export async function listApiResources(): Promise<ListAPIResourcesResult> {
   if (!cfg || !cfg.idp.enabled)
     return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/api-resources`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/api-resources`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -3638,7 +3611,7 @@ export async function getApiResource(id: string): Promise<GetAPIResourceResult> 
       featureUnavailable: false,
     };
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -3751,7 +3724,7 @@ export async function createApiResource(
   if (Array.isArray(opts.scopes) && opts.scopes.length > 0)
     body.scopes = opts.scopes.map((s) => ({ name: s.name, description: s.description }));
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/api-resources`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/api-resources`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -3878,7 +3851,7 @@ export async function updateApiResource(
   if (Array.isArray(opts.scopes))
     body.scopes = opts.scopes.map((s) => ({ name: s.name, description: s.description }));
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -4010,7 +3983,7 @@ export async function rotateApiResourceSecret(id: string): Promise<RotateAPIReso
     // is server-enforced from the actor's session cookie. The request
     // CANNOT carry organization_id, resource_secret, secret_hash, or
     // any other field by construction.
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}/secret/regenerate`,
       {
         method: "POST",
@@ -4121,7 +4094,7 @@ export async function deleteApiResource(id: string): Promise<DeleteAPIResourceRe
       message: "IdP is not configured.",
     };
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/api-resources/${encodeURIComponent(id)}`, {
       method: "DELETE",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -4262,7 +4235,7 @@ export async function listServiceAccounts(orgID: string): Promise<ListServiceAcc
   if (!cfg || !cfg.idp.enabled)
     return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/service-accounts`,
       { method: "GET", headers: await idpAuthHeaders(), cache: "no-store" }
     );
@@ -4321,7 +4294,7 @@ export async function createServiceAccount(
     body.expires_at = opts.expires_at;
   }
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/service-accounts`,
       {
         method: "POST",
@@ -4423,7 +4396,7 @@ export async function deleteServiceAccount(
     // actor, not the URL). orgID is retained on the signature for the caller's
     // authorization intent but is not part of the path.
     void orgID;
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/service-accounts/${encodeURIComponent(saID)}`,
       {
         method: "DELETE",
@@ -4543,7 +4516,7 @@ export async function linkServiceAccountToOAuthClient(
     // orgID stays on the signature for caller intent; the org is derived
     // server-side from the actor + the client row, never from the request.
     void orgID;
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(oauthClientID)}`,
       {
         method: "PUT",
@@ -4693,7 +4666,7 @@ export async function unlinkServiceAccountFromOAuthClient(
     // caller intent; scope is enforced server-side from the actor + client row.
     void orgID;
     void serviceAccountID;
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(oauthClientID)}`,
       {
         method: "PUT",
@@ -4866,7 +4839,7 @@ export async function listServiceAccountOAuthClients(
     // is the org's clients filtered to this SA. The list handler org-pins an
     // org_admin actor server-side; orgID stays for caller intent only.
     void orgID;
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/clients?page=1&page_size=200`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/clients?page=1&page_size=200`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -5011,7 +4984,7 @@ async function callServiceAccountLifecycle(
   }
   try {
     void orgID;
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/service-accounts/${encodeURIComponent(serviceAccountID)}/${segment}`,
       {
         method: "POST",
@@ -5176,7 +5149,7 @@ export async function updateServiceAccount(
   }
   try {
     void orgID;
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/service-accounts/${encodeURIComponent(serviceAccountID)}`,
       {
         // Released OSS updates a service account with PUT /service-accounts/:id.
@@ -5323,7 +5296,7 @@ export async function getOrgProtocolSettings(orgId: string): Promise<GetOrgProto
   if (!cfg || !cfg.idp.enabled) return { ok: false, reason: "unavailable", status: 0 };
 
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgId)}/protocol-settings`,
       {
         method: "GET",
@@ -5418,7 +5391,7 @@ export async function updateOrgProtocolSettings(
     return protocolSettingsFailure({ kind: "unavailable", status: 503 });
 
   try {
-    const res = await fetch(
+    const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgId)}/protocol-settings`,
       {
         method: "PUT",
