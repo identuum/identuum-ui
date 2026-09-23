@@ -3,10 +3,10 @@
  *
  * Every call goes to the same origin the shell was served from. The HttpOnly
  * `access_token` cookie is sent by the browser and lifted to a Bearer by the
- * boundary; page script never reads, stores or forwards a token. Unsafe
- * methods carry the request header the boundary requires — a cross-site form
- * cannot set it, and a non-allowlisted origin cannot send it through CORS —
- * which is the CSRF mechanism this proof selected.
+ * boundary; page script never reads, stores or forwards a token. Every
+ * request, reads included, carries the request header the boundary requires —
+ * a cross-site form cannot set it, and a non-allowlisted origin cannot send it
+ * through CORS — which is the CSRF mechanism this proof selected.
  */
 
 export const BFF_PREFIX = "/bff";
@@ -54,9 +54,8 @@ function refreshSession(signal: AbortSignal): Promise<Response> {
 function withBoundaryHeaders(init: RequestInit): RequestInit {
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
-  if (method !== "GET" && method !== "HEAD") {
-    headers.set(BFF_REQUEST_HEADER, BFF_REQUEST_HEADER_VALUE);
-  }
+  // The boundary requires the proof on EVERY /bff request, reads included.
+  headers.set(BFF_REQUEST_HEADER, BFF_REQUEST_HEADER_VALUE);
   if (init.body !== undefined && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
