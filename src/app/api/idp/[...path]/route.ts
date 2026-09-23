@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
+import { refuseCrossOrigin } from "@/lib/same-origin-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,11 @@ async function proxyToIdP(req: NextRequest, segments: string[]): Promise<Respons
   if (!cfg || !cfg.idp.enabled) {
     return NextResponse.json({ error: "IdP not configured" }, { status: 503 });
   }
+
+  // CSRF: a state-changing request from any other origin never reaches the
+  // IdP with the user's cookie (see same-origin-guard.ts).
+  const refused = refuseCrossOrigin(req, cfg);
+  if (refused) return refused;
 
   const base = idpBaseUrl(cfg).replace(/\/$/, "");
   const upstreamPath = `/${segments.join("/")}`;

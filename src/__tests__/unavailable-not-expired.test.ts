@@ -216,7 +216,12 @@ describe("three states, honest retry, no false verdict [UNAVAILABLE-NOT-EXPIRED-
     const { NextRequest } = await import("next/server");
     const req = new NextRequest("http://ui.test/api/auth/logout", {
       method: "POST",
-      headers: { cookie: "access_token=live; refresh_token=live" },
+      // Same-origin form POST (the CSRF guard refuses anything else).
+      headers: {
+        cookie: "access_token=live; refresh_token=live",
+        origin: "http://ui.test",
+        host: "ui.test",
+      },
     });
     const res = await POST(req);
     expect(res.status).toBe(303);

@@ -28,6 +28,7 @@
 
 import { type NextRequest, NextResponse } from "next/server";
 import { idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
+import { refuseCrossOrigin } from "@/lib/same-origin-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,11 @@ export const LOGIN_SIGNED_OUT_LOCALLY = "/login?reason=signed_out_locally";
 
 export async function POST(req: NextRequest): Promise<Response> {
   const cfg = loadRuntimeConfig();
+  // CSRF: another origin must not be able to sign the user out (nor reach
+  // the IdP with their cookie). Refused before anything is forwarded or cleared.
+  const refused = refuseCrossOrigin(req, cfg);
+  if (refused) return refused;
+
   let destination = LOGIN_SIGNED_OUT;
 
   if (cfg?.idp.enabled) {
