@@ -79,24 +79,54 @@ export function isNoEmailSentinel(email: string): boolean {
 }
 
 /**
+ * The organization's registration policy (organizations.allow_public_registration
+ * + require_registration_approval), read from GET /organizations/current.
+ */
+export interface OrgRegistrationPolicy {
+  allow_public_registration: boolean;
+  require_registration_approval: boolean;
+}
+
+/**
+ * OSS stores an admin-disabled org_user and a self-registrant held for
+ * approval identically (banned=true). Only an organization that takes public
+ * registrations AND holds them for approval can have the second kind; when
+ * the policy could not be read (null), both remain possible.
+ */
+export function bannedMayAwaitApproval(policy: OrgRegistrationPolicy | null): boolean {
+  return (
+    policy === null || (policy.allow_public_registration && policy.require_registration_approval)
+  );
+}
+
+/** Label for a banned org_user whose state the backend cannot disambiguate. */
+export const BANNED_AMBIGUOUS_STATUS_LABEL = "Disabled or awaiting approval";
+
+/**
  * Derives the operator-facing status from a user's flag set.
  *
  * Precedence:
  *   1. `deleted=true` → `deleted` (terminal — no action affordances).
  *   2. `invitation_pending=true` → `pending`.
  *   3. No-email sentinel + not verified → `pending` (manual-invite case).
- *   4. `banned=true` && role==="org_user" → `pending_approval`
- *      (the IDP creates self-registered users banned=true; only ApproveRegistration
- *      clears it. Surfacing this as its own status keeps Approve as a distinct
- *      affordance instead of being conflated with admin-Disabled accounts.)
+ *   4. `banned=true` && role==="org_user" → `pending_approval` when the
+ *      organization may hold registrations for approval (see
+ *      bannedMayAwaitApproval): the row is then either disabled or a
+ *      self-registrant awaiting approval, and is labelled as such
+ *      (BANNED_AMBIGUOUS_STATUS_LABEL). Otherwise it is `disabled`.
  *   5. `active=false` → `disabled`.
  *   6. Otherwise → `active`.
  */
-export function computeOrgUserStatus(u: OrgAdminUserActionInput): OrgAdminUserStatus {
+export function computeOrgUserStatus(
+  u: OrgAdminUserActionInput,
+  policy: OrgRegistrationPolicy | null = null
+): OrgAdminUserStatus {
   if (u.deleted) return "deleted";
   if (u.invitation_pending) return "pending";
   if (isNoEmailSentinel(u.email) && !u.email_verified) return "pending";
-  if (u.banned && u.role === "org_user") return "pending_approval";
+  if (u.banned && u.role === "org_user") {
+    return bannedMayAwaitApproval(policy) ? "pending_approval" : "disabled";
+  }
   if (!u.active) return "disabled";
   return "active";
 }
@@ -140,9 +170,10 @@ export interface OrgAdminUserActionsResult {
  */
 export function deriveOrgAdminUserActions(
   u: OrgAdminUserActionInput,
-  activeAdminCount: number
+  activeAdminCount: number,
+  policy: OrgRegistrationPolicy | null = null
 ): OrgAdminUserActionsResult {
-  const status = computeOrgUserStatus(u);
+  const status = computeOrgUserStatus(u, policy);
 
   // Deleted users: terminal state, no actions.
   if (status === "deleted") {
@@ -168,11 +199,11 @@ export function deriveOrgAdminUserActions(
     return { status, actions, soleActiveAdmin: false };
   }
 
-  // Pending registration approval: approve-registration only. The IDP rejects
-  // the lifecycle Disable/Enable on banned users with ErrInvalidRequest, so we
-  // suppress those affordances and surface the single Approve action.
+  // Disabled or awaiting approval: the row may be either, so both ways back
+  // are offered — Enable (PUT active=true, which OSS maps to banned=false)
+  // and Approve registration.
   if (status === "pending_approval") {
-    actions.push("approve-registration");
+    actions.push("enable", "approve-registration");
     return { status, actions, soleActiveAdmin: false };
   }
 
@@ -319,7 +350,7 @@ export const APPROVE_REGISTRATION_COPY = {
   sectionHeading: "Approve registration",
   /** Description shown beneath the heading. */
   description:
-    "This user has registered and is waiting for an administrator to approve their access.",
+    "If this user registered and is waiting for an administrator, approve their access here.",
   /** Button label. */
   buttonLabel: "Approve registration",
   /** Confirmation message after a successful approve. */

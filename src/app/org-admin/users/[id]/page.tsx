@@ -29,6 +29,7 @@ import { ResetMFAButton, UserRowActions } from "../user-row-actions";
 import { ApproveButton } from "./approve-button";
 import {
   APPROVE_REGISTRATION_COPY,
+  BANNED_AMBIGUOUS_STATUS_LABEL,
   buildOrgAdminUserAuditHref,
   computeOrgUserStatus,
   deriveOrgAdminUserActions,
@@ -111,10 +112,19 @@ export default async function OrgAdminUserDetailPage({
   // backend enforce the final guard on submission.
   const activeAdminCount =
     allUsers?.users.filter((u) => u.role === "org_admin" && u.active && !u.deleted).length ?? 0;
-  const status = computeOrgUserStatus(user);
+  // The registration policy decides whether a banned org_user can be a
+  // self-registrant awaiting approval (null when the org could not be read).
+  const registrationPolicy = org
+    ? {
+        allow_public_registration: org.allow_public_registration,
+        require_registration_approval: org.require_registration_approval,
+      }
+    : null;
+  const status = computeOrgUserStatus(user, registrationPolicy);
   const { actions, soleActiveAdmin: isSoleActiveAdmin } = deriveOrgAdminUserActions(
     user,
-    activeAdminCount
+    activeAdminCount,
+    registrationPolicy
   );
   const isManualInvite =
     (user.invitation_pending && !user.invitation_email_bound) ||
@@ -127,7 +137,7 @@ export default async function OrgAdminUserDetailPage({
     active: { label: "Active", cls: "text-emerald-700 bg-emerald-50 border-emerald-200" },
     pending: { label: "Pending", cls: "text-amber-700 bg-amber-50 border-amber-200" },
     pending_approval: {
-      label: "Pending approval",
+      label: BANNED_AMBIGUOUS_STATUS_LABEL,
       cls: "text-violet-700 bg-violet-50 border-violet-200",
     },
     disabled: { label: "Disabled", cls: "text-stone-500 bg-stone-100 border-stone-200" },

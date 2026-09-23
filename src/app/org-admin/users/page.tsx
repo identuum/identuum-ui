@@ -15,37 +15,19 @@
  */
 
 import type { Metadata } from "next";
-import { listOrgUsers } from "@/lib/idp-admin-client";
+import { getOwnOrganization, listOrgUsers } from "@/lib/idp-admin-client";
 import type { OrgUserItem } from "@/lib/types";
+import {
+  BANNED_AMBIGUOUS_STATUS_LABEL,
+  computeOrgUserStatus,
+  isNoEmailSentinel,
+  type OrgRegistrationPolicy,
+} from "./[id]/user-detail-actions";
 import { UserRowActions } from "./user-row-actions";
 
 export const metadata: Metadata = { title: "Users — Identuum Org Admin" };
 
 type StatusFilter = "all" | "active" | "pending" | "pending_approval" | "disabled";
-
-/**
- * Defensive fallback: detect sentinel emails from older API responses that
- * pre-date the invitation_pending field.
- */
-function isNoEmailSentinel(email: string): boolean {
-  return email.startsWith("noemail+") && email.endsWith("@no-email.internal");
-}
-
-function computeStatus(
-  user: OrgUserItem
-): "active" | "pending" | "pending_approval" | "disabled" | "deleted" {
-  if (user.deleted) return "deleted";
-  // Use the explicit backend field first.
-  if (user.invitation_pending) return "pending";
-  // Defensive fallback: sentinel email without the new field.
-  if (isNoEmailSentinel(user.email) && !user.email_verified) return "pending";
-  // IDP creates self-registered users with banned=true; only ApproveRegistration
-  // flips it. The list-level computation mirrors deriveOrgAdminUserActions on
-  // the detail page so both surfaces stay in lockstep.
-  if (user.banned && user.role === "org_user") return "pending_approval";
-  if (!user.active) return "disabled";
-  return "active";
-}
 
 const USERS_PAGE_SIZE = 200;
 
@@ -73,8 +55,17 @@ export default async function OrgAdminUsersPage({
     ? (rawFilter as StatusFilter)
     : "all";
 
-  const listResult = await listOrgUsers({ page });
+  const [listResult, org] = await Promise.all([listOrgUsers({ page }), getOwnOrganization()]);
   const users = listResult?.users ?? null;
+  // Whether a banned org_user can be a self-registrant awaiting approval
+  // (null when the organization could not be read: both stay possible).
+  const policy: OrgRegistrationPolicy | null = org
+    ? {
+        allow_public_registration: org.allow_public_registration,
+        require_registration_approval: org.require_registration_approval,
+      }
+    : null;
+  const computeStatus = (u: OrgUserItem) => computeOrgUserStatus(u, policy);
   // Every user is REACHABLE BY PAGING on the backend's 1-based
   // page/page_size contract; the window is never presented as the whole —
   // when more than one page exists, the counts are labeled page-scoped and
@@ -163,7 +154,11 @@ export default async function OrgAdminUsersPage({
       ) : displayUsers.length === 0 ? (
         <EmptyState filter={filter} />
       ) : (
-        <UsersTable users={displayUsers} activeAdminCount={activeAdminCount} />
+        <UsersTable
+          users={displayUsers}
+          activeAdminCount={activeAdminCount}
+          computeStatus={computeStatus}
+        />
       )}
 
       {paginated && (
@@ -231,9 +226,11 @@ function PaginationControls({
 function UsersTable({
   users,
   activeAdminCount,
+  computeStatus,
 }: {
   users: OrgUserItem[];
   activeAdminCount: number;
+  computeStatus: (u: OrgUserItem) => ReturnType<typeof computeOrgUserStatus>;
 }) {
   return (
     <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
@@ -259,7 +256,12 @@ function UsersTable({
           </thead>
           <tbody className="divide-y divide-stone-100">
             {users.map((user) => (
-              <UserRow key={user.id} user={user} activeAdminCount={activeAdminCount} />
+              <UserRow
+                key={user.id}
+                user={user}
+                status={computeStatus(user)}
+                activeAdminCount={activeAdminCount}
+              />
             ))}
           </tbody>
         </table>
@@ -268,13 +270,19 @@ function UsersTable({
   );
 }
 
-function UserRow({ user, activeAdminCount }: { user: OrgUserItem; activeAdminCount: number }) {
-  const status = computeStatus(user);
-
+function UserRow({
+  user,
+  status,
+  activeAdminCount,
+}: {
+  user: OrgUserItem;
+  status: ReturnType<typeof computeOrgUserStatus>;
+  activeAdminCount: number;
+}) {
   const statusBadge: Record<typeof status, { label: string; cls: string }> = {
     active: { label: "Active", cls: "text-emerald-700 bg-emerald-50" },
     pending: { label: "Pending", cls: "text-amber-700 bg-amber-50" },
-    pending_approval: { label: "Pending approval", cls: "text-violet-700 bg-violet-50" },
+    pending_approval: { label: BANNED_AMBIGUOUS_STATUS_LABEL, cls: "text-violet-700 bg-violet-50" },
     disabled: { label: "Disabled", cls: "text-stone-500 bg-stone-100" },
     deleted: { label: "Deleted", cls: "text-red-500 bg-red-50" },
   };
@@ -307,16 +315,11 @@ function UserRow({ user, activeAdminCount }: { user: OrgUserItem; activeAdminCou
   // Disable the "Disable" button if this is the last active admin.
   const isSoleActiveAdmin = user.role === "org_admin" && user.active && activeAdminCount <= 1;
 
-  // Show Disable/Enable only for fully active or admin-disabled users.
-  // Pending invitations and pending-approval registrations are not yet
-  // functional accounts; skip lifecycle actions for them to avoid confusing
-  // the admin. Pending-approval rows direct the operator to the detail page
-  // where the Approve affordance lives.
-  const showActions =
-    !user.deleted &&
-    user.role !== "site_admin" &&
-    status !== "pending" &&
-    status !== "pending_approval";
+  // Show Disable/Enable for active and disabled users. Pending invitations are
+  // not yet functional accounts, so they get no lifecycle action. A row that
+  // is disabled or awaiting approval gets Enable here; Approve registration
+  // lives on the detail page.
+  const showActions = !user.deleted && user.role !== "site_admin" && status !== "pending";
 
   // Display label: use backend-authoritative invitation fields,
   // fall back to sentinel email detection for older API responses.

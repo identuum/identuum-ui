@@ -760,10 +760,10 @@ describe("computeOrgUserStatus — pending_approval (banned+org_user)", () => {
 });
 
 describe("deriveOrgAdminUserActions — approve-registration surface", () => {
-  it("pending_approval users surface ONLY approve-registration", () => {
+  it("pending_approval users (disabled or awaiting approval) surface enable + approve-registration", () => {
     const r = deriveOrgAdminUserActions(user({ banned: true }), 1);
     expect(r.status).toBe("pending_approval");
-    expect(r.actions).toEqual(["approve-registration"]);
+    expect(r.actions).toEqual(["enable", "approve-registration"]);
     expect(r.soleActiveAdmin).toBe(false);
   });
 
