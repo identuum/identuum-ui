@@ -811,7 +811,9 @@ export async function listOrgUsers(opts?: {
         email: String(u.email ?? ""),
         name: typeof u.name === "string" && u.name.length > 0 ? u.name : null,
         role: (u.role as UserRole) ?? "org_user",
-        active: Boolean(u.active),
+        // OSS carries `banned`, not `active` (PUT {active} writes banned = !active):
+        // an absent `active` is derived, never coerced to false (ABSENT ≠ NEGATIVE).
+        active: typeof u.active === "boolean" ? u.active : !u.banned,
         deleted: Boolean(u.deleted),
         mfa_enabled: Boolean(u.mfa_enabled),
         email_verified: Boolean(u.email_verified),
@@ -906,7 +908,9 @@ export async function getOrgUserById(id: string): Promise<OrgUserItem | null> {
       email: String(u.email ?? ""),
       name: typeof u.name === "string" && u.name.length > 0 ? u.name : null,
       role: (u.role as UserRole) ?? "org_user",
-      active: Boolean(u.active),
+      // OSS carries `banned`, not `active` (PUT {active} writes banned = !active):
+      // an absent `active` is derived, never coerced to false (ABSENT ≠ NEGATIVE).
+      active: typeof u.active === "boolean" ? u.active : !u.banned,
       deleted: Boolean(u.deleted),
       mfa_enabled: Boolean(u.mfa_enabled),
       email_verified: Boolean(u.email_verified),
