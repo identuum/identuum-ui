@@ -47,8 +47,8 @@ const AUTH_COOKIES = ["access_token", "refresh_token"] as const;
  * IdP's correlation id, and the redirect names the state
  * (/login?reason=signed_out_locally) so the /login copy and the operator can
  * tell "signed out everywhere" from "signed out here; the identity service
- * could not confirm". A 4xx from the IdP (no session to revoke) is a plain
- * sign-out.
+ * could not confirm". Only an unmarked 204 confirms completion; a refusal,
+ * rate limit, redirect or unexpected success shape does not confirm revocation.
  */
 export const LOGIN_SIGNED_OUT = "/login";
 export const LOGIN_SIGNED_OUT_LOCALLY = "/login?reason=signed_out_locally";
@@ -60,7 +60,8 @@ export async function POST(req: NextRequest): Promise<Response> {
   const refused = refuseCrossOrigin(req, cfg);
   if (refused) return refused;
 
-  let destination = LOGIN_SIGNED_OUT;
+  // Only an unmarked 204 from the IdP confirms revocation (below).
+  let destination = LOGIN_SIGNED_OUT_LOCALLY;
 
   if (cfg?.idp.enabled) {
     // Forward session cookies to the IdP logout endpoint server-side so
@@ -68,21 +69,26 @@ export async function POST(req: NextRequest): Promise<Response> {
     // below happens regardless of this hop's outcome — see the decision above.
     const cookieHeader = req.cookies
       .getAll()
+      .filter((cookie) => AUTH_COOKIES.some((name) => name === cookie.name))
       .map((c) => `${c.name}=${c.value}`)
       .join("; ");
 
     try {
       const upstream = await fetch(`${idpBaseUrl(cfg)}/api/v1/logout`, {
         method: "POST",
-        headers: { Cookie: cookieHeader },
+        headers: { Cookie: cookieHeader, "X-Requested-With": "identuum-ui" },
         cache: "no-store",
+        redirect: "manual",
+        signal: AbortSignal.timeout(5000),
       });
-      if (upstream.status >= 500) {
+      if (upstream.status !== 204 || upstream.headers.has("x-identuum-logout")) {
         const cid = upstream.headers.get("x-request-id") ?? "-";
         console.warn(
           `[logout] IdP answered ${upstream.status} (correlation_id=${cid}): server-side session revocation NOT confirmed; clearing this browser's cookies anyway (decision: THE-UNAVAILABLE-IS-NOT-EXPIRED)`
         );
         destination = LOGIN_SIGNED_OUT_LOCALLY;
+      } else {
+        destination = LOGIN_SIGNED_OUT;
       }
     } catch (err) {
       console.warn(
