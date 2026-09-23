@@ -6,3 +6,10 @@ README.md
 *.md
 config/
 setup/
+# Local environment files must never enter the build context or its cache.
+.env*
+**/.env*
+*.env
+*.env.*
+**/*.env
+**/*.env.*

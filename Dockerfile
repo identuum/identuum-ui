@@ -43,15 +43,19 @@ RUN mkdir -p /app/config-mount
 # Stage 3: production runner (Next.js standalone)
 ##############################################################################
 # cgr.dev/chainguard/node, pinned by DIGEST (owner ruling THE-UI-NODE-26-LATEST,
-# 2026-09-06; moved digest-to-digest by THE-PATCHED-BASE, 2026-09-12).
-# Measured AT THIS DIGEST (sha256:4a274a26…, image created 2026-09-10): node
-# v26.8.2; busybox /bin/sh PRESENT (/bin/sh -> /bin/busybox, 231 entries in
-# /bin); ENTRYPOINT ["/usr/bin/node"]; USER 65532 (`node`); WORKDIR /app; npm
+# 2026-09-06; most recent digest-to-digest move measured 2026-09-22).
+# Measured AT THIS DIGEST (sha256:1f903d44…, image created 2026-09-17): node
+# v26.9.0; busybox /bin/sh PRESENT (/bin/sh -> /bin/busybox);
+# ENTRYPOINT ["/usr/bin/node"]; USER 65532 (`node`); WORKDIR /app; npm
 # at /usr/bin/npm; grype through the pinned judge lictor (`lictor grype`; the
 # idp-oss tools/grype-gate it was ported from is retired since OSS 63ee215):
-# matches=0 fixable=0 severe=0. glibc (Wolfi), not Alpine: IMG-NONALPINE holds.
+# matches=1 fixable=0 allowlisted=0 unfixable=1 severe=0 on ARM64 and AMD64.
+# The remaining Medium CVE-2026-89092 has fix state "unknown"; it is not
+# suppressed or claimed fixed. glibc (Wolfi), not Alpine: IMG-NONALPINE holds.
+# This move from sha256:4a274a26… patches zlib to 1.3.2.1_rc20260601-r0
+# and node-gyp to 13.0.2-r1, removing all eight fixable scan findings.
 #
-# WHY IT MOVED: the previous digest (sha256:753a6601…) shipped glibc 2.44-r5,
+# PREVIOUS MOVE (2026-09-12): sha256:753a6601… shipped glibc 2.44-r5,
 # and on 2026-09-12 the vulnerability database attached CVE-2026-18374 and
 # GHSA-qg52-8pr2-xj9v to it with a published fix in 2.44-r6 — eight fixable
 # findings across glibc, glibc-locale-posix, ld-linux and libcrypt1. The judge
@@ -65,7 +69,7 @@ RUN mkdir -p /app/config-mount
 # toolchain-parity reads that annotation and holds it equal to the build
 # stages, engines, @types/node and the CI matrix.
 # node-major=26
-FROM cgr.dev/chainguard/node@sha256:4a274a26acabd969b086b5a4840c5286f915d6ce43b8c2e74155a7061a30cd87 AS runner
+FROM cgr.dev/chainguard/node@sha256:1f903d44fc11a6f6e74447fc2c6a3c141f112217576be5d96c283210116b5d25 AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -87,8 +91,8 @@ COPY --from=builder --chown=node:node /app/config-mount ./config
 
 # The Debian runner's npm-removal RUN line is DROPPED: this base carries npm
 # at /usr/bin/npm inside its node package (no vendored tree under
-# /usr/local/lib), it scans to zero findings at this digest, and removing it
-# would need root. `server.js` remains the only thing this image executes.
+# /usr/local/lib), and removing it would need root. The current scan result
+# is recorded above. `server.js` remains the only thing this image executes.
 
 USER node
 
