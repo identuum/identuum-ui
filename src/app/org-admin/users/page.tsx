@@ -233,7 +233,10 @@ function UsersTable({
   computeStatus: (u: OrgUserItem) => ReturnType<typeof computeOrgUserStatus>;
 }) {
   return (
-    <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
+    <div
+      data-testid="user-list"
+      className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden"
+    >
       <div className="px-5 py-3 border-b border-stone-100">
         <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
           {users.length} {users.length === 1 ? "user" : "users"}
@@ -456,7 +459,10 @@ function EmptyState({ filter }: { filter: StatusFilter }) {
 
 function ErrorState() {
   return (
-    <div className="bg-white border border-red-100 rounded-[1.5rem] shadow-sm px-8 py-12 text-center">
+    <div
+      data-testid="users-unavailable"
+      className="bg-white border border-red-100 rounded-[1.5rem] shadow-sm px-8 py-12 text-center"
+    >
       <p className="text-sm font-semibold text-red-600">Could not load users</p>
       <p className="text-xs text-stone-400 mt-1">
         The identity service is unavailable. Please try again in a moment.

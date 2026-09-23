@@ -120,7 +120,8 @@ test("a user-list outage is not an empty list", async ({ page }) => {
         : {},
     });
   });
-  await page.goto(`${baseURL}/org-admin`);
+  // Plan D: the user list is the shared /org-admin/users page.
+  await page.goto(`${baseURL}/org-admin/users`);
   await expect(page.getByTestId("users-unavailable")).toBeVisible();
   await expect(page.getByTestId("user-list")).toHaveCount(0);
 });

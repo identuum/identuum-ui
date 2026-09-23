@@ -1,9 +1,14 @@
+// The shared pages are styled by the app's own stylesheet (Tailwind through
+// the repository's PostCSS config), the same one the Next root layout loads.
+import "@/app/globals.css";
 import { type FormEvent, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { UserUnavailable } from "@/components/shared/user-unavailable";
 import { roleToPath } from "@/lib/role-routing";
 import { bff, readJson } from "./bff";
 import { signOutDestination } from "./logout";
+import { buildOrgAdminRoute, buildUnavailableRoute } from "./org-admin-routes";
+import { navigate, useLocation } from "./router";
+import { ServerRoute } from "./server-route";
 import { discoverPlatform, type SessionState, validateSession } from "./session";
 
 // Page operations have a bounded transport failure outcome. Session validation
@@ -37,26 +42,49 @@ const UNAVAILABLE_MESSAGE = "The identity provider is unavailable. Try again.";
 
 // ----------------------------------------------------------------- router
 
-type Listener = () => void;
-const listeners = new Set<Listener>();
+export { navigate };
 
-export function navigate(path: string): void {
-  window.history.pushState(null, "", path);
-  for (const l of listeners) l();
+/**
+ * The shared Next pages use plain anchors and the Next-only sign-out route.
+ * In the export a same-origin link to a shell path navigates in place (no
+ * document load), and a sign-out form posted to /api/auth/logout signs out
+ * through the Go boundary's logout instead. API, boundary and system paths
+ * are left to the browser.
+ */
+const NOT_SHELL = ["/api/", "/bff", "/.well-known/", "/system/", "/health", "/livez", "/metrics"];
+const NEXT_SIGN_OUT = "/api/auth/logout";
+
+function isShellPath(pathname: string): boolean {
+  return !NOT_SHELL.some((p) => pathname === p || pathname.startsWith(p));
 }
 
-function usePath(): string {
-  const [path, setPath] = useState(window.location.pathname + window.location.search);
-  useEffect(() => {
-    const update = () => setPath(window.location.pathname + window.location.search);
-    listeners.add(update);
-    window.addEventListener("popstate", update);
-    return () => {
-      listeners.delete(update);
-      window.removeEventListener("popstate", update);
-    };
-  }, []);
-  return path;
+function interceptDocument(): () => void {
+  const onClick = (e: MouseEvent) => {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+      return;
+    }
+    const anchor = (e.target as Element | null)?.closest?.("a");
+    if (!anchor || anchor.target || anchor.hasAttribute("download")) return;
+    const href = anchor.getAttribute("href");
+    if (href === null) return;
+    const url = new URL(href, window.location.href);
+    if (url.origin !== window.location.origin || !isShellPath(url.pathname)) return;
+    e.preventDefault();
+    navigate(url.pathname + url.search + url.hash);
+  };
+  const onSubmit = (e: SubmitEvent) => {
+    const form = e.target as HTMLFormElement | null;
+    if (!form || e.defaultPrevented || form.method.toLowerCase() !== "post") return;
+    if (new URL(form.action, window.location.href).pathname !== NEXT_SIGN_OUT) return;
+    e.preventDefault();
+    void signOut();
+  };
+  document.addEventListener("click", onClick);
+  document.addEventListener("submit", onSubmit);
+  return () => {
+    document.removeEventListener("click", onClick);
+    document.removeEventListener("submit", onSubmit);
+  };
 }
 
 function Link({
@@ -525,83 +553,6 @@ function Home({ session }: { session: Extract<SessionState, { kind: "authenticat
   );
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function NotFoundPanel() {
-  // Preserved as today: the panel, at HTTP 200 (Plan A correction, 5b-2).
-  return <p data-testid="user-not-found">This user could not be found.</p>;
-}
-
-function UserDetail({
-  session,
-  id,
-}: {
-  session: Extract<SessionState, { kind: "authenticated" }>;
-  id: string;
-}) {
-  const [user, setUser] = useState<Record<string, unknown> | null | undefined>(undefined);
-  const [status, setStatus] = useState<number | null>(null);
-  const [unavailable, setUnavailable] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    // A route change clears the previous record before the new one is fetched:
-    // no stale user is ever shown under a different id.
-    setUser(undefined);
-    setStatus(null);
-    setUnavailable(false);
-    if (!UUID_RE.test(id)) {
-      setUser(null);
-      return;
-    }
-    pageRequest(`/api/v1/users/${encodeURIComponent(id)}`)
-      .then(async (res) => {
-        if (cancelled) return;
-        setStatus(res.status);
-        if (!res.ok) {
-          if (res.status === 403 || res.status === 404) setUser(null);
-          else setUnavailable(true);
-          return;
-        }
-        const body = await readJson(res);
-        const record = (body?.user as Record<string, unknown> | undefined) ?? body;
-        if (!record || typeof record.id !== "string") setUnavailable(true);
-        else setUser(record);
-      })
-      .catch(() => {
-        if (!cancelled) setUnavailable(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
-  return (
-    <Shell session={session}>
-      <p>
-        <Link to={roleToPath(session.role)} testid="back-to-list">
-          Back
-        </Link>
-      </p>
-      {unavailable ? (
-        <UserUnavailable retryHref={`/org-admin/users/${encodeURIComponent(id)}`} />
-      ) : user === undefined ? (
-        <p data-testid="user-loading">Loading…</p>
-      ) : user === null ? (
-        <NotFoundPanel />
-      ) : (
-        <article data-testid="user-detail" data-id={id} data-status={status ?? ""}>
-          <h1 data-testid="user-email">{String(user.email ?? "")}</h1>
-          <dl>
-            <dt>Id</dt>
-            <dd data-testid="user-id">{String(user.id ?? "")}</dd>
-            <dt>Role</dt>
-            <dd data-testid="user-role">{String(user.role ?? "")}</dd>
-          </dl>
-        </article>
-      )}
-    </Shell>
-  );
-}
-
 function AccountSettings({
   session,
 }: {
@@ -683,9 +634,10 @@ function AccountSettings({
 // -------------------------------------------------------------------- app
 
 function App() {
-  const full = usePath();
-  const [pathname, search] = full.split("?");
+  const { path: full, revalidation } = useLocation();
+  const [pathname = "/", search] = full.split("?");
   const query = new URLSearchParams(search ?? "");
+  useEffect(interceptDocument, []);
   const guard = (
     render: (s: Extract<SessionState, { kind: "authenticated" }>) => React.ReactNode
   ) => <Guard key={full} render={render} pathname={pathname} />;
@@ -694,11 +646,27 @@ function App() {
   if (pathname === "/login") return <Login query={query} />;
   if (pathname === "/setup" || pathname === "/setup-required") return <SetupRequired />;
   if (pathname === "/platform-status") return <PlatformStatus query={query} />;
-  if (pathname === "/dashboard" || pathname === "/org-admin" || pathname === "/site-admin") {
+  if (pathname === "/org-admin" || pathname.startsWith("/org-admin/")) {
+    return (
+      <ServerRoute
+        routeKey={full}
+        revalidation={revalidation}
+        build={() => buildOrgAdminRoute(pathname, query)}
+      />
+    );
+  }
+  if (pathname === "/unavailable") {
+    return (
+      <ServerRoute
+        routeKey={full}
+        revalidation={revalidation}
+        build={() => buildUnavailableRoute(query)}
+      />
+    );
+  }
+  if (pathname === "/dashboard" || pathname === "/site-admin") {
     return guard((s) => <Home session={s} />);
   }
-  const user = pathname.match(/^\/org-admin\/users\/([^/]+)$/);
-  if (user) return guard((s) => <UserDetail session={s} id={decodeURIComponent(user[1] ?? "")} />);
   if (pathname === "/account/settings") return guard((s) => <AccountSettings session={s} />);
   return (
     <section data-testid="not-found">

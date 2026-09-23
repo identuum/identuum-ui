@@ -175,7 +175,7 @@ export default async function OrgAdminUserDetailPage({
   const showRolesCard = !user.deleted && user.role !== "site_admin";
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div data-testid="user-detail" data-id={id} className="space-y-6 max-w-2xl">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs text-stone-400">
         <a href="/org-admin/users" className="hover:text-sky-950 transition-colors">
@@ -188,7 +188,10 @@ export default async function OrgAdminUserDetailPage({
       {/* Page header */}
       <div className="space-y-1">
         <div className="flex items-start gap-3 flex-wrap">
-          <h1 className="text-2xl font-extrabold tracking-tight text-sky-950 break-all">
+          <h1
+            data-testid="user-email"
+            className="text-2xl font-extrabold tracking-tight text-sky-950 break-all"
+          >
             {isManualInvite ? (
               <span className="text-amber-700">{user.name ?? "Manual invite pending"}</span>
             ) : (
@@ -437,7 +440,7 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
 
 function NotFoundPanel() {
   return (
-    <div className="max-w-lg space-y-4">
+    <div data-testid="user-not-found" className="max-w-lg space-y-4">
       <div className="flex items-center gap-2 text-xs text-stone-400">
         <a href="/org-admin/users" className="hover:text-sky-950 transition-colors">
           Users
