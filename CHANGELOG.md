@@ -6,6 +6,44 @@ first published image. Format roughly follows
 [Semantic Versioning](https://semver.org/). The published artifact is the
 container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
+## `v0.2.3`
+
+Three fixes found by the identuum-idp-oss `v0.5.0` release-candidate
+rehearsal. Delta `v0.2.2..HEAD`: these three commits and this release
+commit; the image build (Dockerfile, runtime base, `.dockerignore`) is
+unchanged from `v0.2.2`.
+
+### Security
+
+- **Cross-origin state changes are refused** (`355a22c`). The `/api/idp`
+  proxy and `POST /api/auth/logout` now allow a method other than
+  GET/HEAD/OPTIONS only when Origin equals the runtime config's `ui_origin`
+  (or, when that is unset, the Origin host equals Host), or, with no
+  Origin, when `Sec-Fetch-Site` is `same-origin`. Anything else gets 403
+  before any upstream call. Before, a page on another origin of the same
+  site could act through the proxy with the user's cookie.
+
+### Fixed
+
+- **Sign-out lands on /login** (`7405e33`). The logout redirect was built
+  from the container's listen address (`http://0.0.0.0:7104`) and ended on
+  a connection error; it is relative now.
+- **Users: a disabled member is Disabled, with Enable** (`80c0035`). A
+  banned org_user was always shown as "Pending approval" with no Enable
+  control. It is Disabled with Enable unless the organization takes public
+  registrations and holds them for approval (or its policy could not be
+  read); there it is "Disabled or awaiting approval" with both Enable and
+  Approve registration.
+
+### Security (image)
+
+- Runtime base unchanged from `v0.2.2`
+  (`cgr.dev/chainguard/node@sha256:1f903d44fc11a6f6e74447fc2c6a3c141f112217576be5d96c283210116b5d25`,
+  node v26.9.0 measured in the built image). `make grype-scan` (grype
+  0.119.0 through lictor v0.4.2) on the image built at this release:
+  `matches=1 fixable=0 allowlisted=0 unfixable=1 severe=0` — CVE-2026-89092,
+  Medium, glibc 2.44-r6, fix state `unknown`, as in `v0.2.2`.
+
 ## `v0.2.2`
 
 Two fixes for the org-admin pages against identuum-idp-oss, cut for the
