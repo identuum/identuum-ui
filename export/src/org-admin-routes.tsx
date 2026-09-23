@@ -31,6 +31,15 @@ import ApplicationNewPage, {
 import ApplicationsPage, { metadata as applicationsMeta } from "@/app/org-admin/applications/page";
 import OrgAdminLayout, { metadata as layoutMeta } from "@/app/org-admin/layout";
 import OrgAdminPage from "@/app/org-admin/page";
+import ServiceAccountDetailPage, {
+  metadata as serviceAccountDetailMeta,
+} from "@/app/org-admin/service-accounts/[id]/page";
+import ServiceAccountNewPage, {
+  metadata as serviceAccountNewMeta,
+} from "@/app/org-admin/service-accounts/new/page";
+import ServiceAccountsPage, {
+  metadata as serviceAccountsMeta,
+} from "@/app/org-admin/service-accounts/page";
 import UserDetailPage, { metadata as userDetailMeta } from "@/app/org-admin/users/[id]/page";
 import UsersPage, { metadata as usersMeta } from "@/app/org-admin/users/page";
 import UnavailablePage from "@/app/unavailable/page";
@@ -90,6 +99,14 @@ export const ORG_ADMIN_ROUTES: readonly Route[] = [
     ["id"],
     ApiResourceEditPage,
     apiResourceEditMeta
+  ),
+  route(/^\/org-admin\/service-accounts$/, [], ServiceAccountsPage, serviceAccountsMeta),
+  route(/^\/org-admin\/service-accounts\/new$/, [], ServiceAccountNewPage, serviceAccountNewMeta),
+  route(
+    /^\/org-admin\/service-accounts\/([^/]+)$/,
+    ["id"],
+    ServiceAccountDetailPage,
+    serviceAccountDetailMeta
   ),
 ];
 
