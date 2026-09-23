@@ -25,12 +25,18 @@ function capture() {
   return seen;
 }
 
-it.each(["GET", "HEAD", undefined])("a %s through the boundary carries the browser proof", async (method) => {
-  const seen = capture();
-  await bff("/api/v1/users/fixture", method ? { method } : {});
-  expect(seen).toHaveLength(1);
-  expect(seen[0]).toMatchObject({ url: "/bff/api/v1/users/fixture", proof: BFF_REQUEST_HEADER_VALUE });
-});
+it.each(["GET", "HEAD", undefined])(
+  "a %s through the boundary carries the browser proof",
+  async (method) => {
+    const seen = capture();
+    await bff("/api/v1/users/fixture", method ? { method } : {});
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
+      url: "/bff/api/v1/users/fixture",
+      proof: BFF_REQUEST_HEADER_VALUE,
+    });
+  }
+);
 
 it("every request of a mutation, its validate pre-check included, carries the browser proof", async () => {
   const seen = capture();
