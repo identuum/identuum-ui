@@ -2069,7 +2069,12 @@ export async function createOrganizationClient(
     }
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
-    const d: any = await res.json();
+    const raw: any = await res.json();
+    // OSS HandleCreateClient answers {"client": <safe client>, "client_secret": "..."};
+    // a flat record is still read the same way.
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
+    const d: any = raw && typeof raw.client === "object" && raw.client !== null ? raw.client : raw;
+    const secret = typeof raw?.client_secret === "string" ? raw.client_secret : d.client_secret;
 
     return {
       ok: true,
@@ -2080,7 +2085,7 @@ export async function createOrganizationClient(
         is_public: Boolean(d.is_public),
         // The IDP returns client_secret ONLY on this response. Surface
         // it through the envelope. Empty string for public clients.
-        client_secret: typeof d.client_secret === "string" ? d.client_secret : "",
+        client_secret: typeof secret === "string" ? secret : "",
         redirect_uris: Array.isArray(d.redirect_uris)
           ? d.redirect_uris.map((s: unknown) => String(s))
           : [],
