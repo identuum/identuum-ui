@@ -6,9 +6,9 @@ import { createRoot } from "react-dom/client";
 import { roleToPath } from "@/lib/role-routing";
 import { bff, readJson } from "./bff";
 import { signOutDestination } from "./logout";
-import { buildOrgAdminRoute, buildUnavailableRoute } from "./org-admin-routes";
 import { navigate, useLocation } from "./router";
 import { ServerRoute } from "./server-route";
+import { buildServerRoute, isServerRoute } from "./server-routes";
 import { discoverPlatform, type SessionState, validateSession } from "./session";
 
 // Page operations have a bounded transport failure outcome. Session validation
@@ -646,21 +646,12 @@ function App() {
   if (pathname === "/login") return <Login query={query} />;
   if (pathname === "/setup" || pathname === "/setup-required") return <SetupRequired />;
   if (pathname === "/platform-status") return <PlatformStatus query={query} />;
-  if (pathname === "/org-admin" || pathname.startsWith("/org-admin/")) {
+  if (isServerRoute(pathname)) {
     return (
       <ServerRoute
         routeKey={full}
         revalidation={revalidation}
-        build={() => buildOrgAdminRoute(pathname, query)}
-      />
-    );
-  }
-  if (pathname === "/unavailable") {
-    return (
-      <ServerRoute
-        routeKey={full}
-        revalidation={revalidation}
-        build={() => buildUnavailableRoute(query)}
+        build={() => buildServerRoute(pathname, query)}
       />
     );
   }

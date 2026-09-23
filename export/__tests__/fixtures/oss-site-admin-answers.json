@@ -1,0 +1,892 @@
+{
+  "_about": "GET answers recorded from the OSS Plan-C binary (identuum-idp-oss c483719, rebased onto bcb8905) on 2026-09-23 through the static export as the site administrator: /bff for /api/v1 reads, direct for setup, discovery and the license probe. Recorded by visiting every routed site-admin page; nothing was created. No credential, secret or token field is present. Every session_id in audit metadata is replaced by a fixed placeholder.",
+  "paths": {
+    "org": "/site-admin/organizations/01a0d043-4b62-7b87-a759-fabf6b319cdd"
+  },
+  "answers": {
+    "GET /api/v1/users": {
+      "status": 200,
+      "json": null
+    },
+    "GET /api/v1/component": {
+      "status": 200,
+      "json": {
+        "auth": {
+          "authority": "identuum-idp",
+          "provider_mode": "local"
+        },
+        "capabilities": {
+          "account_self_service": true,
+          "anomaly_detection": false,
+          "api_resources": true,
+          "audit_chain": false,
+          "audit_log": true,
+          "auth_provider_discovery": true,
+          "authorization_server": true,
+          "client_credentials": true,
+          "component_discovery": true,
+          "dynamic_client_registration": true,
+          "identity_provider": true,
+          "license_status": true,
+          "mfa": true,
+          "oauth_clients": true,
+          "observability": false,
+          "org_roles": true,
+          "protocol_settings": true,
+          "reporting": false,
+          "scim": false,
+          "scope_templates": true,
+          "service_accounts": true,
+          "user_sessions": true,
+          "webauthn": true
+        },
+        "capability_map_schema_version": "idp-capabilities.v1",
+        "component": "identuum-idp",
+        "license": {
+          "days_remaining": null,
+          "deployment_mode": "self_hosted",
+          "expires_at": null,
+          "license_type": "oss",
+          "product": "identuum-idp-oss",
+          "status": "valid",
+          "tier": "starter"
+        },
+        "product": "identuum-idp-oss",
+        "status": "ok",
+        "version": "identuum-idp-oss 0.5.0-11-gc483719-dirty"
+      }
+    },
+    "GET /api/setup/status": {
+      "status": 200,
+      "json": {
+        "state": "setup_complete",
+        "setup_complete": true,
+        "setup_token_required": false,
+        "product": "identuum-idp-oss",
+        "distribution": "oss",
+        "issuer": "http://localhost:7113",
+        "first_signing_key_exists": true,
+        "site_admin_exists": true,
+        "first_organization_exists": true,
+        "next_action": "Setup is complete. Use the login page to sign in."
+      }
+    },
+    "GET /api/v1/organizations": {
+      "status": 200,
+      "json": {
+        "organizations": [],
+        "page": 1,
+        "page_size": 25,
+        "total": 0
+      }
+    },
+    "GET /api/upgrade/status": {
+      "status": 404,
+      "json": null
+    },
+    "GET /api/v1/audit/events": {
+      "status": 200,
+      "json": {
+        "events": [
+          {
+            "id": "01a0d050-12ae-776e-bf35-339510610f26",
+            "created_at": "2026-09-23T22:08:23Z",
+            "event_type": "user_session.login.mfa_enrolled",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "session_id": "00000000-0000-7000-8000-000000005e55",
+              "user_id": "00000000-0000-7000-0000-000000000001"
+            }
+          },
+          {
+            "id": "01a0d050-125a-7e19-9d59-a8979d64cd1e",
+            "created_at": "2026-09-23T22:08:23Z",
+            "event_type": "user_session.login.mfa_enrollment_required",
+            "outcome": "denied",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal"
+          },
+          {
+            "id": "01a0d045-abec-7b8d-bc22-79c319a435c5",
+            "created_at": "2026-09-23T21:57:02Z",
+            "event_type": "organization_domain.created",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "domain": "verify-ec8624.tenant-a-p3.test",
+              "domain_id": "01a0d045-abdd-7ec7-8dd1-67374fd732d8",
+              "organization_id": "01a0d043-4b26-7e27-8795-90e6862a475f"
+            }
+          },
+          {
+            "id": "01a0d045-ab27-7a96-8b36-d88d373f5182",
+            "created_at": "2026-09-23T21:57:01Z",
+            "event_type": "service_account.disabled",
+            "outcome": "success",
+            "actor_id": "01a0d043-4b18-7be2-8a9f-b0a40beb7542",
+            "actor_type": "user",
+            "actor_email": "admin@tenant-a-p3.test",
+            "actor_role": "org_admin",
+            "actor_organization_id": "01a0d043-4b26-7e27-8795-90e6862a475f",
+            "subject_id": "01a0d045-aa5e-72a2-b67c-b63796f0a414",
+            "subject_type": "service_account",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "service_account_id": "01a0d045-aa5e-72a2-b67c-b63796f0a414"
+            }
+          },
+          {
+            "id": "01a0d045-aa6c-7c5f-bc1e-a00e610bb8bc",
+            "created_at": "2026-09-23T21:57:01Z",
+            "event_type": "service_account.created",
+            "outcome": "success",
+            "actor_id": "01a0d043-4b18-7be2-8a9f-b0a40beb7542",
+            "actor_type": "user",
+            "actor_email": "admin@tenant-a-p3.test",
+            "actor_role": "org_admin",
+            "actor_organization_id": "01a0d043-4b26-7e27-8795-90e6862a475f",
+            "subject_id": "01a0d045-aa5e-72a2-b67c-b63796f0a414",
+            "subject_type": "service_account",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "organization_id": "01a0d043-4b26-7e27-8795-90e6862a475f",
+              "role": "org_user",
+              "service_account_id": "01a0d045-aa5e-72a2-b67c-b63796f0a414"
+            }
+          },
+          {
+            "id": "01a0d045-a9f0-79a4-ac9a-fd0020f7a49d",
+            "created_at": "2026-09-23T21:57:01Z",
+            "event_type": "api_resource.updated",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "resource_id": "01a0d045-a90b-755f-bedf-939b0f1a1d56"
+            }
+          },
+          {
+            "id": "01a0d045-a90d-7a3d-95c7-a5ca9a659554",
+            "created_at": "2026-09-23T21:57:01Z",
+            "event_type": "api_resource.created",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "audience": "https://api-a-ec8624.example.test",
+              "resource_id": "01a0d045-a90b-755f-bedf-939b0f1a1d56"
+            }
+          },
+          {
+            "id": "01a0d045-a8a6-7b10-b046-b460b31d216d",
+            "created_at": "2026-09-23T21:57:01Z",
+            "event_type": "client.deleted",
+            "outcome": "success",
+            "actor_id": "01a0d043-4b18-7be2-8a9f-b0a40beb7542",
+            "actor_type": "user",
+            "actor_email": "admin@tenant-a-p3.test",
+            "actor_role": "org_admin",
+            "actor_organization_id": "01a0d043-4b26-7e27-8795-90e6862a475f",
+            "subject_id": "01a0d045-a717-753f-b5d0-6fcda9edb903",
+            "subject_type": "oauth_client",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "client_uuid": "01a0d045-a717-753f-b5d0-6fcda9edb903"
+            }
+          },
+          {
+            "id": "01a0d045-a809-79db-8f9c-8221778f561c",
+            "created_at": "2026-09-23T21:57:01Z",
+            "event_type": "client.updated",
+            "outcome": "success",
+            "actor_id": "01a0d043-4b18-7be2-8a9f-b0a40beb7542",
+            "actor_type": "user",
+            "actor_email": "admin@tenant-a-p3.test",
+            "actor_role": "org_admin",
+            "actor_organization_id": "01a0d043-4b26-7e27-8795-90e6862a475f",
+            "subject_id": "01a0d045-a717-753f-b5d0-6fcda9edb903",
+            "subject_type": "oauth_client",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "client_id": "759bec45633b3400b20dda83846ab32f"
+            }
+          },
+          {
+            "id": "01a0d045-a719-72b3-930c-043154066ce2",
+            "created_at": "2026-09-23T21:57:00Z",
+            "event_type": "client.created",
+            "outcome": "success",
+            "actor_id": "01a0d043-4b18-7be2-8a9f-b0a40beb7542",
+            "actor_type": "user",
+            "actor_email": "admin@tenant-a-p3.test",
+            "actor_role": "org_admin",
+            "actor_organization_id": "01a0d043-4b26-7e27-8795-90e6862a475f",
+            "subject_id": "01a0d045-a717-753f-b5d0-6fcda9edb903",
+            "subject_type": "oauth_client",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "client_id": "759bec45633b3400b20dda83846ab32f",
+              "is_public": false,
+              "name": "A app ec8624"
+            }
+          },
+          {
+            "id": "01a0d045-a67e-726d-94c9-798124b99177",
+            "created_at": "2026-09-23T21:57:00Z",
+            "event_type": "user.updated",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "user_id": "01a0d045-3500-7a31-bf9c-a70e1352f5dc"
+            }
+          },
+          {
+            "id": "01a0d045-a5ac-7b8d-86c3-f96a4e99e033",
+            "created_at": "2026-09-23T21:57:00Z",
+            "event_type": "user.updated",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "user_id": "01a0d045-34e2-7c9a-99cb-a8aef0cf4abc"
+            }
+          },
+          {
+            "id": "01a0d045-a505-7b2f-be74-e502ff56d8b3",
+            "created_at": "2026-09-23T21:57:00Z",
+            "event_type": "user_session.login.mfa_verified",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "session_id": "00000000-0000-7000-8000-000000005e55",
+              "user_id": "00000000-0000-7000-0000-000000000001"
+            }
+          },
+          {
+            "id": "01a0d045-3583-72ce-bfbe-a937d407073c",
+            "created_at": "2026-09-23T21:56:31Z",
+            "event_type": "user_session.login.mfa_required",
+            "outcome": "denied",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal"
+          },
+          {
+            "id": "01a0d045-3502-71fb-b8e8-8f37dba36f56",
+            "created_at": "2026-09-23T21:56:31Z",
+            "event_type": "user.created",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "email": "detail-member-ec8624@tenant-a-p3.test",
+              "organization_id": "01a0d043-4b26-7e27-8795-90e6862a475f",
+              "role": "org_admin",
+              "user_id": "01a0d045-3500-7a31-bf9c-a70e1352f5dc"
+            }
+          },
+          {
+            "id": "01a0d045-34e5-7626-a55a-6d2733b691c3",
+            "created_at": "2026-09-23T21:56:31Z",
+            "event_type": "user.created",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "email": "list-member-ec8624@tenant-a-p3.test",
+              "organization_id": "01a0d043-4b26-7e27-8795-90e6862a475f",
+              "role": "org_admin",
+              "user_id": "01a0d045-34e2-7c9a-99cb-a8aef0cf4abc"
+            }
+          },
+          {
+            "id": "01a0d045-347f-7ed0-b103-44744fccbc42",
+            "created_at": "2026-09-23T21:56:31Z",
+            "event_type": "user_session.login.mfa_enrolled",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "session_id": "00000000-0000-7000-8000-000000005e55",
+              "user_id": "01a0d043-4b18-7be2-8a9f-b0a40beb7542"
+            }
+          },
+          {
+            "id": "01a0d045-3426-7add-83c5-0f978377241a",
+            "created_at": "2026-09-23T21:56:31Z",
+            "event_type": "user_session.login.mfa_enrollment_required",
+            "outcome": "denied",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal"
+          },
+          {
+            "id": "01a0d045-334e-78be-b17a-e9cdd841e57e",
+            "created_at": "2026-09-23T21:56:31Z",
+            "event_type": "service_account.created",
+            "outcome": "success",
+            "actor_id": "01a0d043-4b54-71b1-a897-547e133c4666",
+            "actor_type": "user",
+            "actor_email": "admin@tenant-b-p3.test",
+            "actor_role": "org_admin",
+            "actor_organization_id": "01a0d043-4b62-7b87-a759-fabf6b319cdd",
+            "subject_id": "01a0d045-3341-7b7b-ae65-1a4440c70cf4",
+            "subject_type": "service_account",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "organization_id": "01a0d043-4b62-7b87-a759-fabf6b319cdd",
+              "role": "org_user",
+              "service_account_id": "01a0d045-3341-7b7b-ae65-1a4440c70cf4"
+            }
+          },
+          {
+            "id": "01a0d045-32d1-79ee-8aee-cb373999e09a",
+            "created_at": "2026-09-23T21:56:31Z",
+            "event_type": "api_resource.created",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "audience": "https://api-b-ec8624.example.test",
+              "resource_id": "01a0d045-32cf-795a-8560-cb788313e99c"
+            }
+          },
+          {
+            "id": "01a0d045-3255-7b8d-89e7-fc5f05a31532",
+            "created_at": "2026-09-23T21:56:30Z",
+            "event_type": "client.created",
+            "outcome": "success",
+            "actor_id": "01a0d043-4b54-71b1-a897-547e133c4666",
+            "actor_type": "user",
+            "actor_email": "admin@tenant-b-p3.test",
+            "actor_role": "org_admin",
+            "actor_organization_id": "01a0d043-4b62-7b87-a759-fabf6b319cdd",
+            "subject_id": "01a0d045-3253-7d84-bafc-fc98e346baa7",
+            "subject_type": "oauth_client",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "client_id": "7fa701b342a8432033e35f4101ef3026",
+              "is_public": false,
+              "name": "B app ec8624"
+            }
+          },
+          {
+            "id": "01a0d045-31df-7c7f-ac99-925856672071",
+            "created_at": "2026-09-23T21:56:30Z",
+            "event_type": "user_session.login.mfa_enrolled",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "session_id": "00000000-0000-7000-8000-000000005e55",
+              "user_id": "01a0d043-4b54-71b1-a897-547e133c4666"
+            }
+          },
+          {
+            "id": "01a0d045-3182-78f8-b9e3-5ff034947380",
+            "created_at": "2026-09-23T21:56:30Z",
+            "event_type": "user_session.login.mfa_enrollment_required",
+            "outcome": "denied",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal"
+          },
+          {
+            "id": "01a0d045-30cb-7261-9d46-fbcd246d7498",
+            "created_at": "2026-09-23T21:56:30Z",
+            "event_type": "user_session.login.failure",
+            "outcome": "denied",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal"
+          },
+          {
+            "id": "01a0d045-301b-7b4e-85e9-eacc79e405b8",
+            "created_at": "2026-09-23T21:56:30Z",
+            "event_type": "user_session.logout",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal"
+          },
+          {
+            "id": "01a0d045-2fdb-730d-9e53-cdbc3009f821",
+            "created_at": "2026-09-23T21:56:30Z",
+            "event_type": "user_session.login.mfa_verified",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "session_id": "00000000-0000-7000-8000-000000005e55",
+              "user_id": "00000000-0000-7000-0000-000000000001"
+            }
+          },
+          {
+            "id": "01a0d044-bb66-7a19-8cbe-ce1f88f77a2f",
+            "created_at": "2026-09-23T21:56:00Z",
+            "event_type": "user_session.login.mfa_required",
+            "outcome": "denied",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal"
+          },
+          {
+            "id": "01a0d044-bab0-776a-8130-6f2aae220af6",
+            "created_at": "2026-09-23T21:56:00Z",
+            "event_type": "user_session.login.mfa_verified",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "session_id": "00000000-0000-7000-8000-000000005e55",
+              "user_id": "00000000-0000-7000-0000-000000000001"
+            }
+          },
+          {
+            "id": "01a0d044-5787-7747-89e0-9f190a59f780",
+            "created_at": "2026-09-23T21:55:34Z",
+            "event_type": "user_session.login.mfa_required",
+            "outcome": "denied",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal"
+          },
+          {
+            "id": "01a0d044-56b7-7a77-9d0e-ab6b8d7e54f9",
+            "created_at": "2026-09-23T21:55:34Z",
+            "event_type": "profile.updated",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "user_id": "00000000-0000-7000-0000-000000000001"
+            }
+          },
+          {
+            "id": "01a0d044-5646-7674-8785-a62d5c8e9566",
+            "created_at": "2026-09-23T21:55:34Z",
+            "event_type": "user_session.login.mfa_verified",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "session_id": "00000000-0000-7000-8000-000000005e55",
+              "user_id": "00000000-0000-7000-0000-000000000001"
+            }
+          },
+          {
+            "id": "01a0d044-55e9-74be-b517-a483aeaecf0c",
+            "created_at": "2026-09-23T21:55:34Z",
+            "event_type": "user_session.login.mfa_required",
+            "outcome": "denied",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal"
+          },
+          {
+            "id": "01a0d044-53c7-7d94-9380-7c0845efd355",
+            "created_at": "2026-09-23T21:55:33Z",
+            "event_type": "user_session.login.mfa_enrolled",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "session_id": "00000000-0000-7000-8000-000000005e55",
+              "user_id": "01a0d043-4ad9-7616-8053-0fdd9a26743f"
+            }
+          },
+          {
+            "id": "01a0d044-536b-791c-b362-90865daeeca0",
+            "created_at": "2026-09-23T21:55:33Z",
+            "event_type": "user_session.login.mfa_enrollment_required",
+            "outcome": "denied",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal"
+          },
+          {
+            "id": "01a0d044-5269-7232-bd9f-ece4f4f9b194",
+            "created_at": "2026-09-23T21:55:33Z",
+            "event_type": "profile.updated",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "user_id": "00000000-0000-7000-0000-000000000001"
+            }
+          },
+          {
+            "id": "01a0d044-5261-7b89-95f6-33e108e031d3",
+            "created_at": "2026-09-23T21:55:33Z",
+            "event_type": "user_session.refresh.success",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal"
+          },
+          {
+            "id": "01a0d044-51f1-7cd5-b183-90954e5e3cb8",
+            "created_at": "2026-09-23T21:55:33Z",
+            "event_type": "user_session.refresh.success",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal"
+          },
+          {
+            "id": "01a0d044-51cd-71d0-9f73-da095cf538a5",
+            "created_at": "2026-09-23T21:55:33Z",
+            "event_type": "user_session.login.mfa_verified",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "session_id": "00000000-0000-7000-8000-000000005e55",
+              "user_id": "00000000-0000-7000-0000-000000000001"
+            }
+          },
+          {
+            "id": "01a0d044-5172-70da-9d1a-bf08ea413c06",
+            "created_at": "2026-09-23T21:55:33Z",
+            "event_type": "user_session.login.mfa_required",
+            "outcome": "denied",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal"
+          },
+          {
+            "id": "01a0d044-50cd-74da-87e2-838f81d70d80",
+            "created_at": "2026-09-23T21:55:33Z",
+            "event_type": "user_session.login.mfa_enrolled",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal",
+            "metadata": {
+              "session_id": "00000000-0000-7000-8000-000000005e55",
+              "user_id": "00000000-0000-7000-0000-000000000001"
+            }
+          },
+          {
+            "id": "01a0d044-5076-740b-89bc-04a7006de7cf",
+            "created_at": "2026-09-23T21:55:33Z",
+            "event_type": "user_session.login.mfa_enrollment_required",
+            "outcome": "denied",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+            "priority": "normal"
+          },
+          {
+            "id": "01a0d043-4b8b-78b2-8a0d-b6b6a3bc1cfc",
+            "created_at": "2026-09-23T21:54:26Z",
+            "event_type": "organization_activated",
+            "outcome": "success",
+            "actor_id": "01a0d043-4b54-71b1-a897-547e133c4666",
+            "actor_type": "",
+            "actor_organization_id": "01a0d043-4b62-7b87-a759-fabf6b319cdd",
+            "subject_id": "01a0d043-4b62-7b87-a759-fabf6b319cdd",
+            "subject_type": "organization",
+            "ip_address": "127.0.0.1",
+            "user_agent": "node",
+            "priority": "normal",
+            "metadata": {
+              "activated_by": "admin@tenant-b-p3.test"
+            }
+          },
+          {
+            "id": "01a0d043-4b6f-70b3-a3a3-0d6e85410e04",
+            "created_at": "2026-09-23T21:54:26Z",
+            "event_type": "organization.created",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "node",
+            "priority": "normal",
+            "metadata": {
+              "active": false,
+              "domain": "tenant-b-p3.test",
+              "initial_admin": true,
+              "name": "Plan D proof tenant-b-p3.test",
+              "organization_id": "01a0d043-4b62-7b87-a759-fabf6b319cdd"
+            }
+          },
+          {
+            "id": "01a0d043-4b51-77b0-94a7-3d106050b168",
+            "created_at": "2026-09-23T21:54:26Z",
+            "event_type": "organization_activated",
+            "outcome": "success",
+            "actor_id": "01a0d043-4b18-7be2-8a9f-b0a40beb7542",
+            "actor_type": "",
+            "actor_organization_id": "01a0d043-4b26-7e27-8795-90e6862a475f",
+            "subject_id": "01a0d043-4b26-7e27-8795-90e6862a475f",
+            "subject_type": "organization",
+            "ip_address": "127.0.0.1",
+            "user_agent": "node",
+            "priority": "normal",
+            "metadata": {
+              "activated_by": "admin@tenant-a-p3.test"
+            }
+          },
+          {
+            "id": "01a0d043-4b33-747c-9571-1482c9d04626",
+            "created_at": "2026-09-23T21:54:26Z",
+            "event_type": "organization.created",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "node",
+            "priority": "normal",
+            "metadata": {
+              "active": false,
+              "domain": "tenant-a-p3.test",
+              "initial_admin": true,
+              "name": "Plan D proof tenant-a-p3.test",
+              "organization_id": "01a0d043-4b26-7e27-8795-90e6862a475f"
+            }
+          },
+          {
+            "id": "01a0d043-4b14-7d9c-992a-55abc370d746",
+            "created_at": "2026-09-23T21:54:26Z",
+            "event_type": "organization_activated",
+            "outcome": "success",
+            "actor_id": "01a0d043-4ad9-7616-8053-0fdd9a26743f",
+            "actor_type": "",
+            "actor_organization_id": "01a0d043-4ae8-753e-bab9-d7cb881f127b",
+            "subject_id": "01a0d043-4ae8-753e-bab9-d7cb881f127b",
+            "subject_type": "organization",
+            "ip_address": "127.0.0.1",
+            "user_agent": "node",
+            "priority": "normal",
+            "metadata": {
+              "activated_by": "org-admin@ready-p3.test"
+            }
+          },
+          {
+            "id": "01a0d043-4af6-7b52-94a0-44cd9a7ae3f6",
+            "created_at": "2026-09-23T21:54:26Z",
+            "event_type": "organization.created",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "node",
+            "priority": "normal",
+            "metadata": {
+              "active": false,
+              "domain": "ready-p3.test",
+              "initial_admin": true,
+              "name": "Plan D proof ready-p3.test",
+              "organization_id": "01a0d043-4ae8-753e-bab9-d7cb881f127b"
+            }
+          },
+          {
+            "id": "01a0d043-4ad3-719a-a6df-b13f135e7047",
+            "created_at": "2026-09-23T21:54:26Z",
+            "event_type": "user_session.login.mfa_enrolled",
+            "outcome": "success",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "node",
+            "priority": "normal",
+            "metadata": {
+              "session_id": "00000000-0000-7000-8000-000000005e55",
+              "user_id": "00000000-0000-7000-0000-000000000001"
+            }
+          },
+          {
+            "id": "01a0d043-4ac4-7943-8c37-063bbb2fd811",
+            "created_at": "2026-09-23T21:54:26Z",
+            "event_type": "user_session.login.mfa_enrollment_required",
+            "outcome": "denied",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "node",
+            "priority": "normal"
+          },
+          {
+            "id": "01a0d043-00ad-762e-b398-36a64ed5d4da",
+            "created_at": "2026-09-23T21:54:07Z",
+            "event_type": "user_session.login.failure",
+            "outcome": "denied",
+            "actor_type": "",
+            "ip_address": "127.0.0.1",
+            "user_agent": "node",
+            "priority": "normal"
+          }
+        ],
+        "has_more": false
+      }
+    },
+    "GET /api/v1/organizations/01a0d043-4b62-7b87-a759-fabf6b319cdd": {
+      "status": 200,
+      "json": {
+        "id": "01a0d043-4b62-7b87-a759-fabf6b319cdd",
+        "name": "Plan D proof tenant-b-p3.test",
+        "domain": "tenant-b-p3.test",
+        "org_slug": "plan-d-proof-tenant-b-p3-test",
+        "active": true,
+        "max_sessions_per_user": 10,
+        "mfa_policy": "optional",
+        "auth_policy": "local_only",
+        "api_authorization_policy": "STRICT",
+        "allow_public_registration": false,
+        "require_registration_approval": false,
+        "require_strict_reauth": false,
+        "local_admin_only": false,
+        "password_complexity_enabled": true,
+        "service_account_expiry_days": 0,
+        "m2m_anomaly_limit": 0,
+        "m2m_anomaly_window_seconds": 0,
+        "tier": "TierBase",
+        "created_at": "2026-09-23T22:54:26.274249+01:00",
+        "updated_at": "2026-09-23T22:54:26.303702+01:00",
+        "is_claimed": true,
+        "can_assign_admin": false
+      }
+    },
+    "GET /api/v1/organizations/01a0d043-4b62-7b87-a759-fabf6b319cdd/protocol-settings": {
+      "status": 403,
+      "json": {
+        "error": "forbidden"
+      }
+    },
+    "GET /api/v1/organizations/01a0d043-4b62-7b87-a759-fabf6b319cdd/admin-recovery-candidates": {
+      "status": 200,
+      "json": {
+        "admins": [
+          {
+            "id": "01a0d043-4b54-71b1-a897-547e133c4666",
+            "email": "admin@tenant-b-p3.test",
+            "role": "org_admin",
+            "mfa_enabled": true,
+            "email_verified": true,
+            "active": true,
+            "deleted": false,
+            "created_at": "2026-09-23T21:54:26Z"
+          }
+        ]
+      }
+    },
+    "GET /api/v1/keys": {
+      "status": 200,
+      "json": {
+        "count": 1,
+        "keys": [
+          {
+            "kid": "eddsa-20260923-215426",
+            "algorithm": "EdDSA",
+            "state": "active",
+            "created_at": "2026-09-23T22:54:26.003084+01:00",
+            "activated_at": "2026-09-23T22:54:26.003084+01:00",
+            "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAIn6mLRG11itHovnCoHJa9ILCjFcUKs0PHtdf8wGJrP8=\n-----END PUBLIC KEY-----\n"
+          }
+        ]
+      }
+    },
+    "GET /api/setup/license": {
+      "status": 404,
+      "json": null
+    },
+    "GET /api/v1/health/details": {
+      "status": 200,
+      "json": {
+        "status": "healthy",
+        "version": "identuum-idp-oss 0.5.0-11-gc483719-dirty",
+        "database": {
+          "status": "connected"
+        },
+        "audit_system": {
+          "status": "operational"
+        }
+      }
+    },
+    "GET /api/v1/audit/event-types": {
+      "status": 404,
+      "json": null
+    },
+    "GET /api/v1/anomaly/stats": {
+      "status": 404,
+      "json": null
+    },
+    "GET /api/v1/anomaly/events": {
+      "status": 404,
+      "json": null
+    },
+    "GET /api/v1/system/sessions": {
+      "status": 404,
+      "json": null
+    }
+  }
+}

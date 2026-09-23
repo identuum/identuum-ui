@@ -9,9 +9,9 @@
  */
 import { renderToStaticMarkup } from "react-dom/server";
 import { vi } from "vitest";
-import { buildOrgAdminRoute } from "../src/org-admin-routes";
 import { ExportRedirect } from "../src/platform/next-navigation";
 import { revalidate } from "../src/router";
+import { buildServerRoute } from "../src/server-routes";
 
 export const ORG_ID = "01990000-0000-7000-8000-00000000000a";
 export const ADMIN_ID = "01990000-0000-7000-8000-000000000001";
@@ -143,7 +143,7 @@ export function installExport(path: string, routes: Routes = {}) {
     async render(): Promise<{ html: string; redirectedTo: string | null }> {
       const [pathname, search = ""] = `${location.pathname}${location.search}`.split("?");
       try {
-        const tree = await buildOrgAdminRoute(pathname ?? "/", new URLSearchParams(search));
+        const tree = await buildServerRoute(pathname ?? "/", new URLSearchParams(search));
         return { html: renderToStaticMarkup(<>{tree}</>), redirectedTo: null };
       } catch (error) {
         if (error instanceof ExportRedirect) return { html: "", redirectedTo: error.to };

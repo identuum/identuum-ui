@@ -1,14 +1,8 @@
 /**
- * Plan D: the org-admin area in the static export — the SAME layout and page
- * modules the Next deployment renders (src/app/org-admin), not copies. Each
- * route awaits the shared layout (its session, role and MFA guard runs first,
- * exactly as in Next), then the shared page, and renders the composed tree.
- *
- * /unavailable is the shared destination org-admin's own outage redirects
- * name (getServerSession → unavailablePath); it is routed here so an outage
- * keeps its meaning in the export instead of reading as "page not found".
+ * Plan D: the org-admin area in the static export — its route table over the
+ * shared layout and page modules (src/app/org-admin). The machinery that
+ * composes a route is shared with the site-admin area (area-routes.tsx).
  */
-import { createContext, type ReactNode, useContext } from "react";
 import ApiResourceEditPage, {
   metadata as apiResourceEditMeta,
 } from "@/app/org-admin/api-resources/[id]/edit/page";
@@ -44,30 +38,7 @@ import ServiceAccountsPage, {
 import SettingsPage, { metadata as settingsMeta } from "@/app/org-admin/settings/page";
 import UserDetailPage, { metadata as userDetailMeta } from "@/app/org-admin/users/[id]/page";
 import UsersPage, { metadata as usersMeta } from "@/app/org-admin/users/page";
-import UnavailablePage from "@/app/unavailable/page";
-
-type SearchParams = Record<string, string | string[]>;
-type PageProps = {
-  params: Promise<Record<string, string>>;
-  searchParams: Promise<SearchParams>;
-};
-// Each page declares only the props it reads; every one accepts this shape.
-type AnyPage = (props: PageProps) => Promise<ReactNode> | ReactNode;
-type Meta = { title?: unknown } | undefined;
-
-interface Route {
-  pattern: RegExp;
-  keys: string[];
-  page: AnyPage;
-  metadata: Meta;
-}
-
-const route = (pattern: RegExp, keys: string[], page: unknown, metadata: Meta): Route => ({
-  pattern,
-  keys,
-  page: page as AnyPage,
-  metadata,
-});
+import { type Area, buildAreaRoute, type Route, route } from "./area-routes";
 
 // Literal segments ("new", "edit") are matched before the dynamic id.
 export const ORG_ADMIN_ROUTES: readonly Route[] = [
@@ -114,68 +85,12 @@ export const ORG_ADMIN_ROUTES: readonly Route[] = [
   route(/^\/org-admin\/audit$/, [], AuditPage, auditMeta),
 ];
 
-/** Next's searchParams shape: one value is a string, a repeated key an array. */
-export function toSearchParams(query: URLSearchParams): SearchParams {
-  const out: SearchParams = {};
-  for (const key of new Set(query.keys())) {
-    const all = query.getAll(key);
-    out[key] = all.length === 1 ? (all[0] ?? "") : all;
-  }
-  return out;
-}
+export const ORG_ADMIN_AREA: Area = {
+  layout: OrgAdminLayout,
+  layoutMeta,
+  routes: ORG_ADMIN_ROUTES,
+};
 
-export function matchOrgAdmin(
-  pathname: string
-): { route: Route; params: Record<string, string> } | null {
-  for (const r of ORG_ADMIN_ROUTES) {
-    const m = pathname.match(r.pattern);
-    if (!m) continue;
-    const params: Record<string, string> = {};
-    r.keys.forEach((k, i) => {
-      params[k] = decodeURIComponent(m[i + 1] ?? "");
-    });
-    return { route: r, params };
-  }
-  return null;
-}
-
-const Slot = createContext<ReactNode>(null);
-function PageSlot() {
-  return <>{useContext(Slot)}</>;
-}
-
-function titleOf(meta: Meta): string | null {
-  return typeof meta?.title === "string" ? meta.title : null;
-}
-
-/** Layout first (its guard may redirect), then the page, then the composed tree. */
-export async function buildOrgAdminRoute(
-  pathname: string,
-  query: URLSearchParams
-): Promise<ReactNode> {
-  const match = matchOrgAdmin(pathname);
-  const layout = await OrgAdminLayout({ children: <PageSlot /> });
-  if (!match) {
-    const missing = (
-      <section data-testid="not-found">
-        <h1>Page not found</h1>
-      </section>
-    );
-    return <Slot.Provider value={missing}>{layout}</Slot.Provider>;
-  }
-  const props: PageProps = {
-    params: Promise.resolve(match.params),
-    searchParams: Promise.resolve(toSearchParams(query)),
-  };
-  const page = await match.route.page(props);
-  document.title = titleOf(match.route.metadata) ?? titleOf(layoutMeta) ?? document.title;
-  return <Slot.Provider value={page}>{layout}</Slot.Provider>;
-}
-
-export async function buildUnavailableRoute(query: URLSearchParams): Promise<ReactNode> {
-  const page = UnavailablePage as unknown as AnyPage;
-  return page({
-    params: Promise.resolve({}),
-    searchParams: Promise.resolve(toSearchParams(query)),
-  });
+export function buildOrgAdminRoute(pathname: string, query: URLSearchParams) {
+  return buildAreaRoute(ORG_ADMIN_AREA, pathname, query);
 }
