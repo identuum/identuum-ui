@@ -6,6 +6,39 @@ first published image. Format roughly follows
 [Semantic Versioning](https://semver.org/). The published artifact is the
 container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
+## `v0.2.1`
+
+The image the identuum-idp-oss `v0.5.0` compose should pin instead of
+`v0.2.0`, whose runtime base carried 11 grype matches, 5 of them severe.
+Measured delta `v0.2.0..HEAD` before this release commit (`git log` and
+`git diff --shortstat`): 294 commits, 317 files changed, +20712/−4184 — by
+subject line 75 witness records (`Witness: `), 30 manifest re-bases
+(subject contains "rebase"), 4 CI records (`ci: record run `) and 185
+others. **The 185 application changes are NOT itemized in this section**;
+it records the image and build-context changes this release was cut for.
+
+### Security (image)
+
+- **Runtime base moved to the 2026-09-17 digest** (`c4d05c1`):
+  `cgr.dev/chainguard/node@sha256:1f903d44fc11a6f6e74447fc2c6a3c141f112217576be5d96c283210116b5d25`,
+  node v26.9.0 (measured `node --version` in the built image), from
+  `sha256:4a274a26…` (node v26.8.2). It patches zlib to
+  `1.3.2.1_rc20260601-r0` and node-gyp to `13.0.2-r1`, removing every
+  fixable finding the previous base carried.
+- **Scan of the image built from this Dockerfile** (`make grype-scan`,
+  grype 0.119.0 through lictor v0.4.2): `matches=1 fixable=0 allowlisted=0
+  unfixable=1 severe=0`. The one match is CVE-2026-89092, severity Medium,
+  in glibc 2.44-r6, fix state `unknown` — not suppressed, not claimed
+  fixed. The publish-gate shape `trivy image --severity HIGH,CRITICAL
+  --ignore-unfixed --exit-code 1`: exit 0, zero findings.
+- **`.env` files never enter the build context** (`c4d05c1`):
+  `.dockerignore` excludes `.env*`, `*.env` and `*.env.*` at any depth.
+
+### Verification machinery
+
+- `LICTOR_VERSION` v0.4.1 → v0.4.2 and `biome.jsonc`'s `$schema` 2.5.10 →
+  2.5.12, both following the installed and locked tools (`78a144e`).
+
 ## `v0.2.0`
 
 First refresh since `v0.1.0` (built 2026-06-13 from `5158f0b`). Measured
