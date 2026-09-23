@@ -8,6 +8,7 @@ import {
   ORG_ID,
   session,
 } from "./harness";
+import { answers } from "./recorded";
 
 // Plan D: the shared org-admin layout, overview, users list and user detail
 // as the static export renders them — same modules as Next, data through the
@@ -187,5 +188,77 @@ describe("a users-area mutation in the export", () => {
     expect(result.phase).toBe("error");
     expect(result.userId).toBe(OTHER_ID);
     expect(env.calls.some((c) => c.method === "PUT" && c.viaBff && c.proof)).toBe(true);
+  });
+});
+
+// v0.2.3 (F3): a disabled member is Disabled with Enable unless the
+// organization takes public registrations AND holds them for approval, where
+// the row is "Disabled or awaiting approval". The export renders the same
+// page modules, so it must show the same; the policy comes from
+// GET /api/v1/organizations/current through the boundary.
+describe("a disabled member in the export (F3)", () => {
+  const recordedOrg = answers["GET /api/v1/organizations/current"] as {
+    json: Record<string, unknown>;
+  };
+  const orgWith = (allow: boolean, approval: boolean) => ({
+    json: {
+      ...recordedOrg.json,
+      allow_public_registration: allow,
+      require_registration_approval: approval,
+    },
+  });
+  const disabled = user(OTHER_ID, "member@tenant-a.test", { active: false, banned: true });
+
+  it.each([
+    ["invite-only", "Disabled", false, false],
+    ["public-with-approval", "Disabled or awaiting approval", true, true],
+  ])(
+    "the users list under %s labels the row %s and offers Enable",
+    async (_name, label, allow, approval) => {
+      const env = installExport("/org-admin/users", {
+        "GET /api/v1/organizations/current": orgWith(allow, approval),
+        "GET /api/v1/users": {
+          json: {
+            users: [user(ADMIN_ID, "admin@tenant-a.test", { role: "org_admin" }), disabled],
+            total: 2,
+          },
+        },
+      });
+      const { html } = await env.render();
+      const row = html.slice(html.indexOf("member@tenant-a.test"));
+      const rowEnd = row.indexOf("</tr>");
+      const rowHtml = row.slice(0, rowEnd);
+      expect(rowHtml).toContain(`>${label}</span>`);
+      expect(rowHtml).toMatch(/>Enable<\/button>/);
+      expect(rowHtml).not.toContain(">Pending approval</span>");
+      expect(env.calls.map((c) => c.path)).toContain("/api/v1/organizations/current");
+      expect(everyApiCallThroughTheBoundary(env.calls)).toBe(true);
+    }
+  );
+
+  it("the user detail under invite-only offers Restore access and no Approve registration", async () => {
+    const env = installExport(`/org-admin/users/${OTHER_ID}`, {
+      "GET /api/v1/organizations/current": orgWith(false, false),
+      [`GET /api/v1/users/${OTHER_ID}`]: { json: disabled },
+      "GET /api/v1/users": { json: { users: [], total: 0 } },
+    });
+    const { html } = await env.render();
+    expect(html).toContain("Restore access");
+    expect(html).toMatch(/>Enable<\/button>/);
+    expect(html).not.toContain("Approve registration");
+    expect(html).not.toContain("Disabled or awaiting approval");
+  });
+
+  it("the user detail under public-with-approval offers both Enable and Approve registration", async () => {
+    const env = installExport(`/org-admin/users/${OTHER_ID}`, {
+      "GET /api/v1/organizations/current": orgWith(true, true),
+      [`GET /api/v1/users/${OTHER_ID}`]: { json: disabled },
+      "GET /api/v1/users": { json: { users: [], total: 0 } },
+    });
+    const { html } = await env.render();
+    expect(html).toContain("Disabled or awaiting approval");
+    expect(html).toContain("Restore access");
+    expect(html).toMatch(/>Enable<\/button>/);
+    expect(html).toContain("Approve registration");
   });
 });
