@@ -6,6 +6,37 @@ first published image. Format roughly follows
 [Semantic Versioning](https://semver.org/). The published artifact is the
 container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
+## `v0.2.2`
+
+Two fixes for the org-admin pages against identuum-idp-oss, cut for the
+`v0.5.0` install. Delta `v0.2.1..HEAD`: these two commits and this release
+commit; the image build (Dockerfile, runtime base, `.dockerignore`) is
+unchanged from `v0.2.1`.
+
+### Fixed
+
+- **Applications: the created client reads correctly** (`3494727`). OSS
+  answers a create with `{"client": {...}, "client_secret": "..."}`; the
+  success panel read the fields from the top level and showed
+  " has been created." with an empty client ID and no redirect URIs. The
+  nested client is read now and the one-time secret from the top level; a
+  flat answer still works.
+- **Users: account status reads correctly** (`c9ede3c`). OSS carries
+  `banned`, not `active`, on a user (and writes `banned = !active`); the
+  users list and user detail coerced the absent `active` to false, so every
+  user, the signed-in admin included, showed as Disabled and offered only
+  "Enable". `active` is now derived as `!banned` when absent; an explicit
+  `active` still wins.
+
+### Security (image)
+
+- Runtime base unchanged from `v0.2.1`
+  (`cgr.dev/chainguard/node@sha256:1f903d44fc11a6f6e74447fc2c6a3c141f112217576be5d96c283210116b5d25`,
+  node v26.9.0 measured in the built image). `make grype-scan` (grype
+  0.119.0 through lictor v0.4.2) on the image built at this release:
+  `matches=1 fixable=0 allowlisted=0 unfixable=1 severe=0` — CVE-2026-89092,
+  Medium, glibc 2.44-r6, fix state `unknown`, as in `v0.2.1`.
+
 ## `v0.2.1`
 
 The image the identuum-idp-oss `v0.5.0` compose should pin instead of
