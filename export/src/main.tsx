@@ -655,7 +655,7 @@ function App() {
       />
     );
   }
-  if (pathname === "/dashboard" || pathname === "/site-admin") {
+  if (pathname === "/dashboard") {
     return guard((s) => <Home session={s} />);
   }
   if (pathname === "/account/settings") return guard((s) => <AccountSettings session={s} />);

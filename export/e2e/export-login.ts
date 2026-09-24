@@ -63,3 +63,15 @@ export async function login(page: Page, email: string, password: string): Promis
   }
   await expect(page.getByTestId("home")).toBeVisible();
 }
+
+/**
+ * Clicks an account action (nav-account, sign-out). The shared layouts keep
+ * them in the AccountMenu dropdown, which opens first; the export's own shell
+ * shows them inline.
+ */
+export async function accountAction(page: Page, testid: "nav-account" | "sign-out"): Promise<void> {
+  const target = page.getByTestId(testid);
+  const menu = page.getByTestId("account-menu");
+  if (!(await target.isVisible()) && (await menu.isVisible())) await menu.click();
+  await target.click();
+}

@@ -11,16 +11,10 @@ import { buildSiteAdminRoute } from "./site-admin-routes";
 const inArea = (pathname: string, area: string) =>
   pathname === area || pathname.startsWith(`${area}/`);
 
-/**
- * True when the path is served by a shared layout and page tree. The
- * site-admin overview (/site-admin itself) is not: it needs UI routes the
- * binary does not serve (site-admin-routes.tsx).
- */
+/** True when the path is served by a shared layout and page tree. */
 export function isServerRoute(pathname: string): boolean {
   return (
-    inArea(pathname, "/org-admin") ||
-    pathname.startsWith("/site-admin/") ||
-    pathname === "/unavailable"
+    inArea(pathname, "/org-admin") || inArea(pathname, "/site-admin") || pathname === "/unavailable"
   );
 }
 

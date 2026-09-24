@@ -63,18 +63,20 @@ describe("site-admin layout guard in the export", () => {
 });
 
 describe("site-admin routes in the export", () => {
-  it("routes every site-admin sub-page through the shared tree, but not the overview", () => {
+  it("routes every site-admin page through the shared tree, the overview included", () => {
     expect(isServerRoute("/site-admin/organizations")).toBe(true);
     expect(isServerRoute("/site-admin/system/info")).toBe(true);
-    // The overview needs GET /api/status and GET /api/runtime-config (UI routes
-    // the binary does not serve): it stays on the export's own home.
-    expect(isServerRoute("/site-admin")).toBe(false);
+    // PLAN-D-4: the binary serves GET /api/status and GET /api/runtime-config,
+    // the two UI routes the overview reads.
+    expect(isServerRoute("/site-admin")).toBe(true);
   });
 
-  it("settings is not routed: its /healthz probe would read the app shell as a health answer", async () => {
-    const { html, env } = await sitePage("/site-admin/settings");
-    expect(html).toContain('data-testid="not-found"');
-    expect(env.calls.some((c) => c.path === "/healthz")).toBe(false);
+  it("settings is routed: it probes the binary's own /healthz, a health route and not the shell", async () => {
+    const { html, env } = await sitePage("/site-admin/settings", {
+      "GET /healthz": { json: { status: "healthy", mode: "oss", tier: "starter" } },
+    });
+    expect(html).not.toContain('data-testid="not-found"');
+    expect(env.calls.find((c) => c.path === "/healthz")).toMatchObject({ viaBff: false });
   });
 });
 

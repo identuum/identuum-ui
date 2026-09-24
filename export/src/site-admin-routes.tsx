@@ -38,7 +38,9 @@ import OrgNewPage, { metadata as orgNewMeta } from "@/app/site-admin/organizatio
 import OrganizationsPage, {
   metadata as organizationsMeta,
 } from "@/app/site-admin/organizations/page";
+import SiteAdminOverviewPage from "@/app/site-admin/page";
 import ReportsPage, { metadata as reportsMeta } from "@/app/site-admin/reports/page";
+import SettingsPage, { metadata as settingsMeta } from "@/app/site-admin/settings/page";
 import AuditChainPage, {
   metadata as auditChainMeta,
 } from "@/app/site-admin/system/audit-chain/page";
@@ -52,13 +54,14 @@ const org = (suffix: string) => new RegExp(`^${ORG}${suffix}$`);
 
 // Literal segments ("new") are matched before the dynamic id.
 //
-// Not routed (PLAN-D-3, blocked on the Go binary): the overview
-// (src/app/site-admin/page.tsx) reads the Next-only UI routes GET /api/status
-// and GET /api/runtime-config, which the binary does not serve; settings
-// (src/app/site-admin/settings/page.tsx) probes the IdP at GET /healthz, which
-// OSS does not serve and the binary's UI fallback answers with the app shell
-// (200 text/html), so the export would report a health it never measured.
+// The overview (src/app/site-admin/page.tsx) reads the UI routes GET
+// /api/status and GET /api/runtime-config, and settings
+// (src/app/site-admin/settings/page.tsx) probes the IdP at GET /healthz; the
+// binary serves all three since PLAN-D-4 (identuum-idp-oss plan-c, ui.go and
+// router.go), so both are routed.
 export const SITE_ADMIN_ROUTES: readonly Route[] = [
+  route(/^\/site-admin$/, [], SiteAdminOverviewPage, layoutMeta),
+  route(/^\/site-admin\/settings$/, [], SettingsPage, settingsMeta),
   route(/^\/site-admin\/organizations$/, [], OrganizationsPage, organizationsMeta),
   route(/^\/site-admin\/organizations\/new$/, [], OrgNewPage, orgNewMeta),
   route(org(""), ["id"], OrgDetailPage, orgDetailMeta),

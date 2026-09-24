@@ -41,7 +41,9 @@ export function SiteAdminOverviewClient({
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-sky-950">Overview</h1>
+        <h1 data-testid="home" className="text-2xl font-extrabold tracking-tight text-sky-950">
+          Overview
+        </h1>
         <p className="text-sm text-stone-500 mt-0.5">System status and configuration</p>
       </div>
 

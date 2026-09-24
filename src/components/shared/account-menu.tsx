@@ -49,9 +49,12 @@ export function AccountMenu({ email }: AccountMenuProps) {
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label="Account menu"
+        data-testid="account-menu"
         className="flex items-center gap-1 text-xs text-stone-400 hover:text-stone-600 truncate max-w-xs transition-colors"
       >
-        <span className="truncate">{email}</span>
+        <span data-testid="who" className="truncate">
+          {email}
+        </span>
         {/* chevron-down */}
         <svg
           className="h-3 w-3 shrink-0"
@@ -76,6 +79,7 @@ export function AccountMenu({ email }: AccountMenuProps) {
           <a
             href="/account/settings"
             role="menuitem"
+            data-testid="nav-account"
             onClick={() => setOpen(false)}
             className="block px-4 py-2 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
           >
@@ -89,6 +93,7 @@ export function AccountMenu({ email }: AccountMenuProps) {
             <button
               type="submit"
               role="menuitem"
+              data-testid="sign-out"
               className="w-full text-left px-4 py-2 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
             >
               Sign out

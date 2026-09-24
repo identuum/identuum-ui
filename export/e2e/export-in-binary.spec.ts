@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { type Browser, expect, type Page, test } from "@playwright/test";
 import { resetTOTPLedgerForTests } from "../../e2e/helpers/totp";
-import { login as loginAs } from "./export-login";
+import { accountAction, login as loginAs } from "./export-login";
 import { expectNoAuthMaterial, expectNoBrowserAuthMaterial, proofRequest } from "./proof-privacy";
 
 /**
@@ -135,7 +135,7 @@ test.describe("bootstrapped appliance", () => {
     expect(afterRead.refresh_token?.value !== initial.refresh_token?.value).toBe(true);
     expect(renewals).toBe(1);
 
-    await page.getByTestId("nav-account").click();
+    await accountAction(page, "nav-account");
     await page.getByTestId("profile-name").fill("Site Admin (renewal proof)");
     await page.context().clearCookies({ name: "access_token" });
     await page.getByTestId("profile-form").locator('button[type="submit"]').click();
@@ -171,7 +171,7 @@ test.describe("bootstrapped appliance", () => {
     if (label !== "disposable")
       throw new Error("outage injection requires a labelled disposable fixture");
     await login(page);
-    await page.getByTestId("nav-account").click();
+    await accountAction(page, "nav-account");
     await page.getByTestId("profile-name").fill("Must not be submitted during outage");
     const before = await cookieNames(page);
     expect(Boolean(before.refresh_token?.value)).toBe(true);
@@ -323,7 +323,7 @@ test.describe("bootstrapped appliance", () => {
     page,
   }) => {
     await login(page);
-    await page.getByTestId("nav-account").click();
+    await accountAction(page, "nav-account");
     await page.getByTestId("profile-name").fill("Site Admin (export proof)");
     await page.getByTestId("profile-form").locator('button[type="submit"]').click();
     await expect(page.getByTestId("profile-outcome")).toHaveText("saved:Site Admin (export proof)");
@@ -458,7 +458,7 @@ test.describe("bootstrapped appliance", () => {
     const oldToken = before.access_token?.value ?? "";
     expect(oldToken.length).toBeGreaterThan(0);
 
-    await page.getByTestId("sign-out").click();
+    await accountAction(page, "sign-out");
     await expect(page.getByTestId("login-reason")).toHaveText("You have been signed out.");
     const after = await cookieNames(page);
     expect(after.access_token === undefined).toBe(true);

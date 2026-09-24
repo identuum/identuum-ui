@@ -176,6 +176,10 @@ test.describe("site-admin area in the binary", () => {
   });
 
   for (const [path, title, readProof] of [
+    // PLAN-D-4: the overview reads the binary's GET /api/status (product and
+    // health) and GET /api/runtime-config; settings probes GET /healthz.
+    ["/site-admin", "Overview", "identuum-idp-oss"],
+    ["/site-admin/settings", "Settings", "Healthy"],
     ["/site-admin/audit", "Audit log", "organization.created"],
     ["/site-admin/anomaly", "Anomaly", "Anomaly statistics require Enterprise/CE"],
     ["/site-admin/keys", "Signing keys", "EdDSA"],
