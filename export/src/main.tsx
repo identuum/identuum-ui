@@ -645,7 +645,7 @@ function App() {
 
   if (pathname === "/") return <Root />;
   if (pathname === "/login") return <Login query={query} />;
-  if (pathname === "/setup" || pathname === "/setup-required") return <SetupRequired />;
+  if (pathname === "/setup") return <SetupRequired />;
   if (pathname === "/platform-status") return <PlatformStatus query={query} />;
   if (isServerRoute(pathname)) {
     return (
