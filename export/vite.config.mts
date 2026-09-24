@@ -21,6 +21,18 @@ export default defineConfig({
     outDir: path.resolve(import.meta.dirname, "../out"),
     emptyOutDir: true,
     sourcemap: false,
+    // PLAN-E-1: the OSS binary vendors this output in its tree, and
+    // identuum-idp-oss's tracked-binary-check refuses any tracked file over
+    // 1 MiB (with no allowlist, on purpose). One bundle measured 1,204,927
+    // bytes; library code goes to its own chunks, each capped well below
+    // that line, so every emitted file stays under it.
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [{ name: "vendor", test: /node_modules/, maxSize: 700_000 }],
+        },
+      },
+    },
   },
   resolve: {
     alias: { "@": path.resolve(import.meta.dirname, "../src") },
