@@ -10,8 +10,8 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
 The UI ships as a static export that the IdP binary serves: identuum-idp-oss
 `v0.6.0` embeds it and answers UI and API on one origin, with no UI
-container and no Node at runtime. Delta `v0.2.4..HEAD`: 37 commits and this
-release commit. The published artifact of this release is the export
+container and no Node at runtime. Delta `v0.2.4..HEAD`: 39 commits
+(measured at `1eb489d`) and this notes commit. The published artifact of this release is the export
 (`publish-ui-export.yml` on the tag: a deterministic tarball, its
 `identuum-ui-vendor.v1` manifest with every file's sha256 and the tree
 digest, an SPDX SBOM, and a build-provenance attestation over the three, as
@@ -37,6 +37,18 @@ release assets); no container image is published for it.
   (`9a1fd9e`); sign-out is a same-origin POST, and only an unmarked `204`
   confirms revocation (`892ecb1`); a user-detail read that fails at the IdP
   renders "unavailable", not "not found" (`5377276`).
+- **The export asks an edition only for what it serves** (`1eb489d`). It
+  reads `edition` once from the binary's `/api/runtime-config`; on any edition
+  but `ce` the IdP routes only identuum-idp-ce serves —
+  `/api/upgrade/status`, `/api/setup/license`, anomaly events and stats,
+  audit event types, system sessions, audit-chain verify, organization
+  identity providers and webhooks — are answered in the page with the
+  binary's own 404 and never requested, so the OSS binary shows no browser
+  console errors for them. On `ce` they are requested as before.
+- The site-admin organization page no longer requests the organization's
+  protocol settings (`1eb489d`): every edition refuses site_admin on a
+  tenant's own resource, and the page shows that refusal, as before,
+  without the request.
 
 ### Operator notes
 
