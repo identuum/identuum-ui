@@ -121,9 +121,13 @@ test.describe("admin reset without customer data loss (destructive, last phase)"
     const preResetSite = await siteAdminSession(IDP_BASE, SITE_ADMIN_EMAIL, oldPassword);
 
     // ── 2. RESET via the product CLI (password via env, never printed) ──
+    // The harness's OWN project (full-run.sh exports it; the app container is
+    // named after it) — never a default that would name the dev stack's.
+    const project = process.env.IDENTUUM_IDP_COMPOSE_PROJECT ?? "";
+    expect(project, "the harness exports its own Compose project").toBe("identuum-e2e");
     const dsn = execFileSync(
       "docker",
-      ["inspect", "identuum-idp-oss", "--format", "{{range .Config.Env}}{{println .}}{{end}}"],
+      ["inspect", project, "--format", "{{range .Config.Env}}{{println .}}{{end}}"],
       { encoding: "utf8" }
     )
       .split("\n")
@@ -134,6 +138,8 @@ test.describe("admin reset without customer data loss (destructive, last phase)"
       "docker",
       [
         "compose",
+        "-p",
+        project,
         "-f",
         `${idpDir}/deployment/docker-compose.dev.yml`,
         "--profile",

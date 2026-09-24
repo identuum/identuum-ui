@@ -13,7 +13,9 @@
 # Usage: auth503-scan.sh <idp-oss repo dir>
 set -u
 IDP_DIR="${1:?idp-oss repo dir}"
-COMPOSE=(docker compose -f "$IDP_DIR/deployment/docker-compose.dev.yml" --profile app)
+# The harness's own project (full-run.sh exports it); unset is an error, never
+# a fallback to the default project, whose app is the operator's dev stack.
+COMPOSE=(docker compose -p "${IDENTUUM_IDP_COMPOSE_PROJECT:?the e2e-full harness project}" -f "$IDP_DIR/deployment/docker-compose.dev.yml" --profile app)
 
 if ! LOG="$("${COMPOSE[@]}" logs --no-color app 2>/dev/null)"; then
 	echo "auth503-scan: cannot read the appliance log" >&2

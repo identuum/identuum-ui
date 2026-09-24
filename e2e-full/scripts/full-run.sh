@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # full-run.sh — the e2e-full disposable harness (THE-DISPOSABLE-HARNESS, 2026-08-28).
 #
-# DESTROYS AND REBUILDS its own environment on every run:
-#   1. fast-clean   — stops the OSS dev stack and DELETES its postgres volume
+# DESTROYS AND REBUILDS its own environment on every run — its OWN Compose
+# project (identuum-e2e, below), never the operator's dev stack:
+#   1. fast-clean   — stops the harness stack and DELETES its postgres volume
 #   2. oss-up       — rebuilds the image from the working tree and starts it
 #   3. dev-smoke    — refuses a stale binary (build_commit must match the tree)
 #   4. oss-bootstrap— creates the site_admin with a RUN-LOCAL random password
@@ -22,7 +23,7 @@
 #                     casually. Green runs keep nothing extra.
 #
 # NEVER wire this into make verify, wiki make check, or CI: step 1 eats the
-# local OSS dev database by design. The Playwright project it runs is not
+# harness's own database by design. The Playwright project it runs is not
 # even registered unless IDENTUUM_E2E_FULL=1 (set below and nowhere else).
 #
 # The run-local password is generated here, exported to the bootstrap and to
@@ -31,6 +32,23 @@ set -euo pipefail
 
 UI_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 IDP_DIR=$(cd "$UI_DIR/../identuum-idp-oss" && pwd)
+
+# THE-OWNER-STACK-UNTOUCHED (2026-09-24): the harness runs as its OWN Compose
+# project. idp-oss's docker-compose.dev.yml derives the project, both container
+# names, the image tag and the (project-scoped) volume from
+# IDENTUUM_IDP_COMPOSE_PROJECT, and the Postgres host port from
+# DEV_PG_HOST_PORT; its Makefile exports both to compose. Set unconditionally,
+# never inherited: an operator shell exporting the default project would
+# otherwise point every `down --volumes` below at the dev database.
+export IDENTUUM_IDP_COMPOSE_PROJECT=identuum-e2e
+export DEV_PG_HOST_PORT=15513
+E2E_PROJECT="$IDENTUUM_IDP_COMPOSE_PROJECT"
+E2E_APP_CONTAINER="$E2E_PROJECT"
+E2E_COMPOSE=(docker compose -p "$E2E_PROJECT" -f "$IDP_DIR/deployment/docker-compose.dev.yml")
+# The dev-loop UI port (see E2E_UI_PORT below) and the appliance's app port,
+# which the dev compose publishes on 7113 for every project.
+E2E_APP_PORT=7113
+E2E_UI_PORT=7108
 
 # THE-SEED-THAT-OUTLIVED-ITS-APPLIANCE: the site_admin TOTP seed is written
 # under e2e-full/.auth/ during a run and is valid ONLY for the appliance that
@@ -47,14 +65,33 @@ IDP_DIR=$(cd "$UI_DIR/../identuum-idp-oss" && pwd)
 # spending the current one.
 rm -f "$UI_DIR/e2e-full/.auth/full-site-admin-totp"
 
-echo "e2e-full: DESTROYING the OSS dev stack (down --volumes, app profile included)"
+echo "e2e-full: DESTROYING the harness stack (project $E2E_PROJECT: down --volumes, app profile included)"
 # NOT `make fast-clean`: that recipe omits `--profile app`, so it deletes
 # postgres and the volume but LEAVES the profiled app container serving
 # (measured: a 6.4s "run" where a stale app answered the health probe
 # instantly and bootstrap then hit a freshly re-created empty postgres).
 # Recorded as an idp-oss follow-up; the repo is read-only for this slice.
 # Same compose file, same flags, plus the profile — the app dies too.
-docker compose -f "$IDP_DIR/deployment/docker-compose.dev.yml" --profile app down --volumes
+# `-p` names the harness project explicitly: this removes identuum-e2e's
+# containers, network and volume and nothing of any other project.
+"${E2E_COMPOSE[@]}" --profile app down --volumes
+
+# PREFLIGHT, after our own leftovers are gone: every host port this run binds
+# must be free. A port held by anything else — the operator's dev app on 7113
+# included — is a refusal naming the holder, never a collision mid-run.
+for port in "$DEV_PG_HOST_PORT" "$E2E_APP_PORT" "$E2E_UI_PORT"; do
+	# `|| true`: lsof exits 1 when nothing listens, which pipefail would turn
+	# into an abort before the free port could be reported free.
+	holder="$(docker ps --filter "publish=$port" --format '{{.Names}}' | tr '\n' ' ' || true)"
+	if [ -z "$holder" ]; then
+		holder="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR>1{print $1" pid "$2}' | sort -u | tr '\n' ' ' || true)"
+	fi
+	if [ -n "$holder" ]; then
+		echo "e2e-full: REFUSING — host port $port is taken by: $holder(the harness needs it free; it never stops another stack)" >&2
+		exit 1
+	fi
+done
+echo "e2e-full: preflight OK — ports $DEV_PG_HOST_PORT, $E2E_APP_PORT, $E2E_UI_PORT free; project $E2E_PROJECT"
 
 echo "e2e-full: rebuilding + starting the appliance (oss-up, INSECURE_DEV_MODE)"
 # TEST-ONLY rate-limit escape hatch (idp-oss internal/runtime/insecure_dev_mode.go,
@@ -71,7 +108,7 @@ export IDENTUUM_IDP_INSECURE_DEV_MODE=true
 # starts — because the appliance must allow this origin for WebAuthn: the RP
 # origin allowlist otherwise defaults to http://localhost:7104 and every
 # passkey attestation from the harness UI is refused (measured 2026-08-29).
-E2E_UI_PORT=7108
+# (E2E_UI_PORT is declared at the top, with the other harness ports.)
 # Force the suite's ONE authoritative base URL (shell env outranks the
 # operator's gitignored .env.playwright file, which loadEnvFile never lets
 # overwrite an already-set var). Without this, an operator file pinning
@@ -203,13 +240,13 @@ export IDENTUUM_IDP_BOOTSTRAP_PASSWORD
 # slice). Same binary, same argv, no shell: the DSN is read host-side from
 # the running container's env and passed as a plain argument. It is a local
 # dev DSN and is never printed.
-OSS_DB_DSN=$(docker inspect identuum-idp-oss \
+OSS_DB_DSN=$(docker inspect "$E2E_APP_CONTAINER" \
 	--format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^IDENTUUM_IDP_OSS_DB=//p')
 if [ -z "$OSS_DB_DSN" ]; then
 	echo "e2e-full: could not resolve the container's DB DSN" >&2
 	exit 1
 fi
-(cd "$IDP_DIR" && docker compose -f deployment/docker-compose.dev.yml --profile app \
+(cd "$IDP_DIR" && docker compose -p "$E2E_PROJECT" -f deployment/docker-compose.dev.yml --profile app \
 	exec -T -e IDENTUUM_IDP_BOOTSTRAP_PASSWORD app \
 	/app/identuum-idp bootstrap "$OSS_DB_DSN")
 
@@ -299,7 +336,7 @@ bash "$GW" step "$RECORD" 'provisioner=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_PROVISIO
 # is the truth.
 if [ ! -f "$FIXTURE_FILE" ]; then
 	echo "e2e-full: provisioner did not write the fixture envelope — aborting the dev-loop run" >&2
-	docker compose -f "$IDP_DIR/deployment/docker-compose.dev.yml" --profile app down --volumes
+	"${E2E_COMPOSE[@]}" --profile app down --volumes
 	exit 1
 fi
 
@@ -434,7 +471,7 @@ GATE_WITNESS_XREPO="identuum-idp-oss=$IDP_DIR" bash "$GW" finalize "$RECORD" || 
 # already copied by pw-phase.sh. Printed by path so the report can cite it.
 if [ "$rc" -ne 0 ]; then
 	mkdir -p "$E2E_EVIDENCE_DIR"
-	docker compose -f "$IDP_DIR/deployment/docker-compose.dev.yml" --profile app logs --no-color --timestamps >"$E2E_EVIDENCE_DIR/appliance.log" 2>&1 || true
+	"${E2E_COMPOSE[@]}" --profile app logs --no-color --timestamps >"$E2E_EVIDENCE_DIR/appliance.log" 2>&1 || true
 	cp "$RECORD" "$E2E_EVIDENCE_DIR/" 2>/dev/null || true
 	cp e2e/.auth/pw-*.json "$E2E_EVIDENCE_DIR/" 2>/dev/null || true
 	cp "$IDENTUUM_E2E_MATRIX_LOG" "$E2E_EVIDENCE_DIR/" 2>/dev/null || true
@@ -442,7 +479,7 @@ if [ "$rc" -ne 0 ]; then
 fi
 
 echo "e2e-full: teardown (down --volumes, app profile included)"
-docker compose -f "$IDP_DIR/deployment/docker-compose.dev.yml" --profile app down --volumes
+"${E2E_COMPOSE[@]}" --profile app down --volumes
 
 # Green only when EVERY witnessed phase recorded exit=0 (finalize enforces the
 # same condition inside the record itself).

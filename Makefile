@@ -493,11 +493,14 @@ tool-versions:
 	@printf 'yq         %s  %s\n' "$$(yq --version 2>/dev/null | grep -oE 'v[0-9.]+' | head -1)" "$$(command -v yq || echo MISSING)"
 
 ## e2e-full: the DISPOSABLE full-behavior suite (THE-DISPOSABLE-HARNESS).
-## DESTROYS the OSS dev stack's postgres volume, rebuilds the appliance from
-## the sibling working tree, bootstraps a run-local site_admin, runs the
-## e2e-full Playwright project serially (--workers=1, TOTP physics), then
-## fast-cleans again. OPT-IN ONLY — never wired into verify, wiki make
-## check, or CI: fired by accident it eats the local dev database.
+## Runs as its OWN Compose project (identuum-e2e, Postgres on 127.0.0.1:15513,
+## app on 7113): destroys ITS postgres volume, rebuilds the appliance from the
+## sibling working tree, bootstraps a run-local site_admin, runs the e2e-full
+## Playwright project serially (--workers=1, TOTP physics), then tears its own
+## project down again. The operator's dev stack (project identuum-idp-oss,
+## 5513) is never touched; a host port it needs that is already taken is a
+## refusal naming the holder. OPT-IN ONLY — never wired into verify, wiki make
+## check, or CI.
 e2e-full:
 	@bash e2e-full/scripts/full-run.sh
 
