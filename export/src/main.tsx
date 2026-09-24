@@ -10,7 +10,7 @@ import { nextProxyFetch } from "./next-proxy";
 import { navigate, useLocation } from "./router";
 import { ServerRoute } from "./server-route";
 import { buildServerRoute, isServerRoute } from "./server-routes";
-import { discoverPlatform, type SessionState, validateSession } from "./session";
+import { discoverPlatform } from "./session";
 
 // Page operations have a bounded transport failure outcome. Session validation
 // retains its separate shared retry engine and never uses this adapter.
@@ -369,200 +369,10 @@ function Login({ query }: { query: URLSearchParams }) {
   );
 }
 
-// ------------------------------------------------------------------ guard
-
-function Unavailable({ state }: { state: Extract<SessionState, { kind: "unavailable" }> }) {
-  return (
-    <section data-testid="unavailable">
-      <h1>Service unavailable</h1>
-      <p>
-        The identity provider could not confirm your session. Your session was not ended; try again.
-      </p>
-      <dl>
-        <dt>Status</dt>
-        <dd data-testid="unavailable-status">{state.status ?? "network"}</dd>
-        <dt>Correlation id</dt>
-        <dd data-testid="unavailable-cid">{state.correlationId ?? "—"}</dd>
-        <dt>Attempts</dt>
-        <dd data-testid="unavailable-attempts">{state.attempts}</dd>
-      </dl>
-      <p>
-        <button
-          type="button"
-          data-testid="unavailable-retry"
-          onClick={() => window.location.reload()}
-        >
-          Retry
-        </button>
-      </p>
-    </section>
-  );
-}
-
-/**
- * The layout guard's three arms (src/lib/session-guard.ts:23-32): authenticated
- * renders; unauthenticated (an answer below 500) leaves for /login;
- * unavailable renders IN PLACE and touches no cookie. Nothing privileged is
- * rendered before the verdict.
- */
-function Guard({
-  render,
-  pathname,
-}: {
-  render: (session: Extract<SessionState, { kind: "authenticated" }>) => React.ReactNode;
-  pathname: string;
-}) {
-  // The App keys each Guard by the full path, so a navigation remounts it
-  // and re-validates; nothing from the previous page survives the remount.
-  const [session, setSession] = useState<SessionState | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    validateSession().then((s) => {
-      if (cancelled) return;
-      if (s.kind === "unauthenticated") {
-        navigate("/login?reason=session_expired");
-        return;
-      }
-      if (s.kind === "authenticated") {
-        const requiredRole = pathname.startsWith("/org-admin")
-          ? "org_admin"
-          : pathname.startsWith("/site-admin")
-            ? "site_admin"
-            : pathname.startsWith("/dashboard")
-              ? "org_user"
-              : null;
-        if (requiredRole && s.role !== requiredRole) {
-          navigate(roleToPath(s.role));
-          return;
-        }
-        if (requiredRole === "org_admin" && s.user.mfa_enabled === false) {
-          navigate("/account/settings?reason=mfa_required");
-          return;
-        }
-      }
-      setSession(s);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname]);
-  if (session === null) return <p data-testid="guard-validating">Checking your session…</p>;
-  if (session.kind === "unavailable") return <Unavailable state={session} />;
-  if (session.kind === "unauthenticated") return null;
-  return <>{render(session)}</>;
-}
+// ---------------------------------------------------------------- sign-out
 
 async function signOut(): Promise<void> {
   navigate(await signOutDestination());
-}
-
-function Shell({
-  session,
-  children,
-}: {
-  session: Extract<SessionState, { kind: "authenticated" }>;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <header>
-        <span data-testid="who">{session.user.email}</span>{" "}
-        <span data-testid="role">{session.role}</span>{" "}
-        <nav>
-          <Link to={roleToPath(session.role)} testid="nav-home">
-            Home
-          </Link>{" "}
-          <Link to="/account/settings" testid="nav-account">
-            Account
-          </Link>{" "}
-          <button type="button" data-testid="sign-out" onClick={() => void signOut()}>
-            Sign out
-          </button>
-        </nav>
-      </header>
-      <main>{children}</main>
-    </div>
-  );
-}
-
-// ------------------------------------------------------------------- pages
-
-function AccountSettings({
-  session,
-}: {
-  session: Extract<SessionState, { kind: "authenticated" }>;
-}) {
-  const [outcome, setOutcome] = useState<string>("");
-  const [profileOutcome, setProfileOutcome] = useState<string>("");
-  // The authorized-success mutation of the proof set: PUT /api/v1/profile
-  // (users.go:432, RequireAuthenticated, self-scoped by the principal).
-  async function saveProfile(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    const res = await pageRequest("/api/v1/profile", {
-      method: "PUT",
-      body: JSON.stringify({ name: String(form.get("name") ?? "") }),
-    });
-    const body = await readJson(res);
-    if (res.ok) setProfileOutcome(`saved:${String(body?.name ?? "")}`);
-    else if (res.status === 401) setProfileOutcome("Your session has expired. Sign in again.");
-    else if (res.status === 403) setProfileOutcome("refused");
-    else setProfileOutcome(`error:${res.status}`);
-  }
-  async function disable(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    if (String(form.get("confirm") ?? "") !== "DISABLE") {
-      setOutcome("Type DISABLE to confirm.");
-      return;
-    }
-    const res = await pageRequest("/api/v1/me/mfa/disable", {
-      method: "POST",
-      body: JSON.stringify({ code: String(form.get("code") ?? ""), password: "" }),
-    });
-    const body = await readJson(res);
-    // The mapping of src/lib/idp-account-client.ts:138-151, preserved.
-    if (res.status === 204) setOutcome("disabled");
-    else if (res.status === 404 || res.status === 501 || res.status === 503)
-      setOutcome("MFA disable is not available from this IDP runtime.");
-    else if (res.status === 403)
-      setOutcome("Your organization requires MFA; it cannot be disabled.");
-    else if (res.status === 400) setOutcome("MFA is not enrolled on this account.");
-    else if (res.status === 401 && body?.error === "invalid_code")
-      setOutcome("Could not verify the code.");
-    else if (res.status === 401) setOutcome("Your session has expired. Sign in again.");
-    else setOutcome("Could not disable MFA.");
-  }
-  return (
-    <Shell session={session}>
-      <h1>Account settings</h1>
-      <form onSubmit={saveProfile} data-testid="profile-form">
-        <label>
-          Display name <input name="name" data-testid="profile-name" />
-        </label>
-        <button type="submit">Save</button>
-      </form>
-      {profileOutcome && (
-        <p role="status" data-testid="profile-outcome">
-          {profileOutcome}
-        </p>
-      )}
-      <form onSubmit={disable} data-testid="mfa-disable-form">
-        <label>
-          Authenticator code <input name="code" inputMode="numeric" />
-        </label>
-        <label>
-          Type DISABLE <input name="confirm" />
-        </label>
-        <button type="submit">Disable two-factor authentication</button>
-      </form>
-      {outcome && (
-        <p role="status" data-testid="mfa-disable-outcome">
-          {outcome}
-        </p>
-      )}
-    </Shell>
-  );
 }
 
 // -------------------------------------------------------------------- app
@@ -572,9 +382,6 @@ function App() {
   const [pathname = "/", search] = full.split("?");
   const query = new URLSearchParams(search ?? "");
   useEffect(interceptDocument, []);
-  const guard = (
-    render: (s: Extract<SessionState, { kind: "authenticated" }>) => React.ReactNode
-  ) => <Guard key={full} render={render} pathname={pathname} />;
 
   if (pathname === "/") return <Root />;
   if (pathname === "/login") return <Login query={query} />;
@@ -589,7 +396,6 @@ function App() {
       />
     );
   }
-  if (pathname === "/account/settings") return guard((s) => <AccountSettings session={s} />);
   return (
     <section data-testid="not-found">
       <h1>Page not found</h1>

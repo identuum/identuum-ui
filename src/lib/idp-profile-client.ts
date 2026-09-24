@@ -6,20 +6,9 @@
  */
 import "server-only";
 
-import { cookies } from "next/headers";
+import { idpAuthHeaders, idpFetch } from "./idp-transport";
 import { idpBaseUrl, loadRuntimeConfig } from "./runtime-config";
 import type { ProfileFieldKey } from "./types";
-
-async function idpAuthHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
-  const all = (await cookies()).getAll();
-  const headers: Record<string, string> = {
-    ...extra,
-    Cookie: all.map((c) => `${c.name}=${c.value}`).join("; "),
-  };
-  const accessToken = all.find((c) => c.name === "access_token")?.value;
-  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-  return headers;
-}
 
 /** Patch body: absent = unchanged, "" = clear. */
 export type OwnProfilePatch = Partial<Record<ProfileFieldKey | "name", string>>;
@@ -40,7 +29,7 @@ export async function updateOwnProfile(patch: OwnProfilePatch): Promise<UpdateOw
     return { ok: false, status: 503, message: "Identity provider unavailable.", unavailable: true };
   }
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/profile`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/profile`, {
       method: "PUT",
       headers: await idpAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(patch),

@@ -93,7 +93,11 @@ export function DisableMfaForm() {
   }, [state]);
 
   return (
-    <form action={action} className="rounded-xl border border-red-100 bg-red-50 p-4 space-y-3">
+    <form
+      action={action}
+      data-testid="mfa-disable-form"
+      className="rounded-xl border border-red-100 bg-red-50 p-4 space-y-3"
+    >
       <div>
         <p className="text-xs font-semibold text-red-700">Disable MFA</p>
         <p className="text-xs text-red-700 mt-1 leading-relaxed">
@@ -125,7 +129,11 @@ export function DisableMfaForm() {
           className="mt-1 w-full rounded-lg border border-red-100 bg-white px-2 py-1.5 text-xs font-mono text-stone-800 focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100 disabled:opacity-50"
         />
       </label>
-      {state.phase === "error" && <p className="text-xs text-red-700">{state.error}</p>}
+      {state.phase === "error" && (
+        <p data-testid="mfa-disable-outcome" className="text-xs text-red-700">
+          {state.error}
+        </p>
+      )}
       <Button type="submit" variant="danger" size="sm" loading={isPending} disabled={disabled}>
         Disable MFA
       </Button>

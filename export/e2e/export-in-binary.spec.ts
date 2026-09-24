@@ -46,6 +46,23 @@ function login(page: Page, email = EMAIL, password = PASSWORD): Promise<void> {
   return loginAs(page, email, password);
 }
 
+/** The profile name the server now holds, read back through the boundary. */
+async function storedProfileName(page: Page): Promise<string> {
+  return page.evaluate(async () => {
+    const r = await fetch("/bff/api/v1/profile", {
+      headers: { "X-Requested-With": "identuum-ui" },
+      credentials: "same-origin",
+    });
+    return String((await r.json())?.name ?? "");
+  });
+}
+
+/** The shared account settings page keeps each form on its own tab. */
+async function accountTab(page: Page, label: "Profile" | "MFA"): Promise<void> {
+  await page.getByRole("link", { name: label, exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/account/settings\\?tab=${label.toLowerCase()}$`));
+}
+
 async function cookieNames(
   page: Page
 ): Promise<Record<string, { httpOnly: boolean; sameSite: string; value: string }>> {
@@ -136,12 +153,17 @@ test.describe("bootstrapped appliance", () => {
     expect(renewals).toBe(1);
 
     await accountAction(page, "nav-account");
+    await accountTab(page, "Profile");
     await page.getByTestId("profile-name").fill("Site Admin (renewal proof)");
     await page.context().clearCookies({ name: "access_token" });
-    await page.getByTestId("profile-form").locator('button[type="submit"]').click();
-    await expect(page.getByTestId("profile-outcome")).toHaveText(
-      "saved:Site Admin (renewal proof)"
+    const renewedSave = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === "/bff/api/v1/profile" && r.request().method() === "PUT"
     );
+    await page.getByTestId("profile-form").locator('button[type="submit"]').click();
+    // The server's own answer: saved, and the name it now holds.
+    expect((await renewedSave).status()).toBe(200);
+    expect(await storedProfileName(page)).toBe("Site Admin (renewal proof)");
+    await expect(page.getByTestId("profile-outcome")).toContainText("Profile saved");
     const afterMutation = await cookieNames(page);
     expect(Boolean(afterMutation.access_token?.value)).toBe(true);
     expect(Boolean(afterMutation.refresh_token?.value)).toBe(true);
@@ -172,6 +194,7 @@ test.describe("bootstrapped appliance", () => {
       throw new Error("outage injection requires a labelled disposable fixture");
     await login(page);
     await accountAction(page, "nav-account");
+    await accountTab(page, "Profile");
     await page.getByTestId("profile-name").fill("Must not be submitted during outage");
     const before = await cookieNames(page);
     expect(Boolean(before.refresh_token?.value)).toBe(true);
@@ -186,15 +209,14 @@ test.describe("bootstrapped appliance", () => {
     execFileSync("docker", ["pause", FIXTURE_CONTAINER], { stdio: "ignore" });
     try {
       await page.getByTestId("profile-form").locator('button[type="submit"]').click();
-      await expect(page.getByTestId("profile-outcome")).toHaveText("error:503", {
-        timeout: 30_000,
-      });
+      // The shared page's outage destination (getServerSession → /unavailable),
+      // measured in the export harness: the save is never sent.
+      await expect(page).toHaveURL(/\/unavailable\?status=503$/, { timeout: 30_000 });
       const after = await cookieNames(page);
       expect(renewals).toBe(1);
       expect(mutations).toBe(0);
       expect(after.access_token === undefined).toBe(true);
       expect(after.refresh_token?.value === before.refresh_token?.value).toBe(true);
-      expect(new URL(page.url()).pathname).toBe("/account/settings");
       await expect(page.getByTestId("login")).toHaveCount(0);
     } finally {
       execFileSync("docker", ["unpause", FIXTURE_CONTAINER], { stdio: "ignore" });
@@ -324,19 +346,32 @@ test.describe("bootstrapped appliance", () => {
   }) => {
     await login(page);
     await accountAction(page, "nav-account");
+    await accountTab(page, "Profile");
     await page.getByTestId("profile-name").fill("Site Admin (export proof)");
+    const saved = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === "/bff/api/v1/profile" && r.request().method() === "PUT"
+    );
     await page.getByTestId("profile-form").locator('button[type="submit"]').click();
-    await expect(page.getByTestId("profile-outcome")).toHaveText("saved:Site Admin (export proof)");
+    expect((await saved).status()).toBe(200);
+    expect(await storedProfileName(page)).toBe("Site Admin (export proof)");
+    await expect(page.getByTestId("profile-outcome")).toContainText("Profile saved");
 
     // MFA disable on a user with no MFA: the server's refusal, rendered as today.
-    await page.locator('input[name="code"]').fill("000000");
-    await page.locator('input[name="confirm"]').fill("DISABLE");
-    await page.getByTestId("mfa-disable-form").locator('button[type="submit"]').click();
+    await accountTab(page, "MFA");
+    const disable = page.getByTestId("mfa-disable-form");
+    await disable.locator('input[name="code"]').fill("000000");
+    await disable.locator('input[name="confirm"]').fill("DISABLE");
+    const refused = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === "/bff/api/v1/me/mfa/disable"
+    );
+    await disable.locator('button[type="submit"]').click();
+    expect((await refused).status()).toBe(403);
     // The site admin enrolled at first login and site policy requires MFA for
     // admins: the server refuses the disable with 403 mfa_required_by_policy
-    // (auth_mfa_disable.go), rendered with today's copy.
+    // (auth_mfa_disable.go), rendered with the shared page's copy for a 403
+    // (src/app/account/settings/mfa-actions.ts).
     await expect(page.getByTestId("mfa-disable-outcome")).toHaveText(
-      "Your organization requires MFA; it cannot be disabled."
+      "MFA is required for this account or organization. Contact a site administrator for reset."
     );
 
     // From page context, the same PUT without the boundary's request header —

@@ -23,12 +23,15 @@ export function isServerRoute(pathname: string): boolean {
 }
 
 /**
- * The public pages and the org_user dashboard (public-routes.tsx).
- * /account/settings is still the export's own page (main.tsx) until the
- * shared one passes the same specs.
+ * The public pages, the org_user dashboard and the personal account
+ * settings (public-routes.tsx).
  */
 export function isPublicRoute(pathname: string): boolean {
-  return inArea(pathname, "/dashboard") || PUBLIC_PATHS.some((p) => p.test(pathname));
+  return (
+    inArea(pathname, "/dashboard") ||
+    pathname === "/account/settings" ||
+    PUBLIC_PATHS.some((p) => p.test(pathname))
+  );
 }
 
 export function buildServerRoute(pathname: string, query: URLSearchParams): Promise<ReactNode> {

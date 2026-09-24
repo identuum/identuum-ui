@@ -7,7 +7,7 @@
  */
 import "server-only";
 
-import { cookies } from "next/headers";
+import { idpAuthHeaders, idpFetch } from "./idp-transport";
 import { idpBaseUrl, loadRuntimeConfig } from "./runtime-config";
 
 /**
@@ -17,16 +17,6 @@ import { idpBaseUrl, loadRuntimeConfig } from "./runtime-config";
  * (mw.BearerPrincipal never reads the cookie). Token stays server-side
  * (`server-only` module); never logged, never returned to the browser.
  */
-async function idpAuthHeaders(extra?: Record<string, string>): Promise<Record<string, string>> {
-  const all = (await cookies()).getAll();
-  const headers: Record<string, string> = {
-    ...extra,
-    Cookie: all.map((c) => `${c.name}=${c.value}`).join("; "),
-  };
-  const accessToken = all.find((c) => c.name === "access_token")?.value;
-  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-  return headers;
-}
 
 function routeUnavailable(status: number): boolean {
   return status === 404 || status === 501 || status === 503;
@@ -66,7 +56,7 @@ export async function listOwnSessions(): Promise<ListSessionsResult> {
   if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, unavailable: true };
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/sessions`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/sessions`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -169,7 +159,7 @@ export async function revokeSessionById(id: string): Promise<AccountMutationResu
   const base = idpBaseUrl(cfg);
   const authHeaders = await idpAuthHeaders();
   try {
-    const ceRes = await fetch(`${base}/api/v1/sessions/${encodeURIComponent(id)}/revoke`, {
+    const ceRes = await idpFetch(`${base}/api/v1/sessions/${encodeURIComponent(id)}/revoke`, {
       method: "POST",
       headers: authHeaders,
       cache: "no-store",
@@ -178,7 +168,7 @@ export async function revokeSessionById(id: string): Promise<AccountMutationResu
     if (ceRes.status !== 404) return failedMutation(ceRes.status);
 
     // CE route absent (IDP OSS) → fall back to the OSS body form.
-    const ossRes = await fetch(`${base}/api/v1/revoke`, {
+    const ossRes = await idpFetch(`${base}/api/v1/revoke`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify({ session_id: id }),
@@ -208,7 +198,7 @@ export async function getOwnMfaStatus(): Promise<MfaStatusResult> {
   }
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/me/mfa/status`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/me/mfa/status`, {
       method: "GET",
       headers: await idpAuthHeaders(),
       cache: "no-store",
@@ -254,7 +244,7 @@ export async function regenerateOwnMfaRecoveryCodes(input: {
   if (!cfg || !cfg.idp.enabled) return failedMutation(503);
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/me/mfa/recovery-codes/regenerate`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/me/mfa/recovery-codes/regenerate`, {
       method: "POST",
       headers: await idpAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ code: input.code }),
@@ -283,7 +273,7 @@ export async function disableOwnMfa(input: {
   if (!cfg || !cfg.idp.enabled) return failedMutation(503);
 
   try {
-    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/me/mfa/disable`, {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/me/mfa/disable`, {
       method: "POST",
       headers: await idpAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ code: input.code ?? "", password: input.password ?? "" }),

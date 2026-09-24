@@ -81,14 +81,20 @@ export function ProfileForm({ profile }: { profile: UserProfile | null }) {
   const [state, action, isPending] = useActionState(updateProfileAction, initialState);
 
   return (
-    <form action={action} className="space-y-5 max-w-md">
+    <form action={action} data-testid="profile-form" className="space-y-5 max-w-md">
       {state.phase === "error" && (
-        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div
+          data-testid="profile-outcome"
+          className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600"
+        >
           {state.error}
         </div>
       )}
       {state.phase === "success" && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+        <div
+          data-testid="profile-outcome"
+          className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"
+        >
           Profile saved. Applications you have consented to receive only the fields you set.
         </div>
       )}
@@ -104,6 +110,7 @@ export function ProfileForm({ profile }: { profile: UserProfile | null }) {
           <input
             id={`profile_${f.key}`}
             name={f.key}
+            data-testid={`profile-${f.key}`}
             type={f.type ?? "text"}
             defaultValue={profile?.[f.key] ?? ""}
             placeholder={f.placeholder}

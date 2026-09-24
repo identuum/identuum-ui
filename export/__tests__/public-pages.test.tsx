@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { updateProfileAction } from "@/app/account/settings/profile-actions";
 import { completeActivationAction } from "@/app/activate/actions";
 import { requestPasswordResetAction } from "@/app/forgot-password/actions";
 import { consumeResetTokenAction } from "@/app/reset-password/actions";
@@ -44,7 +45,7 @@ const direct = (env: ReturnType<typeof installExport>, path: string) =>
   env.calls.find((c) => c.path.split("?")[0] === path);
 
 it("the pages still pending replacement are not routed to the shared tree yet", () => {
-  for (const p of ["/login", "/setup", "/platform-status", "/account/settings"]) {
+  for (const p of ["/login", "/setup", "/platform-status"]) {
     expect(isServerRoute(p), p).toBe(false);
   }
 });
@@ -227,6 +228,62 @@ describe("dashboard", () => {
       "GET /api/v1/validate": { json: session("org_admin") },
     });
     expect(redirectedTo).toBe("/org-admin");
+  });
+});
+
+describe("account settings", () => {
+  it("is the shared page, routed", async () => {
+    expect(isServerRoute("/account/settings")).toBe(true);
+    const { html, redirectedTo } = await render("/account/settings?tab=profile", {
+      "GET /api/v1/validate": { json: session("site_admin") },
+      "GET /api/v1/profile": { json: { name: "Site Admin" } },
+    });
+    expect(redirectedTo).toBeNull();
+    expect(html).toContain('data-testid="profile-form"');
+  });
+
+  it("a profile save PUTs through the boundary with the browser proof, after validation", async () => {
+    const { result, env } = await act(
+      {
+        "GET /api/v1/validate": { json: session("site_admin") },
+        "PUT /api/v1/profile": { json: { name: "Renamed" } },
+      },
+      () => {
+        const f = new FormData();
+        f.set("name", "Renamed");
+        return updateProfileAction({ phase: "idle" } as never, f);
+      }
+    );
+    expect(result).toEqual({ phase: "success" });
+    expect(env.calls.find((c) => c.method === "PUT")).toMatchObject({
+      path: "/api/v1/profile",
+      viaBff: true,
+      proof: true,
+      body: { name: "Renamed" },
+    });
+  });
+
+  it("an outage sends the save to the shared unavailable page and never PUTs", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      const pending = act(
+        {
+          "GET /api/v1/validate": { status: 503, json: {} },
+          "POST /session/refresh": { status: 503, json: {} },
+        },
+        () => {
+          const f = new FormData();
+          f.set("name", "Must not be sent");
+          return updateProfileAction({ phase: "idle" } as never, f);
+        }
+      );
+      await vi.advanceTimersByTimeAsync(20_000);
+      const { redirectedTo, env } = await pending;
+      expect(redirectedTo).toBe("/unavailable?status=503");
+      expect(env.calls.some((c) => c.method === "PUT")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
