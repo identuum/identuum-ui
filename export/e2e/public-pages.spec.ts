@@ -10,7 +10,8 @@ import { proofRequest } from "./proof-privacy";
  * Per page: its read, one mutation where the binary can serve one, and one
  * refusal.
  *
- * What the binary cannot serve a success for, stated rather than skipped:
+ * What the binary cannot serve a success for, stated rather than skipped
+ * (and an org_user who can sign in, for the dashboard; see below):
  * a claim token (OSS mints none: only GET /auth/claim/validate and POST
  * /auth/claim exist), and a verification or reset token (both only emailed,
  * and the binary has no mail transport here). Those pages prove their read
@@ -155,6 +156,12 @@ test.describe("public pages in the binary", () => {
     await expect(page.getByTestId("route-error")).toHaveCount(0);
   });
 
+  // The org_user dashboard's READ is not provable against this binary: an
+  // org_user it can sign in does not exist here. POST /api/v1/users requires a
+  // password and leaves email_verified=false, and sign-in then answers 401
+  // account_unverified until an emailed link is followed (no mail transport
+  // here); OSS has no invite or claim-issuance route. The read is proven in
+  // export/__tests__/public-pages.test.tsx and route-guards.spec.ts.
   test("dashboard/security: an org_admin is refused the org_user dashboard", async () => {
     await a.goto("/dashboard/security");
     await expect(a).toHaveURL(`${BASE}/org-admin`);

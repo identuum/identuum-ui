@@ -487,73 +487,6 @@ function Shell({
 
 // ------------------------------------------------------------------- pages
 
-interface UserRow {
-  id: string;
-  email: string;
-  role?: string;
-}
-
-function readUsers(body: Record<string, unknown> | null): UserRow[] {
-  const raw = Array.isArray(body)
-    ? body
-    : Array.isArray(body?.users)
-      ? body.users
-      : Array.isArray(body?.items)
-        ? body.items
-        : [];
-  return (raw as Array<Record<string, unknown>>)
-    .filter((u) => typeof u.id === "string" && typeof u.email === "string")
-    .map((u) => ({
-      id: String(u.id),
-      email: String(u.email),
-      role: typeof u.role === "string" ? u.role : undefined,
-    }));
-}
-
-function Home({ session }: { session: Extract<SessionState, { kind: "authenticated" }> }) {
-  const [users, setUsers] = useState<UserRow[] | null>(null);
-  const [status, setStatus] = useState<number | null>(null);
-  const [unavailable, setUnavailable] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    pageRequest("/api/v1/users").then(async (res) => {
-      if (cancelled) return;
-      setStatus(res.status);
-      if (!res.ok) setUnavailable(true);
-      else setUsers(readUsers(await readJson(res)));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return (
-    <Shell session={session}>
-      <h1 data-testid="home">Home</h1>
-      {unavailable ? (
-        <p role="alert" data-testid="users-unavailable">
-          The user list could not be loaded. Try again.
-        </p>
-      ) : users === null ? (
-        <p>Loading users…</p>
-      ) : (
-        <ul data-testid="user-list" data-status={status ?? ""}>
-          {users.map((u) => (
-            <li key={u.id}>
-              {session.role === "org_admin" ? (
-                <Link to={`/org-admin/users/${u.id}`} testid={`user-link-${u.id}`}>
-                  {u.email}
-                </Link>
-              ) : (
-                u.email
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </Shell>
-  );
-}
-
 function AccountSettings({
   session,
 }: {
@@ -655,9 +588,6 @@ function App() {
         build={() => buildServerRoute(pathname, query)}
       />
     );
-  }
-  if (pathname === "/dashboard") {
-    return guard((s) => <Home session={s} />);
   }
   if (pathname === "/account/settings") return guard((s) => <AccountSettings session={s} />);
   return (

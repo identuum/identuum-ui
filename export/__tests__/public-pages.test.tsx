@@ -44,7 +44,7 @@ const direct = (env: ReturnType<typeof installExport>, path: string) =>
   env.calls.find((c) => c.path.split("?")[0] === path);
 
 it("the pages still pending replacement are not routed to the shared tree yet", () => {
-  for (const p of ["/login", "/setup", "/platform-status", "/dashboard", "/account/settings"]) {
+  for (const p of ["/login", "/setup", "/platform-status", "/account/settings"]) {
     expect(isServerRoute(p), p).toBe(false);
   }
 });
@@ -203,6 +203,30 @@ describe("appliance-state pages", () => {
     });
     expect(html).toContain("Upgrade");
     expect(direct(env, "/api/upgrade/status")).toMatchObject({ viaBff: false, proof: false });
+  });
+});
+
+describe("dashboard", () => {
+  it("is the shared org_user overview, its reads through the boundary", async () => {
+    expect(isServerRoute("/dashboard")).toBe(true);
+    const { html, redirectedTo, env } = await render("/dashboard", {
+      "GET /api/v1/validate": { json: session("org_user") },
+      "GET /api/v1/profile": { json: {} },
+    });
+    expect(redirectedTo).toBeNull();
+    expect(html).toContain('data-testid="home"');
+    expect(html).toContain("Overview");
+    expect(env.calls.find((c) => c.path === "/api/v1/profile")).toMatchObject({
+      viaBff: true,
+      proof: true,
+    });
+  });
+
+  it("an org_admin is sent to its own area, never shown the org_user dashboard", async () => {
+    const { redirectedTo } = await render("/dashboard", {
+      "GET /api/v1/validate": { json: session("org_admin") },
+    });
+    expect(redirectedTo).toBe("/org-admin");
   });
 });
 

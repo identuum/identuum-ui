@@ -23,12 +23,12 @@ export function isServerRoute(pathname: string): boolean {
 }
 
 /**
- * The public pages and the dashboard's security redirect (public-routes.tsx).
- * /dashboard and /account/settings are still the export's own pages
- * (main.tsx) until the shared ones pass the same specs.
+ * The public pages and the org_user dashboard (public-routes.tsx).
+ * /account/settings is still the export's own page (main.tsx) until the
+ * shared one passes the same specs.
  */
 export function isPublicRoute(pathname: string): boolean {
-  return pathname === "/dashboard/security" || PUBLIC_PATHS.some((p) => p.test(pathname));
+  return inArea(pathname, "/dashboard") || PUBLIC_PATHS.some((p) => p.test(pathname));
 }
 
 export function buildServerRoute(pathname: string, query: URLSearchParams): Promise<ReactNode> {
