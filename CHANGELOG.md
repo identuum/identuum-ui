@@ -6,6 +6,44 @@ first published image. Format roughly follows
 [Semantic Versioning](https://semver.org/). The published artifact is the
 container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
+## `v0.3.0`
+
+The UI ships as a static export that the IdP binary serves: identuum-idp-oss
+`v0.6.0` embeds it and answers UI and API on one origin, with no UI
+container and no Node at runtime. Delta `v0.2.4..HEAD`: 37 commits and this
+release commit. The published artifact of this release is the export
+(`publish-ui-export.yml` on the tag: a deterministic tarball, its
+`identuum-ui-vendor.v1` manifest with every file's sha256 and the tree
+digest, an SPDX SBOM, and a build-provenance attestation over the three, as
+release assets); no container image is published for it.
+
+### Added
+
+- **The static export** (`export/`, `pnpm build:export`): the shared Next
+  pages — sign-in, first-run setup, account settings, the org_user
+  dashboard, the org-admin and site-admin areas, activate, claim, password
+  reset, email verification, upgrade, platform status — rendered through a
+  platform layer, talking to the binary through its `/bff` boundary. Every
+  `/bff` request carries `X-Requested-With: identuum-ui`, reads included.
+  Library code is split into size-capped chunks; every emitted file is under
+  1 MiB.
+- **`publish-ui-export.yml`** (`7abd92c`): builds the export from a tag with
+  node 26.8.1 and pnpm 11.3.0 exactly and publishes it as above; a dispatch
+  without a tag builds, attests and uploads a workflow artifact only.
+
+### Changed
+
+- A session validation answered `429` is "unavailable", never a verdict
+  (`9a1fd9e`); sign-out is a same-origin POST, and only an unmarked `204`
+  confirms revocation (`892ecb1`); a user-detail read that fails at the IdP
+  renders "unavailable", not "not found" (`5377276`).
+
+### Operator notes
+
+- The Next server and its container image are unchanged by this release and
+  are not what identuum-idp-oss `v0.6.0` runs; the IdP binary vendors this
+  release's export by commit and checks its digest (`make ui-vendor-check`).
+
 ## `v0.2.4`
 
 Site administrators can restore a deleted organization. Delta
