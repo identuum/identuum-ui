@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { roleToPath } from "@/lib/role-routing";
 import { bff, readJson } from "./bff";
 import { signOutDestination } from "./logout";
+import { nextProxyFetch } from "./next-proxy";
 import { navigate, useLocation } from "./router";
 import { ServerRoute } from "./server-route";
 import { buildServerRoute, isServerRoute } from "./server-routes";
@@ -666,6 +667,10 @@ function App() {
     </section>
   );
 }
+
+// The shared browser clients call the Next IdP proxy path; answer it here
+// (next-proxy.ts), before anything renders.
+window.fetch = nextProxyFetch(window.fetch.bind(window));
 
 const root = document.getElementById("root");
 if (root) createRoot(root).render(<App />);
