@@ -43,6 +43,12 @@ function form(fields: Record<string, string>): FormData {
 const direct = (env: ReturnType<typeof installExport>, path: string) =>
   env.calls.find((c) => c.path.split("?")[0] === path);
 
+it("the pages still pending replacement are not routed to the shared tree yet", () => {
+  for (const p of ["/login", "/setup", "/platform-status", "/dashboard", "/account/settings"]) {
+    expect(isServerRoute(p), p).toBe(false);
+  }
+});
+
 it("every converted page is routed through the shared tree", () => {
   for (const p of [
     "/activate",
