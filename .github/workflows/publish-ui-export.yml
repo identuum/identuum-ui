@@ -1,0 +1,201 @@
+# publish-ui-export — the signed identuum-ui static export (PLAN-F-1).
+#
+# ONE UI artifact for both editions (owner decision 2026-09-24): the OSS and
+# CE binaries embed the same built export and read the edition at runtime
+# from /api/runtime-config. This workflow builds that export from a commit,
+# with an EXACT node and pnpm, and produces:
+#
+#   identuum-ui-export-<name>.tar.gz   the built files (out/), a deterministic tar
+#   identuum-ui-export-<name>.json     the manifest, schema identuum-ui-vendor.v1
+#                                      (identuum-idp-oss internal/uiexport's):
+#                                      ui commit, lockfile sha256, node and pnpm
+#                                      versions, every file's sha256, tree digest
+#   identuum-ui-export-<name>.spdx.json  an SPDX SBOM of the source tree
+#
+# and a GitHub build-provenance attestation over all three.
+#
+# Two modes:
+#   - a tag push (v*), or a dispatch naming version_tag: builds THAT tag and
+#     uploads the three files as assets of its GitHub release;
+#   - a dispatch with version_tag empty: builds the dispatched ref, attests,
+#     and uploads a workflow artifact ONLY — no tag, no release. This is how
+#     the pipeline is proven without publishing anything.
+#
+# The tree digest is the one `make ui-vendor` (identuum-idp-oss) computes:
+# the sha256 of the lines "<sha256>  <path>\n", one per file, in bytewise
+# path order. A vendored copy and this artifact of the same commit must
+# carry the same digest.
+name: Publish UI export
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'A ui tag (vX.Y.Z) to build and release. Empty: build the dispatched ref and upload a workflow artifact only (no release).'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-ui-export-${{ github.ref }}-${{ inputs.version_tag }}
+  cancel-in-progress: false
+
+env:
+  # EXACT toolchain: the export is byte-reproducible only from one node and
+  # one pnpm. pnpm is package.json's packageManager version (asserted below);
+  # node is pinned to the patch release, never a floating major.
+  NODE_VERSION: '26.8.1'
+  PNPM_VERSION: '11.3.0'
+
+jobs:
+  export:
+    name: Build, attest and publish the UI export
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Resolve what to build
+        id: target
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.version_tag }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "push" ]; then
+            tag="$REF_NAME"
+          else
+            tag="$INPUT_TAG"
+          fi
+          if [ -n "$tag" ]; then
+            case "$tag" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "version_tag must look like vX.Y.Z; got '$tag'" >&2; exit 1;; esac
+            echo "ref=refs/tags/$tag" >> "$GITHUB_OUTPUT"
+            echo "name=$tag" >> "$GITHUB_OUTPUT"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=$SHA" >> "$GITHUB_OUTPUT"
+            echo "name=${SHA:0:12}" >> "$GITHUB_OUTPUT"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.target.outputs.ref }}
+          persist-credentials: false
+
+      - name: Install pnpm (exact)
+        run: npm install -g "pnpm@${PNPM_VERSION}"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Prove the exact toolchain
+        run: |
+          set -euo pipefail
+          test "$(node --version)" = "v${NODE_VERSION}" || { echo "node is $(node --version), want v${NODE_VERSION}" >&2; exit 1; }
+          test "$(pnpm --version)" = "${PNPM_VERSION}" || { echo "pnpm is $(pnpm --version), want ${PNPM_VERSION}" >&2; exit 1; }
+          declared="$(node -p 'require("./package.json").packageManager')"
+          test "$declared" = "pnpm@${PNPM_VERSION}" || { echo "packageManager is $declared, want pnpm@${PNPM_VERSION}" >&2; exit 1; }
+          echo "node $(node --version), pnpm $(pnpm --version)"
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the static export
+        run: pnpm build:export
+
+      - name: Write the manifest (identuum-ui-vendor.v1)
+        env:
+          NAME: ${{ steps.target.outputs.name }}
+        run: |
+          set -euo pipefail
+          node - <<'EOF'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const { execFileSync } = require("node:child_process");
+          const sha = (b) => crypto.createHash("sha256").update(b).digest("hex");
+          const root = "out";
+          const files = {};
+          const walk = (dir) => {
+            for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+              const p = path.join(dir, e.name);
+              if (e.isDirectory()) walk(p);
+              else if (e.isFile()) files[path.relative(root, p).split(path.sep).join("/")] = sha(fs.readFileSync(p));
+              else throw new Error(`not a regular file: ${p}`);
+            }
+          };
+          walk(root);
+          // Bytewise path order, "<sha256>  <path>\n" per file (sha256sum format).
+          const paths = Object.keys(files).sort((a, b) => (Buffer.compare(Buffer.from(a), Buffer.from(b))));
+          const lines = paths.map((p) => `${files[p]}  ${p}\n`).join("");
+          const manifest = {
+            schema: "identuum-ui-vendor.v1",
+            ui_commit: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
+            ui_lockfile_sha256: sha(fs.readFileSync("pnpm-lock.yaml")),
+            node_version: process.version,
+            pnpm_version: execFileSync("pnpm", ["--version"], { encoding: "utf8" }).trim(),
+            files: Object.fromEntries(paths.map((p) => [p, files[p]])),
+            tree_digest: sha(lines),
+          };
+          fs.writeFileSync(`identuum-ui-export-${process.env.NAME}.json`, `${JSON.stringify(manifest, null, 2)}\n`);
+          console.log(`tree_digest ${manifest.tree_digest} over ${paths.length} files at ${manifest.ui_commit}`);
+          EOF
+
+      - name: Pack the export (deterministic tar)
+        env:
+          NAME: ${{ steps.target.outputs.name }}
+        run: |
+          set -euo pipefail
+          tar --sort=name --mtime='1970-01-01 00:00:00Z' --owner=0 --group=0 --numeric-owner \
+            -cf - -C out . | gzip -n -9 > "identuum-ui-export-${NAME}.tar.gz"
+          sha256sum "identuum-ui-export-${NAME}.tar.gz" "identuum-ui-export-${NAME}.json"
+
+      - name: SBOM (SPDX, source tree)
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          path: .
+          format: spdx-json
+          output-file: identuum-ui-export-${{ steps.target.outputs.name }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Build-provenance attestation
+        id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            identuum-ui-export-${{ steps.target.outputs.name }}.tar.gz
+            identuum-ui-export-${{ steps.target.outputs.name }}.json
+            identuum-ui-export-${{ steps.target.outputs.name }}.spdx.json
+
+      - name: Upload the workflow artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: identuum-ui-export-${{ steps.target.outputs.name }}
+          path: |
+            identuum-ui-export-${{ steps.target.outputs.name }}.tar.gz
+            identuum-ui-export-${{ steps.target.outputs.name }}.json
+            identuum-ui-export-${{ steps.target.outputs.name }}.spdx.json
+          if-no-files-found: error
+
+      - name: Upload the release assets (a tag only)
+        if: steps.target.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.target.outputs.name }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag --title "identuum-ui $TAG" --notes "identuum-ui $TAG static export; see docs/releases/$TAG.md."
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber \
+            "identuum-ui-export-${TAG}.tar.gz" "identuum-ui-export-${TAG}.json" "identuum-ui-export-${TAG}.spdx.json"
