@@ -225,14 +225,18 @@ test.describe("bootstrapped appliance", () => {
     execFileSync("docker", ["pause", FIXTURE_CONTAINER], { stdio: "ignore" });
     try {
       await page.getByTestId("profile-form").locator('button[type="submit"]').click();
-      // The shared page's outage destination (getServerSession → /unavailable),
-      // measured in the export harness: the save is never sent.
-      await expect(page).toHaveURL(/\/unavailable\?status=503$/, { timeout: 30_000 });
+      // The shared page's copy for a save the boundary answered 503 (the
+      // renewal before the mutation met the paused store), measured here.
+      await expect(page.getByTestId("profile-outcome")).toHaveText(
+        "Profile editing is not available on this backend.",
+        { timeout: 30_000 }
+      );
       const after = await cookieNames(page);
       expect(renewals).toBe(1);
       expect(mutations).toBe(0);
       expect(after.access_token === undefined).toBe(true);
       expect(after.refresh_token?.value === before.refresh_token?.value).toBe(true);
+      expect(new URL(page.url()).pathname).toBe("/account/settings");
       await expect(page.getByTestId("login")).toHaveCount(0);
     } finally {
       execFileSync("docker", ["unpause", FIXTURE_CONTAINER], { stdio: "ignore" });
@@ -597,22 +601,32 @@ test.describe("appliance with its store paused", () => {
     }
   });
 
-  test("unavailable: a guarded page renders in place, keeps the cookie, and never redirects to /login", async ({
+  test("unavailable: a guarded page shows the outage, keeps the cookie, and never redirects to /login", async ({
     browser,
   }) => {
     const context = await contextWithState(browser);
     const page = await context.newPage();
     const before = (await context.cookies()).find((c) => c.name === "access_token");
     expect(before).toBeDefined();
+    let validations = 0;
+    page.on("request", (r) => {
+      if (new URL(r.url()).pathname === "/bff/api/v1/validate") validations += 1;
+    });
     await page.goto("/site-admin");
-    await expect(page.getByTestId("unavailable")).toBeVisible({ timeout: 30_000 });
+    // /site-admin is the shared layout since PLAN-D-4: its outage arm is the
+    // shared ServiceUnavailable panel.
+    const panel = page.getByTestId("service-unavailable");
+    await expect(panel).toBeVisible({ timeout: 30_000 });
     // Either the store-unavailable 503 or, when the blocked store outlives the
-    // browser's per-attempt budget, a network timeout: both are the
-    // UNAVAILABLE arm. Neither is ever read as expiry.
-    const status = (await page.getByTestId("unavailable-status").textContent()) ?? "";
-    expect(status === "network" || Number(status) >= 500, `status=${status}`).toBe(true);
-    expect(Number(await page.getByTestId("unavailable-attempts").textContent())).toBeGreaterThan(0);
-    expect(new URL(page.url()).pathname).toBe("/site-admin");
+    // browser's per-attempt budget, no answer: both are the UNAVAILABLE arm.
+    // Neither is ever read as expiry.
+    const text = (await panel.textContent()) ?? "";
+    expect(/\(HTTP 5\d\d\)|\(no answer\)/.test(text), text).toBe(true);
+    expect(validations).toBeGreaterThan(0);
+    // The shared page's own session read sends an outage to the shared
+    // /unavailable destination (getServerSession → unavailablePath) — never
+    // to /login, and the cookie is untouched.
+    expect(new URL(page.url()).pathname).toBe("/unavailable");
     await expect(page.getByTestId("login")).toHaveCount(0);
     const after = (await context.cookies()).find((c) => c.name === "access_token");
     expect(after?.value === before?.value).toBe(true);
