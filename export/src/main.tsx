@@ -3,6 +3,7 @@
 import "@/app/globals.css";
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { loadEdition } from "./edition";
 import { signOutDestination } from "./logout";
 import { nextProxyFetch } from "./next-proxy";
 import { navigate, useLocation } from "./router";
@@ -155,8 +156,10 @@ function App() {
 }
 
 // The shared browser clients call the Next IdP proxy path; answer it here
-// (next-proxy.ts), before anything renders.
-window.fetch = nextProxyFetch(window.fetch.bind(window));
+// (next-proxy.ts), before anything renders. The edition is read once, now;
+// only a CE-only route waits for it (edition.ts).
+const originalFetch = window.fetch.bind(window);
+window.fetch = nextProxyFetch(originalFetch, loadEdition(originalFetch));
 
 const root = document.getElementById("root");
 if (root) createRoot(root).render(<App />);

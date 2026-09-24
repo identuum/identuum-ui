@@ -14,14 +14,41 @@
  *                           /api/upgrade/*), directly — /bff forwards /api/v1
  *                           only
  *
+ * With an edition, a same-origin call to a CE-only IdP route — by any of
+ * the three paths above or through /bff — is answered here with the binary's
+ * own 404 unless the edition is "ce" (./edition.ts).
+ *
  * Nothing else is touched: other paths, other origins and Request objects go
  * to the original fetch unchanged.
  */
 import { bff } from "./bff";
+import { isCeOnlyRoute, unmountedRouteAnswer } from "./edition";
 
 const NEXT_IDP_PROXY = "/api/idp";
+const BFF = "/bff";
 
-export function nextProxyFetch(original: typeof fetch): typeof fetch {
+function idpPath(pathname: string): string {
+  if (pathname.startsWith(`${NEXT_IDP_PROXY}/`)) return pathname.slice(NEXT_IDP_PROXY.length);
+  if (pathname.startsWith(`${BFF}/`)) return pathname.slice(BFF.length);
+  return pathname;
+}
+
+export function nextProxyFetch(original: typeof fetch, edition?: Promise<string>): typeof fetch {
+  const proxied = proxyFetch(original);
+  if (!edition) return proxied;
+  return (input: RequestInfo | URL, init?: RequestInit) => {
+    if (typeof input === "string" || input instanceof URL) {
+      const url = new URL(String(input), window.location.href);
+      const here = new URL(window.location.href).origin;
+      if (url.origin === here && isCeOnlyRoute(idpPath(url.pathname))) {
+        return edition.then((e) => (e === "ce" ? proxied(input, init) : unmountedRouteAnswer()));
+      }
+    }
+    return proxied(input, init);
+  };
+}
+
+function proxyFetch(original: typeof fetch): typeof fetch {
   return (input: RequestInfo | URL, init?: RequestInit) => {
     if (typeof input === "string" || input instanceof URL) {
       const url = new URL(String(input), window.location.href);

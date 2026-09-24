@@ -127,14 +127,25 @@ describe("new organization", () => {
 });
 
 describe("organization detail", () => {
-  it("reads the organization, its administrators and its protocol settings through the boundary", async () => {
+  it("reads the organization and its administrators through the boundary", async () => {
     const { html, env } = await sitePage(`/site-admin/organizations/${SITE_ORG}`);
     expect(html).toContain(String(recordedOrg.name));
     expect(html).toContain("admin@tenant-b-p3.test");
     const paths = env.calls.map((c) => c.path.split("?")[0]);
     expect(paths).toContain(`${ORG_PATH}/admin-recovery-candidates`);
-    expect(paths).toContain(`${ORG_PATH}/protocol-settings`);
     expect(everyApiCallThroughTheBoundary(env.calls)).toBe(true);
+  });
+
+  // Protocol settings are a tenant's own resource: every edition refuses
+  // site_admin (OSS 403, THE-REMAINING-FOUR; CE's admin model likewise), so
+  // the site-admin page shows the refusal without asking for it.
+  it("never asks for protocol settings and shows the site administrator's refusal", async () => {
+    const { html, env } = await sitePage(`/site-admin/organizations/${SITE_ORG}`);
+    const paths = env.calls.map((c) => c.path.split("?")[0]);
+    expect(paths).not.toContain(`${ORG_PATH}/protocol-settings`);
+    expect(html).toContain(
+      "You do not have access to manage this organization&#x27;s protocol settings."
+    );
   });
 
   it.each([403, 404])(

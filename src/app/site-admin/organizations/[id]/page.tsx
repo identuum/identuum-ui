@@ -10,13 +10,8 @@ import type { OrgAdminRecoveryCandidate } from "@/lib/idp-admin-client";
  * Data: GET /api/v1/organizations/:id via getOrganization().
  * Sanitized to OrgDetail — no secrets, internal URLs, or credential material.
  */
-import {
-  getOrganization,
-  getOrgProtocolSettings,
-  listAuditEvents,
-  listOrgAdminsForRecovery,
-} from "@/lib/idp-admin-client";
-import type { OrgDetail } from "@/lib/types";
+import { getOrganization, listAuditEvents, listOrgAdminsForRecovery } from "@/lib/idp-admin-client";
+import type { GetOrgProtocolSettingsResult, OrgDetail } from "@/lib/types";
 import {
   ADMIN_STATE_COPY,
   type AdminState,
@@ -35,6 +30,13 @@ export const metadata: Metadata = { title: "Organization — Identuum Admin" };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** What GET /api/v1/organizations/:id/protocol-settings answers site_admin. */
+const SITE_ADMIN_PROTOCOL_SETTINGS: GetOrgProtocolSettingsResult = {
+  ok: false,
+  reason: "forbidden",
+  status: 403,
+};
+
 export default async function OrgDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -42,12 +44,15 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
     return <NotFoundPanel />;
   }
 
-  const [org, recentAuditResult, adminsResult, protocolSettings] = await Promise.all([
+  const [org, recentAuditResult, adminsResult] = await Promise.all([
     getOrganization(id),
     listAuditEvents({ subjectId: id, subjectType: "organization", pageSize: 8 }).catch(() => null),
     listOrgAdminsForRecovery(id).catch(() => null),
-    getOrgProtocolSettings(id).catch(() => null),
   ]);
+  // Protocol settings are the tenant's own resource: every edition refuses
+  // site_admin (OSS answers 403), so this page shows that refusal without
+  // asking for it.
+  const protocolSettings: GetOrgProtocolSettingsResult = SITE_ADMIN_PROTOCOL_SETTINGS;
 
   if (!org) {
     return <NotFoundPanel />;

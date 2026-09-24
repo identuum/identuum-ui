@@ -64,3 +64,64 @@ describe("the Next IdP proxy path in the export", () => {
     ]);
   });
 });
+
+// OSS-V0.6.0 item 12: the shared pages call IdP routes that only
+// identuum-idp-ce serves. Under Next its server made those calls; in the
+// export the browser does, and each 404 is a console error. On any edition
+// but "ce" the export answers them itself with the binary's own 404 and
+// nothing reaches the network; on "ce" they pass through unchanged.
+describe("CE-only routes on an edition that does not serve them", () => {
+  const CE_ONLY = [
+    "/api/idp/api/upgrade/status",
+    "/api/upgrade/status",
+    "/api/idp/api/setup/license",
+    "/api/setup/license",
+    "/bff/api/v1/anomaly/events?page_size=20",
+    "/bff/api/v1/anomaly/stats",
+    "/bff/api/v1/audit/event-types",
+    "/bff/api/v1/system/sessions",
+    "/bff/api/v1/system/audit/chain/verify",
+    "/bff/api/v1/organizations/01990000-0000-7000-8000-00000000000a/identity-providers",
+    "/bff/api/v1/organizations/01990000-0000-7000-8000-00000000000a/webhooks",
+  ];
+
+  it.each(CE_ONLY)("%s is answered 404 without a request on oss", async (path) => {
+    const { seen } = setup();
+    const wrapped = nextProxyFetch(fetch, Promise.resolve("oss"));
+    const res = await wrapped(path);
+    expect(seen).toHaveLength(0);
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe("404 page not found");
+  });
+
+  it.each(CE_ONLY)("%s still goes to the network on ce", async (path) => {
+    const { seen } = setup();
+    const wrapped = nextProxyFetch(fetch, Promise.resolve("ce"));
+    await wrapped(path);
+    expect(seen).toHaveLength(1);
+  });
+
+  it("routes both editions serve are untouched on oss", async () => {
+    const { seen } = setup();
+    const wrapped = nextProxyFetch(fetch, Promise.resolve("oss"));
+    await wrapped(
+      "/bff/api/v1/organizations/01990000-0000-7000-8000-00000000000a/identity-provider"
+    );
+    await wrapped("/bff/api/v1/audit/events");
+    await wrapped("/api/idp/api/setup/status");
+    await wrapped("/api/status");
+    expect(seen.map((s) => s.url)).toEqual([
+      "/bff/api/v1/organizations/01990000-0000-7000-8000-00000000000a/identity-provider",
+      "/bff/api/v1/audit/events",
+      "/api/setup/status",
+      "/api/status",
+    ]);
+  });
+
+  it("an edition that could not be read is not ce", async () => {
+    const { seen } = setup();
+    const wrapped = nextProxyFetch(fetch, Promise.resolve("unknown"));
+    expect((await wrapped("/api/upgrade/status")).status).toBe(404);
+    expect(seen).toHaveLength(0);
+  });
+});
