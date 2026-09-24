@@ -131,11 +131,11 @@ test("login transport failure is reported without an unhandled rejection", async
   page.on("pageerror", (error) => errors.push(error.name));
   await page.route("**/bff/api/v1/auth/login", (route) => route.abort("failed"));
   await page.goto(`${baseURL}/login`);
-  await page.locator('input[name="email"]').fill("fixture@example.test");
-  await page.locator('input[name="password"]').fill("test-fixture-only");
+  await page.getByLabel("Email or domain").fill("fixture@example.test");
   await page.getByRole("button", { name: "Continue" }).click();
-  await expect(page.getByTestId("login-error")).toHaveText(
-    "The identity provider is unavailable. Try again."
-  );
+  await page.getByLabel("Password").fill("test-fixture-only");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  // The shared password form's copy for a request that got no answer.
+  await expect(page.getByTestId("login-error")).toHaveText("Login failed. Try again.");
   expect(errors).toEqual([]);
 });

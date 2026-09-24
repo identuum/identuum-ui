@@ -12,10 +12,13 @@ Both deployments now execute `src/lib/session-validation.ts` for session verdict
 retry timing, Retry-After handling, and the total validation budget. The static
 adapter supplies the in-process BFF transport; the Next adapter supplies its
 server-side request. Role destinations come from the existing `role-routing`
-module. The prototype still has separate login, enrollment, user-detail and
-account components. It is not evidence that the complete existing page set has
-been converted, and it must not replace that page set before the migration and
-equivalent requirement proofs are complete.
+module. Since PLAN-D-4 every page the export serves is the Next app's own
+module (the org-admin and site-admin areas, the public ceremony and
+appliance-state pages, sign-in, the org_user dashboard and account settings);
+what the export keeps of its own is the boot ladder, the boundary's sign-out
+and the sign-in reason banner for the boundary's logout outcomes
+(export/src/login-route.tsx). It must not replace the Next deployment before
+the remaining acceptance gates named below have run.
 
 ## Security contract
 

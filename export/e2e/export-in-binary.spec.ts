@@ -101,11 +101,15 @@ test.describe("fresh appliance", () => {
     expect(status.state).toBe("setup_required");
   });
 
-  test("setup-state: /login on a fresh appliance still renders the form (no ladder on a deep link)", async ({
+  test("setup-state: /login on a fresh appliance is the shared page's redirect to the setup wizard", async ({
     page,
   }) => {
+    // The shared login page sends a fresh appliance to /setup
+    // (src/app/login/page.tsx); the export's own form rendered in place.
     await page.goto("/login");
-    await expect(page.getByTestId("password-form")).toBeVisible();
+    await expect(page).toHaveURL(/\/setup$/);
+    await expect(page.getByTestId("setup-wizard")).toBeVisible();
+    await expect(page.getByTestId("login")).toHaveCount(0);
   });
 });
 
@@ -546,9 +550,10 @@ test.describe("bootstrapped appliance", () => {
   // that need the account open.
   test("login: wrong credentials are refused and set no cookie", async ({ page }) => {
     await page.goto("/login");
-    await page.locator('input[name="email"]').fill(EMAIL);
-    await page.locator('input[name="password"]').fill("definitely-not-the-password");
-    await page.locator('button[type="submit"]').click();
+    await page.getByLabel("Email or domain").fill(EMAIL);
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByLabel("Password").fill("definitely-not-the-password");
+    await page.getByRole("button", { name: "Sign in" }).click();
     await expect
       .poll(
         async () => (await page.getByTestId("login-error").textContent()) === "Invalid credentials."
@@ -637,7 +642,9 @@ test.describe("appliance with its store paused", () => {
     page,
   }) => {
     await page.goto("/");
-    await expect(page.getByTestId("platform-status")).toBeVisible({ timeout: 30_000 });
+    // The root's outage arm is the shared outage destination since PLAN-D-4.
+    await expect(page).toHaveURL(/\/unavailable(\?status=5\d\d)?$/, { timeout: 30_000 });
+    await expect(page.getByTestId("service-unavailable")).toBeVisible();
     await expect(page.getByTestId("setup-wizard")).toHaveCount(0);
   });
 

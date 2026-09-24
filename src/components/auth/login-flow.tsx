@@ -309,7 +309,7 @@ export function LoginFlow({ onSuccess }: LoginFlowProps) {
             a styling class. The page-wide brute-force banner keeps its own
             alert outside every form. */}
         {serverError && (
-          <p role="alert" className="text-sm text-red-600 text-center">
+          <p role="alert" data-testid="login-error" className="text-sm text-red-600 text-center">
             {serverError}
           </p>
         )}

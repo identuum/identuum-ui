@@ -44,10 +44,54 @@ function form(fields: Record<string, string>): FormData {
 const direct = (env: ReturnType<typeof installExport>, path: string) =>
   env.calls.find((c) => c.path.split("?")[0] === path);
 
-it("the pages still pending replacement are not routed to the shared tree yet", () => {
+it("login and platform-status are the shared pages, routed", () => {
   for (const p of ["/login", "/platform-status"]) {
-    expect(isServerRoute(p), p).toBe(false);
+    expect(isServerRoute(p), p).toBe(true);
   }
+});
+
+describe("login", () => {
+  const READY = {
+    "GET /api/v1/component": { json: { product: "identuum-idp-oss" } },
+    "GET /api/setup/status": { json: { state: "setup_complete", setup_complete: true } },
+  };
+
+  it("renders the shared sign-in page inside the export's login frame", async () => {
+    const { html, redirectedTo } = await render("/login", READY);
+    expect(redirectedTo).toBeNull();
+    expect(html).toContain('data-testid="login"');
+    expect(html).not.toContain('data-testid="login-reason"');
+  });
+
+  it.each([
+    ["signed_out", "You have been signed out."],
+    ["session_expired", "Your session has expired. Sign in again."],
+    [
+      "signed_out_locally",
+      "You were signed out on this device only: the identity provider could not be reached to end the session.",
+    ],
+    ["sign_out_unconfirmed", "Sign-out could not be confirmed. Your session may still be active."],
+  ])("?reason=%s shows the boundary's outcome: %s", async (reason, text) => {
+    const { html } = await render(`/login?reason=${reason}`, READY);
+    expect(html).toContain('data-testid="login-reason"');
+    expect(html).toContain(text);
+  });
+
+  it("an unknown reason shows nothing", async () => {
+    const { html } = await render("/login?reason=whatever", READY);
+    expect(html).not.toContain('data-testid="login-reason"');
+  });
+});
+
+describe("platform-status", () => {
+  it("is the shared status page, its discovery read directly", async () => {
+    const { html, env } = await render("/platform-status", {
+      "GET /api/v1/component": { json: { product: "identuum-idp-oss" } },
+      "GET /api/setup/status": { json: { state: "setup_complete", setup_complete: true } },
+    });
+    expect(html).toContain(">Platform Status</h1>");
+    expect(env.calls.find((c) => c.path === "/api/v1/component")).toMatchObject({ viaBff: false });
+  });
 });
 
 it("every converted page is routed through the shared tree", () => {

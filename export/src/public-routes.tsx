@@ -15,7 +15,7 @@ import DashboardLayout, { metadata as dashboardLayoutMeta } from "@/app/dashboar
 import DashboardPage, { metadata as dashboardMeta } from "@/app/dashboard/page";
 import DashboardSecurityRedirect from "@/app/dashboard/security/page";
 import ForgotPasswordPage, { metadata as forgotMeta } from "@/app/forgot-password/page";
-import LoginPage, { metadata as loginMeta } from "@/app/login/page";
+import { metadata as loginMeta } from "@/app/login/page";
 import PlatformStatusPage, { metadata as platformStatusMeta } from "@/app/platform-status/page";
 import ResetPasswordPage, { metadata as resetMeta } from "@/app/reset-password/page";
 import SetupPage, { metadata as setupMeta } from "@/app/setup/page";
@@ -23,6 +23,7 @@ import SetupRequiredPage, { metadata as setupRequiredMeta } from "@/app/setup-re
 import UpgradePage, { metadata as upgradeMeta } from "@/app/upgrade/page";
 import VerifyEmailPage, { metadata as verifyMeta } from "@/app/verify-email/page";
 import { type Area, buildAreaRoute, route } from "./area-routes";
+import { ExportLoginPage } from "./login-route";
 
 /** The root layout's frame is the export's index.html; public pages add none. */
 function PassThrough({ children }: { children: ReactNode }) {
@@ -42,7 +43,7 @@ export const PUBLIC_AREA: Area = {
     route(/^\/upgrade$/, [], UpgradePage, upgradeMeta),
     route(/^\/setup$/, [], SetupPage, setupMeta),
     route(/^\/platform-status$/, [], PlatformStatusPage, platformStatusMeta),
-    route(/^\/login$/, [], LoginPage, loginMeta),
+    route(/^\/login$/, [], ExportLoginPage, loginMeta),
   ],
 };
 
@@ -61,15 +62,7 @@ export const ACCOUNT_AREA: Area = {
   routes: [route(/^\/account\/settings$/, [], AccountSettingsPage, accountSettingsMeta)],
 };
 
-/**
- * The pages still answered by the export's own components in main.tsx until
- * the shared ones pass the same specs: listed in the table, not yet routed.
- */
-export const PENDING_REPLACEMENT = new Set(["/login", "/platform-status"]);
-
-export const PUBLIC_PATHS = PUBLIC_AREA.routes
-  .map((r) => r.pattern)
-  .filter((p) => ![...PENDING_REPLACEMENT].some((path) => p.test(path)));
+export const PUBLIC_PATHS = PUBLIC_AREA.routes.map((r) => r.pattern);
 
 export function buildPublicRoute(pathname: string, query: URLSearchParams) {
   if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
