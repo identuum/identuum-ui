@@ -942,7 +942,8 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
   });
 
   test("identity provider: full CRUD and its error branches", async () => {
-    // ROW GET /organizations/:id/identity-provider (SR) — 404 before create.
+    // ROW GET /organizations/:id/identity-provider (SR) — none configured is
+    // 200 with identity_provider null since identuum-idp-oss v0.6.0 (db77482).
     const getBefore = await api(
       IDP_BASE,
       "GET",
@@ -950,7 +951,11 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       undefined,
       orgAdmin.bearer
     );
-    expectStatus(getBefore, 404, "get with none configured → 404");
+    expectStatus(getBefore, 200, "get with none configured → 200");
+    expect(getBefore.json.success).toBe(true);
+    expect("identity_provider" in getBefore.json && getBefore.json.identity_provider === null).toBe(
+      true
+    );
 
     // ROW POST /organizations/:id/identity-provider (SM)
     const createBadType = await api(

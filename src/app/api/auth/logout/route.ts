@@ -112,5 +112,12 @@ export async function POST(req: NextRequest): Promise<Response> {
       sameSite: "lax",
     });
   }
+  // identuum-idp-oss v0.6.0 sets refresh_token at Path=/bff/session/ (owner
+  // decision D3); expire it there too, as OSS clearAuthCookies does. A second
+  // header, because res.cookies keeps one entry per name.
+  res.headers.append(
+    "Set-Cookie",
+    "refresh_token=; Path=/bff/session/; Max-Age=0; HttpOnly; SameSite=lax"
+  );
   return res;
 }

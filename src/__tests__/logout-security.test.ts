@@ -26,7 +26,8 @@ describe("browser logout security", () => {
         })
       );
       expect(result.headers.get("location")).toBe("/login?reason=signed_out_locally");
-      expect(result.headers.getSetCookie()).toHaveLength(2);
+      // access_token, and refresh_token at "/" and at /bff/session/ (OSS v0.6.0, D3).
+      expect(result.headers.getSetCookie()).toHaveLength(3);
     }
   );
 

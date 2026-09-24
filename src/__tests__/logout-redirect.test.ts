@@ -67,4 +67,16 @@ describe("logout redirect", () => {
       expect(setCookies.some((c) => c.startsWith(`${name}=`) && /max-age=0/i.test(c))).toBe(true);
     }
   });
+
+  // identuum-idp-oss v0.6.0 (bf48190, owner decision D3) sets refresh_token at
+  // Path=/bff/session/; a clear at "/" alone leaves that cookie in the browser.
+  // The route expires it at both paths, as OSS clearAuthCookies does.
+  it("expires refresh_token at /bff/session/ as well as at /", async () => {
+    const res = await signOutFromContainer();
+    const refreshClears = res.headers
+      .getSetCookie()
+      .filter((c) => c.startsWith("refresh_token=") && /max-age=0/i.test(c))
+      .map((c) => c.match(/;\s*path=([^;]*)/i)?.[1] ?? "");
+    expect(refreshClears.sort()).toEqual(["/", "/bff/session/"]);
+  });
 });
