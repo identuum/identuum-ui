@@ -269,6 +269,24 @@ describe("delete and restore", () => {
     expect(missing.result).toMatchObject({ error: expect.stringContaining("not found") });
   });
 
+  it("a deleted organization, which OSS will not read by id, is found among the deleted rows through the boundary", async () => {
+    // ORG-RESTORE-1: OSS answers GET /:id 404 for a soft-deleted organization
+    // and marks the row with deleted_at; main's v0.2.4 restore page reads it
+    // from the deleted list instead.
+    const deletedRow = { ...recordedOrg, id: SITE_ORG, deleted_at: "2026-09-24T00:00:00Z" };
+    const { html, env } = await sitePage(`/site-admin/organizations/${SITE_ORG}/restore`, {
+      [`GET ${ORG_PATH}`]: { status: 404, json: { error: "not found" } },
+      "GET /api/v1/organizations": {
+        json: { organizations: [deletedRow], total: 1, page: 1, page_size: 100 },
+      },
+    });
+    expect(html).toContain("Restore organization");
+    expect(html).toContain(`value="${SITE_ORG}"`);
+    const list = env.calls.find((c) => c.path.startsWith("/api/v1/organizations?"));
+    expect(list).toMatchObject({ viaBff: true, proof: true });
+    expect(list?.path).toContain("deleted=true");
+  });
+
   it("the pages name the state they would not change", async () => {
     const live = await sitePage(`/site-admin/organizations/${SITE_ORG}/restore`);
     expect(live.html).toContain("Not deleted");

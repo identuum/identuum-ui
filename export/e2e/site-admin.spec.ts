@@ -144,17 +144,34 @@ test.describe("site-admin area in the binary", () => {
     await refusedByRole(`${org}/delete`);
   });
 
-  // BLOCKED on the Go binary (listed, not converted into a pass): the restore
-  // page reads the organization by id, and OSS answers GET
-  // /api/v1/organizations/:id with 404 for a soft-deleted organization
-  // (HandleGetOrganization: `o.DeletedAt != nil` → not found), so the page —
-  // in Next and in the export alike — shows "Organization not found" and no
-  // restore form. The restore action itself (POST .../restore) is proven
-  // through /bff in site-admin-organizations.test.tsx.
-  test("restore: a deleted organization reads as not found (blocked); refusal for another role", async () => {
-    await sa.goto(`${org}/restore`);
-    await expect(sa.getByText("Organization not found").first()).toBeVisible();
-    await expect(sa.locator('main button[type="submit"]')).toHaveCount(0);
+  // OSS answers GET /api/v1/organizations/:id with 404 for a soft-deleted
+  // organization by contract (ORG-RESTORE-1). Since ui v0.2.4 the restore page
+  // finds it among the list's deleted rows, and the list offers Restore for a
+  // row carrying deleted_at — so the restore is opened from the deleted list.
+  // Restore is an undelete (OrganizationService.Restore → repo.Undelete): the
+  // organization reads by id again; its active flag is the one it had (this
+  // spec deactivated it before the delete).
+  test("restore: open it from the deleted list, restore, readable again; refusal for another role", async () => {
+    await sa.goto("/site-admin/organizations?deleted=true");
+    const restoreLink = sa
+      .locator("main li, main tr")
+      .filter({ hasText: ORG_RENAMED })
+      .locator(`a[href="${org}/restore"]`);
+    await expect(restoreLink).toHaveCount(1);
+    await restoreLink.click();
+    await expect(sa).toHaveURL(`${BASE}${org}/restore`);
+    await heading(sa, "Restore organization");
+    await sa.locator('main button[type="submit"]').click();
+    await expect(sa).toHaveURL(`${BASE}/site-admin/organizations?deleted=false`);
+    await sa.goto(org);
+    await expect(sa.getByText(ORG_RENAMED).first()).toBeVisible();
+    // The page-level not-found heading, not a sub-panel's message (the
+    // recovery-candidates panel says "Organization not found." when that
+    // route answers 404 for this organization).
+    await expect(sa.locator("main h1").filter({ hasText: "Organization not found" })).toHaveCount(
+      0
+    );
+    await expect(sa.getByText("Inactive", { exact: true }).first()).toBeVisible();
     await refusedByRole(`${org}/restore`);
   });
 
