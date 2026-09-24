@@ -65,7 +65,7 @@ export const ACCOUNT_AREA: Area = {
  * The pages still answered by the export's own components in main.tsx until
  * the shared ones pass the same specs: listed in the table, not yet routed.
  */
-export const PENDING_REPLACEMENT = new Set(["/login", "/setup", "/platform-status"]);
+export const PENDING_REPLACEMENT = new Set(["/login", "/platform-status"]);
 
 export const PUBLIC_PATHS = PUBLIC_AREA.routes
   .map((r) => r.pattern)

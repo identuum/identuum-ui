@@ -149,18 +149,6 @@ function PlatformStatus({ query }: { query: URLSearchParams }) {
   );
 }
 
-function SetupRequired() {
-  return (
-    <section data-testid="setup-required">
-      <h1>Setup required</h1>
-      <p>
-        This identity provider has not completed setup. The wizard runs from the setup code an
-        operator holds.
-      </p>
-    </section>
-  );
-}
-
 // ------------------------------------------------------------------ login
 
 type LoginStep =
@@ -385,7 +373,6 @@ function App() {
 
   if (pathname === "/") return <Root />;
   if (pathname === "/login") return <Login query={query} />;
-  if (pathname === "/setup") return <SetupRequired />;
   if (pathname === "/platform-status") return <PlatformStatus query={query} />;
   if (isServerRoute(pathname)) {
     return (

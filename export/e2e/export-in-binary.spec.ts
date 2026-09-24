@@ -80,9 +80,25 @@ test.describe("fresh appliance", () => {
 
   test("setup-state: the root routes to /setup, never to the login form", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByTestId("setup-required")).toBeVisible();
+    // PLAN-D-4: /setup is the shared first-run wizard.
+    await expect(page.getByTestId("setup-wizard")).toBeVisible();
     expect(new URL(page.url()).pathname).toBe("/setup");
     await expect(page.getByTestId("login")).toHaveCount(0);
+  });
+
+  test("setup: the wizard refuses a setup code that is not the appliance's, and completes nothing", async ({
+    page,
+  }) => {
+    await page.goto("/setup");
+    await page.getByTestId("setup-code-input").fill("NOTTHESETUPCODE");
+    const verified = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === "/api/setup/verify-token"
+    );
+    await page.getByTestId("setup-code-verify").click();
+    expect((await verified).status()).toBe(401);
+    await expect(page.getByText("Setup code is not correct.", { exact: false })).toBeVisible();
+    const status = await page.evaluate(async () => (await fetch("/api/setup/status")).json());
+    expect(status.state).toBe("setup_required");
   });
 
   test("setup-state: /login on a fresh appliance still renders the form (no ladder on a deep link)", async ({
@@ -608,7 +624,7 @@ test.describe("appliance with its store paused", () => {
   }) => {
     await page.goto("/");
     await expect(page.getByTestId("platform-status")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId("setup-required")).toHaveCount(0);
+    await expect(page.getByTestId("setup-wizard")).toHaveCount(0);
   });
 
   test("logout during the outage is local-only and says so", async ({ browser }) => {

@@ -45,7 +45,7 @@ const direct = (env: ReturnType<typeof installExport>, path: string) =>
   env.calls.find((c) => c.path.split("?")[0] === path);
 
 it("the pages still pending replacement are not routed to the shared tree yet", () => {
-  for (const p of ["/login", "/setup", "/platform-status"]) {
+  for (const p of ["/login", "/platform-status"]) {
     expect(isServerRoute(p), p).toBe(false);
   }
 });
@@ -193,6 +193,31 @@ describe("verify-email", () => {
 });
 
 describe("appliance-state pages", () => {
+  it("setup is the shared wizard on a fresh appliance, its status read directly", async () => {
+    expect(isServerRoute("/setup")).toBe(true);
+    const fresh = {
+      state: "setup_required",
+      setup_complete: false,
+      setup_token_required: true,
+      product: "identuum-idp-oss",
+      distribution: "oss",
+    };
+    const { html, redirectedTo, env } = await render("/setup", {
+      "GET /api/setup/status": { json: fresh },
+      "GET /api/v1/component": { json: { product: "identuum-idp-oss" } },
+    });
+    expect(redirectedTo).toBeNull();
+    expect(html).toContain('data-testid="setup-wizard"');
+    expect(env.calls.find((c) => c.path === "/api/setup/status")).toMatchObject({ viaBff: false });
+  });
+
+  it("setup on a completed appliance sends the browser to /login", async () => {
+    const { redirectedTo } = await render("/setup", {
+      "GET /api/setup/status": { json: { state: "setup_complete", setup_complete: true } },
+    });
+    expect(redirectedTo).toBe("/login");
+  });
+
   it("setup-required renders", async () => {
     const { html } = await render("/setup-required");
     expect(html).toContain("Setup required");
