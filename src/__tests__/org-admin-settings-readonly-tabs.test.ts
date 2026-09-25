@@ -34,7 +34,6 @@ const PAGE_NO_COMMENTS = stripComments(PAGE_SRC);
 
 const HELPER_NAMES = [
   "listOrganizationIdentityProviders",
-  "listOrganizationWebhooks",
   "listOrgRoles",
   "listScopeTemplates",
 ] as const;
@@ -153,40 +152,12 @@ describe("listOrganizationIdentityProviders — explicit allowlist", () => {
   });
 });
 
-describe("listOrganizationWebhooks — explicit allowlist + redacted-secret invariant", () => {
-  it("GETs /api/v1/organizations/:id/webhooks", () => {
-    const body = isolateHelperBody("listOrganizationWebhooks");
-    expect(body).toMatch(/\/api\/v1\/organizations\/\$\{encodeURIComponent\(orgID\)\}\/webhooks/);
-  });
-
-  it("projects ONLY id/url/event_filters/enabled/created_at — and EXPLICITLY DROPS the redacted-secret field plus any header / authorization / payload-shaped field", () => {
-    const body = isolateHelperBody("listOrganizationWebhooks");
-    expect(body).toMatch(/w\.id/);
-    expect(body).toMatch(/w\.url/);
-    expect(body).toMatch(/w\.event_filters/);
-    expect(body).toMatch(/w\.enabled/);
-    expect(body).toMatch(/w\.created_at/);
-    const stripped = stripComments(body);
-    const BANNED: RegExp[] = [
-      /w\.secret\b/,
-      /w\.signing_secret\b/,
-      /w\.authorization\b/,
-      /w\.authorization_header\b/,
-      /w\.bearer\b/,
-      /w\.headers\b/,
-      /w\.payload\b/,
-      /w\.raw_payload\b/,
-      /w\.body\b/,
-    ];
-    for (const pat of BANNED) {
-      expect(stripped, `listOrganizationWebhooks must not read ${pat}`).not.toMatch(pat);
-    }
-  });
-
-  it("routes absent/license-gated responses through the shared IDP status classifier", () => {
-    const body = isolateHelperBody("listOrganizationWebhooks");
-    expect(body).toContain("classifyAdminReadFailure(res)");
-    expect(body).not.toMatch(/res\.status\s*===\s*404[\s\S]*?featureUnavailable:\s*true/);
+// Owner decision 5 (2026-09-25): no edition serves the organization webhooks
+// list, so the UI neither declares a helper for it nor requests it.
+describe("webhooks list — removed (no edition serves it)", () => {
+  it("declares no listOrganizationWebhooks helper and names no /webhooks path", () => {
+    expect(WIRE_SRC).not.toMatch(/listOrganizationWebhooks/);
+    expect(WIRE_SRC).not.toMatch(/\/webhooks/);
   });
 });
 
@@ -252,7 +223,7 @@ describe("Identity providers section — read-only", () => {
 
   it("renders only id/name/slug/type/priority/active/created_at/updated_at — never client_secret / private_key / signing_cert / metadata XML", () => {
     const start = SECTIONS_SRC.indexOf("function IdentityProvidersReadOnlySection");
-    const end = SECTIONS_SRC.indexOf("\nexport function WebhooksReadOnlySection");
+    const end = SECTIONS_SRC.indexOf("\nexport function", start + 1);
     expect(start).toBeGreaterThan(0);
     expect(end).toBeGreaterThan(start);
     const block = stripComments(SECTIONS_SRC.slice(start, end));
@@ -282,43 +253,10 @@ describe("Identity providers section — read-only", () => {
   });
 });
 
-describe("Webhooks section — read-only", () => {
-  it("exports WebhooksReadOnlySection with the documented heading + no-secret subtitle", () => {
-    expect(SECTIONS_SRC).toMatch(/export function WebhooksReadOnlySection/);
-    expect(SECTIONS_SRC).toMatch(/headingId="webhooks-heading"/);
-    expect(SECTIONS_SRC).toMatch(/title="Webhooks"/);
-    expect(SECTIONS_SRC).toMatch(/Webhook signing secrets are never displayed/i);
-  });
-
-  it("uses CE/OSS boundary copy for unavailable webhooks", () => {
-    expect(SECTIONS_SRC).toContain("Webhooks are a CE IDP capability");
-    expect(SECTIONS_SRC).toContain("IDP OSS deployments show this boundary");
-  });
-
-  it("renders only id/url/event_filters/enabled/created_at — never secret/authorization/payload", () => {
-    const start = SECTIONS_SRC.indexOf("function WebhooksReadOnlySection");
-    const end = SECTIONS_SRC.indexOf("\nexport function OrgRolesReadOnlySection");
-    expect(start).toBeGreaterThan(0);
-    expect(end).toBeGreaterThan(start);
-    const block = stripComments(SECTIONS_SRC.slice(start, end));
-    expect(block).toMatch(/w\.url/);
-    expect(block).toMatch(/w\.event_filters/);
-    expect(block).toMatch(/w\.enabled/);
-    expect(block).toMatch(/w\.created_at/);
-    const BANNED: RegExp[] = [
-      /w\.secret/,
-      /w\.signing_secret/,
-      /w\.authorization/,
-      /w\.authorization_header/,
-      /w\.bearer/,
-      /w\.payload/,
-      /w\.raw_payload/,
-      /w\.headers/,
-      /JSON\.stringify\(/,
-    ];
-    for (const pat of BANNED) {
-      expect(block, `WebhooksReadOnlySection must not render ${pat}`).not.toMatch(pat);
-    }
+describe("Webhooks section — removed", () => {
+  it("exports no WebhooksReadOnlySection and renders no Webhooks heading", () => {
+    expect(SECTIONS_SRC).not.toMatch(/WebhooksReadOnlySection/);
+    expect(SECTIONS_SRC).not.toMatch(/webhooks-heading/);
   });
 });
 
@@ -432,7 +370,6 @@ describe("/org-admin/settings/page.tsx — Promise.all + section mounts", () => 
     for (const name of [
       "listOrgRoles",
       "listOrganizationIdentityProviders",
-      "listOrganizationWebhooks",
       "listScopeTemplates",
     ]) {
       expect(clientImport, `${name} must be imported from idp-admin-client`).toContain(name);
@@ -445,7 +382,6 @@ describe("/org-admin/settings/page.tsx — Promise.all + section mounts", () => 
       "IdentityProvidersReadOnlySection",
       "OrgRolesReadOnlySection",
       "ScopeTemplatesReadOnlySection",
-      "WebhooksReadOnlySection",
     ]) {
       expect(sectionsImport, `${name} must be imported from the sections module`).toContain(name);
     }
@@ -455,7 +391,7 @@ describe("/org-admin/settings/page.tsx — Promise.all + section mounts", () => 
     // Original four resources still present
     expect(PAGE_SRC).toContain("listOrganizationDomains(orgID)");
     expect(PAGE_SRC).toContain("listOrganizationIdentityProviders(orgID)");
-    expect(PAGE_SRC).toContain("listOrganizationWebhooks(orgID)");
+    expect(PAGE_SRC).not.toContain("listOrganizationWebhooks");
     expect(PAGE_SRC).toContain("listOrgRoles(orgID)");
     expect(PAGE_SRC).toContain("listScopeTemplates()");
     // Protocol settings added in this slice
@@ -480,14 +416,13 @@ describe("/org-admin/settings/page.tsx — Promise.all + section mounts", () => 
   it("mounts the four sections AFTER DomainsCard and BEFORE the placeholders array map", () => {
     const domainsIdx = PAGE_SRC.indexOf("<DomainsCard");
     const idpsIdx = PAGE_SRC.indexOf("<IdentityProvidersReadOnlySection");
-    const webhooksIdx = PAGE_SRC.indexOf("<WebhooksReadOnlySection");
     const rolesIdx = PAGE_SRC.indexOf("<OrgRolesReadOnlySection");
     const templatesIdx = PAGE_SRC.indexOf("<ScopeTemplatesReadOnlySection");
     const placeholderIdx = PAGE_SRC.indexOf("ORG_ADMIN_SETTINGS_PLACEHOLDERS.map");
     expect(domainsIdx).toBeGreaterThan(0);
     expect(idpsIdx).toBeGreaterThan(domainsIdx);
-    expect(webhooksIdx).toBeGreaterThan(idpsIdx);
-    expect(rolesIdx).toBeGreaterThan(webhooksIdx);
+    expect(PAGE_SRC).not.toContain("<WebhooksReadOnlySection");
+    expect(rolesIdx).toBeGreaterThan(idpsIdx);
     expect(templatesIdx).toBeGreaterThan(rolesIdx);
     expect(placeholderIdx).toBeGreaterThan(templatesIdx);
   });

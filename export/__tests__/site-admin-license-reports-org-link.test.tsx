@@ -5,7 +5,8 @@ import { SITE_ADMIN_SESSION, siteAnswers, sitePage } from "./recorded";
 
 // PLAN-D-3: the site-admin pages whose data is not an /api/v1 read — the
 // license page (a direct setup probe and a client-side admin manager), the
-// reports page (report download links) and the three AG org-link pages — as
+// reports page (a boundary, no download links since owner decision 5) and the
+// three AG org-link pages — as
 // the export renders them over the OSS binary's recorded answers.
 //
 // What the binary lacks, measured against it on 2026-09-23 and stated here so
@@ -41,15 +42,17 @@ describe("license", () => {
 });
 
 describe("reports", () => {
-  it("names the Enterprise/CE boundary and requests nothing", async () => {
+  it("names the boundary and requests nothing", async () => {
     const { html, env } = await sitePage("/site-admin/reports");
-    expect(html).toContain("Reports require Enterprise/CE");
+    expect(html).toContain("Report exports are not available");
     expect(env.calls.some((c) => c.path.includes("/reports/"))).toBe(false);
   });
 
-  it("its download links still name the Next proxy path the binary does not serve", async () => {
+  // Owner decision 5 (2026-09-25): no edition serves report exports, so the
+  // page offers no download link (the links named a path nothing answers).
+  it("offers no report download link", async () => {
     const { html } = await sitePage("/site-admin/reports");
-    expect(html).toContain('href="/api/idp/api/v1/reports/access/users"');
+    expect(html).not.toContain("/api/v1/reports/");
   });
 });
 

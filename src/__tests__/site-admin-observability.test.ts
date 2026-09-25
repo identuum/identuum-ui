@@ -349,25 +349,16 @@ describe("getSystemInfo — wire contract + safe projection", () => {
   });
 });
 
-// ── SITE_ADMIN_REPORT_FAMILIES: shape + safe paths ──────────────────────────
+// ── Reports: no export metadata (owner decision 5, 2026-09-25) ───────────────
+//
+// No edition serves /api/v1/reports/*, so the wire client carries no report
+// paths and the page links to none (dead-surfaces-decision-5.test.ts renders
+// the page and proves it).
 
-describe("SITE_ADMIN_REPORT_FAMILIES — pure metadata, no eager fetch", () => {
-  it("declares exactly four report families with documented keys", () => {
-    expect(WIRE_SRC).toMatch(/export const SITE_ADMIN_REPORT_FAMILIES:\s*ReportFamily\[\]\s*=/);
-    expect(WIRE_SRC).toMatch(/key:\s*"user_access"/);
-    expect(WIRE_SRC).toMatch(/key:\s*"failed_auth"/);
-    expect(WIRE_SRC).toMatch(/key:\s*"privilege_changes"/);
-    expect(WIRE_SRC).toMatch(/key:\s*"audit_log"/);
-  });
-
-  it("each report path roots at /api/v1/reports and uses safe extensions only", () => {
-    const pathMatches = WIRE_SRC.match(/path:\s*"\/api\/v1\/reports[^"]*"/g) ?? [];
-    expect(pathMatches.length).toBeGreaterThan(0);
-    for (const m of pathMatches) {
-      expect(m).toMatch(
-        /\/api\/v1\/reports\/(access\/users|auth\/failed|privileges\/changes|audit\/events)(\.csv|\.pdf)?"$/
-      );
-    }
+describe("reports — no edition serves them, so the client names none", () => {
+  it("declares no report family metadata and no /api/v1/reports path", () => {
+    expect(WIRE_SRC).not.toMatch(/SITE_ADMIN_REPORT_FAMILIES/);
+    expect(WIRE_SRC).not.toMatch(/\/api\/v1\/reports/);
   });
 });
 
@@ -511,35 +502,25 @@ describe("/site-admin/reports page — landing", () => {
   const SRC = readPage("reports");
   const NO_COMMENTS = stripComments(SRC);
 
-  it("imports SITE_ADMIN_REPORT_FAMILIES + ReportLink type", () => {
-    const importBlock = SRC.match(
-      /import\s*\{([\s\S]*?)\}\s*from\s+["']@\/lib\/idp-admin-client["']/
-    );
-    expect(importBlock).not.toBeNull();
-    expect(importBlock?.[1]).toMatch(/\bSITE_ADMIN_REPORT_FAMILIES\b/);
-    expect(importBlock?.[1]).toMatch(/\btype\s+ReportLink\b/);
+  it("imports nothing from the wire client (it requests nothing)", () => {
+    expect(SRC).not.toMatch(/from\s+["']@\/lib\/idp-admin-client["']/);
   });
 
   it("renders the documented heading", () => {
     expect(SRC).toMatch(/<h1[^>]*>\s*Reports\s*<\/h1>/);
   });
 
-  it("renders Enterprise/CE boundary copy while preserving report links for CE deployments", () => {
+  it("names the boundary: no edition serves report exports", () => {
     expect(SRC).toContain("FeatureBoundaryPanel");
-    expect(SRC).toContain("Reports require Enterprise/CE");
-    expect(SRC).toContain("IDP OSS");
-    expect(SRC).toContain("the links remain available for CE deployments");
-    expect(SRC).toMatch(/href=\{`\/api\/idp\$\{link\.path\}`\}/);
+    expect(SRC).toContain("Report exports are not available");
+    expect(SRC).toContain("No edition of the identity provider serves report exports");
   });
 
-  it('does NOT auto-fetch / auto-download any report on render — links use href + target="_blank"', () => {
-    // No `await fetch(...)` / `await listReports(...)`. The page
-    // composes <a> elements pointing at /api/idp/<report-path>.
+  it("fetches nothing and links to no report", () => {
     expect(NO_COMMENTS).not.toMatch(/await\s+fetch\(/);
-    expect(NO_COMMENTS).not.toMatch(/await\s+listReports/);
-    expect(SRC).toMatch(/href=\{`\/api\/idp\$\{link\.path\}`\}/);
-    expect(SRC).toMatch(/target="_blank"/);
-    expect(SRC).toMatch(/rel="noreferrer"/);
+    expect(NO_COMMENTS).not.toMatch(/<a\b/);
+    expect(NO_COMMENTS).not.toMatch(/\/api\/idp/);
+    expect(NO_COMMENTS).not.toMatch(/\/api\/v1\/reports/);
   });
 
   it("renders NO mutation controls and NO secret-shaped fields", () => {

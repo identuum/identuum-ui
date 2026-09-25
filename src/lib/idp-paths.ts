@@ -25,7 +25,7 @@ export const IDP_PATHS = {
   webauthnRegisterBegin: "/api/idp/api/v1/webauthn/register/begin",
   webauthnRegisterFinish: "/api/idp/api/v1/webauthn/register/finish",
   webauthnCredentials: "/api/idp/api/v1/webauthn/credentials",
-  // PATCH /credentials/:id — rename (same base URL, :id appended at call site)
+  // DELETE /credentials/:id — remove (same base URL, :id appended at call site)
   // WebAuthn / passkey login (public, unauthenticated)
   webauthnLoginBegin: "/api/idp/api/v1/auth/login/webauthn/begin",
   webauthnLoginFinish: "/api/idp/api/v1/auth/login/webauthn/finish",

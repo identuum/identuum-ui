@@ -184,7 +184,7 @@ test.describe("site-admin area in the binary", () => {
     ["/site-admin/anomaly", "Anomaly", "Anomaly statistics require Enterprise/CE"],
     ["/site-admin/keys", "Signing keys", "EdDSA"],
     ["/site-admin/license", "License", ""],
-    ["/site-admin/reports", "Reports", "Reports require Enterprise/CE"],
+    ["/site-admin/reports", "Reports", "Report exports are not available"],
     ["/site-admin/system", "System", ""],
     ["/site-admin/system/info", "Runtime info", "identuum-idp-oss"],
     ["/site-admin/system/sessions", "Admin sessions", "Admin sessions require Enterprise/CE"],

@@ -16,7 +16,6 @@ import {
   getOwnOrganization,
   listOrganizationDomains,
   listOrganizationIdentityProviders,
-  listOrganizationWebhooks,
   listOrgRoles,
   listScopeTemplates,
 } from "@/lib/idp-admin-client";
@@ -34,7 +33,6 @@ import {
   OrgRecordReadOnlySection,
   OrgRolesReadOnlySection,
   ScopeTemplatesReadOnlySection,
-  WebhooksReadOnlySection,
 } from "./settings-readonly-sections";
 
 export const metadata: Metadata = { title: "Organization Settings — Identuum Org Admin" };
@@ -70,7 +68,6 @@ export default async function OrgAdminSettingsPage() {
   const [
     domainsResult,
     identityProvidersResult,
-    webhooksResult,
     rolesResult,
     scopeTemplatesResult,
     protocolSettings,
@@ -78,12 +75,11 @@ export default async function OrgAdminSettingsPage() {
     ? await Promise.all([
         listOrganizationDomains(orgID),
         listOrganizationIdentityProviders(orgID),
-        listOrganizationWebhooks(orgID),
         listOrgRoles(orgID),
         scopeTemplatesCapabilityBoundary ? null : listScopeTemplates(),
         protocolSettingsCapabilityBoundary ? null : getOrgProtocolSettings(orgID).catch(() => null),
       ])
-    : ([null, null, null, null, null, null] as const);
+    : ([null, null, null, null, null] as const);
   const domains = domainsResult?.ok ? domainsResult.data.domains : [];
   const domainsLoadError =
     domainsResult && !domainsResult.ok ? ORG_ADMIN_DOMAINS_CARD_COPY.loadError : null;
@@ -139,7 +135,6 @@ export default async function OrgAdminSettingsPage() {
       {identityProvidersResult && (
         <IdentityProvidersReadOnlySection result={identityProvidersResult} />
       )}
-      {webhooksResult && <WebhooksReadOnlySection result={webhooksResult} />}
       {rolesResult && <OrgRolesReadOnlySection result={rolesResult} />}
       {(scopeTemplatesResult || scopeTemplatesCapabilityBoundary) && (
         <ScopeTemplatesReadOnlySection

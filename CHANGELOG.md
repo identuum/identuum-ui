@@ -6,6 +6,23 @@ first published image. Format roughly follows
 [Semantic Versioning](https://semver.org/). The published artifact is the
 container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
+## Unreleased
+
+### Changed
+
+- **Surfaces no edition serves are removed** (owner decision 5,
+  2026-09-25): the site-admin reports page offers no report export link
+  (it states that no edition serves report exports), the org-admin settings
+  page has no webhooks list, and passkeys can no longer be renamed (the
+  Rename control sent a PATCH neither edition answers). Removing a passkey
+  is unchanged.
+- **Session revoke asks only its edition's route**: identuum-idp-oss
+  `POST /api/v1/revoke {session_id}`, identuum-idp-ce
+  `POST /api/v1/sessions/{id}/revoke`, chosen from the IdP component's
+  product, where it tried the CE route first and fell back on 404.
+- `logout`: the Next route also expires `refresh_token` at
+  `Path=/bff/session/` (identuum-idp-oss v0.6.0, D3) (`9add676`).
+
 ## `v0.3.0`
 
 The UI ships as a static export that the IdP binary serves: identuum-idp-oss

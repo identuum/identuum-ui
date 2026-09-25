@@ -2921,86 +2921,14 @@ export async function getSystemInfo(): Promise<GetSystemInfoResult> {
   }
 }
 
-// ── Reports landing page metadata (no wire fetch — pure metadata) ──────────
-//
-// The reports landing page renders deep links to four report families
-// (user-access, failed-auth, privilege-changes, audit-log) in their
-// available export formats. The /api/v1/reports/* endpoints return
-// JSON / CSV / PDF directly; the UI does NOT eagerly fetch any of
-// these on page load — clicking a link triggers the operator's
-// browser to download or open the file. The OPERATOR is responsible
-// for any data egress; the IDP emits a `data_accessed` audit event
-// per §5.9 SOC2 CC6.1 on the JSON endpoints.
-
-export interface ReportLink {
-  /** Operator-visible label. */
-  label: string;
-  /** Wire path (relative to the IDP origin proxied through /api/idp). */
-  path: string;
-  /** Wire MIME, used to pick an icon / handle file vs JSON view. */
-  format: "json" | "csv" | "pdf";
-}
-
-export interface ReportFamily {
-  /** Stable identifier for the family. */
-  key: "user_access" | "failed_auth" | "privilege_changes" | "audit_log";
-  /** Operator-visible family name. */
-  name: string;
-  /** Short non-technical description of the report's scope. */
-  description: string;
-  /** Available exports for this family. */
-  links: ReportLink[];
-}
-
-export const SITE_ADMIN_REPORT_FAMILIES: ReportFamily[] = [
-  {
-    key: "user_access",
-    name: "User access",
-    description: "Per-user login activity, failed attempts, and risk scoring across the tenancy.",
-    links: [
-      { label: "JSON", path: "/api/v1/reports/access/users", format: "json" },
-      { label: "CSV", path: "/api/v1/reports/access/users.csv", format: "csv" },
-      { label: "PDF", path: "/api/v1/reports/access/users.pdf", format: "pdf" },
-    ],
-  },
-  {
-    key: "failed_auth",
-    name: "Failed authentication",
-    description:
-      "Failed login attempts with timestamp, email, IP, user agent, and rejection reason.",
-    links: [
-      { label: "JSON", path: "/api/v1/reports/auth/failed", format: "json" },
-      { label: "CSV", path: "/api/v1/reports/auth/failed.csv", format: "csv" },
-      { label: "PDF", path: "/api/v1/reports/auth/failed.pdf", format: "pdf" },
-    ],
-  },
-  {
-    key: "privilege_changes",
-    name: "Privilege changes",
-    description: "Role change audit trail with subject, actor, old/new role, and reason.",
-    links: [
-      { label: "JSON", path: "/api/v1/reports/privileges/changes", format: "json" },
-      { label: "CSV", path: "/api/v1/reports/privileges/changes.csv", format: "csv" },
-      { label: "PDF", path: "/api/v1/reports/privileges/changes.pdf", format: "pdf" },
-    ],
-  },
-  {
-    key: "audit_log",
-    name: "Audit log",
-    description:
-      "Full audit log PDF export. JSON access is available via the dedicated /site-admin/audit page.",
-    links: [{ label: "PDF", path: "/api/v1/reports/audit/events.pdf", format: "pdf" }],
-  },
-];
-
 // ── Org-admin Settings read-only tabs (slice identuum-20260530-org-admin-settings-readonly-tabs) ──
 //
-// Four list helpers backing the new read-only sections on
-// /org-admin/settings: Identity providers / Webhooks / Roles / Scope
-// templates. The IDP backend already scrubs sensitive material at the
-// mapper layer (IdentityProviderInfo's ProviderConfig drops
-// ClientSecretEncrypted + BindPasswordEncrypted; the webhook list
-// mapper redacts the signing secret to ""). The UI helpers below add
+// List helpers backing the read-only sections on /org-admin/settings:
+// Identity providers / Roles / Scope templates (the webhooks list was
+// removed by owner decision 5, 2026-09-25: no edition serves it). The IDP
+// backend already scrubs sensitive material at the mapper layer
+// (IdentityProviderInfo's ProviderConfig drops ClientSecretEncrypted +
+// BindPasswordEncrypted). The UI helpers below add
 // explicit field projection as defence-in-depth so a future mapper
 // regression cannot leak through.
 
@@ -3111,80 +3039,6 @@ export async function listOrganizationIdentityProviders(
           return one && typeof one === "object" && !Array.isArray(one) ? [mapOne(one)] : [];
         })();
     return { ok: true, identity_providers, count: identity_providers.length };
-  } catch {
-    return {
-      ok: false,
-      status: 0,
-      forbidden: false,
-      featureUnavailable: false,
-    };
-  }
-}
-
-// ── Webhooks (GET /api/v1/organizations/:id/webhooks) ─────────────────────
-
-/**
- * Operator-safe projection of one configured organization webhook.
- * The backend's `secret` field is redacted to "" by the
- * MapWebhookEndpointsRedacted mapper; the UI helper additionally
- * NEVER reads d.secret / d.authorization / d.headers so a future
- * mapper regression that started populating the field cannot leak
- * through. The webhook URL IS surfaced verbatim — the operator
- * configured it and needs to see it for verification — but the page
- * may choose to display only the URL host for very long URLs that
- * could carry secret query params; the helper itself returns the
- * full URL for the operator-typed UI to make that choice.
- */
-export interface OrgWebhookItem {
-  id: string;
-  url: string;
-  event_filters: string[];
-  enabled: boolean;
-  created_at: string;
-}
-
-export type ListOrganizationWebhooksResult =
-  | { ok: true; items: OrgWebhookItem[]; total_count: number }
-  | {
-      ok: false;
-      status: number;
-      forbidden: boolean;
-      featureUnavailable: boolean;
-    };
-
-export async function listOrganizationWebhooks(
-  orgID: string
-): Promise<ListOrganizationWebhooksResult> {
-  const cfg = loadRuntimeConfig();
-  if (!cfg || !cfg.idp.enabled) {
-    return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
-  }
-  try {
-    const res = await idpFetch(
-      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/webhooks`,
-      { method: "GET", headers: await idpAuthHeaders(), cache: "no-store" }
-    );
-    if (!res.ok) {
-      const failure = await classifyAdminReadFailure(res);
-      return { ok: false, ...failure };
-    }
-    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
-    const d: any = await res.json();
-    const rawList = Array.isArray(d?.items) ? d.items : [];
-    const items: OrgWebhookItem[] = rawList.map((w: Record<string, unknown>) => ({
-      id: typeof w.id === "string" ? w.id : "",
-      url: typeof w.url === "string" ? w.url : "",
-      event_filters: Array.isArray(w.event_filters)
-        ? w.event_filters.map((s: unknown) => String(s))
-        : [],
-      enabled: Boolean(w.enabled),
-      created_at: typeof w.created_at === "string" ? w.created_at : "",
-    }));
-    return {
-      ok: true,
-      items,
-      total_count: typeof d?.total_count === "number" ? d.total_count : items.length,
-    };
   } catch {
     return {
       ok: false,

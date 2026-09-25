@@ -2,9 +2,10 @@
  * Read-only Settings sections landed by slice
  * identuum-20260530-org-admin-settings-readonly-tabs.
  *
- * Four sections mounted on /org-admin/settings BELOW the existing
- * Domains card: Identity providers / Webhooks / Roles / Scope
- * templates. Each section renders the operator-safe field set
+ * Sections mounted on /org-admin/settings BELOW the existing
+ * Domains card: Identity providers / Roles / Scope templates (the
+ * webhooks list was removed by owner decision 5, 2026-09-25: no edition
+ * serves it). Each section renders the operator-safe field set
  * returned by its wire helper; no mutation control is rendered.
  *
  * SECURITY (load-bearing — pinned by Vitest):
@@ -14,12 +15,6 @@
  *     backend mapper drops these at the wire layer; the helper's
  *     projection drops them again; the section reads ONLY the
  *     documented operator-safe fields.
- *   - Webhooks section NEVER renders the signing secret /
- *     Authorization header / secret query params / raw payload.
- *     The backend redacts the secret to "" via
- *     MapWebhookEndpointsRedacted; the helper's projection drops it
- *     entirely; the section reads only id / url / event_filters /
- *     enabled / created_at.
  *   - Roles and Scope templates sections render scope-name strings
  *     only; no scope value carries credential material.
  *   - No mutation control on any section (no <form>, no <button
@@ -28,7 +23,6 @@
 import type { AuthorizationServerPageBoundary } from "@/lib/capability-affordances";
 import type {
   ListOrganizationIdentityProvidersResult,
-  ListOrganizationWebhooksResult,
   ListOrgRolesResult,
   ListScopeTemplatesResult,
 } from "@/lib/idp-admin-client";
@@ -89,57 +83,6 @@ export function IdentityProvidersReadOnlySection({
               </div>
               <div className="shrink-0">
                 <StatusPill active={p.active} />
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
-  );
-}
-
-// ── Webhooks section ───────────────────────────────────────────────────────
-
-export function WebhooksReadOnlySection({ result }: { result: ListOrganizationWebhooksResult }) {
-  return (
-    <Card
-      headingId="webhooks-heading"
-      title="Webhooks"
-      subtitle="Read-only view of configured webhook endpoints for your organization. Create / delete / test-delivery are not available from this page. Webhook signing secrets are never displayed."
-    >
-      {!result.ok && result.forbidden && (
-        <Forbidden body="Your session does not have permission to view webhooks." />
-      )}
-      {!result.ok && result.featureUnavailable && (
-        <Unavailable body="Webhooks are a CE IDP capability. IDP OSS deployments show this boundary instead of treating the section as a Starter feature." />
-      )}
-      {!result.ok && !result.forbidden && !result.featureUnavailable && <ErrorBody />}
-      {result.ok && result.items.length === 0 && (
-        <EmptyBody body="No webhook endpoints are configured for your organization." />
-      )}
-      {result.ok && result.items.length > 0 && (
-        <ul className="divide-y divide-stone-100">
-          {result.items.map((w) => (
-            <li key={w.id} className="px-6 py-3 flex items-start justify-between gap-4">
-              <div className="min-w-0 flex-1 space-y-0.5">
-                <p className="text-sm font-mono text-sky-950 break-all">{w.url}</p>
-                {w.event_filters.length > 0 && (
-                  <p className="text-[10px] text-stone-400 leading-tight">
-                    Events:{" "}
-                    {w.event_filters.map((e, i) => (
-                      <span key={e}>
-                        <span className="font-mono">{e}</span>
-                        {i < w.event_filters.length - 1 ? ", " : ""}
-                      </span>
-                    ))}
-                  </p>
-                )}
-                <p className="text-[10px] text-stone-400 leading-tight">
-                  Created {formatDate(w.created_at)}
-                </p>
-              </div>
-              <div className="shrink-0">
-                <StatusPill active={w.enabled} />
               </div>
             </li>
           ))}

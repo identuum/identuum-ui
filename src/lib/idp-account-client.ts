@@ -143,15 +143,18 @@ function failedMutation(status: number, serverError?: string): AccountMutationFa
 /**
  * Revokes ONE of the caller's own sessions by its opaque id (external_sid).
  *
- * Dual-route, using ONLY pre-existing backend routes (no backend change):
- *   - IDP CE mounts POST /api/v1/sessions/{id}/revoke (path param).
- *   - IDP OSS mounts POST /api/v1/revoke with a { session_id } body.
- * We try the CE path first; on 404 (route absent on OSS) we fall back to the
- * OSS body form. Both revoke by the SAME id that GET /api/v1/sessions returns,
- * and both enforce caller ownership server-side. Bulk semantics (current /
- * others / all) are orchestrated by the caller iterating the session list.
+ * Each edition serves one route, and only that route is asked (owner decision
+ * 5, 2026-09-25 — no try-then-fallback, so no failed request on either):
+ *   - IDP CE: POST /api/v1/sessions/{id}/revoke (path param).
+ *   - IDP OSS: POST /api/v1/revoke with a { session_id } body.
+ * Both revoke by the SAME id that GET /api/v1/sessions returns, and both
+ * enforce caller ownership server-side. Bulk semantics (current / others /
+ * all) are orchestrated by the caller iterating the session list.
  */
-export async function revokeSessionById(id: string): Promise<AccountMutationResult> {
+export async function revokeSessionById(
+  id: string,
+  edition: "oss" | "ce"
+): Promise<AccountMutationResult> {
   const cfg = loadRuntimeConfig();
   if (!cfg || !cfg.idp.enabled) return failedMutation(503);
   if (!id) return failedMutation(404);
@@ -159,23 +162,21 @@ export async function revokeSessionById(id: string): Promise<AccountMutationResu
   const base = idpBaseUrl(cfg);
   const authHeaders = await idpAuthHeaders();
   try {
-    const ceRes = await idpFetch(`${base}/api/v1/sessions/${encodeURIComponent(id)}/revoke`, {
-      method: "POST",
-      headers: authHeaders,
-      cache: "no-store",
-    });
-    if (ceRes.ok) return { ok: true };
-    if (ceRes.status !== 404) return failedMutation(ceRes.status);
-
-    // CE route absent (IDP OSS) → fall back to the OSS body form.
-    const ossRes = await idpFetch(`${base}/api/v1/revoke`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders },
-      body: JSON.stringify({ session_id: id }),
-      cache: "no-store",
-    });
-    if (ossRes.ok) return { ok: true };
-    return failedMutation(ossRes.status);
+    const res =
+      edition === "ce"
+        ? await idpFetch(`${base}/api/v1/sessions/${encodeURIComponent(id)}/revoke`, {
+            method: "POST",
+            headers: authHeaders,
+            cache: "no-store",
+          })
+        : await idpFetch(`${base}/api/v1/revoke`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...authHeaders },
+            body: JSON.stringify({ session_id: id }),
+            cache: "no-store",
+          });
+    if (res.ok) return { ok: true };
+    return failedMutation(res.status);
   } catch {
     return failedMutation(0);
   }

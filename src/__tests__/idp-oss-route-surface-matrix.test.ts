@@ -160,10 +160,15 @@ const IDP_ROUTE_SURFACE_MATRIX: SurfaceMatrixRow[] = [
   },
   {
     route: "/site-admin/reports",
-    classification: "CE-only",
+    // Owner decision 5 (2026-09-25): no edition serves report exports; the
+    // page states that boundary and requests nothing.
+    classification: "backend-absent tolerant",
     coveredRoutes: ["/site-admin/reports"],
     files: ["app/site-admin/reports/page.tsx"],
-    signals: ["Reports require Enterprise/CE", "the links remain available for CE deployments"],
+    signals: [
+      "Report exports are not available",
+      "No edition of the identity provider serves report exports",
+    ],
   },
   {
     route: "/site-admin/system/audit-chain",
@@ -399,12 +404,10 @@ describe("IDP OSS route/surface matrix", () => {
     expect(protocolPanel).not.toMatch(/SCIM.*(OSS|Foundation|Starter)/i);
   });
 
-  it("preserves CE links for report exports while explaining the OSS boundary", () => {
+  it("offers no report export link in any edition (owner decision 5)", () => {
     const reportsPage = readSource("app/site-admin/reports/page.tsx");
-    expect(reportsPage).toContain("href={`/api/idp${link.path}`}");
-    expect(reportsPage).toContain("the links remain available for CE deployments");
-    expect(reportsPage).toContain(
-      "IDP OSS operators can use this direct page to identify the boundary"
-    );
+    expect(reportsPage).not.toContain("/api/idp");
+    expect(reportsPage).not.toMatch(/<a\b/);
+    expect(reportsPage).toContain("No edition of the identity provider serves report exports");
   });
 });

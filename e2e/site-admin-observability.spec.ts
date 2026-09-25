@@ -72,22 +72,15 @@ test.describe("/site-admin observability pages — read-only smoke", () => {
     }
   });
 
-  test("Reports page renders without auto-downloading", async ({ page }) => {
+  test("Reports page states the boundary and offers no export link", async ({ page }) => {
     await page.goto("/site-admin/reports");
     await page.waitForLoadState("networkidle");
     expect(await page.title()).not.toMatch(/500|404|internal error|application error|not found/i);
     await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();
-    // The four report families are listed; their names are
-    // operator-visible anchors.
-    await expect(page.getByText("User access", { exact: true })).toBeVisible();
-    await expect(page.getByText("Failed authentication", { exact: true })).toBeVisible();
-    await expect(page.getByText("Privilege changes", { exact: true })).toBeVisible();
-    await expect(page.getByText("Audit log", { exact: true })).toBeVisible();
-    // Each export link is a JSON/CSV/PDF anchor — confirm at least
-    // one with target="_blank" exists (we do NOT click any link).
-    const jsonLink = page.getByRole("link", { name: /^JSON$/ }).first();
-    await expect(jsonLink).toBeVisible();
-    expect(await jsonLink.getAttribute("target")).toBe("_blank");
+    // Owner decision 5 (2026-09-25): no edition serves report exports.
+    await expect(page.getByText("Report exports are not available")).toBeVisible();
+    expect(await page.locator('main a[href*="/reports/"]').count()).toBe(0);
+    expect(await page.getByRole("link", { name: /^(JSON|CSV|PDF)$/ }).count()).toBe(0);
     const bodyText = (await page.locator("body").textContent()) ?? "";
     for (const pat of BODY_BANNED_PATTERNS) {
       expect(bodyText.match(pat), `reports body matched forbidden pattern ${pat}`).toBeNull();

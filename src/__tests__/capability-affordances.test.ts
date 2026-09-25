@@ -398,6 +398,8 @@ describe("admin navigation capability affordance source invariants", () => {
         href: "/site-admin/reports",
         capability: "reporting",
         directBoundaryFile: "app/site-admin/reports/page.tsx",
+        // Owner decision 5: no edition serves report exports.
+        boundaryCopy: "Report exports are not available",
       },
     ];
 
@@ -413,7 +415,9 @@ describe("admin navigation capability affordance source invariants", () => {
 
       const directPage = readSource(item.directBoundaryFile);
       expect(directPage).toContain("FeatureBoundaryPanel");
-      expect(directPage).toContain("Enterprise/CE");
+      expect(directPage).toContain(
+        "boundaryCopy" in item ? String(item.boundaryCopy) : "Enterprise/CE"
+      );
     }
 
     for (const label of ["Overview", "Organizations", "Signing keys", "System", "Settings"]) {

@@ -16,6 +16,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { listOwnSessions, revokeSessionById } from "@/lib/idp-account-client";
+import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { getServerSession } from "@/lib/server-session";
 
 const confirmByAction = {
@@ -94,11 +95,15 @@ export async function revokeSessionAction(
     return { error: "Could not identify the current session. Use the account menu to sign out." };
   }
 
+  // Each edition serves one revoke route; ask only that one (decision 5).
+  const runtime = await getServerRuntimeState();
+  const edition = runtime?.components.idp.product === "identuum-idp-ce" ? "ce" : "oss";
+
   let lastForbidden = false;
   let lastUnauthorized = false;
   let anyFailure = false;
   for (const id of targetIds) {
-    const r = await revokeSessionById(id);
+    const r = await revokeSessionById(id, edition);
     if (!r.ok) {
       anyFailure = true;
       lastForbidden = lastForbidden || r.forbidden;

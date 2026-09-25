@@ -18,7 +18,7 @@
  *   - Nickname is a display-only label; the server sanitizes it before storage.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { IDP_PATHS } from "@/lib/idp-paths";
 import { Button } from "./button";
 import { arrayBufferToBase64url, base64urlToArrayBuffer } from "./passkey-base64url";
@@ -229,29 +229,6 @@ export function PasskeySection() {
     }
   }
 
-  async function handleRenamePasskey(credId: string, newNickname: string): Promise<boolean> {
-    try {
-      const res = await fetch(`${IDP_PATHS.webauthnCredentials}/${encodeURIComponent(credId)}`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nickname: newNickname }),
-        cache: "no-store",
-      });
-      if (res.ok) {
-        setCredentials((prev) =>
-          prev.map((c) =>
-            c.id === credId ? { ...c, nickname: newNickname || "Device passkey" } : c
-          )
-        );
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
-    }
-  }
-
   const isRegistering = phase === "registering";
 
   return (
@@ -338,7 +315,6 @@ export function PasskeySection() {
               cred={cred}
               isDeleting={deletingId === cred.id}
               onDelete={() => handleDeletePasskey(cred.id)}
-              onRename={(newName) => handleRenamePasskey(cred.id, newName)}
             />
           ))}
         </ul>
@@ -351,19 +327,11 @@ function CredentialRow({
   cred,
   isDeleting,
   onDelete,
-  onRename,
 }: {
   cred: CredentialSummary;
   isDeleting: boolean;
   onDelete: () => void;
-  onRename: (name: string) => Promise<boolean>;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(cred.nickname || "Device passkey");
-  const [renaming, setRenaming] = useState(false);
-  const [renameError, setRenameError] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
   const createdDate = new Date(cred.created_at).toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
@@ -384,58 +352,13 @@ function CredentialRow({
       ? cred.aaguid.replace(/-/g, "").slice(0, 8)
       : null;
 
-  function startEdit() {
-    setDraft(cred.nickname || "Device passkey");
-    setRenameError(false);
-    setEditing(true);
-    setTimeout(() => inputRef.current?.focus(), 0);
-  }
-
-  function cancelEdit() {
-    setEditing(false);
-    setRenameError(false);
-  }
-
-  async function commitRename() {
-    if (renaming) return;
-    const trimmed = draft.trim() || "Device passkey";
-    setRenaming(true);
-    setRenameError(false);
-    const ok = await onRename(trimmed);
-    setRenaming(false);
-    if (ok) {
-      setEditing(false);
-    } else {
-      setRenameError(true);
-    }
-  }
-
   return (
     <li className="py-3 space-y-1">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          {editing ? (
-            <input
-              ref={inputRef}
-              type="text"
-              value={draft}
-              onChange={(e) => {
-                setDraft(e.target.value.slice(0, 80));
-                setRenameError(false);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitRename();
-                if (e.key === "Escape") cancelEdit();
-              }}
-              maxLength={80}
-              disabled={renaming}
-              className="w-full rounded border border-sky-300 bg-stone-50 px-2 py-0.5 text-sm text-sky-950 font-medium focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:opacity-50"
-            />
-          ) : (
-            <p className="text-sm text-sky-950 font-medium truncate">
-              {cred.nickname || "Device passkey"}
-            </p>
-          )}
+          <p className="text-sm text-sky-950 font-medium truncate">
+            {cred.nickname || "Device passkey"}
+          </p>
           <p className="text-xs text-stone-400 mt-0.5">
             Added {createdDate}
             {lastUsed && ` · Last used ${lastUsed}`}
@@ -449,53 +372,19 @@ function CredentialRow({
               Clone warning — possible key duplication detected.
             </p>
           )}
-          {renameError && (
-            <p className="text-xs text-red-500 mt-0.5">Rename failed. Please try again.</p>
-          )}
         </div>
 
         {/* Actions */}
         <div className="flex items-center gap-3 shrink-0 mt-0.5">
-          {editing ? (
-            <>
-              <button
-                type="button"
-                onClick={commitRename}
-                disabled={renaming}
-                className="text-xs text-sky-600 hover:text-sky-700 font-medium transition-colors disabled:opacity-50"
-              >
-                {renaming ? "Saving…" : "Save"}
-              </button>
-              <button
-                type="button"
-                onClick={cancelEdit}
-                disabled={renaming}
-                className="text-xs text-stone-400 hover:text-stone-600 font-medium transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={startEdit}
-                disabled={isDeleting}
-                className="text-xs text-stone-400 hover:text-sky-600 font-medium transition-colors disabled:opacity-50"
-              >
-                Rename
-              </button>
-              <button
-                type="button"
-                onClick={onDelete}
-                disabled={isDeleting}
-                className="text-xs text-stone-400 hover:text-red-600 font-medium transition-colors disabled:opacity-50"
-                aria-label="Remove passkey"
-              >
-                {isDeleting ? "Removing…" : "Remove"}
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={isDeleting}
+            className="text-xs text-stone-400 hover:text-red-600 font-medium transition-colors disabled:opacity-50"
+            aria-label="Remove passkey"
+          >
+            {isDeleting ? "Removing…" : "Remove"}
+          </button>
         </div>
       </div>
     </li>
