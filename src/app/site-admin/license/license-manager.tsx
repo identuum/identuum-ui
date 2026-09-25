@@ -19,6 +19,7 @@
  */
 
 import { useCallback, useState } from "react";
+import { LocalTime } from "@/components/ui/local-time";
 import {
   type AdminLicenseStatusResult,
   type AdminUploadLicenseResult,
@@ -69,7 +70,9 @@ function StatusPanel({ body, context }: StatusPanelProps) {
         {body.expiresAt && (
           <>
             <dt className="text-stone-500">Expires at</dt>
-            <dd>{body.expiresAt}</dd>
+            <dd>
+              <LocalTime value={body.expiresAt} fallback={body.expiresAt} />
+            </dd>
           </>
         )}
         {body.licenseId && (

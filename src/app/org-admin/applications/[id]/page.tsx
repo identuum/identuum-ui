@@ -28,6 +28,8 @@
  */
 
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
+import { LocalTime } from "@/components/ui/local-time";
 import {
   type AuthorizationServerPageBoundary,
   getAuthorizationServerPageBoundary,
@@ -222,13 +224,15 @@ function DetailCard({ client }: { client: OrgClientItem }) {
         <UriListRow label="Allowed audiences" values={client.allowed_audiences} />
         {client.scope && <Row label="Default scope" value={client.scope} mono />}
         {client.jwks_uri && <Row label="JWKS URI" value={client.jwks_uri} mono />}
-        {client.created_at && <Row label="Created at" value={client.created_at} mono />}
+        {client.created_at && (
+          <Row label="Created at" value={<LocalTime value={client.created_at} />} />
+        )}
       </dl>
     </div>
   );
 }
 
-function Row({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+function Row({ label, value, mono = false }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
     <>
       <dt className="font-medium text-stone-500">{label}</dt>
@@ -314,20 +318,6 @@ function ErrorPanel() {
       </p>
     </div>
   );
-}
-
-function formatAuditDate(iso: string): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "—";
-  }
 }
 
 /**
@@ -487,7 +477,7 @@ function ApplicationRecentActivityRow({
           )}
         </div>
         <span className="shrink-0 text-[10px] text-stone-400 whitespace-nowrap">
-          {formatAuditDate(event.created_at)}
+          <LocalTime value={event.created_at} />
         </span>
       </a>
     </li>

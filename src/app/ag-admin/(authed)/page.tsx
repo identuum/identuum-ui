@@ -14,7 +14,9 @@
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { LocalTime } from "@/components/ui/local-time";
 import { agRequest } from "@/lib/ag-client";
+import { formatCount } from "@/lib/format-count";
 import { agBaseUrl, loadRuntimeConfig, runtimeMode } from "@/lib/runtime-config";
 
 export const dynamic = "force-dynamic";
@@ -365,7 +367,7 @@ function StatCard({
       <p
         className={`font-bold tabular-nums leading-none ${text ? "text-sm" : "text-xl"} ${accentCls}`}
       >
-        {value !== null ? (typeof value === "number" ? value.toLocaleString() : value) : "—"}
+        {value !== null ? (typeof value === "number" ? formatCount(value) : value) : "—"}
       </p>
     </a>
   );
@@ -418,7 +420,7 @@ function DashSessionRow({ session: s }: { session: DashSession }) {
           {s.agent_mode}
         </span>
         <span className="text-[11px] text-stone-400 whitespace-nowrap">
-          {formatDate(s.last_activity_at)}
+          <LocalTime value={s.last_activity_at} />
         </span>
         <a
           href={`/ag-admin/sessions/${s.id}`}
@@ -521,17 +523,4 @@ function StatusRow({
       <span className={`text-xs text-right truncate max-w-xs ${valueCls}`}>{value}</span>
     </div>
   );
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso.slice(0, 16);
-  }
 }

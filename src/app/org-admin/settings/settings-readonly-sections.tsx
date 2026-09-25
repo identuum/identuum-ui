@@ -20,25 +20,13 @@
  *   - No mutation control on any section (no <form>, no <button
  *     type="submit">, no Create / Edit / Delete affordance).
  */
+import { LocalTime } from "@/components/ui/local-time";
 import type { AuthorizationServerPageBoundary } from "@/lib/capability-affordances";
 import type {
   ListOrganizationIdentityProvidersResult,
   ListOrgRolesResult,
   ListScopeTemplatesResult,
 } from "@/lib/idp-admin-client";
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return "—";
-  }
-}
 
 // ── Identity providers section ─────────────────────────────────────────────
 
@@ -78,7 +66,8 @@ export function IdentityProvidersReadOnlySection({
                   )}
                 </p>
                 <p className="text-[10px] text-stone-400 leading-tight">
-                  Created {formatDate(p.created_at)} · Updated {formatDate(p.updated_at)}
+                  Created <LocalTime value={p.created_at} style="date" /> · Updated{" "}
+                  <LocalTime value={p.updated_at} style="date" />
                 </p>
               </div>
               <div className="shrink-0">

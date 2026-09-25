@@ -16,26 +16,12 @@
  */
 
 import type { Metadata } from "next";
+import { LocalTime } from "@/components/ui/local-time";
 import { listSigningKeys } from "@/lib/idp-admin-client";
 
 export const metadata: Metadata = {
   title: "Signing keys — Identuum Site Admin",
 };
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "—";
-  }
-}
 
 export default async function SiteAdminKeysPage() {
   const result = await listSigningKeys();
@@ -80,23 +66,31 @@ export default async function SiteAdminKeysPage() {
                 </div>
                 <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-xs">
                   <dt className="font-medium text-stone-500">Created</dt>
-                  <dd className="font-mono text-sky-950">{formatDate(k.created_at)}</dd>
+                  <dd className="font-mono text-sky-950">
+                    <LocalTime value={k.created_at} />
+                  </dd>
                   {k.activated_at && (
                     <>
                       <dt className="font-medium text-stone-500">Activated</dt>
-                      <dd className="font-mono text-sky-950">{formatDate(k.activated_at)}</dd>
+                      <dd className="font-mono text-sky-950">
+                        <LocalTime value={k.activated_at} />
+                      </dd>
                     </>
                   )}
                   {k.rotated_at && (
                     <>
                       <dt className="font-medium text-stone-500">Rotated</dt>
-                      <dd className="font-mono text-sky-950">{formatDate(k.rotated_at)}</dd>
+                      <dd className="font-mono text-sky-950">
+                        <LocalTime value={k.rotated_at} />
+                      </dd>
                     </>
                   )}
                   {k.expires_at && (
                     <>
                       <dt className="font-medium text-stone-500">Expires</dt>
-                      <dd className="font-mono text-sky-950">{formatDate(k.expires_at)}</dd>
+                      <dd className="font-mono text-sky-950">
+                        <LocalTime value={k.expires_at} />
+                      </dd>
                     </>
                   )}
                 </dl>

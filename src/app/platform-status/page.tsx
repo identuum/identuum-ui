@@ -13,7 +13,9 @@
  */
 
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { AGCEOrgLinkAvailabilityCard } from "@/components/shared/ag-ce-org-link-availability-card";
+import { LocalTime } from "@/components/ui/local-time";
 import { fetchAgAuthProviders } from "@/lib/ag-auth-providers";
 import { getCapabilityAvailability } from "@/lib/runtime-composition";
 import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
@@ -201,16 +203,6 @@ function licenseStatusClass(status: string): string {
   return "text-stone-500";
 }
 
-function formatExpiresAt(s: string): string {
-  try {
-    const d = new Date(s);
-    if (Number.isNaN(d.getTime())) return s;
-    return d.toISOString().slice(0, 10);
-  } catch {
-    return s;
-  }
-}
-
 function daysRemainingClass(days: number): string {
   if (days <= 0) return "text-red-600 font-medium";
   if (days <= 30) return "text-amber-600 font-medium";
@@ -228,7 +220,10 @@ function LicenseRows({ lic }: { lic: ComponentLicenseInfo }) {
       {lic.product && <StatusRow label="Product" value={lic.product} />}
       {lic.tier && <StatusRow label="Tier" value={lic.tier} />}
       {lic.expires_at != null && (
-        <StatusRow label="Expires" value={formatExpiresAt(lic.expires_at)} />
+        <StatusRow
+          label="Expires"
+          value={<LocalTime value={lic.expires_at} style="date" fallback={lic.expires_at} />}
+        />
       )}
       {lic.days_remaining != null && (
         <StatusRow
@@ -326,7 +321,7 @@ function StatusRow({
   valueClass = "text-stone-600",
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   valueClass?: string;
 }) {
   return (

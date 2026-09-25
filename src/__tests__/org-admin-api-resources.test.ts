@@ -762,7 +762,7 @@ describe("api-resources detail page — Recent activity card wiring", () => {
     expect(body).toMatch(/event\.event_type/);
     expect(body).toMatch(/event\.actor_email/);
     expect(body).toMatch(/event\.actor_type/);
-    expect(body).toMatch(/formatAuditDate\(event\.created_at\)/);
+    expect(body).toMatch(/<LocalTime value=\{event\.created_at\}/);
   });
 
   it("per-row href shape = /org-admin/audit?subject_id=<id>&event_type=<type> (the helper does both)", () => {

@@ -22,6 +22,7 @@
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { LocalTime } from "@/components/ui/local-time";
 import { agRequest } from "@/lib/ag-client";
 
 export const metadata: Metadata = { title: "Agent Registry — Identuum AG" };
@@ -381,7 +382,9 @@ function AgentRow({ agent }: { agent: AgentEntry }) {
         {agent.enabled ? "enabled" : "disabled"}
       </span>
       <div className="shrink-0 text-right text-[11px] text-stone-400 space-y-0.5 self-start">
-        <p>{formatDate(agent.created_at)}</p>
+        <p>
+          <LocalTime value={agent.created_at} style="date" />
+        </p>
         <a
           href={`/ag-admin/agents/${agent.id}`}
           className="text-sky-500 hover:text-sky-700 hover:underline text-[11px] font-medium transition-colors"
@@ -482,16 +485,4 @@ function EmptyState() {
       </p>
     </div>
   );
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return iso.slice(0, 10);
-  }
 }

@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
+import { LocalTime } from "@/components/ui/local-time";
 import { type AssignAdminActionState, assignAdminAction } from "./actions";
 
 interface AssignAdminFormProps {
@@ -71,12 +72,7 @@ function SuccessPanel({
 }) {
   const { adminEmail, activationToken, expiresAt } = success;
 
-  const expiryDisplay = expiresAt
-    ? new Date(expiresAt).toLocaleString("en-US", {
-        dateStyle: "medium",
-        timeStyle: "short",
-      })
-    : "24 hours from now";
+  const expiryDisplay = <LocalTime value={expiresAt} fallback="24 hours from now" />;
 
   return (
     <div className="max-w-lg space-y-5">

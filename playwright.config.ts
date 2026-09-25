@@ -291,8 +291,15 @@ export default defineConfig({
           reuseExistingServer: !process.env.CI && !dynamicFixtureMode,
           timeout: 60_000,
           // Hand the spawned `next dev` the isolated config from birth (see above);
-          // globalSetup runs too late to influence it.
-          ...(e2eConfigFile ? { env: { IDENTUUM_UI_CONFIG_FILE: e2eConfigFile } } : {}),
+          // globalSetup runs too late to influence it. UI-DATES (U-020): the
+          // server runs in Pacific/Kiritimati (UTC+14) while browsers default to
+          // UTC, so a date formatted during the server render disagrees with the
+          // browser's on most instants, not only between 23:00 and 00:05 UTC
+          // (e2e/local-time-hydration.spec.ts takes the browser to UTC-12).
+          env: {
+            TZ: "Pacific/Kiritimati",
+            ...(e2eConfigFile ? { IDENTUUM_UI_CONFIG_FILE: e2eConfigFile } : {}),
+          },
         },
       }),
 });

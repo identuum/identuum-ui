@@ -20,6 +20,7 @@
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { LocalTime } from "@/components/ui/local-time";
 import { agRequest } from "@/lib/ag-client";
 
 export const metadata: Metadata = { title: "Agent Sessions — Identuum AG" };
@@ -524,10 +525,12 @@ function SessionRow({ session: s }: { session: AgentSession }) {
         {s.agent_mode}
       </span>
       <span className="text-[11px] text-stone-400 self-start pt-1 whitespace-nowrap">
-        {formatDate(s.last_activity_at)}
+        <LocalTime value={s.last_activity_at} />
       </span>
       <div className="shrink-0 text-right text-[11px] text-stone-400 space-y-0.5 self-start">
-        <p>{formatDate(s.created_at)}</p>
+        <p>
+          <LocalTime value={s.created_at} />
+        </p>
         <a
           href={`/ag-admin/sessions/${s.id}`}
           className="text-sky-500 hover:text-sky-700 hover:underline text-[11px] font-medium transition-colors"
@@ -615,17 +618,4 @@ function UnavailableState() {
       </p>
     </div>
   );
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso.slice(0, 16);
-  }
 }

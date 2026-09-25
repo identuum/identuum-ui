@@ -10,9 +10,10 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { LocalTime } from "@/components/ui/local-time";
 import type { SessionItem } from "@/lib/idp-account-client";
 import { revokeSessionAction } from "./session-actions";
-import { formatDate, selectActiveSessions } from "./sessions-helpers";
+import { selectActiveSessions } from "./sessions-helpers";
 
 interface SessionsSectionProps {
   sessions: SessionItem[];
@@ -95,10 +96,14 @@ function SessionRow({ session }: { session: SessionItem }) {
               This session
             </span>
           )}
-          <span className="text-xs text-stone-500">Started {formatDate(session.created_at)}</span>
+          <span className="text-xs text-stone-500">
+            Started <LocalTime value={session.created_at} />
+          </span>
         </div>
         {session.last_used_at && (
-          <p className="text-xs text-stone-400">Last used {formatDate(session.last_used_at)}</p>
+          <p className="text-xs text-stone-400">
+            Last used <LocalTime value={session.last_used_at} />
+          </p>
         )}
         {session.ip_address && (
           <p className="text-xs text-stone-400 font-mono">{session.ip_address}</p>

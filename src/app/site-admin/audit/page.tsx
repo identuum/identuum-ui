@@ -4,6 +4,7 @@ import { AuditFilterPanel } from "@/components/shared/audit-filter-panel";
 import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
 import { AuditIPAddressCell } from "@/components/shared/audit-ip-address-cell";
 import { FeatureBoundaryPanel } from "@/components/shared/feature-boundary-panel";
+import { LocalTime } from "@/components/ui/local-time";
 import type { AuditEventItem } from "@/lib/idp-admin-client";
 /**
  * Audit log viewer — site_admin only (read-only).
@@ -28,6 +29,7 @@ import type { AuditEventItem } from "@/lib/idp-admin-client";
  *   - Backend enforces all authorization — no client-side filtering.
  */
 import { listAuditEvents, listAuditEventTypes } from "@/lib/idp-admin-client";
+import { auditDateRange } from "@/lib/utc-wire";
 
 export const metadata: Metadata = { title: "Audit Log — Identuum Admin" };
 
@@ -76,27 +78,8 @@ function parseAuditFilters(params: Record<string, string | string[] | undefined>
   const startDate = str(params, "start_date", 32);
   const endDate = str(params, "end_date", 32);
 
-  // Compute ISO timestamps for backend from either preset or custom dates
-  let startDateISO: string | null = null;
-  let endDateISO: string | null = null;
-
-  if (window === "24h") {
-    startDateISO = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  } else if (window === "7d") {
-    startDateISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  } else if (window === "30d") {
-    startDateISO = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  } else {
-    if (startDate && !Number.isNaN(Date.parse(startDate))) {
-      startDateISO = new Date(startDate).toISOString();
-    }
-    if (endDate && !Number.isNaN(Date.parse(endDate))) {
-      // End of the specified day
-      const d = new Date(endDate);
-      d.setUTCHours(23, 59, 59, 999);
-      endDateISO = d.toISOString();
-    }
-  }
+  // UTC ISO bounds for the backend from either preset or custom dates
+  const { startDateISO, endDateISO } = auditDateRange(window, startDate, endDate, Date.now());
 
   return {
     filters: { eventType, subjectType, window, startDate, endDate, sortOrder },
@@ -291,7 +274,7 @@ function AuditTable({
             // biome-ignore lint/suspicious/noArrayIndexKey: audit rows have no stable client key
             <tr key={i} className="hover:bg-stone-50/60 transition-colors">
               <td className="px-4 py-3 text-xs text-stone-400 whitespace-nowrap">
-                {formatDate(e.created_at)}
+                <LocalTime value={e.created_at} style="datetime-seconds" />
               </td>
               <td className="px-4 py-3">
                 <span className="text-xs font-mono text-sky-950">{e.event_type}</span>
@@ -424,21 +407,6 @@ function PriorityBadge({ priority }: { priority: string }) {
       normal
     </span>
   );
-}
-
-function formatDate(iso: string): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  } catch {
-    return "—";
-  }
 }
 
 function PaginationLink({

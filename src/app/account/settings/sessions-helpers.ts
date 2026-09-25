@@ -16,23 +16,6 @@
 import type { SessionItem } from "@/lib/idp-account-client";
 
 /**
- * Renders an ISO-8601 timestamp string into a localised "medium" date +
- * "short" time pair. Returns the em-dash `—` for nullish or unparsable
- * input. Behaviour pinned by tests:
- *   - `null` / `undefined` / empty string → `—`
- *   - invalid date string → `—`
- *   - valid ISO → `new Date(iso).toLocaleString("en-US", …)` output
- */
-export function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
-  } catch {
-    return "—";
-  }
-}
-
-/**
  * Returns the subset of session items the SessionsSection actually
  * renders. The IDP returns both active and recently-expired/revoked
  * sessions in a single list; the UI shows only the currently-active

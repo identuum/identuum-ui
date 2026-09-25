@@ -15,25 +15,12 @@
 
 import type { Metadata } from "next";
 import { FeatureBoundaryPanel } from "@/components/shared/feature-boundary-panel";
+import { LocalTime } from "@/components/ui/local-time";
 import { getAnomalyStats, listAnomalyEvents } from "@/lib/idp-admin-client";
 
 export const metadata: Metadata = {
   title: "Anomaly — Identuum Site Admin",
 };
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "—";
-  }
-}
 
 export default async function SiteAdminAnomalyPage() {
   const [statsResult, eventsResult] = await Promise.all([getAnomalyStats(), listAnomalyEvents()]);
@@ -49,7 +36,7 @@ export default async function SiteAdminAnomalyPage() {
       </div>
 
       <StatsCard result={statsResult} />
-      <EventsCard result={eventsResult} formatDate={formatDate} />
+      <EventsCard result={eventsResult} />
     </div>
   );
 }
@@ -97,13 +84,7 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function EventsCard({
-  result,
-  formatDate,
-}: {
-  result: Awaited<ReturnType<typeof listAnomalyEvents>>;
-  formatDate: (iso: string) => string;
-}) {
+function EventsCard({ result }: { result: Awaited<ReturnType<typeof listAnomalyEvents>> }) {
   if (!result.ok && result.forbidden) {
     return (
       <ForbiddenPanel
@@ -150,7 +131,7 @@ function EventsCard({
               <div className="shrink-0 text-right space-y-0.5">
                 <p className="text-xs font-semibold text-sky-950">{e.score.toFixed(2)}</p>
                 <p className="text-[10px] text-stone-400 whitespace-nowrap">
-                  {formatDate(e.created_at)}
+                  <LocalTime value={e.created_at} />
                 </p>
               </div>
             </li>

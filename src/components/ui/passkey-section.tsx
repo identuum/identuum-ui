@@ -21,6 +21,7 @@
 import { useEffect, useState } from "react";
 import { IDP_PATHS } from "@/lib/idp-paths";
 import { Button } from "./button";
+import { LocalTime } from "./local-time";
 import { arrayBufferToBase64url, base64urlToArrayBuffer } from "./passkey-base64url";
 import { classifyPasskeyEnrollmentError } from "./passkey-enrollment-errors";
 
@@ -332,20 +333,6 @@ function CredentialRow({
   isDeleting: boolean;
   onDelete: () => void;
 }) {
-  const createdDate = new Date(cred.created_at).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-
-  const lastUsed = cred.last_used_at
-    ? new Date(cred.last_used_at).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      })
-    : null;
-
   const shortId = cred.id.replace(/-/g, "").slice(0, 8);
   const shortAaguid =
     cred.aaguid && cred.aaguid !== "00000000-0000-0000-0000-000000000000"
@@ -360,8 +347,13 @@ function CredentialRow({
             {cred.nickname || "Device passkey"}
           </p>
           <p className="text-xs text-stone-400 mt-0.5">
-            Added {createdDate}
-            {lastUsed && ` · Last used ${lastUsed}`}
+            Added <LocalTime value={cred.created_at} style="date" />
+            {cred.last_used_at && (
+              <>
+                {" · Last used "}
+                <LocalTime value={cred.last_used_at} style="date" />
+              </>
+            )}
           </p>
           <p className="text-[11px] font-mono text-stone-300 mt-0.5">
             {shortId}

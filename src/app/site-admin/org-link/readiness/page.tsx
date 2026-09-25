@@ -21,6 +21,7 @@ import { AGCEOrgLinkAvailabilityCard } from "@/components/shared/ag-ce-org-link-
  * license keys, customer IDs, signatures, ciphertext, or user data are rendered.
  */
 import { BackendNotConfiguredNotice } from "@/components/shared/backend-not-configured-notice";
+import { LocalTime } from "@/components/ui/local-time";
 import {
   deriveOrganizationCandidateMatches,
   type OrganizationCandidateMatch,
@@ -553,7 +554,9 @@ function CandidateRow({ org }: { org: OrganizationExportCandidate }) {
           <span className="font-mono">slug: {safeDisplayString(org.slug)}</span>
         )}
         <span className="font-mono">{safeDisplayString(org.source_component)}</span>
-        {timestamp && <span>{timestamp}</span>}
+        {timestamp && (
+          <LocalTime value={timestamp} style="date" fallback={safeDisplayString(timestamp)} />
+        )}
         {isLinked && linkedIDP !== "" && (
           <span className="font-mono">idp: {shortenIDPUUID(linkedIDP)}</span>
         )}
@@ -589,20 +592,14 @@ function candidateStatusClass(status: string): string {
 }
 
 /**
- * pickTimestamp returns a formatted date string for the most recently updated
- * timestamp available, falling back to created_at. Bad input renders nothing
- * instead of crashing.
+ * pickTimestamp returns the most recently updated timestamp available,
+ * falling back to created_at; blank input renders nothing. <LocalTime>
+ * formats it, and shows an unparsable value as its safe display string.
  */
 function pickTimestamp(updated: string | null, created: string | null): string | null {
   const candidate = updated ?? created;
   if (!candidate || candidate.trim() === "") return null;
-  try {
-    const d = new Date(candidate);
-    if (Number.isNaN(d.getTime())) return safeDisplayString(candidate);
-    return d.toISOString().slice(0, 10);
-  } catch {
-    return safeDisplayString(candidate);
-  }
+  return candidate;
 }
 
 /**

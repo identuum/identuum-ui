@@ -35,6 +35,7 @@ import {
 } from "@/app/org-admin/settings/domains-actions";
 import { ORG_ADMIN_DOMAINS_CARD_COPY } from "@/app/org-admin/settings/settings-helpers";
 import { Button } from "@/components/ui/button";
+import { LocalTime } from "@/components/ui/local-time";
 import type { OrganizationDomainInfo } from "@/lib/types";
 
 interface DomainsCardProps {
@@ -117,7 +118,12 @@ export function DomainsCard({ domains, loadError }: DomainsCardProps) {
               <dt className="font-medium text-emerald-900">
                 {ORG_ADMIN_DOMAINS_CARD_COPY.challengeExpiresAtLabel}
               </dt>
-              <dd className="font-mono">{addState.challenge.expires_at}</dd>
+              <dd>
+                <LocalTime
+                  value={addState.challenge.expires_at}
+                  fallback={addState.challenge.expires_at}
+                />
+              </dd>
             </dl>
           </output>
         )}
@@ -207,7 +213,10 @@ export function DomainsCard({ domains, loadError }: DomainsCardProps) {
                   {!d.verified && d.verification_token_expires_at && (
                     <p className="text-xs text-stone-500">
                       {ORG_ADMIN_DOMAINS_CARD_COPY.challengeExpiresAtLabel}:{" "}
-                      <span className="font-mono">{d.verification_token_expires_at}</span>
+                      <LocalTime
+                        value={d.verification_token_expires_at}
+                        fallback={d.verification_token_expires_at}
+                      />
                     </p>
                   )}
                   {!d.verified && d.verification_attempts > 0 && (

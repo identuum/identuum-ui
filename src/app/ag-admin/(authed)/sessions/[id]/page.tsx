@@ -21,7 +21,9 @@
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { LocalTime } from "@/components/ui/local-time";
 import { agRequest } from "@/lib/ag-client";
+import { formatCount } from "@/lib/format-count";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Session Detail — Identuum AG" };
@@ -477,15 +479,13 @@ function SessionDetailView({
         {s.max_input_tokens != null && (
           <Field
             label="Max input tokens"
-            value={<span className="font-mono text-xs">{s.max_input_tokens.toLocaleString()}</span>}
+            value={<span className="font-mono text-xs">{formatCount(s.max_input_tokens)}</span>}
           />
         )}
         {s.max_session_tokens != null && (
           <Field
             label="Max session tokens"
-            value={
-              <span className="font-mono text-xs">{s.max_session_tokens.toLocaleString()}</span>
-            }
+            value={<span className="font-mono text-xs">{formatCount(s.max_session_tokens)}</span>}
           />
         )}
       </Card>
@@ -502,13 +502,17 @@ function SessionDetailView({
             </span>
           }
         />
-        <Field label="Created" value={formatDateFull(s.created_at)} />
-        <Field label="Last active" value={formatDateFull(s.last_activity_at)} />
-        <Field label="Expires" value={formatDateFull(s.expires_at)} />
+        <Field label="Created" value={<LocalTime value={s.created_at} />} />
+        <Field label="Last active" value={<LocalTime value={s.last_activity_at} />} />
+        <Field label="Expires" value={<LocalTime value={s.expires_at} />} />
         {s.revoked_at && (
           <Field
             label="Revoked at"
-            value={<span className="text-red-600 font-medium">{formatDateFull(s.revoked_at)}</span>}
+            value={
+              <span className="text-red-600 font-medium">
+                <LocalTime value={s.revoked_at} />
+              </span>
+            }
           />
         )}
         {s.revocation_reason && (
@@ -571,18 +575,4 @@ function UnavailableState() {
       </p>
     </div>
   );
-}
-
-function formatDateFull(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso.slice(0, 19);
-  }
 }

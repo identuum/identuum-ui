@@ -17,7 +17,9 @@
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { LocalTime } from "@/components/ui/local-time";
 import { agRequest } from "@/lib/ag-client";
+import { formatCount } from "@/lib/format-count";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Audit / Activity — Identuum AG" };
@@ -747,7 +749,7 @@ function ChainVerifyPanel({
             <p className="text-xs font-semibold text-amber-800">Verification error</p>
             <p className="text-xs text-amber-700 leading-relaxed">{verifyResult.service_error}</p>
             <p className="text-[11px] text-stone-400">
-              {verifyResult.total_rows.toLocaleString()} events checked
+              {formatCount(verifyResult.total_rows)} events checked
             </p>
           </div>
         </div>
@@ -785,7 +787,7 @@ function ChainVerifyPanel({
               rows, or partial E2E test data. In production, investigate immediately.
             </p>
             <p className="text-[11px] text-stone-400">
-              {verifyResult.total_rows.toLocaleString()} events checked
+              {formatCount(verifyResult.total_rows)} events checked
             </p>
           </div>
         </div>
@@ -808,7 +810,7 @@ function ChainVerifyPanel({
         <div className="space-y-0.5">
           <p className="text-xs font-semibold text-emerald-800">Append-only chain verified</p>
           <p className="text-[11px] text-stone-400">
-            {verifyResult.total_rows.toLocaleString()} event
+            {formatCount(verifyResult.total_rows)} event
             {verifyResult.total_rows !== 1 ? "s" : ""} verified — no chain break detected.
           </p>
         </div>
@@ -938,7 +940,7 @@ function AuditEventRow({
 
       {/* Timestamp */}
       <span className="text-[11px] text-stone-400 whitespace-nowrap pt-0.5">
-        {formatDate(e.event_timestamp)}
+        <LocalTime value={e.event_timestamp} />
       </span>
     </div>
   );
@@ -978,17 +980,4 @@ function UnavailableState() {
       </div>
     </div>
   );
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso.slice(0, 16);
-  }
 }

@@ -11,8 +11,9 @@
  * This file covers the highest-risk regression surfaces that CAN be
  * unit-tested in a node environment:
  *
- *   - `formatDate(iso)` — display-string formatting + null/invalid input
- *     handling
+ *   - (date display moved to the shared <LocalTime>, UI-DATES / U-020;
+ *     its formatting and null/invalid fallback are pinned in
+ *     local-time.test.tsx)
  *   - `selectActiveSessions(sessions)` — projection invariants
  *   - `canRevokeSession(session)` — the load-bearing rule that the
  *     current session is NOT individually revocable from this UI
@@ -31,11 +32,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  canRevokeSession,
-  formatDate,
-  selectActiveSessions,
-} from "../app/account/settings/sessions-helpers";
+import { canRevokeSession, selectActiveSessions } from "../app/account/settings/sessions-helpers";
 import type { SessionItem } from "../lib/idp-account-client";
 
 // Synthetic session-fixture builder. The OSS /me sessions endpoint returns
@@ -53,63 +50,6 @@ function syntheticSession(overrides: Partial<SessionItem> = {}): SessionItem {
     ...overrides,
   };
 }
-
-// ── formatDate ────────────────────────────────────────────────────────────────
-
-describe("formatDate — null / invalid / empty input fallback", () => {
-  it("returns em-dash for null", () => {
-    expect(formatDate(null)).toBe("—");
-  });
-
-  it("returns em-dash for undefined", () => {
-    expect(formatDate(undefined)).toBe("—");
-  });
-
-  it("returns em-dash for empty string", () => {
-    expect(formatDate("")).toBe("—");
-  });
-
-  it("returns em-dash (NOT 'Invalid Date') for unparsable strings", () => {
-    // A regression that called `.toLocaleString(...)` on the result of
-    // `new Date("not-a-date")` returns the literal string "Invalid
-    // Date" in the rendered DOM. The helper guards against this by
-    // catching — but `new Date()` does NOT throw on invalid input, so
-    // we must explicitly assert the output here. Note: in current
-    // implementation `new Date("garbage").toLocaleString(...)` returns
-    // "Invalid Date" without throwing, so this test pins the
-    // observable output. If the helper is later refactored to detect
-    // and return em-dash on invalid input the test must be updated.
-    const out = formatDate("not-a-date");
-    // Accept either the fallback OR the "Invalid Date" string — both
-    // are bounded (no IP / cookie / token can leak). The test does
-    // NOT pass through arbitrary user input to the page.
-    expect(["—", "Invalid Date"]).toContain(out);
-  });
-});
-
-describe("formatDate — valid ISO input", () => {
-  it("renders a valid ISO 8601 UTC timestamp into a non-empty localised string", () => {
-    const out = formatDate("2026-05-28T10:00:00Z");
-    expect(out).not.toBe("—");
-    expect(out.length).toBeGreaterThan(0);
-    // Year must appear in the output (medium date includes year).
-    expect(out).toMatch(/2026/);
-  });
-
-  it("returns deterministic output for the same input across calls (no clock drift)", () => {
-    const a = formatDate("2026-01-15T08:00:00Z");
-    const b = formatDate("2026-01-15T08:00:00Z");
-    expect(a).toBe(b);
-  });
-
-  it("does NOT leak the ISO Z-suffix into the rendered display string", () => {
-    // The Z indicates UTC; the rendered output is localised, so it
-    // should not contain the literal Z. Regression that bypassed
-    // toLocaleString and rendered the raw ISO would fail this.
-    const out = formatDate("2026-05-28T10:00:00Z");
-    expect(out).not.toMatch(/Z\s*$/);
-  });
-});
 
 // ── selectActiveSessions ─────────────────────────────────────────────────────
 

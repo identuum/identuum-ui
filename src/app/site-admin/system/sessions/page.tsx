@@ -10,25 +10,12 @@
 
 import type { Metadata } from "next";
 import { FeatureBoundaryPanel } from "@/components/shared/feature-boundary-panel";
+import { LocalTime } from "@/components/ui/local-time";
 import { listAdminSessions } from "@/lib/idp-admin-client";
 
 export const metadata: Metadata = {
   title: "Admin sessions — Identuum Site Admin",
 };
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "—";
-  }
-}
 
 export default async function SiteAdminSystemSessionsPage() {
   const result = await listAdminSessions();
@@ -92,8 +79,14 @@ export default async function SiteAdminSystemSessionsPage() {
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <p className="text-xs font-mono text-sky-950 truncate">{s.id}</p>
                   <p className="text-[10px] text-stone-400 leading-tight">
-                    Created {formatDate(s.created_at)} · Expires {formatDate(s.expires_at)}
-                    {s.last_used_at && <> · Last used {formatDate(s.last_used_at)}</>}
+                    Created <LocalTime value={s.created_at} /> · Expires{" "}
+                    <LocalTime value={s.expires_at} />
+                    {s.last_used_at && (
+                      <>
+                        {" "}
+                        · Last used <LocalTime value={s.last_used_at} />
+                      </>
+                    )}
                   </p>
                 </div>
                 <div className="shrink-0">

@@ -24,6 +24,7 @@
  */
 
 import type { Metadata } from "next";
+import { LocalTime } from "@/components/ui/local-time";
 import {
   type AuthorizationServerPageBoundary,
   getAuthorizationServerPageBoundary,
@@ -56,21 +57,6 @@ export const metadata: Metadata = {
 };
 
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "—";
-  }
-}
 
 export default async function OrgAdminServiceAccountDetailPage({
   params,
@@ -215,10 +201,14 @@ export default async function OrgAdminServiceAccountDetailPage({
             <span className="font-mono text-xs text-sky-950 break-all">{sa.id}</span>
           </DetailRow>
           <DetailRow label="Created">
-            <span className="text-xs text-stone-500">{formatDate(sa.created_at)}</span>
+            <span className="text-xs text-stone-500">
+              <LocalTime value={sa.created_at} />
+            </span>
           </DetailRow>
           <DetailRow label="Updated">
-            <span className="text-xs text-stone-500">{formatDate(sa.updated_at)}</span>
+            <span className="text-xs text-stone-500">
+              <LocalTime value={sa.updated_at} />
+            </span>
           </DetailRow>
         </dl>
       </div>
@@ -342,20 +332,6 @@ function ErrorPanel() {
       </p>
     </div>
   );
-}
-
-function formatAuditDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "—";
-  }
 }
 
 /**
@@ -494,7 +470,7 @@ function ServiceAccountRecentActivityRow({
           )}
         </div>
         <span className="shrink-0 text-[10px] text-stone-400 whitespace-nowrap">
-          {formatAuditDate(event.created_at)}
+          <LocalTime value={event.created_at} />
         </span>
       </a>
     </li>

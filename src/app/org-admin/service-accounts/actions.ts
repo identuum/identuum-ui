@@ -39,6 +39,7 @@ import {
 } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
+import { expiryUtcIso } from "@/lib/utc-wire";
 
 const NAME_MAX = 255;
 const DESCRIPTION_MAX = 1024;
@@ -115,19 +116,17 @@ export async function createServiceAccountAction(
   const expiresAtRaw = ((formData.get("expires_at") as string | null) ?? "").trim();
   let expires_at: string | undefined;
   if (expiresAtRaw.length > 0) {
-    // Accept either YYYY-MM-DD (from <input type="date">) or full ISO-8601.
-    const isoCandidate = /^\d{4}-\d{2}-\d{2}$/.test(expiresAtRaw)
-      ? `${expiresAtRaw}T23:59:59Z`
-      : expiresAtRaw;
-    const t = Date.parse(isoCandidate);
-    if (Number.isNaN(t) || t < Date.now()) {
+    // YYYY-MM-DD (from <input type="date">) is the end of that UTC day; a
+    // full ISO-8601 instant must carry its zone (U-020: UTC on the wire).
+    const iso = expiryUtcIso(expiresAtRaw, Date.now());
+    if (iso === null) {
       return {
         phase: "error",
         error: "Expiry must be a valid future date.",
         fieldErrors: { expires_at: "Invalid date." },
       };
     }
-    expires_at = new Date(t).toISOString();
+    expires_at = iso;
   }
 
   const org = await getOwnOrganization();

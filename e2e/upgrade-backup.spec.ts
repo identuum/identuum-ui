@@ -72,7 +72,7 @@ const PRESEEDED_OLDER = "identuum-idp-ce-upgrade-backup-20260617T080000Z-bbbbbbb
 const NOT_FOUND_FILENAME = "identuum-idp-ce-upgrade-backup-20260617T079999Z-cccccccc.sql";
 
 // Mock backup body size used in created entries. The wizard renders
-// this with toLocaleString() so the assertion is on a substring.
+// this with formatCount() so the assertion is on a substring.
 const MOCK_SIZE_BYTES = 38897;
 
 // ── Mock fetch installer ─────────────────────────────────────────────────────
@@ -353,12 +353,15 @@ test.describe("/upgrade — backup affordance", () => {
     await expect(newestRow).toContainText("latest");
     await expect(olderRow).not.toContainText("latest");
 
-    // Safe metadata only: filename, byte count (toLocaleString
-    // adds a comma), and the ISO timestamp must be visible. The
-    // SQL body bytes must never appear in the rendered page.
+    // Safe metadata only: filename, byte count (formatCount adds a
+    // comma), and the timestamp — shown in the browser's zone with the
+    // exact UTC ISO instant on hover (U-020). The SQL body bytes must
+    // never appear in the rendered page.
     await expect(newestRow).toContainText(PRESEEDED_NEWEST);
     await expect(newestRow).toContainText("38,897 bytes");
-    await expect(newestRow).toContainText("2026-06-17T08:05:00Z");
+    const createdAt = newestRow.locator('time[datetime="2026-06-17T08:05:00.000Z"]');
+    await expect(createdAt).toHaveAttribute("title", "2026-06-17T08:05:00.000Z");
+    await expect(createdAt).toHaveText(/^Jun 17, 2026, \d{2}:\d{2} [AP]M \S+$/);
     const html = await page.content();
     expect(html).not.toContain("PostgreSQL database dump");
     expect(html).not.toContain("-- pg_dump");

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
+import { LocalTime } from "@/components/ui/local-time";
 import type { OrgAdminRecoveryCandidate } from "@/lib/idp-admin-client";
 /**
  * Organization detail page — site_admin only, read-only.
@@ -167,12 +168,16 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
           </DetailRow>
           {org.created_at && (
             <DetailRow label="Created">
-              <span className="text-xs text-stone-500">{formatDate(org.created_at)}</span>
+              <span className="text-xs text-stone-500">
+                <LocalTime value={org.created_at} style="date" />
+              </span>
             </DetailRow>
           )}
           {org.updated_at && (
             <DetailRow label="Updated">
-              <span className="text-xs text-stone-500">{formatDate(org.updated_at)}</span>
+              <span className="text-xs text-stone-500">
+                <LocalTime value={org.updated_at} style="date" />
+              </span>
             </DetailRow>
           )}
         </dl>
@@ -392,7 +397,7 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
                 </div>
                 <div className="shrink-0 flex flex-col items-end gap-0.5">
                   <span className="text-[10px] text-stone-400 whitespace-nowrap">
-                    {formatDate(e.created_at)}
+                    <LocalTime value={e.created_at} style="date" />
                   </span>
                   <a
                     href={`/site-admin/audit?subject_id=${encodeURIComponent(id)}&subject_type=organization&event_type=${encodeURIComponent(e.event_type)}`}
@@ -416,19 +421,6 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
       </a>
     </div>
   );
-}
-
-function formatDate(iso: string): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return "—";
-  }
 }
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {

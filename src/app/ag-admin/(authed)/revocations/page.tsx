@@ -15,7 +15,9 @@
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { LocalTime } from "@/components/ui/local-time";
 import { agRequest } from "@/lib/ag-client";
+import { formatCount } from "@/lib/format-count";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Revocations — Identuum AG" };
@@ -354,7 +356,7 @@ function SummaryCard({
     >
       <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400 mb-1">{label}</p>
       <p className="text-xl font-bold tabular-nums text-sky-950">
-        {value !== null ? value.toLocaleString() : "—"}
+        {value !== null ? formatCount(value) : "—"}
       </p>
     </a>
   );
@@ -395,11 +397,13 @@ function RevocationRow({ record: r }: { record: RevocationRecord }) {
           {r.reason || <span className="italic text-stone-400">No reason provided</span>}
         </p>
         {r.expires_at && (
-          <p className="text-[11px] text-stone-400">Expires: {formatDate(r.expires_at)}</p>
+          <p className="text-[11px] text-stone-400">
+            Expires: <LocalTime value={r.expires_at} />
+          </p>
         )}
       </div>
       <span className="text-[11px] text-stone-400 whitespace-nowrap pt-0.5">
-        {formatDate(r.revoked_at)}
+        <LocalTime value={r.revoked_at} />
       </span>
     </div>
   );
@@ -438,18 +442,4 @@ function UnavailableState() {
       </div>
     </div>
   );
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso.slice(0, 19);
-  }
 }

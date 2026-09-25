@@ -39,6 +39,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { LocalTime } from "@/components/ui/local-time";
+import { formatCount } from "@/lib/format-count";
 import {
   applyUpgrade,
   type BackupAvailabilityBody,
@@ -629,8 +631,12 @@ export function UpgradeWizard({ initialStatus }: Props) {
                     {backupStatus.body.latestBackup.filename}
                   </span>{" "}
                   <span className="text-stone-400">
-                    ({backupStatus.body.latestBackup.sizeBytes.toLocaleString()} bytes,{" "}
-                    {backupStatus.body.latestBackup.createdAt})
+                    ({formatCount(backupStatus.body.latestBackup.sizeBytes)} bytes,{" "}
+                    <LocalTime
+                      value={backupStatus.body.latestBackup.createdAt}
+                      fallback={backupStatus.body.latestBackup.createdAt}
+                    />
+                    )
                   </span>
                 </p>
               ) : null}
@@ -705,7 +711,7 @@ export function UpgradeWizard({ initialStatus }: Props) {
                   <span>
                     Backup created:{" "}
                     <span className="font-mono break-all">{backupCreate.body.filename}</span> (
-                    {backupCreate.body.sizeBytes.toLocaleString()} bytes).
+                    {formatCount(backupCreate.body.sizeBytes)} bytes).
                   </span>
                 </p>
               ) : null}
@@ -1029,7 +1035,8 @@ function BackupList({
                   ) : null}
                 </span>
                 <span className="text-[11px] text-stone-500">
-                  {b.sizeBytes.toLocaleString()} bytes · {b.createdAt}
+                  {formatCount(b.sizeBytes)} bytes ·{" "}
+                  <LocalTime value={b.createdAt} fallback={b.createdAt} />
                 </span>
               </span>
               {isPendingThis ? (

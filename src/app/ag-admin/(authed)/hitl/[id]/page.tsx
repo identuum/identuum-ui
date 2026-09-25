@@ -21,6 +21,7 @@
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { LocalTime } from "@/components/ui/local-time";
 import { agRequest } from "@/lib/ag-client";
 
 export const dynamic = "force-dynamic";
@@ -272,9 +273,17 @@ function ReviewDetail({
               </p>
             </div>
           </Field>
-          <Field label="Pending since">{formatDate(item.pending_since)}</Field>
-          <Field label="Expires">{formatDate(item.expires_at)}</Field>
-          {item.decided_at && <Field label="Decided at">{formatDate(item.decided_at)}</Field>}
+          <Field label="Pending since">
+            <LocalTime value={item.pending_since} />
+          </Field>
+          <Field label="Expires">
+            <LocalTime value={item.expires_at} />
+          </Field>
+          {item.decided_at && (
+            <Field label="Decided at">
+              <LocalTime value={item.decided_at} />
+            </Field>
+          )}
         </dl>
       </div>
 
@@ -395,18 +404,4 @@ function UnavailableState() {
       </a>
     </div>
   );
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso.slice(0, 19);
-  }
 }

@@ -15,6 +15,7 @@
  */
 
 import type { Metadata } from "next";
+import { LocalTime } from "@/components/ui/local-time";
 import { getOwnOrganization, listOrgUsers } from "@/lib/idp-admin-client";
 import type { OrgUserItem } from "@/lib/types";
 import {
@@ -299,22 +300,6 @@ function UserRow({
   const badge = statusBadge[status];
   const role = roleBadge[user.role] ?? { label: user.role, cls: "text-stone-500 bg-stone-100" };
 
-  const joinedDate = user.created_at
-    ? new Date(user.created_at).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      })
-    : "—";
-
-  const lastLogin = user.last_login_at
-    ? new Date(user.last_login_at).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      })
-    : "—";
-
   // Disable the "Disable" button if this is the last active admin.
   const isSoleActiveAdmin = user.role === "org_admin" && user.active && activeAdminCount <= 1;
 
@@ -388,10 +373,14 @@ function UserRow({
       </td>
 
       {/* Joined */}
-      <td className="px-5 py-3.5 text-xs text-stone-400 whitespace-nowrap">{joinedDate}</td>
+      <td className="px-5 py-3.5 text-xs text-stone-400 whitespace-nowrap">
+        <LocalTime value={user.created_at} style="date" />
+      </td>
 
       {/* Last login */}
-      <td className="px-5 py-3.5 text-xs text-stone-400 whitespace-nowrap">{lastLogin}</td>
+      <td className="px-5 py-3.5 text-xs text-stone-400 whitespace-nowrap">
+        <LocalTime value={user.last_login_at} style="date" />
+      </td>
 
       {/* Actions */}
       <td className="px-5 py-3.5 text-right">

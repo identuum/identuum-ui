@@ -24,7 +24,9 @@
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { LocalTime } from "@/components/ui/local-time";
 import { agRequest } from "@/lib/ag-client";
+import { formatCount } from "@/lib/format-count";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "HITL / CBAA — Identuum AG" };
@@ -213,7 +215,7 @@ function CountCard({
     <div className="bg-white border border-stone-200 rounded-2xl shadow-sm px-4 py-3">
       <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400 mb-1">{label}</p>
       <p className={`text-xl font-bold tabular-nums ${valueCls}`}>
-        {value !== null ? value.toLocaleString() : "—"}
+        {value !== null ? formatCount(value) : "—"}
       </p>
     </div>
   );
@@ -279,9 +281,17 @@ function QueueRow({ item }: { item: HeldRequest }) {
           </span>
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-stone-400">
-          <span>Pending since: {formatDate(item.pending_since)}</span>
-          <span>Expires: {formatDate(item.expires_at)}</span>
-          {item.decided_at && <span>Decided: {formatDate(item.decided_at)}</span>}
+          <span>
+            Pending since: <LocalTime value={item.pending_since} />
+          </span>
+          <span>
+            Expires: <LocalTime value={item.expires_at} />
+          </span>
+          {item.decided_at && (
+            <span>
+              Decided: <LocalTime value={item.decided_at} />
+            </span>
+          )}
         </div>
       </div>
       <div className="shrink-0 flex items-start gap-2 pt-0.5">
@@ -339,17 +349,4 @@ function EmptyState() {
       </p>
     </div>
   );
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso.slice(0, 16);
-  }
 }

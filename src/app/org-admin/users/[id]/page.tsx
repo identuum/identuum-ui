@@ -17,6 +17,7 @@
 import type { Metadata } from "next";
 import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
 import { UserUnavailable } from "@/components/shared/user-unavailable";
+import { LocalTime } from "@/components/ui/local-time";
 import type { OrgRoleItem } from "@/lib/idp-admin-client";
 import {
   getOrgUserById,
@@ -44,33 +45,6 @@ import { UserRolesCard } from "./user-roles-card";
 export const metadata: Metadata = { title: "User — Identuum Org Admin" };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function formatAuditDate(iso: string): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "—";
-  }
-}
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return "—";
-  }
-}
 
 export default async function OrgAdminUserDetailPage({
   params,
@@ -262,10 +236,14 @@ export default async function OrgAdminUserDetailPage({
             </span>
           </DetailRow>
           <DetailRow label="Joined">
-            <span className="text-xs text-stone-500">{formatDate(user.created_at)}</span>
+            <span className="text-xs text-stone-500">
+              <LocalTime value={user.created_at} />
+            </span>
           </DetailRow>
           <DetailRow label="Last login">
-            <span className="text-xs text-stone-500">{formatDate(user.last_login_at)}</span>
+            <span className="text-xs text-stone-500">
+              <LocalTime value={user.last_login_at} />
+            </span>
           </DetailRow>
           {user.invitation_pending && (
             <DetailRow label="Invitation">
@@ -408,7 +386,7 @@ export default async function OrgAdminUserDetailPage({
                       )}
                     </div>
                     <span className="shrink-0 text-[10px] text-stone-400 whitespace-nowrap">
-                      {formatAuditDate(e.created_at)}
+                      <LocalTime value={e.created_at} />
                     </span>
                   </a>
                 </li>

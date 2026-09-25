@@ -1,5 +1,6 @@
 "use client";
 
+import { LocalTime } from "@/components/ui/local-time";
 import type { OrgListItem, OrgListResult } from "@/lib/types";
 
 type StateFilter = "current" | "deactivated" | "deleted" | "all";
@@ -176,7 +177,9 @@ function OrgTable({ orgs }: { orgs: OrgListItem[] }) {
               <td className="px-5 py-3.5">
                 <AdminStateBadge org={org} />
               </td>
-              <td className="px-5 py-3.5 text-stone-400 text-xs">{formatDate(org.created_at)}</td>
+              <td className="px-5 py-3.5 text-stone-400 text-xs">
+                <LocalTime value={org.created_at} style="date" />
+              </td>
               <td className="px-5 py-3.5">
                 <OrgActions org={org} />
               </td>
@@ -344,19 +347,6 @@ function AdminStateBadge({ org }: { org: OrgListItem }) {
       {label}
     </span>
   );
-}
-
-function formatDate(iso: string): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return "—";
-  }
 }
 
 function EmptyState({ stateFilter }: { stateFilter: StateFilter }) {

@@ -14,7 +14,9 @@
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { LocalTime } from "@/components/ui/local-time";
 import { agRequest } from "@/lib/ag-client";
+import { formatCount } from "@/lib/format-count";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Agent Detail — Identuum AG" };
@@ -328,13 +330,10 @@ function AgentDetailView({
           />
         )}
         {agent.default_max_input_tokens != null && (
-          <Field label="Max input tokens" value={agent.default_max_input_tokens.toLocaleString()} />
+          <Field label="Max input tokens" value={formatCount(agent.default_max_input_tokens)} />
         )}
         {agent.default_max_session_tokens != null && (
-          <Field
-            label="Max session tokens"
-            value={agent.default_max_session_tokens.toLocaleString()}
-          />
+          <Field label="Max session tokens" value={formatCount(agent.default_max_session_tokens)} />
         )}
         <Field
           label="Max session duration"
@@ -347,8 +346,8 @@ function AgentDetailView({
 
       {/* Audit */}
       <Card title="Audit">
-        <Field label="Created" value={formatDateFull(agent.created_at)} />
-        <Field label="Last updated" value={formatDateFull(agent.updated_at)} />
+        <Field label="Created" value={<LocalTime value={agent.created_at} />} />
+        <Field label="Last updated" value={<LocalTime value={agent.updated_at} />} />
         {agent.created_by_user_id && (
           <Field
             label="Created by"
@@ -400,7 +399,7 @@ function OperationalSummary({
           value={
             totalCount !== null ? (
               <span className="text-lg font-bold text-sky-950 tabular-nums">
-                {totalCount.toLocaleString()}
+                {formatCount(totalCount)}
               </span>
             ) : (
               <span className="text-xs text-stone-400 italic">unavailable</span>
@@ -411,7 +410,9 @@ function OperationalSummary({
           label="Last active"
           value={
             mostRecentActivity ? (
-              <span className="text-xs text-stone-700">{formatDateFull(mostRecentActivity)}</span>
+              <span className="text-xs text-stone-700">
+                <LocalTime value={mostRecentActivity} />
+              </span>
             ) : totalCount === 0 ? (
               <span className="text-xs text-stone-400 italic">never</span>
             ) : (
@@ -473,7 +474,7 @@ function RecentSessions({
           ))}
           {sessions.hasMore && (
             <div className="px-6 py-3 text-xs text-stone-400 text-center">
-              Showing 5 most recent · {sessions.totalCount.toLocaleString()} total
+              Showing 5 most recent · {formatCount(sessions.totalCount)} total
             </div>
           )}
         </div>
@@ -525,7 +526,7 @@ function SessionRow({ session: s }: { session: SessionSummary }) {
           {s.agent_mode}
         </span>
         <span className="text-[11px] text-stone-400 whitespace-nowrap">
-          {formatDateFull(s.last_activity_at)}
+          <LocalTime value={s.last_activity_at} />
         </span>
         <a
           href={`/ag-admin/sessions/${s.id}`}
@@ -670,20 +671,6 @@ function UnavailableState() {
       </p>
     </div>
   );
-}
-
-function formatDateFull(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso.slice(0, 19);
-  }
 }
 
 function formatDuration(seconds: number): string {

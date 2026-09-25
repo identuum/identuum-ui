@@ -434,8 +434,7 @@ describe("audit page — safe fields rendered", () => {
   });
 
   it("renders event_timestamp", () => {
-    expect(page).toContain("e.event_timestamp");
-    expect(page).toContain("formatDate");
+    expect(page).toContain("<LocalTime value={e.event_timestamp}");
   });
 
   it("links agent_session_id to /ag-admin/sessions/:id", () => {

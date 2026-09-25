@@ -210,8 +210,7 @@ describe("revocations page — list rows", () => {
   });
 
   it("revoked_at timestamp rendered for each row", () => {
-    expect(page).toContain("r.revoked_at");
-    expect(page).toContain("formatDate");
+    expect(page).toContain("<LocalTime value={r.revoked_at}");
   });
 
   it("revoked_by_user_id shown as short technical ID when present", () => {
