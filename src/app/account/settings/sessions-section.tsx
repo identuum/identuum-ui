@@ -21,9 +21,26 @@ interface SessionsSectionProps {
   unavailable: boolean;
   /** True when the list fetch failed for a reason other than unavailable runtime. */
   error: boolean;
+  /**
+   * True when the IdP refused the list (403): it answers a site_admin's
+   * GET /api/v1/sessions 403 by design (identuum-idp-oss sessions.go). Not an
+   * error to retry.
+   */
+  forbidden?: boolean;
 }
 
-export function SessionsSection({ sessions, unavailable, error }: SessionsSectionProps) {
+export function SessionsSection({ sessions, unavailable, error, forbidden }: SessionsSectionProps) {
+  if (forbidden) {
+    return (
+      <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3">
+        <p className="text-xs text-stone-500 leading-relaxed">
+          Session management is not available for administrator accounts. Use the account menu to
+          sign out of this browser session.
+        </p>
+      </div>
+    );
+  }
+
   if (unavailable) {
     return (
       <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3">

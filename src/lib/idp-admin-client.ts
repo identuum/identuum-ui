@@ -700,8 +700,13 @@ export async function getOwnProfile(): Promise<UserProfile | null> {
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json();
-    const u = data?.user;
-    if (!u) return null;
+    // GET /api/v1/profile answers the user object itself on both editions
+    // (identuum-idp-oss HandleGetProfile; identuum-idp-ce HandleAPIV1Profile).
+    // Reading `data.user` alone returned null, the profile tab rendered
+    // empty, and saving it cleared every field (CE-UI-2a). A `user` wrapper
+    // is still accepted.
+    const u = data?.user ?? data;
+    if (!u || typeof u.email !== "string") return null;
 
     const optStr = (v: unknown): string | null =>
       typeof v === "string" && v.length > 0 ? v : null;

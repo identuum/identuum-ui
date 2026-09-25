@@ -217,7 +217,10 @@ export default async function AccountSettingsPage({
             <SessionsSection
               sessions={sessionsResult.ok ? sessionsResult.sessions : []}
               unavailable={!sessionsResult.ok && sessionsResult.unavailable}
-              error={!sessionsResult.ok && !sessionsResult.unavailable}
+              forbidden={!sessionsResult.ok && sessionsResult.status === 403}
+              error={
+                !sessionsResult.ok && !sessionsResult.unavailable && sessionsResult.status !== 403
+              }
             />
           </div>
         </div>

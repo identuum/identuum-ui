@@ -12,14 +12,18 @@
  *   3. If valid, renders the setup form with pre-filled email (read-only).
  *   4. User sets password (and optional display name).
  *   5. On submit, server action POSTs to IdP claim endpoint.
- *   6. On success: shows redirect-to-login message (no session created).
+ *   6. On success the claim itself creates no session: the action signs in
+ *      with the new password, and an org_admin without a factor enrols TOTP
+ *      right here (the login enrolment pair), then lands on /org-admin.
  *
- * Backend notes:
+ * Backend notes (the same contract on identuum-idp-oss and, since CE-UI-2a,
+ * identuum-idp-ce):
  *   - validate: GET /api/v1/auth/claim/validate?token=... → always HTTP 200
  *   - consume:  POST /api/v1/auth/claim → always HTTP 200 (oracle-hardened)
- *   - No MFA setup at claim time; user logs in with password after setup.
- *   - No session cookie created; user must visit /login after setup.
+ *   - No session cookie is created by the claim.
  *   - Token is one-time-use, bound to target_email, expires in 48h.
+ *   - The page's URL carries the token: Referrer-Policy no-referrer (below,
+ *     and from CE's server) keeps it out of every Referer header.
  */
 
 import type { Metadata } from "next";
@@ -27,7 +31,7 @@ import { validateClaimToken } from "./actions";
 import { ClaimFormClient } from "./form-client";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Account Setup — Identuum" };
+export const metadata: Metadata = { title: "Account Setup — Identuum", referrer: "no-referrer" };
 
 export default async function ClaimPage({
   searchParams,
