@@ -21,5 +21,10 @@ export async function signOutDestination(): Promise<string> {
   if (res.ok && body?.logout === "local_only") {
     return "/login?reason=signed_out_locally";
   }
+  // A cookie-session edition (identuum-idp-ce) confirms its revocation in
+  // the body rather than with a 204.
+  if (res.ok && body?.logged_out === true) {
+    return "/login?reason=signed_out";
+  }
   return "/login?reason=sign_out_unconfirmed";
 }

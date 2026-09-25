@@ -41,6 +41,16 @@ it.each([403, 404, 503, 200])(
   }
 );
 
+// CE-UI-1: identuum-idp-ce's cookie-session logout confirms the revocation
+// with 200 {"logged_out":true}; the boundary passes it through.
+it("calls an edition's confirmed revocation body a completed logout", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(new Response(JSON.stringify({ logged_out: true }), { status: 200 }))
+  );
+  expect(await signOutDestination()).toBe("/login?reason=signed_out");
+});
+
 it("does not claim local cookie clearing when the browser received no response", async () => {
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("network unavailable")));
   expect(await signOutDestination()).toBe("/login?reason=sign_out_unconfirmed");
