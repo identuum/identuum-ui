@@ -6,22 +6,53 @@ first published image. Format roughly follows
 [Semantic Versioning](https://semver.org/). The published artifact is the
 container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
-## Unreleased
+## `v0.3.1`
+
+Fixes to the static export that identuum-idp-oss `v0.6.1` embeds. Delta
+`v0.3.0..HEAD`: 17 commits (measured at `cf6575a`) and this release
+commit. As for `v0.3.0`, the published artifact is the export
+(`publish-ui-export.yml` on the tag); no container image is published.
+
+### Added
+
+- **`/logout` is a page** (`bdeb441`): its only action is the sign-out
+  form's POST; loading it makes no request, so a link or a prefetch never
+  signs out.
 
 ### Changed
 
+- **One date display** (U-020, `91c0519`, `189756b`): every date the UI
+  shows renders through `<LocalTime>` — formatted in the browser's own
+  zone with the zone shown, the exact UTC ISO on hover; what the UI sends
+  (audit date filters, service-account expiry) stays UTC ISO. The server
+  render no longer formats a date in its own zone, which had caused a
+  hydration mismatch between 23:00 and 00:05 UTC.
 - **Surfaces no edition serves are removed** (owner decision 5,
-  2026-09-25): the site-admin reports page offers no report export link
+  `48f8f33`): the site-admin reports page offers no report export link
   (it states that no edition serves report exports), the org-admin settings
   page has no webhooks list, and passkeys can no longer be renamed (the
   Rename control sent a PATCH neither edition answers). Removing a passkey
   is unchanged.
-- **Session revoke asks only its edition's route**: identuum-idp-oss
-  `POST /api/v1/revoke {session_id}`, identuum-idp-ce
-  `POST /api/v1/sessions/{id}/revoke`, chosen from the IdP component's
-  product, where it tried the CE route first and fell back on 404.
+- **Session revoke uses one route on every edition** (`dfe479d`):
+  `POST /api/v1/revoke {session_id}`, without asking which edition it is.
+- **The upgrade-mode boot** (`cc23515`): when `/api/v1/component` is absent
+  the export asks `/api/upgrade/status` and routes to `/upgrade` when the
+  state needs the wizard, as the Next ladder does.
 - `logout`: the Next route also expires `refresh_token` at
   `Path=/bff/session/` (identuum-idp-oss v0.6.0, D3) (`9add676`).
+
+### Fixed
+
+- **A cookie-session sign-out that revoked is confirmed** (`39b7e1a`): a
+  2xx answering `{"logged_out":true}` is "signed out", not "unconfirmed".
+- **Account settings, profile tab** (`1997bec`): `GET /api/v1/profile`
+  answers the user object itself, and the page read `data.user`, so every
+  field showed empty and saving sent a clear for each. It reads the object
+  now (a `user` wrapper is still accepted).
+- **Account settings, sessions tab** (`1997bec`): the IdP's 403 for a
+  site_admin shows the administrator notice, not "Could not load sessions".
+- `/claim` declares `Referrer-Policy: no-referrer`; its URL carries the
+  claim token (`1997bec`).
 
 ## `v0.3.0`
 
