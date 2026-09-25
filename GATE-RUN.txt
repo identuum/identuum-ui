@@ -1,14 +1,14 @@
 schema: gate-run.v1
 gate: identuum-ui make verify
 note: evidence lines are the tools' own summary lines; a summary format this script does not match is recorded only as an exit code
-repo-head: e76f550
-started: 2026-09-25T21:23:36Z
+repo-head: 208f9f7
+started: 2026-09-25T23:00:39Z
 plan: tool-versions image-base-check image-base-parity witness-parity tracked-binary-check credential-transparency workflow-yaml workflow-yaml-parity frozen-lockfile advisory ci-witness toolchain-parity rulefloor ledger-diff-gate grype-scan biome tsc vitest wiki-fresh
 tool: node       v26.8.1  /Users/odemir/.local/state/fnm_multishells/4569_1790130253786/bin/node
 tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/4569_1790130253786/bin/pnpm
 tool: rulefloor  {"schema_version":"rulefloor.version.v1","version":"v0.9.1","toolchain_version":"v0.9.1","version_agreement":"pass"}  /opt/homebrew/bin/rulefloor
 tool: yq         v4.53.6  /opt/homebrew/bin/yq
-elapsed: tool-versions 1s
+elapsed: tool-versions 0s
 target: tool-versions exit=0
 elapsed: image-base-check 0s
 target: image-base-check exit=0
@@ -27,26 +27,26 @@ target: workflow-yaml exit=0
 evidence: [workflow-yaml-parity] check OK: workflow-yaml-parity block md5 d63f3fdb5cd211c38abe98a03ecb1544 matches the shared pin
 elapsed: workflow-yaml-parity 0s
 target: workflow-yaml-parity exit=0
-elapsed: frozen-lockfile 4s
+elapsed: frozen-lockfile 0s
 target: frozen-lockfile exit=0
 elapsed: advisory 2s
 target: advisory exit=0
-evidence: [ci-witness] check OK: ci-witness identuum-ui CI build-and-test (node 26) green, 13 planned target(s) all exit=0, ties commit 6a18b0d, 76 commit(s) behind HEAD — the CI claim covers that tree, not this one, run https://github.com/identuum/identuum-ui/actions/runs/35397115955 attempt=1 sha=6a18b0d3067a5bcdf89b2f9b96d50f34b340e35b
+evidence: [ci-witness] check OK: ci-witness identuum-ui CI build-and-test (node 26) green, 13 planned target(s) all exit=0, ties commit 6a18b0d, 79 commit(s) behind HEAD — the CI claim covers that tree, not this one, run https://github.com/identuum/identuum-ui/actions/runs/35397115955 attempt=1 sha=6a18b0d3067a5bcdf89b2f9b96d50f34b340e35b
 elapsed: ci-witness 0s
 target: ci-witness exit=0
 evidence: [toolchain-parity] check OK: toolchain-parity 12 pins agree (node 26 in matrix [26 ], engines/@types/node 26/26, local node 26, pnpm 11.3.0, go 1.27.1, rulefloor v0.9.1, yq v4.53.6, both vendored digests)
-elapsed: toolchain-parity 0s
+elapsed: toolchain-parity 1s
 target: toolchain-parity exit=0
 evidence: [rulefloor] check OK: 67 rows (67 armed), FLOOR 67, RED-PROOFS 64 (measured 64)
-elapsed: rulefloor 1s
+elapsed: rulefloor 0s
 target: rulefloor exit=0
-evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=b33811b2e0408bbc19c0ad5d4d389d96f924e494 status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=7c39a53ed669395f36635d0764eb127ce1966cf599684a0035866f50c8d7547e
+evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=cf6575acb179833ae0b49f1c520b97092b638ec1 status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=5f67b8a2484152b819afcf161a2bbd831267f5445f9d7fb7c24c360c0e0c8fbe
 elapsed: ledger-diff-gate 0s
 target: ledger-diff-gate exit=0
 evidence: [grype-scan] check OK: grype-gate matches=4 fixable=0 allowlisted=0 unfixable=4 severe=0 — subject image:identuum-ui:verify; config: not applicable (image subject: no directory declaration to compare); coverage: not applicable (image subject: no gitignored tree to enumerate)
-elapsed: grype-scan 15s
+elapsed: grype-scan 29s
 target: grype-scan exit=0
-elapsed: biome 0s
+elapsed: biome 1s
 target: biome exit=0
 elapsed: tsc 1s
 target: tsc exit=0
@@ -55,6 +55,6 @@ elapsed: vitest 3s
 target: vitest exit=0
 elapsed: wiki-fresh 0s
 target: wiki-fresh exit=0
-finished: 2026-09-25T21:24:06Z
-tree: sha256=f8bfa765e710194df4a86413462cc2ba77ac0fce7fa0f45da44e953de417b7f3
+finished: 2026-09-25T23:01:19Z
+tree: sha256=74cf70fc15d2bbc4cb8b9cf9f30fa67c280db3b7591f770b93fabbf4360d391f
 result: green
