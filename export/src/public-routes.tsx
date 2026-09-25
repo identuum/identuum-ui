@@ -16,6 +16,7 @@ import DashboardPage, { metadata as dashboardMeta } from "@/app/dashboard/page";
 import DashboardSecurityRedirect from "@/app/dashboard/security/page";
 import ForgotPasswordPage, { metadata as forgotMeta } from "@/app/forgot-password/page";
 import { metadata as loginMeta } from "@/app/login/page";
+import LogoutPage, { metadata as logoutMeta } from "@/app/logout/page";
 import PlatformStatusPage, { metadata as platformStatusMeta } from "@/app/platform-status/page";
 import ResetPasswordPage, { metadata as resetMeta } from "@/app/reset-password/page";
 import SetupPage, { metadata as setupMeta } from "@/app/setup/page";
@@ -44,6 +45,7 @@ export const PUBLIC_AREA: Area = {
     route(/^\/setup$/, [], SetupPage, setupMeta),
     route(/^\/platform-status$/, [], PlatformStatusPage, platformStatusMeta),
     route(/^\/login$/, [], ExportLoginPage, loginMeta),
+    route(/^\/logout$/, [], LogoutPage, logoutMeta),
   ],
 };
 

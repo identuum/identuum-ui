@@ -44,6 +44,21 @@ function form(fields: Record<string, string>): FormData {
 const direct = (env: ReturnType<typeof installExport>, path: string) =>
   env.calls.find((c) => c.path.split("?")[0] === path);
 
+// CE-UI-1 (decision 3): the UI owns /logout. Its page asks; only the POST
+// of its form signs out, so loading it (a GET) never does.
+describe("logout", () => {
+  it("is a routed page whose form posts the sign-out, and loading it calls nothing", async () => {
+    expect(isServerRoute("/logout")).toBe(true);
+    const { html, redirectedTo, env } = await render("/logout");
+    expect(redirectedTo).toBeNull();
+    expect(html).toContain('data-testid="logout"');
+    const form = html.match(/<form[^>]*>/)?.[0] ?? "";
+    expect(form).toContain('action="/api/auth/logout"');
+    expect(form).toMatch(/method="post"/i);
+    expect(env.calls).toEqual([]);
+  });
+});
+
 it("login and platform-status are the shared pages, routed", () => {
   for (const p of ["/login", "/platform-status"]) {
     expect(isServerRoute(p), p).toBe(true);
