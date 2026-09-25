@@ -33,9 +33,9 @@ describe("IDP OSS account self-service endpoint wiring", () => {
   it("uses the parity Family-A /api/v1/sessions list + per-session revoke (works on OSS AND CE), not the OSS-only /me/sessions family", () => {
     // GET list via /api/v1/sessions — mounted on BOTH IDP OSS and IDP CE.
     expect(ACCOUNT_CLIENT_SRC).toContain("/api/v1/sessions");
-    // Per-session revoke, dual-route using ONLY pre-existing backend routes:
-    //   CE path-param POST /api/v1/sessions/{id}/revoke + OSS body POST /api/v1/revoke.
-    expect(ACCOUNT_CLIENT_SRC).toContain("/api/v1/sessions/${encodeURIComponent(id)}/revoke");
+    // Per-session revoke: POST /api/v1/revoke {session_id}, served with the
+    // same contract by OSS and, since CE-UI-2a, by CE — one route.
+    expect(ACCOUNT_CLIENT_SRC).not.toContain("/api/v1/sessions/${encodeURIComponent(id)}/revoke");
     expect(ACCOUNT_CLIENT_SRC).toContain("/api/v1/revoke");
     expect(ACCOUNT_CLIENT_SRC).toContain("session_id");
     // The OSS-only /me/sessions family (404 on CE) must NOT be used by the

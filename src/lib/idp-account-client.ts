@@ -141,20 +141,14 @@ function failedMutation(status: number, serverError?: string): AccountMutationFa
 }
 
 /**
- * Revokes ONE of the caller's own sessions by its opaque id (external_sid).
- *
- * Each edition serves one route, and only that route is asked (owner decision
- * 5, 2026-09-25 — no try-then-fallback, so no failed request on either):
- *   - IDP CE: POST /api/v1/sessions/{id}/revoke (path param).
- *   - IDP OSS: POST /api/v1/revoke with a { session_id } body.
- * Both revoke by the SAME id that GET /api/v1/sessions returns, and both
- * enforce caller ownership server-side. Bulk semantics (current / others /
- * all) are orchestrated by the caller iterating the session list.
+ * Revokes ONE of the caller's own sessions by the id GET /api/v1/sessions
+ * returns: POST /api/v1/revoke with a { session_id } body. Both editions
+ * serve it with the same contract (identuum-idp-oss; identuum-idp-ce since
+ * CE-UI-2a) and enforce caller ownership server-side — another user's id is
+ * answered like success and changes nothing. Bulk semantics (current /
+ * others / all) are orchestrated by the caller iterating the session list.
  */
-export async function revokeSessionById(
-  id: string,
-  edition: "oss" | "ce"
-): Promise<AccountMutationResult> {
+export async function revokeSessionById(id: string): Promise<AccountMutationResult> {
   const cfg = loadRuntimeConfig();
   if (!cfg || !cfg.idp.enabled) return failedMutation(503);
   if (!id) return failedMutation(404);
@@ -162,19 +156,12 @@ export async function revokeSessionById(
   const base = idpBaseUrl(cfg);
   const authHeaders = await idpAuthHeaders();
   try {
-    const res =
-      edition === "ce"
-        ? await idpFetch(`${base}/api/v1/sessions/${encodeURIComponent(id)}/revoke`, {
-            method: "POST",
-            headers: authHeaders,
-            cache: "no-store",
-          })
-        : await idpFetch(`${base}/api/v1/revoke`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", ...authHeaders },
-            body: JSON.stringify({ session_id: id }),
-            cache: "no-store",
-          });
+    const res = await idpFetch(`${base}/api/v1/revoke`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders },
+      body: JSON.stringify({ session_id: id }),
+      cache: "no-store",
+    });
     if (res.ok) return { ok: true };
     return failedMutation(res.status);
   } catch {

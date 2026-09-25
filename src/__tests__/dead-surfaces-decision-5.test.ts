@@ -10,6 +10,8 @@
  *     neither (OSS serves DELETE only);
  *   - session revoke: OSS POST /api/v1/revoke {session_id}, CE POST
  *     /api/v1/sessions/{id}/revoke — each served, by one edition each.
+ *     Since CE-UI-2a (2026-09-25) CE serves POST /api/v1/revoke with OSS's
+ *     contract, so the UI asks that one route on every edition.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -43,25 +45,22 @@ afterEach(() => {
 const ROOT = resolve(__dirname, "..");
 const read = (...p: string[]) => readFileSync(resolve(ROOT, ...p), "utf-8");
 
-describe("session revoke asks only its edition's route", () => {
-  it("OSS: exactly one request, POST /api/v1/revoke with the session id in the body", async () => {
+describe("session revoke asks one route on every edition (CE-UI-2a)", () => {
+  it("exactly one request, POST /api/v1/revoke with the session id in the body", async () => {
     const { revokeSessionById } = await import("../lib/idp-account-client");
-    const r = await revokeSessionById("sid-1", "oss");
+    const r = await revokeSessionById("sid-1");
     expect(r.ok).toBe(true);
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({ url: "http://idp.test/api/v1/revoke", method: "POST" });
     expect(JSON.parse(String(calls[0]?.body))).toEqual({ session_id: "sid-1" });
   });
 
-  it("CE: exactly one request, POST /api/v1/sessions/{id}/revoke", async () => {
-    const { revokeSessionById } = await import("../lib/idp-account-client");
-    const r = await revokeSessionById("sid-1", "ce");
-    expect(r.ok).toBe(true);
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({
-      url: "http://idp.test/api/v1/sessions/sid-1/revoke",
-      method: "POST",
-    });
+  it("no per-edition route is left: the client never asks CE's /api/v1/sessions/{id}/revoke", () => {
+    const client = read("lib", "idp-account-client.ts");
+    expect(client).not.toContain("/api/v1/sessions/${");
+    expect(read("app", "account", "settings", "session-actions.ts")).not.toContain(
+      "getServerRuntimeState"
+    );
   });
 });
 
