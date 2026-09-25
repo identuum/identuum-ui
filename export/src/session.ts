@@ -119,7 +119,9 @@ async function upgradeNeedsWizard(): Promise<boolean> {
     const res = await direct("/api/upgrade/status", DISCOVERY_TIMEOUT_MS);
     if (!res.ok) return false;
     const state = (await readJson(res))?.state;
-    return typeof state === "string" && upgradeStateNeedsWizard(state as IdpUpgradeStateView["state"]);
+    return (
+      typeof state === "string" && upgradeStateNeedsWizard(state as IdpUpgradeStateView["state"])
+    );
   } catch {
     return false;
   }

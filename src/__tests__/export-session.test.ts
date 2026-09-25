@@ -64,17 +64,26 @@ describe("an absent component probe consults the upgrade status", () => {
   it.each(["oss_database_detected", "upgrade_required", "backup_required"])(
     "%s routes to the upgrade wizard",
     async (state) => {
-      const fetch = vi.fn().mockResolvedValueOnce(component404()).mockResolvedValueOnce(upgrade(state));
+      const fetch = vi
+        .fn()
+        .mockResolvedValueOnce(component404())
+        .mockResolvedValueOnce(upgrade(state));
       vi.stubGlobal("fetch", fetch);
       expect(await discoverPlatform()).toEqual({ mode: "upgrade_required" });
-      expect(fetch.mock.calls.map((c) => c[0])).toEqual(["/api/v1/component", "/api/upgrade/status"]);
+      expect(fetch.mock.calls.map((c) => c[0])).toEqual([
+        "/api/v1/component",
+        "/api/upgrade/status",
+      ]);
     }
   );
 
   it("an upgrade state that needs no wizard stays unavailable", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValueOnce(component404()).mockResolvedValueOnce(upgrade("upgrade_complete"))
+      vi
+        .fn()
+        .mockResolvedValueOnce(component404())
+        .mockResolvedValueOnce(upgrade("upgrade_complete"))
     );
     expect(await discoverPlatform()).toEqual({ mode: "unavailable", detail: "component_404" });
   });
