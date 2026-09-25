@@ -1,36 +1,5 @@
 {
   "schema_version": "ledger-amendments.v1",
-  "base_commit": "298983dfe2ede92a3fe230d2000b470d57fd5e36",
-  "changes": [
-    {
-      "rule_id": "MFA-SA-1",
-      "change_class": "test_fingerprint_changed",
-      "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): the enrolment spec's code entry now draws from unconsumedTOTP() (a step this run has not presented) instead of generateTOTP(secret, 0); reviewed and rehashed d1b659957e2b -> fa2b4f54f580. THE-ELEVEN-MISMATCHES (2026-09-15): the same call names the user whose code it presents (the ledger is keyed by the user, like the appliance's guard); rehashed fa2b4f54f580 -> 546b3ab06577. The assertion — the site-admin MFA enrolment ceremony completes end-to-end with recovery codes shown — is untouched."
-    },
-    {
-      "rule_id": "WIZARD-1",
-      "change_class": "test_fingerprint_changed",
-      "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): the wizard spec's TOTP entry and its retry now draw from unconsumedTOTP() and unconsumedTOTPAfterFreshStep() instead of generateTOTP(secret, 0) and (secret, 1); rehashed 01cc6700c00f -> 25bae8d65d0d. THE-ELEVEN-MISMATCHES (2026-09-15): both calls name the pinned login as the user; rehashed 25bae8d65d0d -> 04602ccc358b. The assertion — the OSS setup wizard runs fresh-appliance to signed-in site_admin in one ceremony — is untouched."
-    },
-    {
-      "rule_id": "COOKIE-1",
-      "change_class": "test_fingerprint_changed",
-      "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): login.spec's two TOTP entries now draw from unconsumedTOTP() instead of generateTOTP(SITE_ADMIN_TOTP_SECRET); rehashed b86ce557419c -> 9462e71dc58a. THE-ELEVEN-MISMATCHES (2026-09-15): both name SITE_ADMIN_EMAIL as the user; rehashed 9462e71dc58a -> ba1d30c15861. The assertion — a stale cookie never blocks a second sign-in in the same browser context — is untouched."
-    },
-    {
-      "rule_id": "PIN-CHIP-1",
-      "change_class": "test_fingerprint_changed",
-      "reason": "THE-SUITE-THAT-REPLAYED (2026-09-13): same file as WIZARD-1 (e2e/oss-wizard-ui.spec.ts @ e2e-run), same TOTP-entry change; rehashed 01cc6700c00f -> 25bae8d65d0d. THE-ELEVEN-MISMATCHES (2026-09-15): same file, same user-argument change; rehashed 25bae8d65d0d -> 04602ccc358b. The assertion — the wizard displays the pinned login read-only and demotes the typed address to contact email — is untouched."
-    },
-    {
-      "rule_id": "BROWSER-CONSOLE-GATE-1",
-      "change_class": "rule_added",
-      "reason": "THE-ELEVEN-MISMATCHES (2026-09-15): e2e-full fails on a React rendering or hydration error in the browser console — pw-phase.sh reads every browser phase's own traces (page errors and console errors) and fails the phase on one React's renderer wrote, naming the page and the test, failing closed on an unreadable trace; network-resource console errors the suite provokes on purpose are tolerated by name. A hydration mismatch had been invisible to every gate for four days, eleven per mint. Pinned by src/__tests__/browser-console-gate-source-invariants.test.ts (red first: three of four pins failed before the scan existed), mutation red-proved on the neutralised verdict, and shown red on the runner over the pre-fix tree (react-errors=11) before the fix."
-    },
-    {
-      "rule_id": "ORGREC-READONLY-1",
-      "change_class": "test_fingerprint_changed",
-      "reason": "UI-E2E-FIX (2026-09-23): the org-record write in e2e/org-admin-settings.spec.ts now sends the UI's own Origin (uiOriginHeader()), as a browser does. Since v0.2.3 (355a22c) the same-origin guard answered a request without Origin with 403 before it reached the IdP, so the test's 403 came from the guard, not from the infrastructure-authority refusal the rule is about; with the Origin it proves that refusal again. Reviewed and rehashed b02bf9e24f4a -> 95923405f495. The assertion (403) is untouched."
-    }
-  ]
+  "base_commit": "a8d829f4ced0e8a1c523d872d401673df31445f1",
+  "changes": []
 }
