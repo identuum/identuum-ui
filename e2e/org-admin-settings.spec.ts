@@ -88,7 +88,7 @@ test.afterAll(async () => {
 // ── 1. Main settings surface ─────────────────────────────────────────────────
 
 test.describe("/org-admin/settings — main settings surface", () => {
-  test("renders heading + all four documented card titles", async () => {
+  test("renders heading + the documented card titles", async () => {
     if (skipOrgAdminTests) {
       test.skip(true, SKIP_MSG);
     }
@@ -112,11 +112,12 @@ test.describe("/org-admin/settings — main settings surface", () => {
       expect(await page.getByText("Organization profile", { exact: true }).count()).toBe(0);
       expect(await page.getByText("Security policy", { exact: true }).count()).toBe(0);
 
-      // Four NEW read-only headings landed by slice
+      // Read-only headings landed by slice
       // identuum-20260530-org-admin-settings-readonly-tabs. Each
-      // section's <h2> is the load-bearing anchor.
+      // section's <h2> is the load-bearing anchor. The Webhooks section is
+      // gone (owner decision 5, 2026-09-25: no edition serves the list).
       await expect(page.getByRole("heading", { name: "Identity providers" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Webhooks" })).toBeVisible();
+      expect(await page.getByRole("heading", { name: "Webhooks" }).count()).toBe(0);
       await expect(page.getByRole("heading", { name: "Roles" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Scope templates" })).toBeVisible();
 
