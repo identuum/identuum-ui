@@ -83,8 +83,14 @@ const IDP_ROUTE_SURFACE_MATRIX: SurfaceMatrixRow[] = [
   {
     route: "/login + MFA session handling",
     classification: "OSS-supported",
-    coveredRoutes: ["/login"],
-    files: ["app/login/page.tsx", "components/auth/password-form.tsx", "lib/idp-client.ts"],
+    // /logout (CE-UI-1): the sign-out page, whose form posts the sign-out.
+    coveredRoutes: ["/login", "/logout"],
+    files: [
+      "app/login/page.tsx",
+      "app/logout/page.tsx",
+      "components/auth/password-form.tsx",
+      "lib/idp-client.ts",
+    ],
     signals: ["LoginPageClient", "mfa_enrollment_required", "sessionId: string | null"],
   },
   {
