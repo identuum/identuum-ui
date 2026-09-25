@@ -9,7 +9,9 @@
  * to render or where to send the browser.
  */
 
+import { upgradeStateNeedsWizard } from "@/lib/runtime-composition";
 import { validateSessionResponse } from "@/lib/session-validation";
+import type { IdpUpgradeStateView } from "@/lib/types";
 import { bff, direct, readJson } from "./bff";
 
 export type UserRole = "site_admin" | "org_admin" | "org_user";
@@ -70,6 +72,7 @@ export type SetupState = "setup_required" | "setup_complete" | "unknown";
 
 export type PlatformState =
   | { mode: "unavailable"; detail: string }
+  | { mode: "upgrade_required" }
   | { mode: "setup_required" }
   | { mode: "ready" };
 
@@ -84,6 +87,12 @@ export async function discoverPlatform(): Promise<PlatformState> {
     return { mode: "unavailable", detail: "component_unreachable" };
   }
   if (!component.ok) {
+    // A CE binary in upgrade mode mounts only /healthz and /api/upgrade/*:
+    // its absent component is the Next ladder's cue to ask the upgrade
+    // status (runtime-composition.ts fetchIdpUpgradeState).
+    if (component.status === 404 && (await upgradeNeedsWizard())) {
+      return { mode: "upgrade_required" };
+    }
     return { mode: "unavailable", detail: `component_${component.status}` };
   }
   let setup: Response;
@@ -101,4 +110,17 @@ export async function discoverPlatform(): Promise<PlatformState> {
   if (body?.state === "setup_required") return { mode: "setup_required" };
   if (body?.state === "setup_complete") return { mode: "ready" };
   return { mode: "unavailable", detail: "setup_state_unknown" };
+}
+
+/** Whether /api/upgrade/status reports a state the /upgrade wizard is for;
+ * any failure or other state is no. */
+async function upgradeNeedsWizard(): Promise<boolean> {
+  try {
+    const res = await direct("/api/upgrade/status", DISCOVERY_TIMEOUT_MS);
+    if (!res.ok) return false;
+    const state = (await readJson(res))?.state;
+    return typeof state === "string" && upgradeStateNeedsWizard(state as IdpUpgradeStateView["state"]);
+  } catch {
+    return false;
+  }
 }

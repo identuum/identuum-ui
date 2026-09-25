@@ -109,6 +109,8 @@ function Root() {
         // status the discovery saw, when it saw one.
         const status = state.detail.match(/_(\d{3})$/)?.[1];
         navigate(status ? `/unavailable?status=${status}` : "/unavailable");
+      } else if (state.mode === "upgrade_required") {
+        navigate("/upgrade");
       } else if (state.mode === "setup_required") {
         navigate("/setup");
       } else {

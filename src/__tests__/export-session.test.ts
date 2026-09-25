@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { discoverPlatform, validateSession } from "../../export/src/session";
 
 afterEach(() => {
@@ -54,6 +54,46 @@ it.each(["setup_required", "setup_complete", "unknown"])(
     );
   }
 );
+
+// CE-UI-1: a CE binary in upgrade mode mounts no /api/v1/component (404);
+// the ladder then asks /api/upgrade/status, as the Next ladder does.
+describe("an absent component probe consults the upgrade status", () => {
+  const component404 = () => new Response("404 page not found", { status: 404 });
+  const upgrade = (state: string) => new Response(JSON.stringify({ state }), { status: 200 });
+
+  it.each(["oss_database_detected", "upgrade_required", "backup_required"])(
+    "%s routes to the upgrade wizard",
+    async (state) => {
+      const fetch = vi.fn().mockResolvedValueOnce(component404()).mockResolvedValueOnce(upgrade(state));
+      vi.stubGlobal("fetch", fetch);
+      expect(await discoverPlatform()).toEqual({ mode: "upgrade_required" });
+      expect(fetch.mock.calls.map((c) => c[0])).toEqual(["/api/v1/component", "/api/upgrade/status"]);
+    }
+  );
+
+  it("an upgrade state that needs no wizard stays unavailable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(component404()).mockResolvedValueOnce(upgrade("upgrade_complete"))
+    );
+    expect(await discoverPlatform()).toEqual({ mode: "unavailable", detail: "component_404" });
+  });
+
+  it("an absent upgrade status stays unavailable (an OSS or unknown backend)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(component404()).mockResolvedValueOnce(component404())
+    );
+    expect(await discoverPlatform()).toEqual({ mode: "unavailable", detail: "component_404" });
+  });
+
+  it("a failing component probe other than 404 does not ask", async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(new Response("", { status: 503 }));
+    vi.stubGlobal("fetch", fetch);
+    expect(await discoverPlatform()).toEqual({ mode: "unavailable", detail: "component_503" });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
 
 it("does not turn a missing session payload into an expired-session verdict", async () => {
   vi.stubGlobal(
