@@ -863,6 +863,61 @@ export async function resetUserMFA(
   }
 }
 
+/**
+ * CE-UI-2b: an org_admin creates a one-time password reset link for a user of
+ * its organization (identuum-idp-ce; capabilities.admin_reset_link).
+ *
+ * Backend: POST /api/v1/users/:id/recovery/reset-link → {reset_url,
+ * expires_at}. The link is returned to the caller once and never stored by
+ * the UI. Refusals: 403 forbidden / cannot_reset_self /
+ * cannot_reset_site_admin, 404 not_found, 409 user_disabled.
+ */
+export async function createPasswordResetLink(
+  userId: string
+): Promise<
+  { ok: true; resetUrl: string; expiresAt: string } | { ok: false; status: number; message: string }
+> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return { ok: false, status: 503, message: "IdP is not configured." };
+  }
+  try {
+    const res = await idpFetch(
+      `${idpBaseUrl(cfg)}/api/v1/users/${encodeURIComponent(userId)}/recovery/reset-link`,
+      {
+        method: "POST",
+        headers: await idpAuthHeaders(),
+        cache: "no-store",
+      }
+    );
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before typing
+    let body: any = null;
+    try {
+      body = await res.json();
+    } catch {
+      // ignore parse error — handled below
+    }
+    if (res.ok && typeof body?.reset_url === "string" && body.reset_url) {
+      return { ok: true, resetUrl: body.reset_url, expiresAt: String(body.expires_at ?? "") };
+    }
+    const messages: Record<string, string> = {
+      cannot_reset_self: "Use Account settings to change your own password.",
+      cannot_reset_site_admin: "A site administrator's password cannot be reset here.",
+      user_disabled: "Enable the user before creating a reset link.",
+      not_found: "User not found.",
+      forbidden: "Only an organization administrator can create a reset link.",
+    };
+    const code = typeof body?.error === "string" ? body.error : "";
+    return {
+      ok: false,
+      status: res.status,
+      message: messages[code] ?? "Could not create a reset link. Try again.",
+    };
+  } catch {
+    return { ok: false, status: 0, message: "Network error. Try again." };
+  }
+}
+
 // ── Get single org user by ID ────────────────────────────────────────────────
 
 /**

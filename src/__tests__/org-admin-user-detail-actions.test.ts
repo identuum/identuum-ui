@@ -326,9 +326,10 @@ describe("ORG_ADMIN_USER_ACTION_META + getOrgAdminUserActionLabel", () => {
     expect(getOrgAdminUserActionLabel("reset-mfa")).toBe("MFA enrollment");
   });
 
-  it("the metadata table has exactly the four known actions (allowlist key shape)", () => {
+  it("the metadata table has exactly the five known actions (allowlist key shape)", () => {
     const keys = Object.keys(ORG_ADMIN_USER_ACTION_META).sort();
-    expect(keys).toEqual(["approve-registration", "disable", "enable", "reset-mfa"]);
+    // CE-UI-2b added "reset-link" (capabilities.admin_reset_link).
+    expect(keys).toEqual(["approve-registration", "disable", "enable", "reset-link", "reset-mfa"]);
   });
 });
 

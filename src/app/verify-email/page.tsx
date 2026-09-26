@@ -29,6 +29,8 @@
  */
 
 import type { Metadata } from "next";
+import { MailCeremonyUnavailable } from "@/components/auth/mail-ceremony-unavailable";
+import { mailCeremoniesAvailable } from "@/lib/mail-capabilities";
 import { verifyEmailToken } from "./actions";
 import { ResendVerificationForm } from "./resend-form";
 
@@ -40,6 +42,10 @@ export default async function VerifyEmailPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // CE-UI-2b: no mail, no verification mail; the token is never sent.
+  if (!(await mailCeremoniesAvailable())) {
+    return <MailCeremonyUnavailable title="Verify email" />;
+  }
   const params = await searchParams;
   const rawParam = params.token;
   const rawToken = typeof rawParam === "string" ? rawParam.trim() : "";

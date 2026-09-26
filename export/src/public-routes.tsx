@@ -18,6 +18,7 @@ import ForgotPasswordPage, { metadata as forgotMeta } from "@/app/forgot-passwor
 import { metadata as loginMeta } from "@/app/login/page";
 import LogoutPage, { metadata as logoutMeta } from "@/app/logout/page";
 import PlatformStatusPage, { metadata as platformStatusMeta } from "@/app/platform-status/page";
+import ResetLinkPage, { metadata as resetLinkMeta } from "@/app/reset-link/page";
 import ResetPasswordPage, { metadata as resetMeta } from "@/app/reset-password/page";
 import SetupPage, { metadata as setupMeta } from "@/app/setup/page";
 import SetupRequiredPage, { metadata as setupRequiredMeta } from "@/app/setup-required/page";
@@ -39,6 +40,7 @@ export const PUBLIC_AREA: Area = {
     route(/^\/claim$/, [], ClaimPage, claimMeta),
     route(/^\/forgot-password$/, [], ForgotPasswordPage, forgotMeta),
     route(/^\/reset-password$/, [], ResetPasswordPage, resetMeta),
+    route(/^\/reset-link$/, [], ResetLinkPage, resetLinkMeta),
     route(/^\/verify-email$/, [], VerifyEmailPage, verifyMeta),
     route(/^\/setup-required$/, [], SetupRequiredPage, setupRequiredMeta),
     route(/^\/upgrade$/, [], UpgradePage, upgradeMeta),

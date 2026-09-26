@@ -362,6 +362,8 @@ const CAPABILITY_LABELS: Record<keyof ComponentCapabilities, string> = {
   reporting: "Reporting",
   anomaly_detection: "Anomaly detection",
   observability: "Observability",
+  mail_ceremonies: "Mail ceremonies",
+  admin_reset_link: "Admin reset link",
 };
 
 function CapabilitiesList({ capabilities }: { capabilities: ComponentCapabilities }) {

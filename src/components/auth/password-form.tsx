@@ -24,6 +24,9 @@ interface PasswordFormProps {
   onMfaRequired: (sessionId: string) => void;
   onMfaEnrollmentRequired: (sessionId: string) => void;
   onSuccess: (role: UserRole) => void;
+  /** CE-UI-2b: false where the IdP sends no mail (capabilities.mail_ceremonies);
+   *  the Forgot password? link then gives way to the administrator note. */
+  mailCeremonies?: boolean;
 }
 
 export function PasswordForm({
@@ -32,6 +35,7 @@ export function PasswordForm({
   onMfaRequired,
   onMfaEnrollmentRequired,
   onSuccess,
+  mailCeremonies = true,
 }: PasswordFormProps) {
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -119,12 +123,18 @@ export function PasswordForm({
           />
           <span className="text-sm text-slate-600">Remember me</span>
         </label>
-        <a
-          href="/forgot-password"
-          className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
-        >
-          Forgot password?
-        </a>
+        {mailCeremonies ? (
+          <a
+            href="/forgot-password"
+            className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+          >
+            Forgot password?
+          </a>
+        ) : (
+          <span className="text-xs text-slate-500">
+            Ask your administrator to reset your password.
+          </span>
+        )}
       </div>
 
       {/* THE-SIX-SMALL-ONES, UI 2 (2026-09-16): announced as an alert, so a

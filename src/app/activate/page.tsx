@@ -19,6 +19,8 @@
  */
 
 import type { Metadata } from "next";
+import { MailCeremonyUnavailable } from "@/components/auth/mail-ceremony-unavailable";
+import { mailCeremoniesAvailable } from "@/lib/mail-capabilities";
 import { validateActivationToken } from "./actions";
 import { ActivateFormClient } from "./form-client";
 
@@ -30,6 +32,11 @@ export default async function ActivatePage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // CE-UI-2b: no mail, no activation mail (activation is the claim link
+  // there); the token is never sent.
+  if (!(await mailCeremoniesAvailable())) {
+    return <MailCeremonyUnavailable title="Activate organization" />;
+  }
   const params = await searchParams;
   const rawParam = params.token;
   const rawToken = typeof rawParam === "string" ? rawParam.trim() : "";

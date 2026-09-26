@@ -18,6 +18,19 @@ afterEach(() => vi.unstubAllGlobals());
 
 const TOKEN = "t0k3n-fixture";
 
+// CE-UI-2b: the mail pages ask the binary's read-only discovery which
+// ceremonies it serves (capabilities.mail_ceremonies) before anything else;
+// "asks the IdP nothing" means nothing beyond that discovery.
+const DISCOVERY = new Set([
+  "/api/v1/component",
+  "/api/setup/status",
+  "/api/upgrade/status",
+  "/api/runtime-config",
+]);
+function beyondDiscovery(calls: Array<{ path: string }>) {
+  return calls.filter((c) => !DISCOVERY.has(c.path));
+}
+
 async function render(path: string, routes: Routes = {}) {
   const env = installExport(path, routes);
   // The browser adapter for the Next IdP proxy path, as main.tsx installs it.
@@ -148,7 +161,7 @@ describe("activate", () => {
   it("no token is the missing-link panel and asks the IdP nothing", async () => {
     const { html, env } = await render("/activate");
     expect(html).toContain("No activation link provided");
-    expect(env.calls).toHaveLength(0);
+    expect(beyondDiscovery(env.calls).map((c) => c.path)).toEqual([]);
   });
 
   it("completing activation POSTs directly and hands the pending session to MFA enrolment", async () => {
@@ -201,16 +214,24 @@ describe("forgot and reset password", () => {
     const { html, env } = await render("/forgot-password");
     expect(html).toContain(">Forgot password</h1>");
     expect(html).toContain('name="email"');
-    expect(env.calls).toHaveLength(0);
+    expect(beyondDiscovery(env.calls).map((c) => c.path)).toEqual([]);
   });
 
-  it("a reset request POSTs directly and always ends in the same sent state", async () => {
-    for (const status of [200, 404]) {
+  it("a reset request POSTs directly; a 2xx is sent, a non-2xx never is (CE-UI-2b)", async () => {
+    for (const [status, sent] of [
+      [200, true],
+      [404, false],
+    ] as const) {
       const { result, env } = await act(
         { "POST /api/v1/auth/password/reset-request": { status, json: {} } },
         () => requestPasswordResetAction({ phase: "form" }, form({ email: "who@tenant.test" }))
       );
-      expect(result).toEqual({ phase: "sent" });
+      if (sent) {
+        expect(result).toEqual({ phase: "sent" });
+      } else {
+        expect(result?.phase).toBe("form");
+        expect(result?.error).toBeTruthy();
+      }
       expect(direct(env, "/api/v1/auth/password/reset-request")).toMatchObject({
         viaBff: false,
         body: { email: "who@tenant.test" },

@@ -33,6 +33,9 @@ export default async function LoginPage() {
   }
 
   const publicCfg = toPublicConfig(cfg);
+  // CE-UI-2b: where the IdP sends no mail, "Forgot password?" gives way to
+  // "Ask your administrator to reset your password."
+  const mailCeremonies = runtimeState?.components.idp?.capabilities?.mail_ceremonies !== false;
 
   return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center px-4 relative overflow-hidden">
@@ -63,7 +66,7 @@ export default async function LoginPage() {
             <p className="text-sm text-stone-500 mb-6 leading-relaxed">
               Enter your credentials to continue
             </p>
-            <LoginPageClient config={publicCfg} />
+            <LoginPageClient config={publicCfg} mailCeremonies={mailCeremonies} />
           </div>
         </div>
 

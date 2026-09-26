@@ -77,11 +77,22 @@ export async function requestPasswordResetAction(
     // inspect the response body — the no-enumeration guarantee lives on
     // the wire shape (a successful HTTP 200) and we present the same
     // terminal "sent" state to the user regardless of body contents.
-    await fetch(`${idpBaseUrl(cfg)}/api/v1/auth/password/reset-request`, {
+    // CE-UI-2b: only a 2xx is "sent". A 404 (an IdP with no reset route,
+    // such as identuum-idp-ce), a 429 or a 5xx sent nothing, and saying
+    // otherwise would leave the user waiting for a mail that never comes.
+    // The retry hint reveals nothing about the account.
+    const res = await fetch(`${idpBaseUrl(cfg)}/api/v1/auth/password/reset-request`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: parsed.data.email }),
     });
+    if (!res.ok) {
+      return {
+        phase: "form",
+        error:
+          "Could not request a reset link right now. Try again later, or ask your administrator.",
+      };
+    }
     return { phase: "sent" };
   } catch {
     // Hard network failure — surface a generic retry hint that still does

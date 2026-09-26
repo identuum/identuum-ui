@@ -14,6 +14,8 @@
  * the user submits the new password.
  */
 import type { Metadata } from "next";
+import { MailCeremonyUnavailable } from "@/components/auth/mail-ceremony-unavailable";
+import { mailCeremoniesAvailable } from "@/lib/mail-capabilities";
 import { ResetPasswordFormClient } from "./form-client";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +31,10 @@ export default async function ResetPasswordPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // CE-UI-2b: no mail, no mailed reset link to redeem; nothing is called.
+  if (!(await mailCeremoniesAvailable())) {
+    return <MailCeremonyUnavailable title="Reset password" />;
+  }
   const params = await searchParams;
   const token = pickToken(params.token);
 

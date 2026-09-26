@@ -7,9 +7,11 @@ import type { PublicRuntimeConfig, UserRole } from "@/lib/types";
 
 interface LoginPageClientProps {
   config: PublicRuntimeConfig;
+  /** CE-UI-2b: capabilities.mail_ceremonies (default true). */
+  mailCeremonies?: boolean;
 }
 
-export function LoginPageClient({ config }: LoginPageClientProps) {
+export function LoginPageClient({ config, mailCeremonies = true }: LoginPageClientProps) {
   const router = useRouter();
 
   const handleSuccess = (role: UserRole) => {
@@ -17,7 +19,7 @@ export function LoginPageClient({ config }: LoginPageClientProps) {
   };
 
   if (config.idp.enabled) {
-    return <LoginFlow onSuccess={handleSuccess} />;
+    return <LoginFlow onSuccess={handleSuccess} mailCeremonies={mailCeremonies} />;
   }
 
   // AG-only: IdP is not configured. Human identity login is not available.

@@ -758,6 +758,13 @@ export interface ComponentCapabilities {
   reporting?: boolean;
   anomaly_detection?: boolean;
   observability?: boolean;
+  /** CE-UI-2b: the IdP can send the reset, verification and activation
+   *  mails (false on identuum-idp-ce; true on identuum-idp-oss only when
+   *  SMTP is configured). Absent is treated as available. */
+  mail_ceremonies?: boolean;
+  /** CE-UI-2b: an org_admin can issue a one-time reset link
+   *  (identuum-idp-ce). */
+  admin_reset_link?: boolean;
 }
 
 /**

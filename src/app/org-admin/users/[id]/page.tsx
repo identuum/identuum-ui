@@ -28,8 +28,10 @@ import {
   listUserRoles,
   UserDetailUnavailable,
 } from "@/lib/idp-admin-client";
+import { adminResetLinkAvailable } from "@/lib/mail-capabilities";
 import { ResetMFAButton, UserRowActions } from "../user-row-actions";
 import { ApproveButton } from "./approve-button";
+import { ResetLinkButton } from "./reset-link-button";
 import {
   APPROVE_REGISTRATION_COPY,
   BANNED_AMBIGUOUS_STATUS_LABEL,
@@ -105,7 +107,8 @@ export default async function OrgAdminUserDetailPage({
   const { actions, soleActiveAdmin: isSoleActiveAdmin } = deriveOrgAdminUserActions(
     user,
     activeAdminCount,
-    registrationPolicy
+    registrationPolicy,
+    { adminResetLink: await adminResetLinkAvailable() }
   );
   const isManualInvite =
     (user.invitation_pending && !user.invitation_email_bound) ||
@@ -143,6 +146,7 @@ export default async function OrgAdminUserDetailPage({
   const showLifecycleActions = actions.includes("disable") || actions.includes("enable");
   const showMFAReset = actions.includes("reset-mfa");
   const showApproveRegistration = actions.includes("approve-registration");
+  const showResetLink = actions.includes("reset-link");
   // The Assigned-roles card is only meaningful for tenant users. site_admin
   // identities cannot be modified from the /org-admin surface (authority
   // boundary), and deleted users have no actionable roles to show.
@@ -256,7 +260,7 @@ export default async function OrgAdminUserDetailPage({
       </div>
 
       {/* Actions card */}
-      {(showLifecycleActions || showMFAReset || showApproveRegistration) && (
+      {(showLifecycleActions || showMFAReset || showApproveRegistration || showResetLink) && (
         <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-stone-100">
             <p className="text-sm font-semibold text-sky-950">Actions</p>
@@ -320,6 +324,18 @@ export default async function OrgAdminUserDetailPage({
                 </p>
                 <div className="pt-1">
                   <ApproveButton userId={user.id} />
+                </div>
+              </div>
+            )}
+            {showResetLink && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-stone-600">Password reset</p>
+                <p className="text-xs text-stone-400 leading-relaxed max-w-[280px]">
+                  This installation sends no email. Create a one-time link for this user; it sets a
+                  new password and signs them out everywhere. Their authenticator stays enrolled.
+                </p>
+                <div className="pt-1">
+                  <ResetLinkButton userId={user.id} />
                 </div>
               </div>
             )}

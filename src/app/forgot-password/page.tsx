@@ -12,12 +12,19 @@
  * unauthenticated /forgot-password browse cheap and free of side effects.
  */
 import type { Metadata } from "next";
+import { MailCeremonyUnavailable } from "@/components/auth/mail-ceremony-unavailable";
+import { mailCeremoniesAvailable } from "@/lib/mail-capabilities";
 import { ForgotPasswordFormClient } from "./form-client";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Forgot password — Identuum" };
 
-export default function ForgotPasswordPage() {
+export default async function ForgotPasswordPage() {
+  // CE-UI-2b: no mail, no forgot-password (the IdP says so in
+  // capabilities.mail_ceremonies); nothing is called.
+  if (!(await mailCeremoniesAvailable())) {
+    return <MailCeremonyUnavailable title="Forgot password" />;
+  }
   return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center px-4 relative overflow-hidden">
       <div

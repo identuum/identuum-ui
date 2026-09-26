@@ -24,6 +24,8 @@ type EmailData = z.infer<typeof emailSchema>;
 
 interface LoginFlowProps {
   onSuccess: (role: UserRole) => void;
+  /** CE-UI-2b: capabilities.mail_ceremonies (default true). */
+  mailCeremonies?: boolean;
 }
 
 // ── Base64URL helpers (WebAuthn requires ArrayBuffer; server sends base64url) ──
@@ -44,7 +46,7 @@ function arrayBufferToBase64url(buf: ArrayBuffer): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
-export function LoginFlow({ onSuccess }: LoginFlowProps) {
+export function LoginFlow({ onSuccess, mailCeremonies = true }: LoginFlowProps) {
   const [step, setStep] = useState<Step>("EMAIL");
   const [email, setEmail] = useState("");
   const [orgConfig, setOrgConfig] = useState<OrgConfig | null>(null);
@@ -411,6 +413,7 @@ export function LoginFlow({ onSuccess }: LoginFlowProps) {
           onMfaRequired={handleMfaRequired}
           onMfaEnrollmentRequired={handleMfaEnrollmentRequired}
           onSuccess={onSuccess}
+          mailCeremonies={mailCeremonies}
         />
       </div>
     );

@@ -16,6 +16,7 @@ import { redirect } from "next/navigation";
 import {
   approveUserRegistration,
   assignUserRole,
+  createPasswordResetLink,
   removeUserRole,
   resetUserMFA,
   setUserActive,
@@ -88,6 +89,36 @@ export async function resetMFAAction(
     return { phase: "success" };
   }
 
+  return { phase: "error", error: result.message };
+}
+
+// ── Create a one-time password reset link (CE-UI-2b) ──────────────────────────
+
+export interface CreateResetLinkState {
+  phase: "idle" | "success" | "error";
+  /** Shown once to the org_admin and never stored. */
+  resetUrl?: string;
+  expiresAt?: string;
+  error?: string;
+}
+
+export async function createResetLinkAction(
+  _prev: CreateResetLinkState,
+  formData: FormData
+): Promise<CreateResetLinkState> {
+  const session = await getServerSession();
+  if (!session) redirect("/login?reason=session_expired");
+
+  const role = session.user?.role ?? session.role;
+  if (role !== "org_admin") redirect(roleToPath(role));
+
+  const userId = ((formData.get("userId") as string | null) ?? "").trim();
+  if (!userId) return { phase: "error", error: "Missing user ID." };
+
+  const result = await createPasswordResetLink(userId);
+  if (result.ok) {
+    return { phase: "success", resetUrl: result.resetUrl, expiresAt: result.expiresAt };
+  }
   return { phase: "error", error: result.message };
 }
 

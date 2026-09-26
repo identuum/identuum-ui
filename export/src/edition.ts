@@ -22,6 +22,10 @@ const CE_ONLY_ROUTES: readonly RegExp[] = [
   /^\/api\/v1\/system\/sessions$/,
   /^\/api\/v1\/system\/audit\/chain\/verify$/,
   /^\/api\/v1\/organizations\/[^/]+\/identity-providers$/,
+  // CE-UI-2b: the org_admin's one-time reset link (identuum-idp-oss mounts
+  // no reset-link route; its internal/api TestCapabilityIff_MailCapabilities
+  // pins that).
+  /^\/api\/v1\/users\/[^/]+\/recovery\/reset-link$/,
 ];
 
 /** `pathname` is the IdP path, without the /api/idp or /bff prefix or a query. */

@@ -144,6 +144,15 @@ const IDP_ROUTE_SURFACE_MATRIX: SurfaceMatrixRow[] = [
     ],
   },
   {
+    // CE-UI-2b: the redeem page of an org_admin's one-time reset link
+    // (identuum-idp-ce sends no mail; OSS mounts no reset-link route).
+    route: "/reset-link",
+    classification: "CE-only",
+    coveredRoutes: ["/reset-link"],
+    files: ["app/reset-link/page.tsx"],
+    signals: ["validateResetLinkToken", "no-referrer"],
+  },
+  {
     route: "/org-admin/audit",
     classification: "CE-only",
     coveredRoutes: ["/org-admin/audit"],
@@ -350,6 +359,7 @@ describe("IDP OSS route/surface matrix", () => {
       "/dashboard + /dashboard/security",
       "/org-admin overview + users",
       "/org-admin/settings",
+      "/reset-link",
       "/org-admin/audit",
       "/site-admin/audit",
       "/site-admin/anomaly",

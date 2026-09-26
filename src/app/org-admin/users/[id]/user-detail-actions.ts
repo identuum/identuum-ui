@@ -43,7 +43,19 @@ export type OrgAdminUserStatus = "active" | "pending" | "pending_approval" | "di
 // "regenerate-invite" was REMOVED 2026-08-29 (THE-REMAINING-CLICKS): its
 // endpoint (POST /api/v1/users/:id/setup/resend) is not mounted on either
 // backend, so pending rows surface no action — status display only.
-export type OrgAdminUserAction = "disable" | "enable" | "reset-mfa" | "approve-registration";
+// "reset-link" (CE-UI-2b): a one-time password reset link, offered only where
+// the IdP issues them (capabilities.admin_reset_link, identuum-idp-ce).
+export type OrgAdminUserAction =
+  | "disable"
+  | "enable"
+  | "reset-mfa"
+  | "approve-registration"
+  | "reset-link";
+
+/** CE-UI-2b: IdP capabilities that add actions. */
+export interface OrgAdminUserActionOptions {
+  adminResetLink?: boolean;
+}
 
 /**
  * Minimal subset of `OrgUserItem` needed to compute action visibility.
@@ -171,7 +183,8 @@ export interface OrgAdminUserActionsResult {
 export function deriveOrgAdminUserActions(
   u: OrgAdminUserActionInput,
   activeAdminCount: number,
-  policy: OrgRegistrationPolicy | null = null
+  policy: OrgRegistrationPolicy | null = null,
+  options: OrgAdminUserActionOptions = {}
 ): OrgAdminUserActionsResult {
   const status = computeOrgUserStatus(u, policy);
 
@@ -225,6 +238,13 @@ export function deriveOrgAdminUserActions(
     actions.push("reset-mfa");
   }
 
+  // CE-UI-2b: a one-time reset link for an active user of the org (org_user
+  // or another org_admin; site_admin targets returned early above). The IdP
+  // refuses a link for the caller itself.
+  if (options.adminResetLink && status === "active") {
+    actions.push("reset-link");
+  }
+
   return { status, actions, soleActiveAdmin };
 }
 
@@ -240,6 +260,7 @@ export const ORG_ADMIN_USER_ACTION_META: Record<OrgAdminUserAction, OrgAdminUser
   enable: { sectionLabel: "Restore access" },
   "reset-mfa": { sectionLabel: "MFA enrollment" },
   "approve-registration": { sectionLabel: "Approve registration" },
+  "reset-link": { sectionLabel: "Password reset" },
 };
 
 export function getOrgAdminUserActionLabel(action: OrgAdminUserAction): string {
