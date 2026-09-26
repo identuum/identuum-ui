@@ -77,6 +77,8 @@ src/.tsgraph
 # records would each cover the other). `gate-witness check . GATE-RUN.e2e-full.txt`
 # still re-verifies it against the tree it ran on.
 /GATE-RUN.e2e-full.txt
+# GATE-TIERS (2026-09-26): e2e-quick's record, gitignored for the same reason.
+/GATE-RUN.e2e-quick.txt
 # THE-RED-MINT-HAS-NO-NAME (2026-09-06): a RED e2e-full run keeps its evidence
 # here (appliance log, record, JSON reports, observations, failed phases'
 # traces), one directory per run stamp. Run-local, never committed.

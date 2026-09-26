@@ -504,6 +504,15 @@ tool-versions:
 e2e-full:
 	@bash e2e-full/scripts/full-run.sh
 
+## e2e-quick: the SAME disposable harness in its quick mode (GATE-TIERS, owner
+## ruling 2026-09-26, wiki platform/gate-cost.md): fresh appliance, provisioner,
+## the verify-record refusals and ONE dev-loop phase over the eight quick specs
+## with the browser-console gate. Writes the gitignored GATE-RUN.e2e-quick.txt,
+## whose gate line names the mode. identuum-idp-oss's mint-reachability asks for
+## it when every reaching change is quick-class. OPT-IN ONLY, like e2e-full.
+e2e-quick:
+	@E2E_MODE=quick bash e2e-full/scripts/full-run.sh
+
 ## WHY wiki-fresh RUNS LAST (THE-SEVENTEEN-MASKED-TARGETS, 2026-09-11; the
 ## rule is THE-SEALED-GATES, identuum-idp-oss, 2026-08-04)
 ## --------------------------------------------------------------------

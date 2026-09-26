@@ -199,7 +199,23 @@ export IDENTUUM_TEST_SITE_ADMIN_EMAIL="" IDENTUUM_TEST_SITE_ADMIN_PASSWORD="" \
 	IDENTUUM_TEST_ORG_USER_EMAIL="" IDENTUUM_TEST_ORG_USER_PASSWORD="" \
 	IDENTUUM_TEST_ORG_USER_TOTP_SECRET="" IDENTUUM_TEST_ORG_ID=""
 
-RECORD="GATE-RUN.e2e-full.txt"
+# GATE-TIERS (owner ruling 2026-09-26, platform/gate-cost.md): the same
+# disposable harness runs in one of two modes, and the identuum-idp-oss gate
+# (tools/mint-reachability) says which one a change owes. `full` is every phase
+# below. `quick` (make e2e-quick) is the fresh appliance, the provisioner, the
+# verify-record refusals and ONE dev-loop phase over QUICK_SPECS with the same
+# browser-console gate — no api-suite, no static-rows sweep, no role matrix,
+# no admin-reset. Each mode writes its own gitignored record, and the record's
+# gate line names the mode, so a quick record can never pass for a full one.
+E2E_MODE="${E2E_MODE:-full}"
+case "$E2E_MODE" in
+full | quick) ;;
+*)
+	echo "e2e-full: E2E_MODE must be full or quick, not '$E2E_MODE'" >&2
+	exit 2
+	;;
+esac
+RECORD="GATE-RUN.e2e-$E2E_MODE.txt"
 GW="scripts/gate-witness.sh"
 
 # THE-RED-MINT-HAS-NO-NAME: where this run's evidence goes IF it is red.
@@ -214,7 +230,16 @@ export E2E_EVIDENCE_DIR
 PLAN=(fresh-appliance api-suite)
 [ "${IDENTUUM_E2E_MEASURE:-}" = "1" ] && PLAN+=(plain-baseline)
 PLAN+=(provisioner static-rows-sweep static-rows role-matrix verify-record-ui verify-record-idp-oss devloop-provisioned skip-ceiling coverage closure admin-reset auth503-scan)
-bash "$GW" init "$RECORD" "identuum-ui make e2e-full" "${PLAN[@]}"
+# The quick plan and its specs: the eight that caught defects (gate-cost.md
+# §3/§5.1), one sign-in per role among them. tools/mint-reachability's
+# QuickSpecs names the same eight; a change to one of them needs only this mode.
+QUICK_SPECS="e2e/login.spec.ts e2e/health-and-redirects.spec.ts e2e/oss-site-admin-smoke.spec.ts e2e/org-admin-smoke.spec.ts e2e/org-admin-settings.spec.ts e2e/dashboard.spec.ts e2e/account-settings.spec.ts e2e/local-time-hydration.spec.ts"
+if [ "$E2E_MODE" = quick ]; then
+	PLAN=(fresh-appliance provisioner verify-record-ui verify-record-idp-oss devloop-quick)
+fi
+# planned: is this phase in the mode's plan? A phase outside it never runs.
+planned() { case " ${PLAN[*]} " in *" $1 "*) return 0 ;; esac; return 1; }
+bash "$GW" init "$RECORD" "identuum-ui make e2e-$E2E_MODE" "${PLAN[@]}"
 
 rc=0
 
@@ -301,7 +326,7 @@ echo "e2e-full: API suite (oss-full)"
 #              STAYS AT 1.
 #
 # Raise nothing here without three consecutive green runs and identical counts.
-bash "$GW" step "$RECORD" 'api-suite=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh api-suite e2e/.auth/pw-api-suite.json -- --project=oss-full --workers=1' || rc=1
+if planned api-suite; then bash "$GW" step "$RECORD" 'api-suite=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh api-suite e2e/.auth/pw-api-suite.json -- --project=oss-full --workers=1' || rc=1; fi
 
 # MEASUREMENT baseline (opt-in via IDENTUUM_E2E_MEASURE=1): the SAME dev-loop
 # suite BEFORE provisioning — no envelope, no dynamic-fixture, no inherited
@@ -309,7 +334,7 @@ bash "$GW" step "$RECORD" 'api-suite=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_FULL_ADMIN
 # number, measured in this run, never carried forward.
 if [ "${IDENTUUM_E2E_MEASURE:-}" = "1" ]; then
 	echo "e2e-full: MEASURE baseline — dev-loop suite PLAIN (unprovisioned)"
-	bash "$GW" step "$RECORD" 'plain-baseline=rm -f "$FIXTURE_FILE" && IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh plain-baseline e2e/.auth/pw-plain.json -- --project=chromium --workers=1' || rc=1
+	if planned plain-baseline; then bash "$GW" step "$RECORD" 'plain-baseline=rm -f "$FIXTURE_FILE" && IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh plain-baseline e2e/.auth/pw-plain.json -- --project=chromium --workers=1' || rc=1; fi
 fi
 
 # Provision the dev-loop fixture from the ALREADY-bootstrapped site_admin (the
@@ -357,10 +382,10 @@ chmod 600 "$ADMIN_RESET_ENVELOPE"
 # org_admin's recovery codes — confined to this disposable appliance (torn
 # down at run end; no harness login uses recovery codes).
 echo "e2e-full: static census rows sweep (the probes that stay)"
-bash "$GW" step "$RECORD" 'static-rows-sweep=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_STATIC_ROWS=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh static-rows-sweep e2e/.auth/pw-static-rows.json -- --project=oss-full --workers=1 static-rows-sweep' || rc=1
+if planned static-rows-sweep; then bash "$GW" step "$RECORD" 'static-rows-sweep=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_STATIC_ROWS=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh static-rows-sweep e2e/.auth/pw-static-rows.json -- --project=oss-full --workers=1 static-rows-sweep' || rc=1; fi
 
 echo "e2e-full: enforcing the static-rows committed set + floor"
-bash "$GW" step "$RECORD" 'static-rows=node e2e-full/scripts/static-rows-from-run.mjs e2e/.auth/pw-static-rows.json' || rc=1
+if planned static-rows; then bash "$GW" step "$RECORD" 'static-rows=node e2e-full/scripts/static-rows-from-run.mjs e2e/.auth/pw-static-rows.json' || rc=1; fi
 
 # THE-ROLE-CENSUS: collapse this run's api() observations into the
 # (endpoint, role) matrix and enforce the committed set + floor. The
@@ -371,7 +396,7 @@ bash "$GW" step "$RECORD" 'static-rows=node e2e-full/scripts/static-rows-from-ru
 # (coverage-from-run.mjs). The window is identical for the bootstrap run
 # and every enforcing run, so the matrix compares like with like.
 echo "e2e-full: enforcing the (endpoint, role) coverage matrix"
-bash "$GW" step "$RECORD" 'role-matrix=node e2e-full/scripts/role-matrix-from-run.mjs e2e/.auth/role-matrix-observations.jsonl' || rc=1
+if planned role-matrix; then bash "$GW" step "$RECORD" 'role-matrix=node e2e-full/scripts/role-matrix-from-run.mjs e2e/.auth/role-matrix-observations.jsonl' || rc=1; fi
 
 # Run the dev-loop suite PROVISIONED: the envelope is present and
 # dynamic-fixture mode is on, so global-setup's fast path REUSES this running
@@ -404,13 +429,17 @@ bash "$GW" step "$RECORD" 'verify-record-ui=bash scripts/gate-witness.sh check .
 bash "$GW" step "$RECORD" 'verify-record-idp-oss=bash scripts/gate-witness.sh check '"$IDP_DIR"' GATE-RUN.txt' || rc=1
 
 echo "e2e-full: dev-loop suite PROVISIONED (the previously-dark specs now light)"
-bash "$GW" step "$RECORD" 'devloop-provisioned=IDENTUUM_E2E_ORGS_CRUD=1 IDENTUUM_E2E_OSS_CHANGE_PASSWORD=1 IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true IDENTUUM_OSS_TEST_USER_EMAIL="$IDENTUUM_OSS_TEST_USER_EMAIL" IDENTUUM_OSS_TEST_USER_PASSWORD="$IDENTUUM_OSS_TEST_USER_PASSWORD" IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD="$IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD" IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-provisioned e2e/.auth/pw-devloop.json -- --project=chromium --workers=1 --trace on' || rc=1
+if planned devloop-provisioned; then bash "$GW" step "$RECORD" 'devloop-provisioned=IDENTUUM_E2E_ORGS_CRUD=1 IDENTUUM_E2E_OSS_CHANGE_PASSWORD=1 IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true IDENTUUM_OSS_TEST_USER_EMAIL="$IDENTUUM_OSS_TEST_USER_EMAIL" IDENTUUM_OSS_TEST_USER_PASSWORD="$IDENTUUM_OSS_TEST_USER_PASSWORD" IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD="$IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD" IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-provisioned e2e/.auth/pw-devloop.json -- --project=chromium --workers=1 --trace on' || rc=1; fi
+# GATE-TIERS: the quick mode's one dev-loop phase — the same dynamic fixture,
+# the same --trace on and therefore the same pw-phase.sh browser-console gate,
+# over QUICK_SPECS only.
+if planned devloop-quick; then bash "$GW" step "$RECORD" 'devloop-quick=IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-quick e2e/.auth/pw-devloop-quick.json -- --project=chromium --workers=1 --trace on '"$QUICK_SPECS"'' || rc=1; fi
 
 # THE-DISPOSABLE-IDENTITIES: the devloop skip count gets a CEILING, exactly
 # like the coverage floor — a new skip must be a deliberate commit, never
 # silent creep. Enforced from the phase's OWN report.
 echo "e2e-full: enforcing the devloop skip ceiling"
-bash "$GW" step "$RECORD" 'skip-ceiling=node e2e-full/scripts/skip-ceiling-from-run.mjs e2e/.auth/pw-devloop.json' || rc=1
+if planned skip-ceiling; then bash "$GW" step "$RECORD" 'skip-ceiling=node e2e-full/scripts/skip-ceiling-from-run.mjs e2e/.auth/pw-devloop.json' || rc=1; fi
 
 # Route coverage, derived from THE RUN: the inventory is scanned from
 # src/app/**/page.tsx and the reached set from the traces of tests the JSON
@@ -427,7 +456,7 @@ bash "$GW" step "$RECORD" 'skip-ceiling=node e2e-full/scripts/skip-ceiling-from-
 # the first cut of this guard was caught by exactly that, together with an
 # unexported $IDP_DIR that the step's subshell expanded to "" — hence the
 echo "e2e-full: deriving route coverage from the provisioned run"
-bash "$GW" step "$RECORD" 'coverage=node e2e-full/scripts/coverage-from-run.mjs "$IDENTUUM_E2E_BASE_URL" e2e/.auth/pw-devloop.json e2e/.auth/pw-fresh.json' || rc=1
+if planned coverage; then bash "$GW" step "$RECORD" 'coverage=node e2e-full/scripts/coverage-from-run.mjs "$IDENTUUM_E2E_BASE_URL" e2e/.auth/pw-devloop.json e2e/.auth/pw-fresh.json' || rc=1; fi
 
 # THE-CLOSURE-AUDIT: every endpoint OUTSIDE the role matrix (session
 # ceremonies + public/M2M classes) must be OBSERVED in this run's own
@@ -435,7 +464,7 @@ bash "$GW" step "$RECORD" 'coverage=node e2e-full/scripts/coverage-from-run.mjs 
 # PASSED dev-loop traces. "Covered elsewhere" is a claim; this step makes it
 # a per-run fact that fails loudly when a test stops exercising one.
 echo "e2e-full: enforcing outside-matrix closure (session + class endpoints)"
-bash "$GW" step "$RECORD" 'closure=node e2e-full/scripts/closure-from-run.mjs e2e/.auth/role-matrix-observations.jsonl e2e/.auth/pw-devloop.json' || rc=1
+if planned closure; then bash "$GW" step "$RECORD" 'closure=node e2e-full/scripts/closure-from-run.mjs e2e/.auth/role-matrix-observations.jsonl e2e/.auth/pw-devloop.json' || rc=1; fi
 
 # THE-ADMIN-RESET (T-R2a): the LAST CREDENTIALED phase, because it rotates
 # site_admin's credentials — nothing after it may depend on them (only the
@@ -448,14 +477,14 @@ bash "$GW" step "$RECORD" 'closure=node e2e-full/scripts/closure-from-run.mjs e2
 IDENTUUM_E2E_RECOVERED_ADMIN_PASSWORD="R3cover!$(openssl rand -hex 16)"
 export IDENTUUM_E2E_RECOVERED_ADMIN_PASSWORD
 echo "e2e-full: admin-reset scenario (rotates site_admin; run-local recovery password)"
-bash "$GW" step "$RECORD" 'admin-reset=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_ADMIN_RESET=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_IDP_DIR='"$IDP_DIR"' IDENTUUM_E2E_FIXTURE_FILE='"$ADMIN_RESET_ENVELOPE"' IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh admin-reset e2e/.auth/pw-admin-reset.json -- --project=oss-full --workers=1 admin-reset' || rc=1
+if planned admin-reset; then bash "$GW" step "$RECORD" 'admin-reset=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_ADMIN_RESET=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_IDP_DIR='"$IDP_DIR"' IDENTUUM_E2E_FIXTURE_FILE='"$ADMIN_RESET_ENVELOPE"' IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh admin-reset e2e/.auth/pw-admin-reset.json -- --project=oss-full --workers=1 admin-reset' || rc=1; fi
 
 # THE-SESSION-REJECTION-ROOT-CAUSE (AUTH-503): read the appliance log for
 # every store error the IdP answered as 503 during this mint — the hunt's
 # evidence, printed into the record with its correlation ids. Never red on a
 # hit (see auth503-scan.sh); the specs assert no bare 401 was answered.
 echo "e2e-full: AUTH-503 scan (store errors the appliance logged and answered as 503)"
-bash "$GW" step "$RECORD" 'auth503-scan=bash e2e-full/scripts/auth503-scan.sh '"$IDP_DIR"'' || rc=1
+if planned auth503-scan; then bash "$GW" step "$RECORD" 'auth503-scan=bash e2e-full/scripts/auth503-scan.sh '"$IDP_DIR"'' || rc=1; fi
 
 # THE-STALE-WITNESS: this suite exercises TWO repos — the ui specs and the
 # idp-oss appliance they ran against — so the record pins BOTH. finalize
