@@ -1,0 +1,29 @@
+# e2e-full's mail sink (CE-UI-2b, owner exemption 2026-09-26, wiki log/0227).
+#
+# identuum-idp-oss offers its mail ceremonies (forgot/reset password, email
+# verification, activation) only when SMTP is configured: GET /api/v1/component
+# capabilities.mail_ceremonies is true only then (internal/runtime/smtp_config.go
+# resolveEmailNotifier). The harness's appliance therefore gets a local SMTP
+# catcher, so the token-page and verify-email specs exercise the real forms.
+#
+# An OVERLAY on ../identuum-idp-oss/deployment/docker-compose.dev.yml, passed as
+# a second -f by e2e-full/scripts/full-run.sh only, for its own project
+# identuum-e2e. Neither the dev compose nor the customer compose changes.
+# The sink publishes NO host port: the app reaches it on the project network
+# as mail-sink:1025, nothing it receives leaves that network, and
+# `down --volumes` removes it with the project. It is never a real mail server.
+services:
+  mail-sink:
+    profiles: ["app"]
+    image: axllent/mailpit:v1.31.2@sha256:74d609a42ec279aa63c6b4622a6fa9b5408d1ad5b1d76a1c4be40a265ce0863d
+  app:
+    depends_on:
+      mail-sink:
+        condition: service_started
+    environment:
+      IDENTUUM_IDP_SMTP_HOST: "mail-sink"
+      IDENTUUM_IDP_SMTP_PORT: "1025"
+      IDENTUUM_IDP_SMTP_FROM: "no-reply@e2e.identuum.test"
+      # The sink speaks plain SMTP with no AUTH; the notifier still refuses
+      # AUTH over cleartext, and there is none here.
+      IDENTUUM_IDP_SMTP_ALLOW_INSECURE: "true"

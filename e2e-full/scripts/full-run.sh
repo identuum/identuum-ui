@@ -44,7 +44,12 @@ export IDENTUUM_IDP_COMPOSE_PROJECT=identuum-e2e
 export DEV_PG_HOST_PORT=15513
 E2E_PROJECT="$IDENTUUM_IDP_COMPOSE_PROJECT"
 E2E_APP_CONTAINER="$E2E_PROJECT"
-E2E_COMPOSE=(docker compose -p "$E2E_PROJECT" -f "$IDP_DIR/deployment/docker-compose.dev.yml")
+# CE-UI-2b (owner exemption 2026-09-26): the appliance gets a local SMTP
+# catcher, so OSS offers its mail ceremonies (mail_ceremonies is true only when
+# SMTP is configured). The overlay is this harness's own file and is passed
+# here and to oss-up only; neither compose file changes. See the overlay.
+E2E_MAIL_OVERLAY="$UI_DIR/e2e-full/compose.mail-sink.yml"
+E2E_COMPOSE=(docker compose -p "$E2E_PROJECT" -f "$IDP_DIR/deployment/docker-compose.dev.yml" -f "$E2E_MAIL_OVERLAY")
 # The dev-loop UI port (see E2E_UI_PORT below) and the appliance's app port,
 # which the dev compose publishes on 7113 for every project.
 E2E_APP_PORT=7113
@@ -118,7 +123,9 @@ export IDENTUUM_IDP_INSECURE_DEV_MODE=true
 # WebAuthn origin all derive from this one value.
 export IDENTUUM_E2E_BASE_URL="http://localhost:${E2E_UI_PORT}"
 export IDENTUUM_IDP_UI_PUBLIC_BASE_URL="http://localhost:${E2E_UI_PORT}"
-make -C "$IDP_DIR" oss-up
+# COMPOSE_FILE is idp-oss's own `?=` variable; the base file stays first, so the
+# project directory (and the build context) is unchanged.
+make -C "$IDP_DIR" oss-up COMPOSE_FILE="deployment/docker-compose.dev.yml -f $E2E_MAIL_OVERLAY"
 
 echo "e2e-full: waiting for the appliance to serve"
 for i in $(seq 1 60); do
@@ -227,7 +234,7 @@ export E2E_EVIDENCE_DIR
 
 # The plan is fixed at init; the optional MEASURE baseline joins it only when
 # requested, so an absent baseline is a declared subtraction, never INCOMPLETE.
-PLAN=(fresh-appliance api-suite)
+PLAN=(mail-sink fresh-appliance api-suite)
 [ "${IDENTUUM_E2E_MEASURE:-}" = "1" ] && PLAN+=(plain-baseline)
 PLAN+=(provisioner static-rows-sweep static-rows role-matrix verify-record-ui verify-record-idp-oss devloop-provisioned skip-ceiling coverage closure admin-reset auth503-scan)
 # The quick plan and its specs: the eight that caught defects (gate-cost.md
@@ -235,13 +242,20 @@ PLAN+=(provisioner static-rows-sweep static-rows role-matrix verify-record-ui ve
 # QuickSpecs names the same eight; a change to one of them needs only this mode.
 QUICK_SPECS="e2e/login.spec.ts e2e/health-and-redirects.spec.ts e2e/oss-site-admin-smoke.spec.ts e2e/org-admin-smoke.spec.ts e2e/org-admin-settings.spec.ts e2e/dashboard.spec.ts e2e/account-settings.spec.ts e2e/local-time-hydration.spec.ts"
 if [ "$E2E_MODE" = quick ]; then
-	PLAN=(fresh-appliance provisioner verify-record-ui verify-record-idp-oss devloop-quick)
+	PLAN=(mail-sink fresh-appliance provisioner verify-record-ui verify-record-idp-oss devloop-quick)
 fi
 # planned: is this phase in the mode's plan? A phase outside it never runs.
 planned() { case " ${PLAN[*]} " in *" $1 "*) return 0 ;; esac; return 1; }
 bash "$GW" init "$RECORD" "identuum-ui make e2e-$E2E_MODE" "${PLAN[@]}"
 
 rc=0
+
+# ── The mail sink, named in the record: the project's mail-sink container runs
+# the overlay's pinned image, publishes no host port, and the app container was
+# started with IDENTUUM_IDP_SMTP_HOST=mail-sink. Only the image, the host name
+# and a port count are printed.
+MAIL_SINK_IMAGE=$(sed -n 's/^ *image: *//p' "$E2E_MAIL_OVERLAY" | head -1)
+bash "$GW" step "$RECORD" 'mail-sink=cid=$(docker ps -q --filter label=com.docker.compose.project='"$E2E_PROJECT"' --filter label=com.docker.compose.service=mail-sink); img=$(docker inspect --format "{{.Config.Image}}" "$cid" 2>/dev/null); ports=$(docker port "$cid" 2>/dev/null | wc -l | tr -d " "); host=$(docker inspect --format "{{range .Config.Env}}{{println .}}{{end}}" '"$E2E_APP_CONTAINER"' | sed -n "s/^IDENTUUM_IDP_SMTP_HOST=//p"); if [ -n "$cid" ] && [ "$img" = "'"$MAIL_SINK_IMAGE"'" ] && [ "$ports" = 0 ] && [ "$host" = mail-sink ]; then echo "check OK: mail-sink $img running in project '"$E2E_PROJECT"', no host port; the app sends to IDENTUUM_IDP_SMTP_HOST=$host:1025"; else echo "check FAILED: mail-sink container=${cid:-<none>} image=${img:-<none>} host-ports=$ports app IDENTUUM_IDP_SMTP_HOST=${host:-<unset>}"; exit 1; fi' || rc=1
 
 # ── THE-FRESH-APPLIANCE-PHASE: the appliance is STILL setup_required here
 # (oss-up brought it up fresh; the bootstrap runs AFTER this phase) — the one
