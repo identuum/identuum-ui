@@ -28,7 +28,7 @@ import {
   listUserRoles,
   UserDetailUnavailable,
 } from "@/lib/idp-admin-client";
-import { adminResetLinkAvailable } from "@/lib/mail-capabilities";
+import { adminResetLinkAvailable, userApprovalAvailable } from "@/lib/mail-capabilities";
 import { ResetMFAButton, UserRowActions } from "../user-row-actions";
 import { ApproveButton } from "./approve-button";
 import { ResetLinkButton } from "./reset-link-button";
@@ -108,7 +108,10 @@ export default async function OrgAdminUserDetailPage({
     user,
     activeAdminCount,
     registrationPolicy,
-    { adminResetLink: await adminResetLinkAvailable() }
+    {
+      adminResetLink: await adminResetLinkAvailable(),
+      userApproval: await userApprovalAvailable(),
+    }
   );
   const isManualInvite =
     (user.invitation_pending && !user.invitation_email_bound) ||

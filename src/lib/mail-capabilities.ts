@@ -21,3 +21,13 @@ export async function adminResetLinkAvailable(): Promise<boolean> {
   const state = await getServerRuntimeState();
   return state?.components.idp?.capabilities?.admin_reset_link === true;
 }
+
+/**
+ * CE-UI-3a: `user_approval` is false on identuum-idp-ce, which has no
+ * pending-registration state and serves no approve route. A binary that does
+ * not report the key keeps Approve, as before the key existed.
+ */
+export async function userApprovalAvailable(): Promise<boolean> {
+  const state = await getServerRuntimeState();
+  return state?.components.idp?.capabilities?.user_approval !== false;
+}

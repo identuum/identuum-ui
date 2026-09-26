@@ -52,9 +52,13 @@ export type OrgAdminUserAction =
   | "approve-registration"
   | "reset-link";
 
-/** CE-UI-2b: IdP capabilities that add actions. */
+/** IdP capabilities that add or remove actions. */
 export interface OrgAdminUserActionOptions {
+  /** CE-UI-2b: the IdP issues one-time reset links (identuum-idp-ce). */
   adminResetLink?: boolean;
+  /** CE-UI-3a: false where the IdP has no pending-registration state
+   *  (identuum-idp-ce): no Approve. Missing keeps Approve. */
+  userApproval?: boolean;
 }
 
 /**
@@ -214,9 +218,13 @@ export function deriveOrgAdminUserActions(
 
   // Disabled or awaiting approval: the row may be either, so both ways back
   // are offered — Enable (PUT active=true, which OSS maps to banned=false)
-  // and Approve registration.
+  // and Approve registration — unless the IdP has no approval state
+  // (CE-UI-3a: capabilities.user_approval false), where only Enable applies.
   if (status === "pending_approval") {
-    actions.push("enable", "approve-registration");
+    actions.push("enable");
+    if (options.userApproval !== false) {
+      actions.push("approve-registration");
+    }
     return { status, actions, soleActiveAdmin: false };
   }
 

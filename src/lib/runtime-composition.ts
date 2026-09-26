@@ -61,6 +61,7 @@ const KNOWN_CAPABILITY_KEYS: ReadonlyArray<keyof ComponentCapabilities> = [
   "observability",
   "mail_ceremonies",
   "admin_reset_link",
+  "user_approval",
 ];
 
 export type CapabilityAvailability = "available" | "unavailable" | "unknown";

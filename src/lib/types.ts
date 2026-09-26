@@ -765,6 +765,9 @@ export interface ComponentCapabilities {
   /** CE-UI-2b: an org_admin can issue a one-time reset link
    *  (identuum-idp-ce). */
   admin_reset_link?: boolean;
+  /** CE-UI-3a: the IdP has a pending-registration state and serves
+   *  approve (false on identuum-idp-ce). Absent is treated as available. */
+  user_approval?: boolean;
 }
 
 /**
