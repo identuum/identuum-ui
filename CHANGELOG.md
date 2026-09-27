@@ -6,6 +6,33 @@ first published image. Format roughly follows
 [Semantic Versioning](https://semver.org/). The published artifact is the
 container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
+## `v0.3.3`
+
+The static export that identuum-idp-oss `v0.6.3` embeds. Delta
+`v0.3.2..HEAD`: 14 commits (measured at `36377cf`) and this release
+commit. As for `v0.3.2`, the published artifact is the export
+(`publish-ui-export.yml` on the tag); no container image is published.
+
+### Changed
+
+- **`/` sends a signed-in visitor home** (`1c055e9`): site_admin to
+  `/site-admin`, org_admin to `/org-admin`, org_user to `/dashboard`;
+  anyone else to `/login`. It used to send every visitor to `/login`.
+- **`/reset-link` follows `capabilities.admin_reset_link`** (`2773d3e`):
+  where it is not true, the page says it is not available on this
+  installation and calls nothing.
+- **The create-application form follows `capabilities.public_clients`**
+  (`bdc3489`, `5f1230c`): an explicit false (identuum-idp-ce) hides the
+  public-client option; absent keeps it, so identuum-idp-oss is unchanged.
+  The runtime composition now passes the key through, and platform-status
+  labels it (`1d9ba78`).
+
+### Verification machinery (repository-visible, not in the export)
+
+- e2e-full's crud-sweep expects 404 for a DELETE of another
+  organization's client or of an unknown id (`eb2d1ef`), the answer
+  identuum-idp-oss `v0.6.3` gives.
+
 ## `v0.3.2`
 
 The static export that identuum-idp-oss `v0.6.2` embeds. Delta
