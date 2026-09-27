@@ -13,6 +13,15 @@ vi.mock("../lib/idp-transport", () => ({
   idpFetch: vi.fn(),
 }));
 
+describe("the capability projection carries public_clients", () => {
+  it("keeps the IdP's public_clients answer (the export reads only projected keys)", async () => {
+    const { extractCapabilities } = await import("../lib/runtime-composition");
+    expect(extractCapabilities({ public_clients: false }).public_clients).toBe(false);
+    expect(extractCapabilities({ public_clients: true }).public_clients).toBe(true);
+    expect(extractCapabilities({}).public_clients).toBeUndefined();
+  });
+});
+
 describe("the create-application form and public_clients", () => {
   it("offers no public-client option where the IdP registers none", async () => {
     const { CreateApplicationForm } = await import(
