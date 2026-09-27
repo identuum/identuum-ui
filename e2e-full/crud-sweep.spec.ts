@@ -348,9 +348,8 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
     );
     expectStatus(regenXtenant, 404, "rotate B's client secret → 404");
 
-    // ROW DELETE /clients/:id (D) — idempotent by ruling (P3-14): 200 even
-    // cross-tenant, but the WHERE scopes to the actor's org so B's client
-    // is untouched.
+    // ROW DELETE /clients/:id (D) — OSS-CLIENTS: B's client and an unknown id
+    // are 404 (it was a 200 that deleted nothing), and B's client is untouched.
     const delXtenant = await api(
       IDP_BASE,
       "DELETE",
@@ -358,7 +357,9 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       A.bearer
     );
-    expectStatus(delXtenant, 200, "delete B's client → 200 (idempotent no-op, scoped WHERE)");
+    expectStatus(delXtenant, 404, "delete B's client → 404 (scoped, anti-enumeration)");
+    const delGhost = await api(IDP_BASE, "DELETE", `/api/v1/clients/${GHOST}`, undefined, A.bearer);
+    expectStatus(delGhost, 404, "delete a nonexistent client → 404");
     const bSurvives = await api(IDP_BASE, "GET", `/api/v1/clients/${clIdB}`, undefined, B.bearer);
     expectStatus(bSurvives, 200, "…and B's client SURVIVES (no cross-tenant delete) → 200");
     const del = await api(IDP_BASE, "DELETE", `/api/v1/clients/${clId}`, undefined, A.bearer);
