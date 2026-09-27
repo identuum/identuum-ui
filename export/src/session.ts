@@ -9,6 +9,7 @@
  * to render or where to send the browser.
  */
 
+import { roleToPath } from "@/lib/role-routing";
 import { upgradeStateNeedsWizard } from "@/lib/runtime-composition";
 import { validateSessionResponse } from "@/lib/session-validation";
 import type { IdpUpgradeStateView } from "@/lib/types";
@@ -110,6 +111,22 @@ export async function discoverPlatform(): Promise<PlatformState> {
   if (body?.state === "setup_required") return { mode: "setup_required" };
   if (body?.state === "setup_complete") return { mode: "ready" };
   return { mode: "unavailable", detail: "setup_state_unknown" };
+}
+
+/** Where / sends the browser: the boot ladder's answer. */
+export async function rootDestination(): Promise<string> {
+  const state = await discoverPlatform();
+  if (state.mode === "unavailable") {
+    // The shared outage destination (src/app/unavailable): the HTTP status
+    // the discovery saw, when it saw one.
+    const status = state.detail.match(/_(\d{3})$/)?.[1];
+    return status ? `/unavailable?status=${status}` : "/unavailable";
+  }
+  if (state.mode === "upgrade_required") return "/upgrade";
+  if (state.mode === "setup_required") return "/setup";
+  // A signed-in visitor goes to their role's home; anyone else signs in.
+  const session = await validateSession();
+  return session.kind === "authenticated" ? roleToPath(session.role) : "/login";
 }
 
 /** Whether /api/upgrade/status reports a state the /upgrade wizard is for;

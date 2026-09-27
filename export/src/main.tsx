@@ -1,7 +1,7 @@
 // The shared pages are styled by the app's own stylesheet (Tailwind through
 // the repository's PostCSS config), the same one the Next root layout loads.
 import "@/app/globals.css";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { loadEdition } from "./edition";
 import { signOutDestination } from "./logout";
@@ -9,7 +9,7 @@ import { nextProxyFetch } from "./next-proxy";
 import { navigate, useLocation } from "./router";
 import { ServerRoute } from "./server-route";
 import { buildServerRoute, isServerRoute } from "./server-routes";
-import { discoverPlatform } from "./session";
+import { rootDestination } from "./session";
 
 /**
  * THE-UI-THAT-GO-CAN-SERVE (Plan B): the representative set, as a static
@@ -98,30 +98,16 @@ function Link({
 // ------------------------------------------------------------------- root
 
 function Root() {
-  const [detail, setDetail] = useState<string>("");
   useEffect(() => {
     let cancelled = false;
-    discoverPlatform().then((state) => {
-      if (cancelled) return;
-      if (state.mode === "unavailable") {
-        setDetail(state.detail);
-        // The shared outage destination (src/app/unavailable): the HTTP
-        // status the discovery saw, when it saw one.
-        const status = state.detail.match(/_(\d{3})$/)?.[1];
-        navigate(status ? `/unavailable?status=${status}` : "/unavailable");
-      } else if (state.mode === "upgrade_required") {
-        navigate("/upgrade");
-      } else if (state.mode === "setup_required") {
-        navigate("/setup");
-      } else {
-        navigate("/login");
-      }
+    rootDestination().then((to) => {
+      if (!cancelled) navigate(to);
     });
     return () => {
       cancelled = true;
     };
   }, []);
-  return <p data-testid="root-probing">Checking the identity provider… {detail}</p>;
+  return <p data-testid="root-probing">Checking the identity provider…</p>;
 }
 
 // ---------------------------------------------------------------- sign-out

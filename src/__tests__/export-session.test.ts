@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { discoverPlatform, validateSession } from "../../export/src/session";
+import { discoverPlatform, rootDestination, validateSession } from "../../export/src/session";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -141,4 +141,64 @@ it.each([
     vi.fn(async () => new Response(JSON.stringify(body), { status: 200 }))
   );
   expect(await validateSession()).toMatchObject({ kind: "unavailable" });
+});
+
+// SMALL-FIXES-1 item 1: / sends a signed-in visitor to their role's home and
+// anyone else to /login (it used to send everyone to /login).
+describe("rootDestination on a ready platform follows the session", () => {
+  function boundary(validate: () => Response) {
+    return vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/v1/component")) return new Response("{}", { status: 200 });
+      if (url.endsWith("/api/setup/status")) {
+        return new Response(JSON.stringify({ state: "setup_complete" }), { status: 200 });
+      }
+      if (url.endsWith("/api/v1/validate")) return validate();
+      return new Response("{}", { status: 404 });
+    });
+  }
+  const signedIn = (role: string) =>
+    new Response(JSON.stringify({ role, user: { id: "fixture-user", email: "u@t.test", role } }), {
+      status: 200,
+    });
+
+  it.each([
+    ["site_admin", "/site-admin"],
+    ["org_admin", "/org-admin"],
+    ["org_user", "/dashboard"],
+  ])("a signed-in %s lands on %s", async (role, home) => {
+    vi.stubGlobal(
+      "fetch",
+      boundary(() => signedIn(role))
+    );
+    expect(await rootDestination()).toBe(home);
+  });
+
+  it("a signed-out visitor lands on /login", async () => {
+    vi.stubGlobal(
+      "fetch",
+      boundary(
+        () => new Response(JSON.stringify({ reason: "missing_credential" }), { status: 401 })
+      )
+    );
+    expect(await rootDestination()).toBe("/login");
+  });
+
+  it("setup and outage answers still come before the session", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response("{}", { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ state: "setup_required" }), { status: 200 })
+        )
+    );
+    expect(await rootDestination()).toBe("/setup");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 503 }))
+    );
+    expect(await rootDestination()).toBe("/unavailable?status=503");
+  });
 });
