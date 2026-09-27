@@ -52,7 +52,9 @@ export default async function CreateApplicationPage() {
       {capabilityBoundary ? (
         <CapabilityUnavailablePanel copy={capabilityBoundary} />
       ) : (
-        <CreateApplicationForm />
+        <CreateApplicationForm
+          publicClients={runtimeState?.components.idp.capabilities?.public_clients !== false}
+        />
       )}
     </div>
   );

@@ -524,7 +524,10 @@ describe("/org-admin/applications/new page — server-rendered shell", () => {
     expect(SRC).toMatch(
       /import\s*\{\s*CreateApplicationForm\s*\}\s*from\s+["']\.\/create-application-form["']/
     );
-    expect(SRC).toMatch(/<CreateApplicationForm\s*\/>/);
+    // CE-UI-3b: the form is told whether the IdP registers public clients.
+    expect(SRC).toMatch(
+      /<CreateApplicationForm\s+publicClients=\{runtimeState\?\.components\.idp\.capabilities\?\.public_clients !== false\}\s*\/>/
+    );
   });
 
   it("uses oauth_clients capability facts for backend-not-exposed copy while preserving unknown fallback", () => {
@@ -533,7 +536,7 @@ describe("/org-admin/applications/new page — server-rendered shell", () => {
     expect(SRC).toContain('surface: "oauth_clients"');
     expect(SRC).toContain("capabilityBoundary ? (");
     expect(SRC).toContain("<CapabilityUnavailablePanel copy={capabilityBoundary} />");
-    expect(SRC).toContain("<CreateApplicationForm />");
+    expect(SRC).toMatch(/<CreateApplicationForm\s+publicClients=/);
   });
 
   it("page heading + subtitle mention the single-shot secret contract", () => {

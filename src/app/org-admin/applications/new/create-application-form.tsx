@@ -31,7 +31,12 @@ import { type CreateApplicationState, createApplicationAction } from "../actions
 
 const initialState: CreateApplicationState = { phase: "idle" };
 
-export function CreateApplicationForm() {
+/**
+ * `publicClients` is false where the IdP registers no public clients
+ * (CE-UI-3b: identuum-idp-ce declares capabilities.public_clients false);
+ * the "Public client" option is then not offered.
+ */
+export function CreateApplicationForm({ publicClients = true }: { publicClients?: boolean }) {
   const [state, action, pending] = useActionState(createApplicationAction, initialState);
 
   return (
@@ -39,7 +44,7 @@ export function CreateApplicationForm() {
       {state.phase === "success" ? (
         <SuccessPanel created={state.created} />
       ) : (
-        <Form state={state} action={action} pending={pending} />
+        <Form state={state} action={action} pending={pending} publicClients={publicClients} />
       )}
     </div>
   );
@@ -49,10 +54,12 @@ function Form({
   state,
   action,
   pending,
+  publicClients,
 }: {
   state: CreateApplicationState;
   action: (payload: FormData) => void;
   pending: boolean;
+  publicClients: boolean;
 }) {
   const errorMessage = state.phase === "error" ? state.error : null;
   const fieldErrors = state.phase === "error" ? (state.fieldErrors ?? {}) : {};
@@ -168,22 +175,24 @@ function Form({
         />
       </div>
 
-      <div className="flex items-start gap-2">
-        <input
-          id="app-public"
-          name="is_public"
-          type="checkbox"
-          disabled={pending}
-          className="mt-0.5 rounded border-stone-300 text-sky-600 focus:ring-sky-500 disabled:opacity-50"
-        />
-        <label htmlFor="app-public" className="text-sm text-sky-950 leading-tight">
-          Public client
-          <span className="block text-xs text-stone-500 mt-0.5">
-            For single-page or mobile apps that cannot store a secret. Confidential (server-side)
-            clients get a one-time client secret on the next screen.
-          </span>
-        </label>
-      </div>
+      {publicClients ? (
+        <div className="flex items-start gap-2">
+          <input
+            id="app-public"
+            name="is_public"
+            type="checkbox"
+            disabled={pending}
+            className="mt-0.5 rounded border-stone-300 text-sky-600 focus:ring-sky-500 disabled:opacity-50"
+          />
+          <label htmlFor="app-public" className="text-sm text-sky-950 leading-tight">
+            Public client
+            <span className="block text-xs text-stone-500 mt-0.5">
+              For single-page or mobile apps that cannot store a secret. Confidential (server-side)
+              clients get a one-time client secret on the next screen.
+            </span>
+          </label>
+        </div>
+      ) : null}
 
       <div className="flex items-center gap-3 pt-2">
         <Button type="submit" loading={pending} size="md">
