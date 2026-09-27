@@ -178,6 +178,24 @@ describe("the org_admin's reset link on the user detail page", () => {
 });
 
 describe("the /reset-link redeem page", () => {
+  // SMALL-FIXES-1 item 2: where the IdP issues no admin reset links
+  // (identuum-idp-oss: admin_reset_link false) the page says so and calls
+  // nothing, like the mail pages.
+  it("says it is not available on this installation and calls nothing without admin reset links", async () => {
+    capabilities = withMail;
+    const page = (await import("../app/reset-link/page")).default;
+    const html = renderToStaticMarkup((await page(token)) as React.ReactElement);
+    expect(html).toContain("not available on this installation");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(idpFetch).not.toHaveBeenCalled();
+  });
+  it("validates the token where the IdP issues admin reset links", async () => {
+    capabilities = noMail;
+    const page = (await import("../app/reset-link/page")).default;
+    const html = renderToStaticMarkup((await page(token)) as React.ReactElement);
+    expect(html).not.toContain("not available on this installation");
+    expect(fetchSpy.mock.calls.length + idpFetch.mock.calls.length).toBeGreaterThan(0);
+  });
   it("declares Referrer-Policy no-referrer (its URL carries the token)", async () => {
     const { metadata } = await import("../app/reset-link/page");
     expect(metadata.referrer).toBe("no-referrer");

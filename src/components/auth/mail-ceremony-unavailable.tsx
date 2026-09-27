@@ -3,7 +3,13 @@
  * verification, activation) renders where the IdP sends no mail
  * (capabilities.mail_ceremonies === false). It calls nothing.
  */
-export function MailCeremonyUnavailable({ title }: { title: string }) {
+export function MailCeremonyUnavailable({
+  title,
+  reason = "it sends no email",
+}: {
+  title: string;
+  reason?: string;
+}) {
   return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
@@ -19,7 +25,7 @@ export function MailCeremonyUnavailable({ title }: { title: string }) {
           </div>
           <div className="px-6 py-5 space-y-3">
             <p className="text-sm text-stone-600 leading-relaxed">
-              This is not available on this installation: it sends no email.
+              This is not available on this installation: {reason}.
             </p>
             <p className="text-sm text-stone-600 leading-relaxed">
               Ask your administrator to reset your password.

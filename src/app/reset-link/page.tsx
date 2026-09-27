@@ -8,6 +8,8 @@
  * token, so Referrer-Policy is no-referrer (here, and from CE's server).
  */
 import type { Metadata } from "next";
+import { MailCeremonyUnavailable } from "@/components/auth/mail-ceremony-unavailable";
+import { adminResetLinkAvailable } from "@/lib/mail-capabilities";
 import { validateResetLinkToken } from "./actions";
 import { ResetLinkFormClient, ResetLinkInvalid } from "./form-client";
 
@@ -19,6 +21,11 @@ export default async function ResetLinkPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // SMALL-FIXES-1: where the IdP issues no admin reset links
+  // (capabilities.admin_reset_link not true) nothing is called.
+  if (!(await adminResetLinkAvailable())) {
+    return <MailCeremonyUnavailable title="Reset password" reason="it issues no reset links" />;
+  }
   const params = await searchParams;
   const rawParam = params.token;
   const rawToken = typeof rawParam === "string" ? rawParam.trim() : "";
