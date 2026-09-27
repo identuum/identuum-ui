@@ -6,6 +6,50 @@ first published image. Format roughly follows
 [Semantic Versioning](https://semver.org/). The published artifact is the
 container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
+## `v0.3.2`
+
+The static export that identuum-idp-oss `v0.6.2` embeds. Delta
+`v0.3.1..HEAD`: 11 commits (measured at `6362206`) and this release
+commit. As for `v0.3.1`, the published artifact is the export
+(`publish-ui-export.yml` on the tag); no container image is published.
+
+### Added
+
+- **The mail ceremonies follow the IdP** (`ca63f2f`). They are driven by
+  `GET /api/v1/component` `capabilities.mail_ceremonies`, which is false
+  on identuum-idp-ce and on identuum-idp-oss without SMTP. When it is false:
+  - the sign-in form offers no "Forgot password?" and says "Ask your
+    administrator to reset your password.";
+  - `/forgot-password`, `/reset-password`, `/verify-email` and `/activate`
+    say "not available on this installation" and call nothing.
+
+  A binary that does not report the key keeps the pages, as before.
+- **The org_admin's one-time password reset link** (`ca63f2f`), shown where
+  `capabilities.admin_reset_link` is true (identuum-idp-ce):
+  - "Create password reset link" on the user detail page; the link is
+    shown once, with a copy button, and never stored;
+  - `/reset-link` redeems it, with `Referrer-Policy: no-referrer`.
+
+### Changed
+
+- **Approve follows `capabilities.user_approval`** (`dd609fb`): only an
+  explicit false (identuum-idp-ce, which has no pending registrations)
+  hides Approve on the org-admin user detail page.
+
+### Fixed
+
+- **forgot-password reports "sent" only on a 2xx** (`ca63f2f`): a 404, 429
+  or 5xx is a retry message, never "sent".
+
+### Verification machinery (repository-visible, not in the export)
+
+- `make e2e-quick` (`b5998e8`): the e2e-full harness in its quick mode,
+  which is fresh appliance, provisioner, verify-record refusals and one
+  dev-loop phase over the eight quick specs.
+- e2e-full's appliance gets a local mail sink (`bdc0195`,
+  `e2e-full/compose.mail-sink.yml`: mailpit by digest, no host port), so the
+  token-page and verify-email specs exercise the real forms.
+
 ## `v0.3.1`
 
 Fixes to the static export that identuum-idp-oss `v0.6.1` embeds. Delta
