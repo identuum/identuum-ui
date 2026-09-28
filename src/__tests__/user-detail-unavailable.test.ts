@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/runtime-config", () => ({
-  loadRuntimeConfig: () => ({ idp: { enabled: true } }),
+  loadRuntimeConfig: () => ({ idp: { enabled: true }, ag: { enabled: false } }),
   idpBaseUrl: () => "http://fixture.invalid",
 }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ getAll: () => [] }) }));
