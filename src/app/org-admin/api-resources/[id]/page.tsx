@@ -77,13 +77,19 @@ export default async function OrgAdminAPIResourceDetailPage({
   // or feature-gate failure on the audit fetch is caught into a null
   // sentinel so the detail page still renders — the card surfaces the
   // error-state copy instead of failing the whole page.
+  // CE-UI-4: an IdP that keeps no audit log per organization
+  // (identuum-idp-ce declares org_audit false) is not asked, and the card
+  // is not shown.
+  const orgAudit = runtimeState?.components.idp.capabilities?.org_audit !== false;
   const [result, recentAuditResult] = await Promise.all([
     getApiResource(id),
-    listAuditEvents({
-      subjectId: id,
-      subjectType: "api_resource",
-      pageSize: 5,
-    }).catch((): ListAuditEventsResult | null => null),
+    orgAudit
+      ? listAuditEvents({
+          subjectId: id,
+          subjectType: "api_resource",
+          pageSize: 5,
+        }).catch((): ListAuditEventsResult | null => null)
+      : null,
   ]);
   if (!result.ok) {
     if (result.featureUnavailable)
@@ -204,7 +210,7 @@ export default async function OrgAdminAPIResourceDetailPage({
 
       <SecuritySection resourceId={r.id} resourceName={r.name} resourceAudience={r.audience} />
 
-      <APIResourceRecentActivity resourceID={r.id} result={recentAuditResult} />
+      {orgAudit && <APIResourceRecentActivity resourceID={r.id} result={recentAuditResult} />}
 
       <DangerZone resourceId={r.id} resourceName={r.name} resourceAudience={r.audience} />
     </Shell>

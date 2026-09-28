@@ -17,6 +17,8 @@ interface NavLink {
   capability?: keyof ComponentCapabilities;
   boundary?: "enterprise_ce";
   primaryNavUnavailableBehavior?: PrimaryNavUnavailableBehavior;
+  /** Hidden when the IdP reports this capability false; absent keeps it. */
+  hiddenWhenFalse?: keyof ComponentCapabilities;
 }
 
 export const ORG_ADMIN_NAV_LINKS: NavLink[] = [
@@ -28,6 +30,8 @@ export const ORG_ADMIN_NAV_LINKS: NavLink[] = [
     match: "prefix",
     capability: "audit_log",
     boundary: "enterprise_ce",
+    // CE-UI-4: identuum-idp-ce keeps no audit log per organization.
+    hiddenWhenFalse: "org_audit",
   },
   { label: "Settings", href: "/org-admin/settings", match: "prefix" },
   {
@@ -72,6 +76,7 @@ export function OrgAdminNav({ capabilities }: { capabilities?: ComponentCapabili
             })
           : null;
         if (navDecision && !navDecision.visible) return null;
+        if (item.hiddenWhenFalse && capabilities?.[item.hiddenWhenFalse] === false) return null;
         const active =
           item.match === "exact" ? pathname === item.href : pathname.startsWith(item.href);
         const affordance = item.capability

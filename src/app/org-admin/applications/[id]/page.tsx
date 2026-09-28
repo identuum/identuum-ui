@@ -101,13 +101,19 @@ export default async function OrgAdminApplicationDetailPage({
   // contract). A network or feature-gate failure on the audit fetch
   // is caught into a null sentinel so the detail page still renders
   // — the card simply surfaces the error-state copy.
+  // CE-UI-4: an IdP that keeps no audit log per organization
+  // (identuum-idp-ce declares org_audit false) is not asked, and the card
+  // is not shown.
+  const orgAudit = runtimeState?.components.idp.capabilities?.org_audit !== false;
   const [result, recentAuditResult] = await Promise.all([
     getOrganizationClientById(id),
-    listAuditEvents({
-      subjectId: id,
-      subjectType: "oauth_client",
-      pageSize: 5,
-    }).catch((): ListAuditEventsResult | null => null),
+    orgAudit
+      ? listAuditEvents({
+          subjectId: id,
+          subjectType: "oauth_client",
+          pageSize: 5,
+        }).catch((): ListAuditEventsResult | null => null)
+      : null,
   ]);
 
   if (!result.ok) {
@@ -140,7 +146,9 @@ export default async function OrgAdminApplicationDetailPage({
     <ShellWithBack>
       <DetailHeader client={result.data} />
       <DetailCard client={result.data} />
-      <ApplicationRecentActivity applicationID={result.data.id} result={recentAuditResult} />
+      {orgAudit && (
+        <ApplicationRecentActivity applicationID={result.data.id} result={recentAuditResult} />
+      )}
       <SecuritySection
         clientId={result.data.id}
         clientName={result.data.name}

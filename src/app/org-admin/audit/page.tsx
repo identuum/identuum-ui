@@ -24,6 +24,7 @@ import type { AuditEventItem } from "@/lib/idp-admin-client";
  *   - All filter params are validated server-side before forwarding to backend.
  */
 import { listAuditEvents, listAuditEventTypes } from "@/lib/idp-admin-client";
+import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { auditDateRange } from "@/lib/utc-wire";
 
 export const metadata: Metadata = { title: "Audit Log — Identuum" };
@@ -107,6 +108,20 @@ export default async function OrgAdminAuditPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // CE-UI-4: an IdP that keeps no audit log per organization
+  // (identuum-idp-ce declares org_audit false and answers 403) is not asked.
+  const runtimeState = await getServerRuntimeState();
+  if (runtimeState?.components.idp.capabilities?.org_audit === false) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-sky-950">Audit log</h1>
+        </div>
+        <OrgAuditNotKeptPanel />
+      </div>
+    );
+  }
+
   const params = await searchParams;
   const page = parsePage(params.page);
   const { filters, startDateISO, endDateISO, subjectId } = parseAuditFilters(params);
@@ -344,6 +359,15 @@ function FeatureUnavailablePanel() {
     <FeatureBoundaryPanel
       title="Audit log requires Enterprise/CE"
       body="Organization audit events are a commercial IDP capability. In IDP OSS, direct access shows this boundary instead of treating the page as a supported Starter feature."
+    />
+  );
+}
+
+function OrgAuditNotKeptPanel() {
+  return (
+    <FeatureBoundaryPanel
+      title="The organization audit log is not available"
+      body="This identity provider does not keep an audit log per organization. The site administrator's audit log is unaffected."
     />
   );
 }

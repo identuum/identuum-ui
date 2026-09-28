@@ -771,6 +771,10 @@ export interface ComponentCapabilities {
   /** CE-UI-3b: the IdP registers public clients (false on identuum-idp-ce).
    *  Absent is treated as available. */
   public_clients?: boolean;
+  /** CE-UI-4: the IdP keeps an audit log per organization for its
+   *  org_admin (false on identuum-idp-ce, whose audit rows carry no
+   *  organization). Absent is treated as available. */
+  org_audit?: boolean;
 }
 
 /**

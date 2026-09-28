@@ -29,6 +29,7 @@ import {
   UserDetailUnavailable,
 } from "@/lib/idp-admin-client";
 import { adminResetLinkAvailable, userApprovalAvailable } from "@/lib/mail-capabilities";
+import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { ResetMFAButton, UserRowActions } from "../user-row-actions";
 import { ApproveButton } from "./approve-button";
 import { ResetLinkButton } from "./reset-link-button";
@@ -64,6 +65,11 @@ export default async function OrgAdminUserDetailPage({
   // and the per-subject audit feed. listOrgRoles is only useful for the
   // dropdown — if there is no org id available we surface that as the
   // available-roles-load error inside the roles card.
+  const runtimeState = await getServerRuntimeState();
+  // CE-UI-4: an IdP that keeps no audit log per organization
+  // (identuum-idp-ce declares org_audit false) is not asked, and the card
+  // is not shown.
+  const orgAudit = runtimeState?.components.idp.capabilities?.org_audit !== false;
   const [user, org, allUsers, assignedRolesResult, recentAuditResult] = await Promise.all([
     getOrgUserById(id).catch((error: unknown) => {
       if (error instanceof UserDetailUnavailable) return error;
@@ -72,7 +78,7 @@ export default async function OrgAdminUserDetailPage({
     getOwnOrganization(),
     listOrgUsers(),
     listUserRoles(id).catch(() => null),
-    listAuditEvents({ subjectId: id, pageSize: 8 }).catch(() => null),
+    orgAudit ? listAuditEvents({ subjectId: id, pageSize: 8 }).catch(() => null) : null,
   ]);
 
   if (user instanceof UserDetailUnavailable)

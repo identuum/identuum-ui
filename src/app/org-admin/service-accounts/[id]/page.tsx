@@ -106,14 +106,20 @@ export default async function OrgAdminServiceAccountDetailPage({
   // the whole page. Tenant scoping continues to flow through
   // actor_organization_id on every audit row independently of
   // subject_id, so an org_admin can never see another org's events.
+  // CE-UI-4: an IdP that keeps no audit log per organization
+  // (identuum-idp-ce declares org_audit false) is not asked, and the card
+  // is not shown.
+  const orgAudit = runtimeState?.components.idp.capabilities?.org_audit !== false;
   const [result, oauthClientsResult, recentAuditResult, linkedClientsResult] = await Promise.all([
     listServiceAccounts(org.id),
     listOwnOrganizationClients().catch(() => null),
-    listAuditEvents({
-      subjectId: id,
-      subjectType: "service_account",
-      pageSize: 5,
-    }).catch((): ListAuditEventsResult | null => null),
+    orgAudit
+      ? listAuditEvents({
+          subjectId: id,
+          subjectType: "service_account",
+          pageSize: 5,
+        }).catch((): ListAuditEventsResult | null => null)
+      : null,
     // Persistent linked-OAuth-clients read (slice
     // identuum-20260530-service-account-linked-clients-read-model-ui).
     // Closes the prior-slice gap: on hard reload the card can now
@@ -237,7 +243,9 @@ export default async function OrgAdminServiceAccountDetailPage({
         linkedClientsLoadError={!linkedClientsResult || !linkedClientsResult.ok}
       />
 
-      <ServiceAccountRecentActivity serviceAccountID={sa.id} result={recentAuditResult} />
+      {orgAudit && (
+        <ServiceAccountRecentActivity serviceAccountID={sa.id} result={recentAuditResult} />
+      )}
 
       <DangerZone serviceAccountId={sa.id} serviceAccountName={sa.name} />
     </Shell>
