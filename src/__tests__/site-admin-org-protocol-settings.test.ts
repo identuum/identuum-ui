@@ -592,14 +592,11 @@ describe("protocol-settings-actions.ts — source invariants", () => {
     }
   });
 
-  it("allows both site_admin and org_admin roles", () => {
-    expect(actions).toContain("site_admin");
-    expect(actions).toContain("org_admin");
-  });
-
-  it("validates org_id as UUID with Zod for site_admin path", () => {
-    expect(actions).toContain("z.string().uuid");
-    expect(actions).toContain("org_id");
+  it("saves for the org_admin only: no site_admin save path (CE-UI-4, both editions refuse it)", () => {
+    expect(actions).toContain('role === "org_admin"');
+    expect(actions).not.toContain('role === "site_admin"');
+    expect(actions).not.toContain("siteAdminSchema");
+    expect(actions).not.toContain('formData.get("org_id")');
   });
 
   it("org_admin path uses getOwnOrganization to derive org_id (not form data)", () => {
@@ -619,10 +616,6 @@ describe("protocol-settings-actions.ts — source invariants", () => {
 
   it("org_admin path revalidates org-admin settings path", () => {
     expect(actions).toContain('"/org-admin/settings"');
-  });
-
-  it("site_admin path revalidates site-admin org detail path", () => {
-    expect(actions).toContain("/site-admin/organizations/");
   });
 
   it("wrong-role callers are redirected (no silent authorization)", () => {
