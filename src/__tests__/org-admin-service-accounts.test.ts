@@ -917,10 +917,17 @@ describe("idp-admin-client.ts — unlinkServiceAccountFromOAuthClient wire helpe
       /export\s+async\s+function\s+unlinkServiceAccountFromOAuthClient[\s\S]*?\n\}\n/
     );
     const body = fn?.[0] ?? "";
+    // SMALL-FIXES-2: the PUT answers safeClient — the unlinked client is its
+    // id / client_id; previously_linked_* and service_account_id are not on
+    // the wire (the account is the one the call unlinked).
     expect(body).toMatch(/d\?\.organization_id/);
-    expect(body).toMatch(/d\?\.service_account_id/);
-    expect(body).toMatch(/d\?\.previously_linked_oauth_client_uuid/);
-    expect(body).toMatch(/d\?\.previously_linked_oauth_client_identifier/);
+    expect(body).toMatch(/previously_linked_oauth_client_uuid:\s*typeof d\?\.id === "string"/);
+    expect(body).toMatch(
+      /previously_linked_oauth_client_identifier:\s*\n?\s*typeof d\?\.client_id === "string"/
+    );
+    expect(body).toMatch(/service_account_id:\s*serviceAccountID/);
+    expect(body).not.toContain("d?.previously_linked_oauth_client_uuid");
+    expect(body).not.toContain("d?.service_account_id");
     for (const forbidden of [
       "d?.client_secret",
       "d?.client_secret_hash",
@@ -1173,7 +1180,7 @@ describe("idp-admin-client.ts — listServiceAccountOAuthClients wire helper", (
     expect(body).not.toMatch(/body:\s*JSON\.stringify/);
     expect(body).not.toMatch(/"Content-Type":\s*"application\/json"/);
   });
-  it("projects EXACTLY the 7 documented safe fields per row", () => {
+  it("projects EXACTLY the 6 safeClient fields per row (no active: no IdP sends one)", () => {
     const fn = CLIENT_SRC.match(
       /export\s+async\s+function\s+listServiceAccountOAuthClients[\s\S]*?\n\}\n/
     );
@@ -1182,7 +1189,7 @@ describe("idp-admin-client.ts — listServiceAccountOAuthClients wire helper", (
     expect(body).toMatch(/r\?\.client_id/);
     expect(body).toMatch(/r\?\.name/);
     expect(body).toMatch(/r\?\.is_public/);
-    expect(body).toMatch(/r\?\.active/);
+    expect(body).not.toMatch(/r\?\.active/);
     expect(body).toMatch(/r\?\.created_at/);
     expect(body).toMatch(/r\?\.updated_at/);
     for (const forbidden of [
@@ -1252,7 +1259,7 @@ describe("idp-admin-client.ts — listServiceAccountOAuthClients wire helper", (
 });
 
 describe("LinkedOAuthClientForServiceAccount — type-shape allowlist", () => {
-  it("declares exactly the 7 safe fields documented in the backend DTO", () => {
+  it("declares exactly the 6 safeClient fields (no active: no IdP sends one)", () => {
     const block = CLIENT_SRC.match(
       /export\s+interface\s+LinkedOAuthClientForServiceAccount[\s\S]*?\n\}/
     );
@@ -1262,7 +1269,7 @@ describe("LinkedOAuthClientForServiceAccount — type-shape allowlist", () => {
     expect(body).toMatch(/\bclient_id:\s*string\b/);
     expect(body).toMatch(/\bname:\s*string\b/);
     expect(body).toMatch(/\bis_public:\s*boolean\b/);
-    expect(body).toMatch(/\bactive:\s*boolean\b/);
+    expect(body).not.toMatch(/\bactive:\s*boolean\b/);
     expect(body).toMatch(/\bcreated_at:\s*string\b/);
     expect(body).toMatch(/\bupdated_at:\s*string\b/);
     for (const forbidden of [
@@ -1401,21 +1408,12 @@ describe("idp-admin-client.ts — disableServiceAccount / enableServiceAccount w
     expect(body).not.toMatch(/body:\s*JSON\.stringify/);
     expect(body).not.toMatch(/"Content-Type":\s*"application\/json"/);
   });
-  it("projects EXACTLY the 8 documented safe fields", () => {
+  it("reads no body: identuum-idp-oss answers 204 (SMALL-FIXES-2); the result is what the call set", () => {
     const fn = CLIENT_SRC.match(/async\s+function\s+callServiceAccountLifecycle[\s\S]*?\n\}\n/);
     const body = fn?.[0] ?? "";
-    for (const safe of [
-      "d?.success",
-      "d?.message",
-      "d?.organization_id",
-      "d?.service_account_id",
-      "d?.service_account_name",
-      "d?.role",
-      "d?.previous_active",
-      "d?.active",
-    ]) {
-      expect(body).toContain(safe);
-    }
+    expect(body).not.toMatch(/res\.json\(/);
+    expect(body).toMatch(/const active = segment === "enable"/);
+    expect(body).toMatch(/service_account_id:\s*serviceAccountID/);
     for (const forbidden of [
       "d?.client_secret",
       "d?.client_secret_hash",

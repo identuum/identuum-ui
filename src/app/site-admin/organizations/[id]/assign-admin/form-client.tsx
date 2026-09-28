@@ -63,14 +63,14 @@ export function AssignAdminForm({ orgId, orgName }: AssignAdminFormProps) {
   );
 }
 
-function SuccessPanel({
+export function SuccessPanel({
   success,
   orgName,
 }: {
   success: NonNullable<AssignAdminActionState["success"]>;
   orgName: string;
 }) {
-  const { adminEmail, activationToken, expiresAt } = success;
+  const { adminEmail, adminEmailUnavailable, activationToken, expiresAt } = success;
 
   const expiryDisplay = <LocalTime value={expiresAt} fallback="24 hours from now" />;
 
@@ -79,12 +79,21 @@ function SuccessPanel({
       {/* Primary confirmation */}
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4">
         <p className="text-sm font-semibold text-emerald-700">Activation token re-issued</p>
-        <p className="text-xs text-stone-500 mt-1">
-          A fresh one-time activation token was issued for{" "}
-          <span className="font-mono font-medium text-sky-950">{adminEmail}</span>, the pending
-          administrator of <span className="font-medium text-sky-950">{orgName}</span>. Any earlier
-          token no longer works. If SMTP is configured, the activation email was re-sent.
-        </p>
+        {adminEmail ? (
+          <p className="text-xs text-stone-500 mt-1">
+            A fresh one-time activation token was issued for{" "}
+            <span className="font-mono font-medium text-sky-950">{adminEmail}</span>, the pending
+            administrator of <span className="font-medium text-sky-950">{orgName}</span>. Any
+            earlier token no longer works. If SMTP is configured, the activation email was re-sent.
+          </p>
+        ) : (
+          <p className="text-xs text-stone-500 mt-1">
+            A fresh one-time activation token was issued for{" "}
+            <span className="font-medium text-sky-950">{orgName}</span>. Any earlier token no longer
+            works. No administrator email:{" "}
+            {adminEmailUnavailable ?? "the identity provider named none."}
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -96,9 +105,16 @@ function SuccessPanel({
           {activationToken}
         </pre>
         <p className="text-xs text-amber-600 leading-relaxed">
-          ⚠ Copy this token now. It will not be shown again after you leave this page. Deliver it to{" "}
-          <span className="font-mono">{adminEmail}</span> through a secure channel. It expires{" "}
-          {expiryDisplay}.
+          ⚠ Copy this token now. It will not be shown again after you leave this page. Deliver it
+          {adminEmail ? (
+            <>
+              {" "}
+              to <span className="font-mono">{adminEmail}</span>
+            </>
+          ) : (
+            " to the intended administrator"
+          )}{" "}
+          through a secure channel. It expires {expiryDisplay}.
         </p>
       </div>
 

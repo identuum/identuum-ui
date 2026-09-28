@@ -547,6 +547,11 @@ export type AssignOrgAdminResult =
       activationToken: string;
       /** The pending org_admin the token re-activates (backend-resolved). */
       adminEmail: string;
+      /**
+       * Why no admin email exists, when the IdP names it instead of one
+       * (identuum-idp-ce: the re-issued claim is bound to no email).
+       */
+      adminEmailUnavailable?: string;
       /** ISO timestamp when the token expires. */
       expiresAt: string;
     }
@@ -605,6 +610,9 @@ export async function assignOrgAdmin(opts: AssignOrgAdminOptions): Promise<Assig
       ok: true,
       activationToken: String(data.activation_token ?? ""),
       adminEmail: String(data.admin_email ?? ""),
+      ...(typeof data.admin_email_unavailable === "string" && data.admin_email_unavailable !== ""
+        ? { adminEmailUnavailable: data.admin_email_unavailable }
+        : {}),
       expiresAt: String(data.expires_at ?? ""),
     };
   } catch {
@@ -2589,19 +2597,20 @@ export async function rotateOrganizationClientSecret(
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
     const d: any = await res.json();
+    // Both IdPs answer {"client": safeClient, "client_secret"}
+    // (identuum-idp-oss HandleRegenerateClientSecret; identuum-idp-ce the
+    // same since CE-UI-3b): the identifiers are nested (SMALL-FIXES-2).
+    // biome-ignore lint/suspicious/noExplicitAny: raw nested client before projection
+    const c: any = isRecord(d?.client) ? d.client : {};
 
     // Explicit projection — surface ONLY the four documented fields.
     // Any other key the IDP might return is dropped on the floor.
-    // The IDP's RotateClientSecretResponse struct (slice
-    // identuum-20260530-client-secret-rotation-backend-route) carries
-    // ONLY these four fields by construction; the projection here is
-    // defence-in-depth against a future regression.
     return {
       ok: true,
       data: {
-        id: String(d.id ?? ""),
-        client_id: String(d.client_id ?? ""),
-        name: String(d.name ?? ""),
+        id: String(c.id ?? ""),
+        client_id: String(c.client_id ?? ""),
+        name: String(c.name ?? ""),
         client_secret: typeof d.client_secret === "string" ? d.client_secret : "",
       },
     };
@@ -4582,10 +4591,9 @@ export async function unlinkServiceAccountFromOAuthClient(
     // Released OSS unlinks via the client-update surface: PUT /api/v1/clients/:id
     // with the EXPLICIT nil UUID — ClientService.UpdateClient treats a non-nil
     // pointer to uuid.Nil as "remove the binding" (patch semantics leave every
-    // other field unchanged). serviceAccountID/orgID stay on the signature for
-    // caller intent; scope is enforced server-side from the actor + client row.
+    // other field unchanged). orgID stays on the signature for caller intent;
+    // scope is enforced server-side from the actor + client row.
     void orgID;
-    void serviceAccountID;
     const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/clients/${encodeURIComponent(oauthClientID)}`,
       {
@@ -4648,22 +4656,19 @@ export async function unlinkServiceAccountFromOAuthClient(
       };
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const d: any = await res.json().catch(() => ({}));
-    // Explicit projection of the four operational identifiers documented
-    // on the backend UnlinkServiceAccountResponse. Any other key a
-    // future backend regression returned would be dropped on the floor.
+    // The PUT answers the updated safeClient (identuum-idp-oss
+    // internal/handlers/clients.go HandleUpdateClient → toSafeClient): the
+    // unlinked client is its id / client_id, the organization its
+    // organization_id, and the account is the one this call unlinked — the
+    // response no longer names it (SMALL-FIXES-2).
     return {
       ok: true,
       data: {
         organization_id: typeof d?.organization_id === "string" ? d.organization_id : "",
-        service_account_id: typeof d?.service_account_id === "string" ? d.service_account_id : "",
-        previously_linked_oauth_client_uuid:
-          typeof d?.previously_linked_oauth_client_uuid === "string"
-            ? d.previously_linked_oauth_client_uuid
-            : "",
+        service_account_id: serviceAccountID,
+        previously_linked_oauth_client_uuid: typeof d?.id === "string" ? d.id : "",
         previously_linked_oauth_client_identifier:
-          typeof d?.previously_linked_oauth_client_identifier === "string"
-            ? d.previously_linked_oauth_client_identifier
-            : "",
+          typeof d?.client_id === "string" ? d.client_id : "",
       },
     };
   } catch {
@@ -4722,7 +4727,6 @@ export interface LinkedOAuthClientForServiceAccount {
   client_id: string;
   name: string;
   is_public: boolean;
-  active: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -4809,8 +4813,8 @@ export async function listServiceAccountOAuthClients(
       (r: any) =>
         typeof r?.service_account_id === "string" && r.service_account_id === serviceAccountID
     );
-    // Explicit 7-field allowlist projection. Any extra key a future
-    // backend regression returned would be dropped on the floor.
+    // Explicit 6-field allowlist projection of the safeClient row. No IdP
+    // sends an active flag on a client (SMALL-FIXES-2), so none is read.
     const projected: LinkedOAuthClientForServiceAccount[] = rawList.map(
       // biome-ignore lint/suspicious/noExplicitAny: raw row before projection
       (r: any) => ({
@@ -4818,7 +4822,6 @@ export async function listServiceAccountOAuthClients(
         client_id: typeof r?.client_id === "string" ? r.client_id : "",
         name: typeof r?.name === "string" ? r.name : "",
         is_public: typeof r?.is_public === "boolean" ? r.is_public : false,
-        active: typeof r?.active === "boolean" ? r.active : false,
         created_at: typeof r?.created_at === "string" ? r.created_at : "",
         updated_at: typeof r?.updated_at === "string" ? r.updated_at : "",
       })
@@ -4903,7 +4906,6 @@ async function callServiceAccountLifecycle(
     };
   }
   try {
-    void orgID;
     const res = await idpFetch(
       `${idpBaseUrl(cfg)}/api/v1/service-accounts/${encodeURIComponent(serviceAccountID)}/${segment}`,
       {
@@ -4957,22 +4959,24 @@ async function callServiceAccountLifecycle(
             ? "Could not disable the service account. Please try again."
             : "Could not enable the service account. Please try again.",
       };
-    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
-    const d: any = await res.json().catch(() => ({}));
-    // Explicit 8-field allowlist projection. Any extra key a future
-    // backend regression returned would be dropped on the floor.
+    // identuum-idp-oss answers 204 with no body
+    // (internal/handlers/service_accounts.go HandleSetActiveServiceAccount;
+    // identuum-idp-ce serves no service accounts). The result is what the
+    // call set: the account asked about, active after enable, inactive after
+    // disable. The IdP reports no name, role or prior state; the page names
+    // the account from its own record (SMALL-FIXES-2).
+    const active = segment === "enable";
     return {
       ok: true,
       data: {
-        success: typeof d?.success === "boolean" ? d.success : true,
-        message: typeof d?.message === "string" ? d.message : "",
-        organization_id: typeof d?.organization_id === "string" ? d.organization_id : "",
-        service_account_id: typeof d?.service_account_id === "string" ? d.service_account_id : "",
-        service_account_name:
-          typeof d?.service_account_name === "string" ? d.service_account_name : "",
-        role: typeof d?.role === "string" ? d.role : "",
-        previous_active: typeof d?.previous_active === "boolean" ? d.previous_active : false,
-        active: typeof d?.active === "boolean" ? d.active : false,
+        success: true,
+        message: "",
+        organization_id: orgID,
+        service_account_id: serviceAccountID,
+        service_account_name: "",
+        role: "",
+        previous_active: !active,
+        active,
       },
     };
   } catch {

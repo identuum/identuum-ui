@@ -1645,18 +1645,27 @@ describe("idp-admin-client.rotateOrganizationClientSecret — wire contract", ()
     const successMatch = body.match(/ok:\s*true,[\s\S]*?data:\s*\{[\s\S]*?\}\s*,/);
     expect(successMatch).not.toBeNull();
     const successBlock = successMatch?.[0] ?? "";
-    expect(successBlock).toMatch(/\bid:\s*String\(d\.id/);
-    expect(successBlock).toMatch(/\bclient_id:\s*String\(d\.client_id/);
-    expect(successBlock).toMatch(/\bname:\s*String\(d\.name/);
+    // SMALL-FIXES-2: both IdPs nest the identifiers under `client`
+    // ({client: safeClient, client_secret}); the secret is top-level.
+    expect(body).toMatch(/isRecord\(d\?\.client\)\s*\?\s*d\.client/);
+    expect(successBlock).toMatch(/\bid:\s*String\(c\.id/);
+    expect(successBlock).toMatch(/\bclient_id:\s*String\(c\.client_id/);
+    expect(successBlock).toMatch(/\bname:\s*String\(c\.name/);
     expect(successBlock).toMatch(/\bclient_secret:\s*typeof\s+d\.client_secret\s*===\s*"string"/);
     // Forbidden field names — none may appear in the projection.
-    expect(successBlock).not.toMatch(/d\.client_secret_hash/);
-    expect(successBlock).not.toMatch(/d\.secret_hash/);
-    expect(successBlock).not.toMatch(/d\.private_key/);
-    expect(successBlock).not.toMatch(/d\.access_token/);
-    expect(successBlock).not.toMatch(/d\.refresh_token/);
-    expect(successBlock).not.toMatch(/d\.jwks/);
-    expect(successBlock).not.toMatch(/d\.organization_id/);
+    for (const v of ["c", "d"]) {
+      for (const f of [
+        "client_secret_hash",
+        "secret_hash",
+        "private_key",
+        "access_token",
+        "refresh_token",
+        "jwks",
+        "organization_id",
+      ]) {
+        expect(successBlock).not.toContain(`${v}.${f}`);
+      }
+    }
   });
 
   it("does NOT log anything via console.*", () => {

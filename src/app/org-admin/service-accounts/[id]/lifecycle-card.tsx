@@ -128,9 +128,9 @@ function DisablePanel({
         <output className="block rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 space-y-1">
           <p className="font-semibold">Service account disabled.</p>
           <p className="text-xs leading-relaxed">
-            <strong className="font-mono">{state.result.service_account_name}</strong> can no longer
-            mint new client_credentials tokens through any linked OAuth client. No credential was
-            issued or rotated.
+            <strong className="font-mono">{serviceAccountName}</strong> can no longer mint new
+            client_credentials tokens through any linked OAuth client. No credential was issued or
+            rotated.
           </p>
         </output>
       </div>
@@ -227,9 +227,9 @@ function EnablePanel({
         <output className="block rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 space-y-1">
           <p className="font-semibold">Service account enabled.</p>
           <p className="text-xs leading-relaxed">
-            <strong className="font-mono">{state.result.service_account_name}</strong> can again
-            mint new client_credentials tokens through its linked OAuth client (if otherwise valid).
-            No new credential was issued.
+            <strong className="font-mono">{serviceAccountName}</strong> can again mint new
+            client_credentials tokens through its linked OAuth client (if otherwise valid). No new
+            credential was issued.
           </p>
         </output>
       </div>

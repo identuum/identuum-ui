@@ -14,6 +14,8 @@ export interface AssignAdminSuccess {
   orgId: string;
   /** The pending org_admin the token re-activates (backend-resolved). */
   adminEmail: string;
+  /** Why the IdP names no admin email (identuum-idp-ce's unbound claim). */
+  adminEmailUnavailable?: string;
   /**
    * One-time activation token for the pending org_admin.
    * Kept in server-action state only — not placed in URL, localStorage, or sessionStorage.
@@ -79,6 +81,9 @@ export async function assignAdminAction(
     success: {
       orgId: parsed.data.org_id,
       adminEmail: result.adminEmail,
+      ...(result.adminEmailUnavailable
+        ? { adminEmailUnavailable: result.adminEmailUnavailable }
+        : {}),
       activationToken: result.activationToken,
       expiresAt: result.expiresAt,
     },

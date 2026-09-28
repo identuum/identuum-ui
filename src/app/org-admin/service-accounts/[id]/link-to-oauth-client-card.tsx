@@ -606,8 +606,6 @@ function PersistentLinkedClientRow({
           <dd className="font-mono text-sky-950 break-all">{client.id}</dd>
           <dt className="font-medium text-stone-500">Visibility</dt>
           <dd className="text-sky-950">{client.is_public ? "Public" : "Confidential"}</dd>
-          <dt className="font-medium text-stone-500">Status</dt>
-          <dd className="text-sky-950">{client.active ? "Active" : "Inactive"}</dd>
         </dl>
       </div>
       <div className="px-6 py-4 space-y-3">

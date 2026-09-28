@@ -20,6 +20,18 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
+/**
+ * The message a failed TOTP submit shows. A 429 is the IdP's rate limit, not
+ * a wrong code: saying "Invalid verification code" there sends the user to
+ * retype a correct code into the same limit (SMALL-FIXES-2).
+ */
+export function mfaLoginErrorMessage(err: unknown): string {
+  if (err instanceof ApiError && err.status === 429) {
+    return "Too many attempts. Wait a minute, then enter a new code.";
+  }
+  return "Invalid verification code. Try again.";
+}
+
 interface MFAFormProps {
   sessionId: string;
   onBack: () => void;
@@ -47,7 +59,7 @@ export function MFAForm({ sessionId, onBack, onSuccess }: MFAFormProps) {
         window.location.href = "/login?reason=session_expired";
         return;
       }
-      setServerError("Invalid verification code. Try again.");
+      setServerError(mfaLoginErrorMessage(err));
     }
   };
 
