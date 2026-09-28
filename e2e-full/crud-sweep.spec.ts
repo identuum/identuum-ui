@@ -284,6 +284,51 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
     expectStatus(orgAdmin, 403, "restore by org_admin (site_admin-only route) → 403");
   });
 
+  test("users invite — create without a password, validate, redeem, re-issue, cross-tenant (OSS-ONBOARD-A)", async () => {
+    // identuum-idp-oss a07328f (D-016): POST /api/v1/users with no password is
+    // an invite; the public GET/POST /api/v1/auth/invite validate and redeem.
+    // The invite answer carries the raw token AND its link, so these two
+    // bodies are asserted by status only — never through expectStatus, whose
+    // failure message would print the (unredacted) invite_url.
+    const email = `invitee@${runId}-a.test`;
+    const inv = await api(IDP_BASE, "POST", "/api/v1/users", { email, name: "Invitee" }, A.bearer);
+    expect(inv.status, "invite (no password) → 201").toBe(201);
+    const token = String((inv.json as { invite_token?: unknown }).invite_token ?? "");
+    const invitedId = String(
+      ((inv.json as { user?: { id?: unknown } }).user?.id as string | undefined) ?? ""
+    );
+    expect(token.length, "the invite token is 256-bit hex").toBe(64);
+    expect(
+      (inv.json as { user?: { invitation_pending?: unknown } }).user?.invitation_pending,
+      "the invited user is pending"
+    ).toBe(true);
+
+    const valid = await api(IDP_BASE, "GET", `/api/v1/auth/invite/${token}`);
+    expectStatus(valid, 200, "validate the invite (public)");
+    expect(valid.json.email, "validate names the invitee").toBe(email);
+
+    const reissueB = await api(IDP_BASE, "POST", `/api/v1/users/${invitedId}/invite`, undefined, B.bearer);
+    expect(reissueB.status, "re-issue by another organization's org_admin → 404").toBe(404);
+
+    const weak = await api(IDP_BASE, "POST", "/api/v1/auth/invite", { token, password: "short" });
+    expectStatus(weak, 400, "a weak password is refused and the token stays usable");
+    expect(weak.json.error).toBe("weak_password");
+    const redeem = await api(IDP_BASE, "POST", "/api/v1/auth/invite", {
+      token,
+      password: `Inv!${runId}7kqZ`,
+    });
+    expectStatus(redeem, 200, "redeem the invite (public)");
+    const reuse = await api(IDP_BASE, "POST", "/api/v1/auth/invite", {
+      token,
+      password: `Inv!${runId}7kqZ`,
+    });
+    expectStatus(reuse, 400, "a spent invite is refused");
+    expect(reuse.json.error).toBe("invalid_token");
+
+    const reissue = await api(IDP_BASE, "POST", `/api/v1/users/${invitedId}/invite`, undefined, A.bearer);
+    expect(reissue.status, "re-issue for the redeemed (active) user → 409").toBe(409);
+  });
+
   test("clients — put/regen/delete, cross-tenant scoped, B survives", async () => {
     const cl = await api(
       IDP_BASE,

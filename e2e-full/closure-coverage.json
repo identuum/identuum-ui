@@ -56,6 +56,12 @@
       "statuses": [200, 400]
     },
     {
+      "endpoint": "GET /api/v1/auth/invite/:token",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200]
+    },
+    {
       "endpoint": "GET /api/v1/auth/organizations/activate/:token",
       "kind": "class",
       "sources": ["jsonl"],
@@ -212,6 +218,12 @@
       "statuses": [204]
     },
     {
+      "endpoint": "POST /api/v1/auth/invite",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200, 400]
+    },
+    {
       "endpoint": "POST /api/v1/auth/organizations/activate",
       "kind": "class",
       "sources": ["jsonl"],
@@ -302,5 +314,5 @@
       "statuses": [200, 400]
     }
   ],
-  "closure_floor": 50
+  "closure_floor": 52
 }
