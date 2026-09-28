@@ -109,15 +109,18 @@ describe("Four new wire helpers — generic GET-only / no-body / no-secret invar
 // ── Per-helper explicit allowlist projection pins ───────────────────────────
 
 describe("listOrganizationIdentityProviders — explicit allowlist", () => {
-  it("is CROSS-TIER: tries the plural list (CE) first, then the singular OSS route, id URL-encoded", () => {
+  it("calls ONLY the singular route both editions serve (CE-UI-3c), id URL-encoded", () => {
     const body = isolateHelperBody("listOrganizationIdentityProviders");
-    // One URL-encoded org base feeds both fetches.
     expect(body).toMatch(/\/api\/v1\/organizations\/\$\{encodeURIComponent\(orgID\)\}/);
-    expect(body).toMatch(/\$\{base\}\/identity-providers/);
     expect(body).toMatch(/\$\{base\}\/identity-provider`/);
-    // OSS "none configured" (404 on the singular) normalizes to an EMPTY
-    // LIST, not an error.
+    // No edition serves the plural: calling it first cost CE a 404 (a
+    // console error) on every settings load.
+    expect(body).not.toMatch(/identity-providers/);
+    // "None configured" — a 404, or OSS's and CE's 200 with
+    // identity_provider null — normalizes to an EMPTY LIST, not an error and
+    // not a blank provider made of the envelope.
     expect(body).toMatch(/identity_providers:\s*\[\],\s*count:\s*0/);
+    expect(body).toMatch(/body\?\.identity_provider === null/);
   });
 
   it("projects ONLY id/name/slug/type/priority/active/created_at/updated_at — and DROPS the IDP's `config` block", () => {
@@ -144,9 +147,8 @@ describe("listOrganizationIdentityProviders — explicit allowlist", () => {
     expect(stripped).not.toMatch(/p\.claim_mapping\b/);
   });
 
-  it("routes real failures through the shared IDP status classifier on BOTH tiers' paths", () => {
+  it("routes real failures through the shared IDP status classifier", () => {
     const body = isolateHelperBody("listOrganizationIdentityProviders");
-    expect(body).toContain("classifyAdminReadFailure(listRes)");
     expect(body).toContain("classifyAdminReadFailure(oneRes)");
     expect(body).not.toMatch(/res\.status\s*===\s*404[\s\S]*?featureUnavailable:\s*true/);
   });

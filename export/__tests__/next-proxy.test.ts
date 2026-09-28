@@ -81,7 +81,6 @@ describe("CE-only routes on an edition that does not serve them", () => {
     "/bff/api/v1/audit/event-types",
     "/bff/api/v1/system/sessions",
     "/bff/api/v1/system/audit/chain/verify",
-    "/bff/api/v1/organizations/01990000-0000-7000-8000-00000000000a/identity-providers",
   ];
 
   it.each(CE_ONLY)("%s is answered 404 without a request on oss", async (path) => {

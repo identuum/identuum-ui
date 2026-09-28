@@ -2992,13 +2992,11 @@ export async function getSystemInfo(): Promise<GetSystemInfoResult> {
 // explicit field projection as defence-in-depth so a future mapper
 // regression cannot leak through.
 
-// ── Identity providers (cross-tier: CE plural list vs OSS singular) ──────────
+// ── Identity providers (GET /api/v1/organizations/:id/identity-provider) ─────
 //
-// CE may expose a PLURAL list endpoint returning 0..N providers; released OSS
-// exposes a SINGULAR endpoint returning ONE optional provider (404 "no OIDC
-// provider configured" when none). This helper tries the list form first, falls
-// back to the singular, and normalizes BOTH cardinalities to a list so the
-// read-only section renders identically on either tier.
+// Both editions serve the SINGULAR route: ONE optional provider (200 with
+// identity_provider null, or 404 on older binaries, when none). The helper
+// normalizes it to a list so the read-only section keeps its list shape.
 
 /**
  * Operator-safe projection of one configured organization identity
@@ -3050,32 +3048,10 @@ export async function listOrganizationIdentityProviders(
     updated_at: typeof p.updated_at === "string" ? p.updated_at : "",
   });
   try {
-    // 1) List form first (CE, 0..N providers).
-    const listRes = await idpFetch(`${base}/identity-providers`, {
-      method: "GET",
-      headers: await idpAuthHeaders(),
-      cache: "no-store",
-    });
-    if (listRes.ok) {
-      // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
-      const d: any = await listRes.json();
-      const rawList = Array.isArray(d?.identity_providers) ? d.identity_providers : [];
-      const identity_providers: OrgIdentityProviderItem[] = rawList.map(mapOne);
-      return {
-        ok: true,
-        identity_providers,
-        count: typeof d?.count === "number" ? d.count : identity_providers.length,
-      };
-    }
-    // Only a MISSING list route (404) falls through to the singular; a real
-    // failure (e.g. 403 feature-gated) is surfaced as-is.
-    if (listRes.status !== 404) {
-      const failure = await classifyAdminReadFailure(listRes);
-      return { ok: false, ...failure };
-    }
-
-    // 2) Singular fallback (OSS — one optional provider). 404 here means "none
-    //    configured", which normalizes to an EMPTY list (not an error).
+    // The singular route, which identuum-idp-oss and (since CE-UI-3c)
+    // identuum-idp-ce both serve: one optional provider. No edition serves a
+    // plural list, so none is asked for. 404 means "none configured", which
+    // normalizes to an EMPTY list (not an error).
     const oneRes = await idpFetch(`${base}/identity-provider`, {
       method: "GET",
       headers: await idpAuthHeaders(),
@@ -3090,6 +3066,12 @@ export async function listOrganizationIdentityProviders(
     }
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
     const body: any = await oneRes.json();
+    // 200 {"success":true,"identity_provider":null} is "none configured"
+    // (identuum-idp-oss since v0.6.0, and CE): an empty list, never a blank
+    // provider made of the envelope itself.
+    if (body?.identity_provider === null) {
+      return { ok: true, identity_providers: [], count: 0 };
+    }
     // Tolerate { identity_provider: {…} }, { identity_providers: [...] }, or a
     // bare provider object.
     const identity_providers: OrgIdentityProviderItem[] = Array.isArray(body?.identity_providers)
