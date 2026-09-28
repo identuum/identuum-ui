@@ -307,7 +307,13 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
     expectStatus(valid, 200, "validate the invite (public)");
     expect(valid.json.email, "validate names the invitee").toBe(email);
 
-    const reissueB = await api(IDP_BASE, "POST", `/api/v1/users/${invitedId}/invite`, undefined, B.bearer);
+    const reissueB = await api(
+      IDP_BASE,
+      "POST",
+      `/api/v1/users/${invitedId}/invite`,
+      undefined,
+      B.bearer
+    );
     expect(reissueB.status, "re-issue by another organization's org_admin → 404").toBe(404);
 
     const weak = await api(IDP_BASE, "POST", "/api/v1/auth/invite", { token, password: "short" });
@@ -325,7 +331,13 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
     expectStatus(reuse, 400, "a spent invite is refused");
     expect(reuse.json.error).toBe("invalid_token");
 
-    const reissue = await api(IDP_BASE, "POST", `/api/v1/users/${invitedId}/invite`, undefined, A.bearer);
+    const reissue = await api(
+      IDP_BASE,
+      "POST",
+      `/api/v1/users/${invitedId}/invite`,
+      undefined,
+      A.bearer
+    );
     expect(reissue.status, "re-issue for the redeemed (active) user → 409").toBe(409);
   });
 
