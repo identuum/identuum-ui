@@ -816,7 +816,7 @@ export async function listOrgUsers(opts?: {
         created_at: String(u.created_at ?? ""),
         last_login_at: typeof u.last_login_at === "string" ? u.last_login_at : null,
         invitation_pending: Boolean(u.invitation_pending),
-        invitation_email_bound: Boolean(u.invitation_email_bound),
+        invitation_email_bound: invitationEmailBound(u),
         banned: Boolean(u.banned),
       })
     );
@@ -926,6 +926,115 @@ export async function createPasswordResetLink(
   }
 }
 
+// OSS reports no invitation_email_bound (OSS-ONBOARD-A invites are always to
+// a real address): an absent flag is derived from the address — only the
+// no-email sentinel is a manual invite — never coerced to false.
+// biome-ignore lint/suspicious/noExplicitAny: raw API response item
+function invitationEmailBound(u: any): boolean {
+  if (typeof u.invitation_email_bound === "boolean") return u.invitation_email_bound;
+  const email = String(u.email ?? "");
+  return !(email.startsWith("noemail+") && email.endsWith("@no-email.internal"));
+}
+
+// ── User invite (OSS-ONBOARD-B, D-016; capabilities.user_invite) ─────────────
+
+/** An invite as the IdP issued it — shown once to the org_admin, never stored. */
+export interface IssuedInvite {
+  email: string;
+  inviteToken: string;
+  /** The /invite link; null when the IdP could not build one. */
+  inviteUrl: string | null;
+  /** The IdP's reason when it built no link (it names the missing setting). */
+  inviteUrlUnavailable: string | null;
+  expiresAt: string;
+}
+
+export type InviteResult =
+  | { ok: true; invite: IssuedInvite }
+  | { ok: false; status: number; message: string };
+
+const INVITE_MESSAGES: Record<number, string> = {
+  400: "Check the email address and name.",
+  401: "Your session has expired. Sign in again.",
+  403: "Only an organization administrator can invite users to this organization.",
+  404: "User not found.",
+  409: "This user already accepted their invitation and is no longer pending.",
+};
+
+// biome-ignore lint/suspicious/noExplicitAny: raw API response before typing
+function issuedInviteFrom(body: any, email: string): IssuedInvite | null {
+  if (typeof body?.invite_token !== "string" || !body.invite_token) return null;
+  return {
+    email,
+    inviteToken: body.invite_token,
+    inviteUrl: typeof body.invite_url === "string" && body.invite_url ? body.invite_url : null,
+    inviteUrlUnavailable:
+      typeof body.invite_url_unavailable === "string" && body.invite_url_unavailable
+        ? body.invite_url_unavailable
+        : null,
+    expiresAt: String(body.expires_at ?? ""),
+  };
+}
+
+async function postInvite(url: string, body: unknown, emailOf: (b: unknown) => string) {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) {
+    return { ok: false, status: 503, message: "IdP is not configured." } as const;
+  }
+  try {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}${url}`, {
+      method: "POST",
+      headers: { ...(await idpAuthHeaders()), "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      cache: "no-store",
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before typing
+    let data: any = null;
+    try {
+      data = await res.json();
+    } catch {
+      // handled below
+    }
+    const invite = res.ok ? issuedInviteFrom(data, emailOf(data)) : null;
+    if (invite) return { ok: true, invite } as const;
+    return {
+      ok: false,
+      status: res.status,
+      message: INVITE_MESSAGES[res.status] ?? "Could not issue the invitation. Try again.",
+    } as const;
+  } catch {
+    return { ok: false, status: 0, message: "Network error. Try again." } as const;
+  }
+}
+
+/**
+ * Invites a user into the caller's organization: POST /api/v1/users with no
+ * password → 201 {user, invite_token, invite_url | invite_url_unavailable,
+ * expires_at}. The user is pending until the link is redeemed.
+ */
+export async function inviteOrgUser(opts: {
+  email: string;
+  name: string;
+  role: "org_user" | "org_admin";
+}): Promise<InviteResult> {
+  return postInvite("/api/v1/users", opts, (b) =>
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before typing
+    String((b as any)?.user?.email ?? opts.email)
+  );
+}
+
+/**
+ * Re-issues a pending user's invite: POST /api/v1/users/:id/invite → 200
+ * {email, invite_token, invite_url | invite_url_unavailable, expires_at}; the
+ * older link stops working. 409 user_not_pending for an active user.
+ */
+export async function reissueUserInvite(userId: string): Promise<InviteResult> {
+  return postInvite(`/api/v1/users/${encodeURIComponent(userId)}/invite`, undefined, (b) =>
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before typing
+    String((b as any)?.email ?? "")
+  );
+}
+
 // ── Get single org user by ID ────────────────────────────────────────────────
 
 /**
@@ -977,7 +1086,7 @@ export async function getOrgUserById(id: string): Promise<OrgUserItem | null> {
       created_at: String(u.created_at ?? ""),
       last_login_at: typeof u.last_login_at === "string" ? u.last_login_at : null,
       invitation_pending: Boolean(u.invitation_pending),
-      invitation_email_bound: Boolean(u.invitation_email_bound),
+      invitation_email_bound: invitationEmailBound(u),
       banned: Boolean(u.banned),
     };
   } catch (error) {

@@ -6,9 +6,12 @@
 export function MailCeremonyUnavailable({
   title,
   reason = "it sends no email",
+  advice = "Ask your administrator to reset your password.",
 }: {
   title: string;
   reason?: string;
+  /** What to do instead (OSS-ONBOARD-B: /invite says how to get access). */
+  advice?: string;
 }) {
   return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center px-4">
@@ -27,9 +30,7 @@ export function MailCeremonyUnavailable({
             <p className="text-sm text-stone-600 leading-relaxed">
               This is not available on this installation: {reason}.
             </p>
-            <p className="text-sm text-stone-600 leading-relaxed">
-              Ask your administrator to reset your password.
-            </p>
+            <p className="text-sm text-stone-600 leading-relaxed">{advice}</p>
             <a
               href="/login"
               className="inline-block text-sm font-semibold text-sky-600 hover:text-sky-700 underline"

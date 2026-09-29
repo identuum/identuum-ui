@@ -37,6 +37,7 @@ import ServiceAccountsPage, {
 } from "@/app/org-admin/service-accounts/page";
 import SettingsPage, { metadata as settingsMeta } from "@/app/org-admin/settings/page";
 import UserDetailPage, { metadata as userDetailMeta } from "@/app/org-admin/users/[id]/page";
+import UserNewPage, { metadata as userNewMeta } from "@/app/org-admin/users/new/page";
 import UsersPage, { metadata as usersMeta } from "@/app/org-admin/users/page";
 import { type Area, buildAreaRoute, type Route, route } from "./area-routes";
 
@@ -44,6 +45,7 @@ import { type Area, buildAreaRoute, type Route, route } from "./area-routes";
 export const ORG_ADMIN_ROUTES: readonly Route[] = [
   route(/^\/org-admin$/, [], OrgAdminPage, undefined),
   route(/^\/org-admin\/users$/, [], UsersPage, usersMeta),
+  route(/^\/org-admin\/users\/new$/, [], UserNewPage, userNewMeta),
   route(/^\/org-admin\/users\/([^/]+)$/, ["id"], UserDetailPage, userDetailMeta),
   route(/^\/org-admin\/applications$/, [], ApplicationsPage, applicationsMeta),
   route(/^\/org-admin\/applications\/new$/, [], ApplicationNewPage, applicationNewMeta),

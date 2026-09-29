@@ -144,6 +144,15 @@ const IDP_ROUTE_SURFACE_MATRIX: SurfaceMatrixRow[] = [
     ],
   },
   {
+    // OSS-ONBOARD-B (D-016): the user invite — the org_admin's invite form and
+    // the public redeem page (capabilities.user_invite; CE reports none).
+    route: "/org-admin/users/new + /invite",
+    classification: "OSS-supported",
+    coveredRoutes: ["/invite", "/org-admin/users/new"],
+    files: ["app/org-admin/users/new/page.tsx", "app/invite/page.tsx", "app/invite/actions.ts"],
+    signals: ["userInviteAvailable", "/api/v1/auth/invite", "no-referrer"],
+  },
+  {
     // CE-UI-2b: the redeem page of an org_admin's one-time reset link
     // (identuum-idp-ce sends no mail; OSS mounts no reset-link route).
     route: "/reset-link",
@@ -359,6 +368,7 @@ describe("IDP OSS route/surface matrix", () => {
       "/dashboard + /dashboard/security",
       "/org-admin overview + users",
       "/org-admin/settings",
+      "/org-admin/users/new + /invite",
       "/reset-link",
       "/org-admin/audit",
       "/site-admin/audit",

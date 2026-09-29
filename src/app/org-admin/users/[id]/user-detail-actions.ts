@@ -45,12 +45,15 @@ export type OrgAdminUserStatus = "active" | "pending" | "pending_approval" | "di
 // backend, so pending rows surface no action — status display only.
 // "reset-link" (CE-UI-2b): a one-time password reset link, offered only where
 // the IdP issues them (capabilities.admin_reset_link, identuum-idp-ce).
+// "reissue-invite" (OSS-ONBOARD-B, D-016): a new one-time invite for a pending
+// user, offered only where the IdP mounts the invite (capabilities.user_invite).
 export type OrgAdminUserAction =
   | "disable"
   | "enable"
   | "reset-mfa"
   | "approve-registration"
-  | "reset-link";
+  | "reset-link"
+  | "reissue-invite";
 
 /** IdP capabilities that add or remove actions. */
 export interface OrgAdminUserActionOptions {
@@ -59,6 +62,8 @@ export interface OrgAdminUserActionOptions {
   /** CE-UI-3a: false where the IdP has no pending-registration state
    *  (identuum-idp-ce): no Approve. Missing keeps Approve. */
   userApproval?: boolean;
+  /** OSS-ONBOARD-B: the IdP re-issues invites (capabilities.user_invite true). */
+  userInvite?: boolean;
 }
 
 /**
@@ -210,9 +215,11 @@ export function deriveOrgAdminUserActions(
 
   const actions: OrgAdminUserAction[] = [];
 
-  // Pending invitations: no actions (the regenerate affordance was removed —
-  // its backend endpoint is unmounted); the Pending badge is the surface.
+  // Pending invitations: only Re-issue, and only where the IdP mounts it
+  // (OSS-ONBOARD-B: POST /api/v1/users/:id/invite). The old regenerate
+  // affordance stays removed — its endpoint was never mounted.
   if (status === "pending") {
+    if (options.userInvite && u.invitation_pending) actions.push("reissue-invite");
     return { status, actions, soleActiveAdmin: false };
   }
 
@@ -269,6 +276,7 @@ export const ORG_ADMIN_USER_ACTION_META: Record<OrgAdminUserAction, OrgAdminUser
   "reset-mfa": { sectionLabel: "MFA enrollment" },
   "approve-registration": { sectionLabel: "Approve registration" },
   "reset-link": { sectionLabel: "Password reset" },
+  "reissue-invite": { sectionLabel: "Invitation" },
 };
 
 export function getOrgAdminUserActionLabel(action: OrgAdminUserAction): string {

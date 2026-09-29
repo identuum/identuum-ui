@@ -20,7 +20,7 @@ type PageProps = { searchParams: Promise<Record<string, string | string[]>> };
 export async function ExportLoginPage({ searchParams }: PageProps): Promise<ReactNode> {
   const params = await searchParams;
   const reason = typeof params.reason === "string" ? params.reason : null;
-  const page = await LoginPage();
+  const page = await LoginPage({ searchParams: Promise.resolve(params) });
   return (
     <section data-testid="login">
       <LoginReason reason={reason} />

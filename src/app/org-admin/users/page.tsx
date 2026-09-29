@@ -17,6 +17,7 @@
 import type { Metadata } from "next";
 import { LocalTime } from "@/components/ui/local-time";
 import { getOwnOrganization, listOrgUsers } from "@/lib/idp-admin-client";
+import { userInviteAvailable } from "@/lib/mail-capabilities";
 import type { OrgUserItem } from "@/lib/types";
 import {
   BANNED_AMBIGUOUS_STATUS_LABEL,
@@ -56,7 +57,11 @@ export default async function OrgAdminUsersPage({
     ? (rawFilter as StatusFilter)
     : "all";
 
-  const [listResult, org] = await Promise.all([listOrgUsers({ page }), getOwnOrganization()]);
+  const [listResult, org, canInvite] = await Promise.all([
+    listOrgUsers({ page }),
+    getOwnOrganization(),
+    userInviteAvailable(),
+  ]);
   const users = listResult?.users ?? null;
   // Whether a banned org_user can be a self-registrant awaiting approval
   // (null when the organization could not be read: both stay possible).
@@ -98,9 +103,20 @@ export default async function OrgAdminUsersPage({
 
   return (
     <div className="space-y-5 max-w-5xl">
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-sky-950">Users</h1>
-        <p className="text-sm text-stone-500 mt-0.5">Members of your organization.</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-sky-950">Users</h1>
+          <p className="text-sm text-stone-500 mt-0.5">Members of your organization.</p>
+        </div>
+        {/* OSS-ONBOARD-B: only where the IdP mounts the invite (user_invite). */}
+        {canInvite && (
+          <a
+            href="/org-admin/users/new"
+            className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 shadow-sm transition-colors"
+          >
+            Invite user
+          </a>
+        )}
       </div>
 
       {/* Filter tabs */}
@@ -285,7 +301,7 @@ function UserRow({
 }) {
   const statusBadge: Record<typeof status, { label: string; cls: string }> = {
     active: { label: "Active", cls: "text-emerald-700 bg-emerald-50" },
-    pending: { label: "Pending", cls: "text-amber-700 bg-amber-50" },
+    pending: { label: "Invitation pending", cls: "text-amber-700 bg-amber-50" },
     pending_approval: { label: BANNED_AMBIGUOUS_STATUS_LABEL, cls: "text-violet-700 bg-violet-50" },
     disabled: { label: "Disabled", cls: "text-stone-500 bg-stone-100" },
     deleted: { label: "Deleted", cls: "text-red-500 bg-red-50" },

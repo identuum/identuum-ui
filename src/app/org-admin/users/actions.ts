@@ -17,6 +17,9 @@ import {
   approveUserRegistration,
   assignUserRole,
   createPasswordResetLink,
+  type IssuedInvite,
+  inviteOrgUser,
+  reissueUserInvite,
   removeUserRole,
   resetUserMFA,
   setUserActive,
@@ -120,6 +123,64 @@ export async function createResetLinkAction(
     return { phase: "success", resetUrl: result.resetUrl, expiresAt: result.expiresAt };
   }
   return { phase: "error", error: result.message };
+}
+
+// ── Invite a user / re-issue an invite (OSS-ONBOARD-B, D-016) ────────────────
+
+/** The issued invite lives only in this state, shown once, never stored. */
+export type InviteUserState =
+  | { phase: "form"; error?: string }
+  | { phase: "issued"; invite: IssuedInvite };
+
+const INVITE_ROLES = new Set(["org_user", "org_admin"]);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export async function inviteUserAction(
+  _prev: InviteUserState,
+  formData: FormData
+): Promise<InviteUserState> {
+  const session = await getServerSession();
+  if (!session) redirect("/login?reason=session_expired");
+  const role = session.user?.role ?? session.role;
+  if (role !== "org_admin") redirect(roleToPath(role));
+
+  // Login lower-cases the email, so the invite stores it the same way.
+  const email = ((formData.get("email") as string | null) ?? "").trim().toLowerCase();
+  const name = ((formData.get("name") as string | null) ?? "").trim();
+  const inviteRole = ((formData.get("role") as string | null) ?? "").trim();
+  if (!EMAIL_RE.test(email)) return { phase: "form", error: "Enter a valid email address." };
+  if (!name) return { phase: "form", error: "Enter the user's name." };
+  if (!INVITE_ROLES.has(inviteRole)) return { phase: "form", error: "Choose Member or Admin." };
+
+  const result = await inviteOrgUser({
+    email,
+    name,
+    role: inviteRole as "org_user" | "org_admin",
+  });
+  if (!result.ok) return { phase: "form", error: result.message };
+  revalidatePath("/org-admin/users");
+  return { phase: "issued", invite: result.invite };
+}
+
+export type ReissueInviteState =
+  | { phase: "idle" | "confirm"; error?: string }
+  | { phase: "issued"; invite: IssuedInvite };
+
+export async function reissueInviteAction(
+  _prev: ReissueInviteState,
+  formData: FormData
+): Promise<ReissueInviteState> {
+  const session = await getServerSession();
+  if (!session) redirect("/login?reason=session_expired");
+  const role = session.user?.role ?? session.role;
+  if (role !== "org_admin") redirect(roleToPath(role));
+
+  const userId = ((formData.get("userId") as string | null) ?? "").trim();
+  if (!userId) return { phase: "idle", error: "Missing user ID." };
+  const result = await reissueUserInvite(userId);
+  if (!result.ok) return { phase: "idle", error: result.message };
+  revalidatePath(`/org-admin/users/${userId}`);
+  return { phase: "issued", invite: result.invite };
 }
 
 // ── Approve pending registration (POST /api/v1/users/:id/approve) ────────────

@@ -28,12 +28,14 @@
 import { expect, test } from "@playwright/test";
 import { api, expectStatus } from "./helpers/appliance-fixture";
 import {
+  loginAsOrgAdmin,
   loginAsOrgUser,
   SITE_ADMIN_EMAIL,
   SITE_ADMIN_PASSWORD,
   SITE_ADMIN_TOTP_SECRET,
   SKIP_AUTH_MSG,
   skipAuthTests,
+  skipOrgAdminTests,
   skipOrgUserTests,
 } from "./helpers/login";
 import {
@@ -209,5 +211,54 @@ test.describe("token-landing + static pages (NINE-DARK-PAGES)", () => {
     await page.goto("/dashboard/security");
     await page.waitForURL(/\/account\/settings\?tab=passkeys/, { timeout: 10_000 });
     await expect(page.getByRole("heading", { name: /account settings/i })).toBeVisible();
+  });
+
+  // OSS-ONBOARD-B (D-016): the org_admin invites in the UI and reads the link
+  // from the once-only panel; a fresh browser context opens it, sets a
+  // password and lands on sign-in with the notice; signing in reaches the MFA
+  // step the fixture org's policy requires. The link is used, never logged.
+  test("/invite: invited in the UI, redeemed in a fresh context, then sign-in", async ({
+    page,
+    browser,
+  }) => {
+    test.setTimeout(120_000);
+    if (skipOrgAdminTests) test.skip(true, "org_admin credentials unavailable");
+    const comp = await api(IDP_BASE, "GET", "/api/v1/component");
+    const caps = (comp.json.capabilities ?? {}) as Record<string, unknown>;
+    if (caps.user_invite !== true) test.skip(true, "this IdP mounts no user invite");
+    await loginAsOrgAdmin(page);
+    await page.goto("/org-admin/users");
+    await page.getByRole("link", { name: "Invite user" }).click();
+    const email = `invitee-${Date.now().toString(36)}@e2e-invite.test`;
+    await page.getByLabel("Email", { exact: true }).fill(email);
+    await page.getByLabel("Name", { exact: true }).fill("E2E Invitee");
+    await page.getByRole("button", { name: "Invite user" }).click();
+    const link = await page.getByLabel("Setup link").inputValue({ timeout: 15_000 });
+    expect(new URL(link).pathname, "the panel hands over an /invite link").toBe("/invite");
+
+    const fresh = await browser.newContext();
+    try {
+      const guest = await fresh.newPage();
+      await guest.goto(link);
+      await expect(guest.getByLabel("Email", { exact: true })).toHaveValue(email);
+      const password = `Inv!${Date.now().toString(36)}9wqX`;
+      await guest.getByLabel("Password", { exact: true }).fill(password);
+      await guest.getByLabel("Confirm password").fill(password);
+      await guest.getByRole("button", { name: "Set password" }).click();
+      await guest.waitForURL(/\/login\?notice=invite_accepted/, { timeout: 15_000 });
+      await expect(guest.getByText("Your password is set")).toBeVisible();
+      await guest.getByLabel("Email or domain").fill(email);
+      await guest.getByRole("button", { name: "Continue" }).click();
+      await guest.getByLabel("Password", { exact: true }).fill(password);
+      await guest.getByRole("button", { name: "Sign in" }).click();
+      await expect(guest.getByText(/two-factor authentication/i).first()).toBeVisible({
+        timeout: 15_000,
+      });
+      // The spent link is the one invalid state.
+      await guest.goto(link);
+      await expect(guest.getByText("This invitation link is no longer valid")).toBeVisible();
+    } finally {
+      await fresh.close();
+    }
   });
 });

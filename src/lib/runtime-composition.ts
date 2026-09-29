@@ -62,6 +62,7 @@ const KNOWN_CAPABILITY_KEYS: ReadonlyArray<keyof ComponentCapabilities> = [
   "mail_ceremonies",
   "admin_reset_link",
   "user_approval",
+  "user_invite",
   "public_clients",
   "org_audit",
 ];

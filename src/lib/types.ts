@@ -768,6 +768,9 @@ export interface ComponentCapabilities {
   /** CE-UI-3a: the IdP has a pending-registration state and serves
    *  approve (false on identuum-idp-ce). Absent is treated as available. */
   user_approval?: boolean;
+  /** OSS-ONBOARD-B (D-016): the IdP mounts the user invite (identuum-idp-oss
+   *  since OSS-ONBOARD-A). Absent is treated as unavailable. */
+  user_invite?: boolean;
   /** CE-UI-3b: the IdP registers public clients (false on identuum-idp-ce).
    *  Absent is treated as available. */
   public_clients?: boolean;

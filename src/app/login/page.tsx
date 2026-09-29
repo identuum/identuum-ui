@@ -8,7 +8,18 @@ import { LoginPageClient } from "./client";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Sign in — Identuum" };
 
-export default async function LoginPage() {
+// OSS-ONBOARD-B: notices a ceremony hands to sign-in (?notice=…).
+const LOGIN_NOTICES: Record<string, string> = {
+  invite_accepted: "Your password is set. Sign in to continue.",
+};
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+} = {}) {
+  const params = searchParams ? await searchParams : {};
+  const notice = typeof params.notice === "string" ? LOGIN_NOTICES[params.notice] : undefined;
   const cfg = loadRuntimeConfig();
 
   if (!cfg) {
@@ -66,6 +77,15 @@ export default async function LoginPage() {
             <p className="text-sm text-stone-500 mb-6 leading-relaxed">
               Enter your credentials to continue
             </p>
+            {notice && (
+              <p
+                role="status"
+                data-testid="login-notice"
+                className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+              >
+                {notice}
+              </p>
+            )}
             <LoginPageClient config={publicCfg} mailCeremonies={mailCeremonies} />
           </div>
         </div>

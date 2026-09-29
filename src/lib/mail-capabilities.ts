@@ -27,6 +27,16 @@ export async function adminResetLinkAvailable(): Promise<boolean> {
  * pending-registration state and serves no approve route. A binary that does
  * not report the key keeps Approve, as before the key existed.
  */
+/**
+ * OSS-ONBOARD-B (D-016): `user_invite` is true where the IdP mounts the user
+ * invite (identuum-idp-oss since OSS-ONBOARD-A). Only an explicit true offers
+ * Invite user, Re-issue and /invite; CE and older binaries report no key.
+ */
+export async function userInviteAvailable(): Promise<boolean> {
+  const state = await getServerRuntimeState();
+  return state?.components.idp?.capabilities?.user_invite === true;
+}
+
 export async function userApprovalAvailable(): Promise<boolean> {
   const state = await getServerRuntimeState();
   return state?.components.idp?.capabilities?.user_approval !== false;

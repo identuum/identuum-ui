@@ -15,6 +15,7 @@ import DashboardLayout, { metadata as dashboardLayoutMeta } from "@/app/dashboar
 import DashboardPage, { metadata as dashboardMeta } from "@/app/dashboard/page";
 import DashboardSecurityRedirect from "@/app/dashboard/security/page";
 import ForgotPasswordPage, { metadata as forgotMeta } from "@/app/forgot-password/page";
+import InvitePage, { metadata as inviteMeta } from "@/app/invite/page";
 import { metadata as loginMeta } from "@/app/login/page";
 import LogoutPage, { metadata as logoutMeta } from "@/app/logout/page";
 import PlatformStatusPage, { metadata as platformStatusMeta } from "@/app/platform-status/page";
@@ -38,6 +39,7 @@ export const PUBLIC_AREA: Area = {
   routes: [
     route(/^\/activate$/, [], ActivatePage, activateMeta),
     route(/^\/claim$/, [], ClaimPage, claimMeta),
+    route(/^\/invite$/, [], InvitePage, inviteMeta),
     route(/^\/forgot-password$/, [], ForgotPasswordPage, forgotMeta),
     route(/^\/reset-password$/, [], ResetPasswordPage, resetMeta),
     route(/^\/reset-link$/, [], ResetLinkPage, resetLinkMeta),

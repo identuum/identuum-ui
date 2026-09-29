@@ -28,10 +28,15 @@ import {
   listUserRoles,
   UserDetailUnavailable,
 } from "@/lib/idp-admin-client";
-import { adminResetLinkAvailable, userApprovalAvailable } from "@/lib/mail-capabilities";
+import {
+  adminResetLinkAvailable,
+  userApprovalAvailable,
+  userInviteAvailable,
+} from "@/lib/mail-capabilities";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { ResetMFAButton, UserRowActions } from "../user-row-actions";
 import { ApproveButton } from "./approve-button";
+import { ReissueInviteButton } from "./reissue-invite-button";
 import { ResetLinkButton } from "./reset-link-button";
 import {
   APPROVE_REGISTRATION_COPY,
@@ -117,6 +122,7 @@ export default async function OrgAdminUserDetailPage({
     {
       adminResetLink: await adminResetLinkAvailable(),
       userApproval: await userApprovalAvailable(),
+      userInvite: await userInviteAvailable(),
     }
   );
   const isManualInvite =
@@ -128,7 +134,7 @@ export default async function OrgAdminUserDetailPage({
 
   const statusConfig = {
     active: { label: "Active", cls: "text-emerald-700 bg-emerald-50 border-emerald-200" },
-    pending: { label: "Pending", cls: "text-amber-700 bg-amber-50 border-amber-200" },
+    pending: { label: "Invitation pending", cls: "text-amber-700 bg-amber-50 border-amber-200" },
     pending_approval: {
       label: BANNED_AMBIGUOUS_STATUS_LABEL,
       cls: "text-violet-700 bg-violet-50 border-violet-200",
@@ -156,6 +162,7 @@ export default async function OrgAdminUserDetailPage({
   const showMFAReset = actions.includes("reset-mfa");
   const showApproveRegistration = actions.includes("approve-registration");
   const showResetLink = actions.includes("reset-link");
+  const showReissueInvite = actions.includes("reissue-invite");
   // The Assigned-roles card is only meaningful for tenant users. site_admin
   // identities cannot be modified from the /org-admin surface (authority
   // boundary), and deleted users have no actionable roles to show.
@@ -269,7 +276,11 @@ export default async function OrgAdminUserDetailPage({
       </div>
 
       {/* Actions card */}
-      {(showLifecycleActions || showMFAReset || showApproveRegistration || showResetLink) && (
+      {(showLifecycleActions ||
+        showMFAReset ||
+        showApproveRegistration ||
+        showResetLink ||
+        showReissueInvite) && (
         <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-stone-100">
             <p className="text-sm font-semibold text-sky-950">Actions</p>
@@ -345,6 +356,18 @@ export default async function OrgAdminUserDetailPage({
                 </p>
                 <div className="pt-1">
                   <ResetLinkButton userId={user.id} />
+                </div>
+              </div>
+            )}
+            {showReissueInvite && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-stone-600">Invitation</p>
+                <p className="text-xs text-stone-400 leading-relaxed max-w-[280px]">
+                  This user has not accepted their invitation yet. Issue a new one-time link if the
+                  first was lost or expired.
+                </p>
+                <div className="pt-1">
+                  <ReissueInviteButton userId={user.id} />
                 </div>
               </div>
             )}
