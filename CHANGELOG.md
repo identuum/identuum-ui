@@ -8,6 +8,15 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
 ## Unreleased
 
+## `v0.5.0`
+
+The static export that identuum-idp-oss `v0.8.0` embeds. Delta
+`v0.4.0..HEAD`: 25 commits (measured at `9c8f303`) and this release commit.
+As for `v0.4.0`, the published artifact is the export
+(`publish-ui-export.yml` on the tag); no container image is published.
+Minor, not patch: new sign-in step, application option, user action and
+audit columns.
+
 ### Added
 
 - **First sign-in with an admin-set password** (OSS-FIN-1, D-017): when the
