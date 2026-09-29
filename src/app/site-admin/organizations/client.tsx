@@ -193,14 +193,11 @@ function OrgTable({ orgs }: { orgs: OrgListItem[] }) {
 
 function OrgActions({ org }: { org: OrgListItem }) {
   if (org.deleted) {
+    // ORG-RESTORE-1: OSS answers 404 for a soft-deleted org read by id, so
+    // Details (and every other per-org page) would show "Organization not
+    // found". Restore is the one page that serves it.
     return (
       <div className="flex items-center gap-2 flex-wrap">
-        <a
-          href={`/site-admin/organizations/${org.id}`}
-          className="text-xs font-semibold text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200 px-3 py-1.5 rounded-lg transition-colors"
-        >
-          Details
-        </a>
         <a
           href={`/site-admin/organizations/${org.id}/restore`}
           className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg transition-colors"
