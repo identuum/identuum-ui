@@ -361,28 +361,19 @@ export default async function OrgAdminUserDetailPage({
                 </div>
               </div>
             )}
-            {showReissueInvite && (
+            {/* One slot for both invite actions (OSS-FIN-2): sending the first
+                invitation revalidates the page and turns the user pending; the
+                button must keep its place so the issued link it holds stays. */}
+            {(showReissueInvite || showInviteUnverified) && (
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-stone-600">Invitation</p>
                 <p className="text-xs text-stone-400 leading-relaxed max-w-[280px]">
-                  This user has not accepted their invitation yet. Issue a new one-time link if the
-                  first was lost or expired.
+                  {showInviteUnverified
+                    ? "This user was created with a password but never verified, so they cannot sign in. Send a one-time invitation: accepting it sets a new password and verifies the account."
+                    : "This user has not accepted their invitation yet. Issue a new one-time link if the first was lost or expired."}
                 </p>
                 <div className="pt-1">
-                  <ReissueInviteButton userId={user.id} />
-                </div>
-              </div>
-            )}
-            {showInviteUnverified && (
-              <div className="space-y-1">
-                <p className="text-xs font-semibold text-stone-600">Invitation</p>
-                <p className="text-xs text-stone-400 leading-relaxed max-w-[280px]">
-                  This user was created with a password but never verified, so they cannot sign in.
-                  Send a one-time invitation: accepting it sets a new password and verifies the
-                  account.
-                </p>
-                <div className="pt-1">
-                  <ReissueInviteButton userId={user.id} firstInvite />
+                  <ReissueInviteButton userId={user.id} firstInvite={showInviteUnverified} />
                 </div>
               </div>
             )}
