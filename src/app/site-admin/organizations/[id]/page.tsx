@@ -205,8 +205,8 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
                 </p>
                 <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">
                   The administrator state for this organization could not be determined. This is a
-                  reporting gap, not a statement that no administrator exists. Recovery delegation
-                  is not offered from an unknown state.
+                  reporting gap, not a statement that no administrator exists. No administrator
+                  action is offered from an unknown state.
                 </p>
               </div>
             </div>
@@ -243,8 +243,8 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
                 <div className="border-t border-stone-100 pt-3 space-y-2">
                   <p className="text-xs text-amber-700 font-medium">Pending invitation expired</p>
                   <p className="text-xs text-stone-500 leading-relaxed">
-                    The administrator invitation has expired and was never claimed. As site
-                    administrator you may delegate a recovery administrator.
+                    The administrator&apos;s activation link expired before it was used. As site
+                    administrator you can issue a new one.
                   </p>
                   <a
                     href={`/site-admin/organizations/${id}/assign-admin`}
@@ -277,7 +277,7 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
               {!org.deleted && (
                 <div className="border-t border-stone-100 pt-3">
                   <p className="text-xs text-stone-500 mb-2">
-                    As site administrator you may delegate a recovery organization administrator.
+                    As site administrator you can assign an organization administrator.
                   </p>
                   <a
                     href={`/site-admin/organizations/${id}/assign-admin`}
@@ -608,7 +608,7 @@ function OrgAdminRecoveryCard({
 
         {!loadError && admins.length === 0 && (
           <p className="text-xs text-stone-400 leading-relaxed">
-            No administrators on file. Use “Assign administrator” to delegate one.
+            No administrators on file. Use “Assign administrator” to add one.
           </p>
         )}
 

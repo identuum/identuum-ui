@@ -227,9 +227,10 @@ describe("operator-facing copy is pinned (regression sentry for label/body edits
     expect(ADMIN_STATE_COPY.operational.label).toBe("Administrator account active");
     expect(ADMIN_STATE_COPY.operational.body).toMatch(/No recovery action is needed/);
     expect(ADMIN_STATE_COPY["expired-pending"].label).toBe("Pending invitation expired");
-    expect(ADMIN_STATE_COPY["expired-pending"].body).toMatch(/Recovery delegation is available/);
+    // OSS-FIN-1 (D-016 wording): the affordance is named for what it does.
+    expect(ADMIN_STATE_COPY["expired-pending"].body).toMatch(/issue a new activation link/);
     expect(ADMIN_STATE_COPY["no-admin"].label).toBe("No administrator");
-    expect(ADMIN_STATE_COPY["no-admin"].body).toMatch(/Recovery delegation is available/);
+    expect(ADMIN_STATE_COPY["no-admin"].body).toMatch(/You can assign an administrator/);
     expect(ADMIN_STATE_COPY.suspended.label).toBe("Admin management suspended");
     expect(ADMIN_STATE_COPY.suspended.body).toMatch(/Restore the organization/);
   });

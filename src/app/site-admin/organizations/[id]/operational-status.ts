@@ -146,11 +146,11 @@ export const ADMIN_STATE_COPY: Record<AdminState, { label: string; body: string 
   },
   "expired-pending": {
     label: "Pending invitation expired",
-    body: "An administrator account exists but the setup invitation was never claimed. Recovery delegation is available.",
+    body: "An administrator account exists but its activation link was never used. You can issue a new activation link.",
   },
   "no-admin": {
     label: "No administrator",
-    body: "No active administrator account is present. Tenant users cannot manage organization settings without one. Recovery delegation is available.",
+    body: "No active administrator account is present. Tenant users cannot manage organization settings without one. You can assign an administrator.",
   },
   suspended: {
     label: "Admin management suspended",
@@ -158,7 +158,7 @@ export const ADMIN_STATE_COPY: Record<AdminState, { label: string; body: string 
   },
   unknown: {
     label: "Administrator status unavailable",
-    body: "The administrator state for this organization could not be determined. This is a reporting gap, not a statement that no administrator exists; recovery delegation is not offered from an unknown state.",
+    body: "The administrator state for this organization could not be determined. This is a reporting gap, not a statement that no administrator exists; no administrator action is offered from an unknown state.",
   },
 };
 

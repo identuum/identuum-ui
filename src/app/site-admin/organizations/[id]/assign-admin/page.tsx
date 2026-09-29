@@ -68,7 +68,7 @@ export default async function AssignAdminPage({ params }: { params: Promise<{ id
           <p className="text-sm font-semibold text-stone-700">Administrator status unavailable</p>
           <p className="text-xs text-stone-400 mt-1">
             The administrator state for <span className="font-medium text-sky-950">{org.name}</span>{" "}
-            could not be determined, so recovery delegation cannot be offered right now. Reload the
+            could not be determined, so no administrator action can be offered right now. Reload the
             page or check the backend health.
           </p>
         </div>
@@ -102,7 +102,8 @@ export default async function AssignAdminPage({ params }: { params: Promise<{ id
           <p className="text-xs text-stone-400 mt-1">
             An active, verified administrator already manages{" "}
             <span className="font-medium text-sky-950">{org.name}</span>. Site administrators can
-            only delegate the first administrator, or recover the role when no administrator exists.
+            only assign the first administrator, or re-issue the activation link of one who has not
+            activated yet.
           </p>
         </div>
         <a
@@ -124,9 +125,9 @@ export default async function AssignAdminPage({ params }: { params: Promise<{ id
           Assign administrator
         </h1>
         <p className="text-sm text-stone-500 mt-0.5">
-          Generate a one-time setup link to delegate the first org_admin for this organization. This
-          action is available when no active administrator account or valid pending invitation
-          exists.
+          Issue a one-time activation link to hand to this organization&apos;s administrator; it is
+          also mailed only when email delivery is configured. This action is available when no
+          active administrator account or valid activation link exists.
         </p>
       </div>
 
@@ -135,7 +136,7 @@ export default async function AssignAdminPage({ params }: { params: Promise<{ id
         <p className="text-sm font-semibold text-sky-950">{org.name}</p>
         <p className="text-stone-400 font-mono">{org.domain || "no domain"}</p>
         <p className="text-amber-600 font-medium mt-1">
-          {org.has_admin ? "Recovery delegation available" : "No administrator assigned"}
+          {org.has_admin ? "Activation link can be re-issued" : "No administrator assigned"}
         </p>
         {!org.active && (
           <p className="text-stone-400 mt-0.5">
@@ -151,9 +152,8 @@ export default async function AssignAdminPage({ params }: { params: Promise<{ id
         <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3">
           <p className="text-xs font-semibold text-stone-600">Organization is inactive</p>
           <p className="text-xs text-stone-400 mt-1 leading-relaxed">
-            You can still assign an administrator to an inactive organization. Once the admin claims
-            their account, they can reactivate the organization from the site-admin Organizations
-            page.
+            You can still issue the activation link for an inactive organization. When its
+            administrator activates their account with the link, the organization becomes active.
           </p>
         </div>
       )}
