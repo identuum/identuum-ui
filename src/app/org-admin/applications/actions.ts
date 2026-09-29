@@ -31,6 +31,7 @@ import {
   createOrganizationClient,
   deleteOrganizationClient,
   rotateOrganizationClientSecret,
+  SKIP_CONSENT_PUBLIC_MESSAGE,
   updateOrganizationClient,
 } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
@@ -46,6 +47,7 @@ export type CreateApplicationState =
         client_id: string;
         name: string;
         is_public: boolean;
+        skip_consent: boolean;
         /** SINGLE-SHOT secret. Empty string for public clients. */
         client_secret: string;
         redirect_uris: string[];
@@ -158,6 +160,7 @@ export async function createApplicationAction(
   const allowedAudiences = splitLines(formData.get("allowed_audiences") as string | null);
   const scope = ((formData.get("scope") as string | null) ?? "").trim();
   const isPublic = formData.get("is_public") === "on";
+  const skipConsent = formData.get("skip_consent") === "on";
 
   const result = await createOrganizationClient({
     name,
@@ -166,6 +169,7 @@ export async function createApplicationAction(
     allowed_audiences: allowedAudiences.length > 0 ? allowedAudiences : undefined,
     scope: scope.length > 0 ? scope : undefined,
     is_public: isPublic,
+    skip_consent: skipConsent,
   });
 
   if (result.ok) {
@@ -178,6 +182,7 @@ export async function createApplicationAction(
         client_id: result.data.client_id,
         name: result.data.name,
         is_public: result.data.is_public,
+        skip_consent: result.data.skip_consent,
         // SINGLE-SHOT: surface the secret EXACTLY into the action's
         // returned state and nowhere else. The state envelope lives
         // in the form's useActionState memory cell; once the form
@@ -198,7 +203,10 @@ export async function createApplicationAction(
   if (result.invalid) {
     return {
       phase: "error",
-      error: "The application could not be created. Check the values and try again.",
+      error:
+        result.message === SKIP_CONSENT_PUBLIC_MESSAGE
+          ? SKIP_CONSENT_PUBLIC_MESSAGE
+          : "The application could not be created. Check the values and try again.",
     };
   }
   return {
@@ -221,7 +229,7 @@ export async function createApplicationAction(
 //   - The action NEVER reads `organization_id`, `client_secret`,
 //     `is_public`, `token_endpoint_auth_method`, `jwks_uri`, `jwks`,
 //     `token_endpoint_auth_signing_alg`, `service_account_id`,
-//     `skip_consent`, or `token_ttl_secs` from the form data — those
+//     or `token_ttl_secs` from the form data — those
 //     are intentionally not editable from the org_admin self-service
 //     edit surface (each is a separate slice with its own
 //     authorisation / audit / UX review).
@@ -316,6 +324,7 @@ export async function updateApplicationAction(
 
   const allowedAudiences = splitLines(formData.get("allowed_audiences") as string | null);
   const scope = ((formData.get("scope") as string | null) ?? "").trim();
+  const skipConsent = formData.get("skip_consent") === "on";
 
   // Always send the full editable subset. The IDP's update path replaces
   // each non-nil array slice and re-applies each non-nil scalar; the
@@ -327,6 +336,7 @@ export async function updateApplicationAction(
     post_logout_redirect_uris: postLogoutURIs,
     allowed_audiences: allowedAudiences,
     scope,
+    skip_consent: skipConsent,
   });
 
   if (result.ok) {
@@ -366,7 +376,10 @@ export async function updateApplicationAction(
   if (result.invalid) {
     return {
       phase: "error",
-      error: "The application could not be updated. Check the values and try again.",
+      error:
+        result.message === SKIP_CONSENT_PUBLIC_MESSAGE
+          ? SKIP_CONSENT_PUBLIC_MESSAGE
+          : "The application could not be updated. Check the values and try again.",
     };
   }
   return {

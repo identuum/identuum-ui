@@ -406,6 +406,11 @@ export interface CreateOrgClientOptions {
   scope?: string;
   /** Optional. When true the IDP does not mint a client_secret. */
   is_public?: boolean;
+  /**
+   * Optional. First-party: /authorize issues codes without the consent page
+   * (D-018). The IDP refuses it for a public client (400).
+   */
+  skip_consent?: boolean;
   /** Optional allowed token audiences. */
   allowed_audiences?: string[];
 }
@@ -429,6 +434,7 @@ export interface CreatedOrgClient {
   client_id: string;
   name: string;
   is_public: boolean;
+  skip_consent: boolean;
   /**
    * SINGLE-SHOT secret. Empty string for public clients. The string
    * is the only place this value ever surfaces — copy it now or
@@ -460,10 +466,11 @@ export interface CreatedOrgClient {
  *     token_endpoint_auth_signing_alg (advanced private_key_jwt
  *     surface, separate authorisation review)
  *   - service_account_id (M2M provisioning surface)
- *   - skip_consent (consent control, separate slice)
  *   - token_ttl_secs (operator-tuning surface)
  */
 export interface UpdateOrgClientOptions {
+  /** First-party flag (D-018); omit to leave unchanged. Audited by the IDP. */
+  skip_consent?: boolean;
   /** New display name; omit to leave unchanged. */
   name?: string;
   /** New redirect URI list (REPLACES the existing list when supplied). */

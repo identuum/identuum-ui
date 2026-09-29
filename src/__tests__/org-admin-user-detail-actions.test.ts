@@ -326,14 +326,16 @@ describe("ORG_ADMIN_USER_ACTION_META + getOrgAdminUserActionLabel", () => {
     expect(getOrgAdminUserActionLabel("reset-mfa")).toBe("MFA enrollment");
   });
 
-  it("the metadata table has exactly the six known actions (allowlist key shape)", () => {
+  it("the metadata table has exactly the seven known actions (allowlist key shape)", () => {
     const keys = Object.keys(ORG_ADMIN_USER_ACTION_META).sort();
     // CE-UI-2b added "reset-link" (capabilities.admin_reset_link);
-    // OSS-ONBOARD-B added "reissue-invite" (capabilities.user_invite).
+    // OSS-ONBOARD-B added "reissue-invite" (capabilities.user_invite);
+    // OSS-FIN-2 added "invite-unverified" (the pre-D-017 user's invite).
     expect(keys).toEqual([
       "approve-registration",
       "disable",
       "enable",
+      "invite-unverified",
       "reissue-invite",
       "reset-link",
       "reset-mfa",

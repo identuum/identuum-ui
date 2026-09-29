@@ -28,6 +28,7 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { type CreateApplicationState, createApplicationAction } from "../actions";
+import { FIRST_PARTY_LABEL, FirstPartyField } from "../first-party-field";
 
 const initialState: CreateApplicationState = { phase: "idle" };
 
@@ -194,6 +195,8 @@ function Form({
         </div>
       ) : null}
 
+      <FirstPartyField disabled={pending} />
+
       <div className="flex items-center gap-3 pt-2">
         <Button type="submit" loading={pending} size="md">
           {pending ? "Creating…" : "Create application"}
@@ -252,6 +255,8 @@ function SuccessPanel({
               <span className="text-stone-500"> · {created.token_endpoint_auth_method}</span>
             )}
           </dd>
+          <dt className="font-medium text-stone-500">{FIRST_PARTY_LABEL}</dt>
+          <dd className="text-sky-950">{created.skip_consent ? "Yes" : "No"}</dd>
           <dt className="font-medium text-stone-500">Redirect URIs</dt>
           <dd className="font-mono text-sky-950">
             <ul className="space-y-0.5 break-all">

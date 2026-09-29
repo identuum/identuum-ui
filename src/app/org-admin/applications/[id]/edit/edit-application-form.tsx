@@ -23,13 +23,15 @@
  *     / cookies / URL / router history.
  *   - No console.log of any kind anywhere in this file.
  *   - is_public / token_endpoint_auth_method / jwks_uri / jwks /
- *     signing_alg / service_account_id / skip_consent / token_ttl_secs
+ *     signing_alg / service_account_id / token_ttl_secs
  *     are intentionally NOT editable — see actions.ts comment.
+ *     skip_consent (D-018) is, for a confidential client only.
  */
 
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { type UpdateApplicationState, updateApplicationAction } from "../../actions";
+import { FirstPartyField } from "../../first-party-field";
 
 const initialState: UpdateApplicationState = { phase: "idle" };
 
@@ -38,6 +40,7 @@ export interface EditApplicationFormProps {
   initialName: string;
   initialClientID: string;
   initialIsPublic: boolean;
+  initialSkipConsent: boolean;
   initialAuthMethod: string;
   initialRedirectURIs: string[];
   initialPostLogoutRedirectURIs: string[];
@@ -211,6 +214,11 @@ function Form({
           className="w-full font-mono rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:opacity-50"
         />
       </div>
+
+      {/* D-018: a public client cannot be first-party (the IdP refuses it). */}
+      {!props.initialIsPublic && (
+        <FirstPartyField defaultChecked={props.initialSkipConsent} disabled={pending} />
+      )}
 
       <div className="flex items-center gap-3 pt-2">
         <Button type="submit" loading={pending} size="md">

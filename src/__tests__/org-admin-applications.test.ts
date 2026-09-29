@@ -800,12 +800,14 @@ describe("types.ts — UpdateOrgClientOptions source contract", () => {
     const block = TYPES_SRC.slice(start, end)
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .replace(/^\s*\/\/.*$/gm, "");
-    // Allowed properties — exactly these five.
+    // Allowed properties — exactly these six (skip_consent: owner ruling
+    // D-018(b), OSS-FIN-2 — the org_admin's audited first-party decision).
     expect(block).toMatch(/\bname\?\s*:\s*string\b/);
     expect(block).toMatch(/\bredirect_uris\?\s*:\s*string\[\]/);
     expect(block).toMatch(/\bpost_logout_redirect_uris\?\s*:\s*string\[\]/);
     expect(block).toMatch(/\bscope\?\s*:\s*string\b/);
     expect(block).toMatch(/\ballowed_audiences\?\s*:\s*string\[\]/);
+    expect(block).toMatch(/\bskip_consent\?\s*:\s*boolean\b/);
     // Forbidden properties — none may appear.
     const BANNED: RegExp[] = [
       /\borganization_id\b/,
@@ -820,7 +822,6 @@ describe("types.ts — UpdateOrgClientOptions source contract", () => {
       /\bauthorization_code\b/,
       /\bauth_code\b/,
       /\bservice_account_id\b/,
-      /\bskip_consent\b/,
       /\btoken_ttl_secs\b/,
       /\btoken_endpoint_auth_method\b/,
       /\bjwks_uri\b/,
@@ -935,7 +936,9 @@ describe("updateApplicationAction — server-action contract", () => {
     expect(SRC).toMatch(/!UPDATE_UUID_RE\.test\(clientId\)/);
   });
 
-  it("does NOT read organization_id / client_secret / is_public / token-method / jwks / signing / TTL / consent / service-account from form data", () => {
+  // skip_consent is read since OSS-FIN-2 (owner ruling D-018(b)): the
+  // org_admin's audited first-party decision on its own client.
+  it("does NOT read organization_id / client_secret / is_public / token-method / jwks / signing / TTL / service-account from form data", () => {
     const fnStart = SRC.indexOf("export async function updateApplicationAction");
     const body = SRC.slice(fnStart);
     const BANNED: RegExp[] = [
@@ -947,7 +950,6 @@ describe("updateApplicationAction — server-action contract", () => {
       /formData\.get\(\s*["']jwks_uri["']\s*\)/,
       /formData\.get\(\s*["']jwks["']\s*\)/,
       /formData\.get\(\s*["']service_account_id["']\s*\)/,
-      /formData\.get\(\s*["']skip_consent["']\s*\)/,
       /formData\.get\(\s*["']token_ttl_secs["']\s*\)/,
     ];
     for (const pat of BANNED) {

@@ -15,6 +15,14 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
   password" (new + confirm); the new password goes to
   `POST /api/v1/auth/login/password-change`, and the sign-in continues to MFA
   enrolment or verification when the policy asks, else the dashboard.
+- **First-party (skip consent)** (OSS-FIN-2, D-018): the new-application
+  form and a confidential application's edit form carry the checkbox with a
+  one-line warning; the application's page shows it. The IdP's refusal for a
+  public application reads "A public application cannot skip consent".
+- **Send invitation for a user created with a password before D-017**
+  (OSS-FIN-2): an active, unverified user's page offers it where the IdP
+  declares `user_invite`; the one-time link is shown once, as for Invite
+  user.
 
 ### Changed
 

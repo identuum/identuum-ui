@@ -113,6 +113,7 @@ export default async function OrgAdminApplicationEditPage({
         initialName={client.name}
         initialClientID={client.client_id}
         initialIsPublic={client.is_public}
+        initialSkipConsent={client.skip_consent}
         initialAuthMethod={client.token_endpoint_auth_method}
         initialRedirectURIs={client.redirect_uris}
         initialPostLogoutRedirectURIs={client.post_logout_redirect_uris}

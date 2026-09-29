@@ -163,6 +163,7 @@ export default async function OrgAdminUserDetailPage({
   const showApproveRegistration = actions.includes("approve-registration");
   const showResetLink = actions.includes("reset-link");
   const showReissueInvite = actions.includes("reissue-invite");
+  const showInviteUnverified = actions.includes("invite-unverified");
   // The Assigned-roles card is only meaningful for tenant users. site_admin
   // identities cannot be modified from the /org-admin surface (authority
   // boundary), and deleted users have no actionable roles to show.
@@ -280,7 +281,8 @@ export default async function OrgAdminUserDetailPage({
         showMFAReset ||
         showApproveRegistration ||
         showResetLink ||
-        showReissueInvite) && (
+        showReissueInvite ||
+        showInviteUnverified) && (
         <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-stone-100">
             <p className="text-sm font-semibold text-sky-950">Actions</p>
@@ -368,6 +370,19 @@ export default async function OrgAdminUserDetailPage({
                 </p>
                 <div className="pt-1">
                   <ReissueInviteButton userId={user.id} />
+                </div>
+              </div>
+            )}
+            {showInviteUnverified && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-stone-600">Invitation</p>
+                <p className="text-xs text-stone-400 leading-relaxed max-w-[280px]">
+                  This user was created with a password but never verified, so they cannot sign in.
+                  Send a one-time invitation: accepting it sets a new password and verifies the
+                  account.
+                </p>
+                <div className="pt-1">
+                  <ReissueInviteButton userId={user.id} firstInvite />
                 </div>
               </div>
             )}

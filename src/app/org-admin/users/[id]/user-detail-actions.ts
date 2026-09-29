@@ -47,13 +47,16 @@ export type OrgAdminUserStatus = "active" | "pending" | "pending_approval" | "di
 // the IdP issues them (capabilities.admin_reset_link, identuum-idp-ce).
 // "reissue-invite" (OSS-ONBOARD-B, D-016): a new one-time invite for a pending
 // user, offered only where the IdP mounts the invite (capabilities.user_invite).
+// "invite-unverified" (OSS-FIN-2): the same invite for an active user created
+// with a password before D-017 and never verified.
 export type OrgAdminUserAction =
   | "disable"
   | "enable"
   | "reset-mfa"
   | "approve-registration"
   | "reset-link"
-  | "reissue-invite";
+  | "reissue-invite"
+  | "invite-unverified";
 
 /** IdP capabilities that add or remove actions. */
 export interface OrgAdminUserActionOptions {
@@ -260,6 +263,14 @@ export function deriveOrgAdminUserActions(
     actions.push("reset-link");
   }
 
+  // OSS-FIN-2: a user created with a password before D-017 is unverified
+  // with no invite and cannot sign in without mail. The IdP invites it
+  // (POST /api/v1/users/:id/invite); accepting sets a new password and
+  // verifies the account.
+  if (options.userInvite && status === "active" && !u.email_verified) {
+    actions.push("invite-unverified");
+  }
+
   return { status, actions, soleActiveAdmin };
 }
 
@@ -277,6 +288,7 @@ export const ORG_ADMIN_USER_ACTION_META: Record<OrgAdminUserAction, OrgAdminUser
   "approve-registration": { sectionLabel: "Approve registration" },
   "reset-link": { sectionLabel: "Password reset" },
   "reissue-invite": { sectionLabel: "Invitation" },
+  "invite-unverified": { sectionLabel: "Invitation" },
 };
 
 export function getOrgAdminUserActionLabel(action: OrgAdminUserAction): string {

@@ -2177,6 +2177,29 @@ export async function getOrganizationClientById(
 // hand it to the operator in a single-shot UI panel. The value is
 // never persisted, never re-fetched, never logged.
 
+/** Safe copy for the IDP's D-018 refusal of skip_consent on a public client. */
+export const SKIP_CONSENT_PUBLIC_MESSAGE =
+  "A public application cannot skip consent: its identity cannot be verified.";
+
+/**
+ * True when a 400 is the IDP's skip_consent refusal
+ * ({"error":"invalid_request","error_description":"skip_consent requires a
+ * confidential client"}). The body is read for that one marker only.
+ */
+async function isSkipConsentRefusal(res: Response): Promise<boolean> {
+  try {
+    // biome-ignore lint/suspicious/noExplicitAny: raw API error body
+    const b: any = await res.json();
+    return (
+      b?.error === "invalid_request" &&
+      typeof b?.error_description === "string" &&
+      b.error_description.startsWith("skip_consent")
+    );
+  } catch {
+    return false;
+  }
+}
+
 export type CreateOrgClientResult =
   | { ok: true; data: CreatedOrgClient }
   | { ok: false; status: number; conflict: boolean; invalid: boolean; message: string };
@@ -2212,6 +2235,9 @@ export async function createOrganizationClient(
   if (typeof opts.is_public === "boolean") {
     body.is_public = opts.is_public;
   }
+  if (opts.skip_consent === true) {
+    body.skip_consent = true;
+  }
   if (opts.allowed_audiences && opts.allowed_audiences.length > 0) {
     body.allowed_audiences = opts.allowed_audiences;
   }
@@ -2243,7 +2269,9 @@ export async function createOrganizationClient(
         status: 400,
         conflict: false,
         invalid: true,
-        message: "The application could not be created with the supplied values.",
+        message: (await isSkipConsentRefusal(res))
+          ? SKIP_CONSENT_PUBLIC_MESSAGE
+          : "The application could not be created with the supplied values.",
       };
     }
     if (!res.ok) {
@@ -2271,6 +2299,7 @@ export async function createOrganizationClient(
         client_id: String(d.client_id ?? ""),
         name: String(d.name ?? ""),
         is_public: Boolean(d.is_public),
+        skip_consent: Boolean(d.skip_consent),
         // The IDP returns client_secret ONLY on this response. Surface
         // it through the envelope. Empty string for public clients.
         client_secret: typeof secret === "string" ? secret : "",
@@ -2349,7 +2378,8 @@ export async function updateOrganizationClient(
   // Construct a STRICT body — only the safe org_admin self-service
   // subset. No organization_id, no client_secret, no service_account_id,
   // no token_endpoint_auth_method, no jwks / jwks_uri / signing_alg, no
-  // skip_consent, no token_ttl_secs, no is_public flip. Each field is
+  // token_ttl_secs, no is_public flip. skip_consent (D-018) is sent
+  // when the caller supplies it; the IDP audits the change. Each field is
   // included only when the caller actually wants to change it; an
   // omitted field is left unchanged on the IDP side (the Go opts.X is
   // pointer-typed and `nil` means leave-unchanged).
@@ -2368,6 +2398,9 @@ export async function updateOrganizationClient(
   }
   if (Array.isArray(opts.allowed_audiences)) {
     body.allowed_audiences = opts.allowed_audiences;
+  }
+  if (typeof opts.skip_consent === "boolean") {
+    body.skip_consent = opts.skip_consent;
   }
 
   try {
@@ -2389,7 +2422,9 @@ export async function updateOrganizationClient(
         forbidden: false,
         invalid: true,
         conflict: false,
-        message: "The application could not be updated with the supplied values.",
+        message: (await isSkipConsentRefusal(res))
+          ? SKIP_CONSENT_PUBLIC_MESSAGE
+          : "The application could not be updated with the supplied values.",
       };
     }
     if (res.status === 403) {

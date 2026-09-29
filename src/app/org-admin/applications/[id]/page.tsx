@@ -42,6 +42,7 @@ import {
 } from "@/lib/idp-admin-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { OrgClientItem } from "@/lib/types";
+import { FIRST_PARTY_LABEL, FIRST_PARTY_WARNING } from "../first-party-field";
 import {
   APPLICATION_RECENT_ACTIVITY_COPY,
   buildOrgAdminApplicationAuditHref,
@@ -221,6 +222,19 @@ function DetailCard({ client }: { client: OrgClientItem }) {
         <Row label="Name" value={client.name} />
         <Row label="Client ID" value={client.client_id} mono />
         <Row label="Type" value={client.is_public ? "Public" : "Confidential"} />
+        <Row
+          label={FIRST_PARTY_LABEL}
+          value={
+            client.skip_consent ? (
+              <span>
+                Yes
+                <span className="block text-amber-700 mt-0.5">{FIRST_PARTY_WARNING}</span>
+              </span>
+            ) : (
+              "No"
+            )
+          }
+        />
         {client.token_endpoint_auth_method && (
           <Row label="Token endpoint auth method" value={client.token_endpoint_auth_method} mono />
         )}
