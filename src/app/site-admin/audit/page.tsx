@@ -79,7 +79,14 @@ function parseAuditFilters(params: Record<string, string | string[] | undefined>
   const endDate = str(params, "end_date", 32);
 
   // UTC ISO bounds for the backend from either preset or custom dates
-  const { startDateISO, endDateISO } = auditDateRange(window, startDate, endDate, Date.now());
+  const { startDateISO, endDateISO } = auditDateRange(
+    window,
+    startDate,
+    endDate,
+    Date.now(),
+    str(params, "start_utc", 32),
+    str(params, "end_utc", 32)
+  );
 
   return {
     filters: { eventType, subjectType, window, startDate, endDate, sortOrder },

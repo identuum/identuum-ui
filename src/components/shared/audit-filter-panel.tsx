@@ -15,6 +15,7 @@ import {
   KNOWN_AUDIT_EVENT_TYPES,
 } from "@/lib/audit-event-types";
 import type { AuditEventTypeGroupFromAPI } from "@/lib/idp-admin-client";
+import { LocalDayBounds } from "./local-day-bounds";
 
 export interface AuditFilterValues {
   eventType: string | null;
@@ -136,6 +137,8 @@ export function AuditFilterPanel({
             operator changes another filter. Out-of-band from the
             visible controls — operator cannot type a UUID here. */}
         {subjectId ? <input type="hidden" name="subject_id" value={subjectId} /> : null}
+        {/* OSS-FIN-1 (U-020): From/To are the viewer's local days, sent as UTC. */}
+        <LocalDayBounds />
 
         {/* Event type — grouped select from known backend constants */}
         <div className="space-y-1 sm:col-span-2 lg:col-span-1">
@@ -226,6 +229,10 @@ export function AuditFilterPanel({
             className={`${inputCls} disabled:opacity-40 disabled:cursor-not-allowed`}
           />
         </div>
+
+        <p className="sm:col-span-2 lg:col-span-3 text-xs text-stone-400">
+          From and To are your local days; they are sent as UTC times.
+        </p>
 
         {/* Actions */}
         <div className="sm:col-span-2 lg:col-span-3 flex items-center gap-3 pt-1">
