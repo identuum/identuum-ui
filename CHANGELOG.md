@@ -23,6 +23,13 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
   (OSS-FIN-2): an active, unverified user's page offers it where the IdP
   declares `user_invite`; the one-time link is shown once, as for Invite
   user.
+- **The audit log names the actor and the organization** (OSS-FIN-3): the
+  site-admin and organization-admin audit tables show the actor's type and
+  role with its email, a client's client_id or a short id, and an
+  Organization column for the organization the row concerns (the
+  organization admin's own by name; a site admin's rows link to the
+  organization; "Platform" when none). The organization admin's page lists
+  its organization's rows whoever acted, a site admin included.
 
 ### Changed
 

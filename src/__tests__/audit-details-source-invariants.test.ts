@@ -33,6 +33,8 @@ const ROOT = resolve(__dirname, "..");
 const src = (rel: string): string => readFileSync(resolve(ROOT, rel), "utf8");
 
 // The measured auditEventView wire contract (gograph fields auditEventView).
+// Re-measured 2026-09-29 (OSS-FIN-3): 19 keys — organization_id, the
+// organization acted upon, added.
 const WIRE_KEYS = [
   "id",
   "created_at",
@@ -43,6 +45,7 @@ const WIRE_KEYS = [
   "actor_email",
   "actor_role",
   "actor_organization_id",
+  "organization_id",
   "subject_id",
   "subject_type",
   "subject_email",
@@ -60,6 +63,7 @@ const DETAIL_KEYS = [
   "outcome",
   "actor_id",
   "actor_organization_id",
+  "organization_id",
   "user_agent",
   "request_id",
   "correlation_id",

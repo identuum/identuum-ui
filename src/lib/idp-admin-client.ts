@@ -1283,6 +1283,8 @@ export interface AuditEventItem {
   actor_type: string;
   actor_role: string | null;
   actor_organization_id: string | null;
+  /** The organization acted upon (OSS-FIN-3); null on older rows and platform events. */
+  organization_id: string | null;
   subject_id: string | null;
   subject_email: string | null;
   subject_type: string | null;
@@ -1372,6 +1374,7 @@ export async function listAuditEvents(opts?: {
       actor_type: String(e.actor_type ?? ""),
       actor_role: e.actor_role ? String(e.actor_role) : null,
       actor_organization_id: e.actor_organization_id ? String(e.actor_organization_id) : null,
+      organization_id: e.organization_id ? String(e.organization_id) : null,
       subject_id: e.subject_id ? String(e.subject_id) : null,
       subject_email: e.subject_email ? String(e.subject_email) : null,
       subject_type: e.subject_type ? String(e.subject_type) : null,

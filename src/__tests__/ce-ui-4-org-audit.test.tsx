@@ -29,6 +29,8 @@ const listAuditEvents = vi.fn(async () => ({
 vi.mock("../lib/idp-admin-client", () => ({
   listAuditEvents: (...args: unknown[]) => listAuditEvents(...(args as [])),
   listAuditEventTypes: async () => null,
+  // OSS-FIN-3: the page names its own organization in the Organization column.
+  getOwnOrganization: async () => null,
 }));
 
 afterEach(() => {

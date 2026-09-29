@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AuditActorCell, AuditOrganizationCell } from "@/components/shared/audit-actor-cell";
 import type { AuditFilterValues } from "@/components/shared/audit-filter-panel";
 import { AuditFilterPanel } from "@/components/shared/audit-filter-panel";
 import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
@@ -23,7 +24,7 @@ import type { AuditEventItem } from "@/lib/idp-admin-client";
  *   - org_admin scoping is server-enforced — filters do not broaden visibility.
  *   - All filter params are validated server-side before forwarding to backend.
  */
-import { listAuditEvents, listAuditEventTypes } from "@/lib/idp-admin-client";
+import { getOwnOrganization, listAuditEvents, listAuditEventTypes } from "@/lib/idp-admin-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { auditDateRange } from "@/lib/utc-wire";
 
@@ -63,7 +64,8 @@ function parseAuditFilters(params: Record<string, string | string[] | undefined>
   const subjectType = str(params, "subject_type", 32);
   // subject_id arrives here from per-row "View in audit" links on the
   // org-admin user detail page (and from the "View all →" link on the
-  // recent-activity card). The IDP backend filters by actor's org so
+  // recent-activity card). The IDP backend filters to the organization the
+  // rows concern (OSS-FIN-3), so
   // a UUID for a user in another org would simply return no results —
   // no cross-tenant leak. UUID = 36 chars max, so the slice trims any
   // accidentally longer string.
@@ -133,7 +135,7 @@ export default async function OrgAdminAuditPage({
   const page = parsePage(params.page);
   const { filters, startDateISO, endDateISO, subjectId } = parseAuditFilters(params);
 
-  const [result, eventTypeGroups] = await Promise.all([
+  const [result, eventTypeGroups, ownOrg] = await Promise.all([
     listAuditEvents({
       page,
       pageSize: PAGE_SIZE,
@@ -148,7 +150,12 @@ export default async function OrgAdminAuditPage({
         Promise.resolve({ ok: false, status: 0, featureUnavailable: false, forbidden: false })
     ),
     listAuditEventTypes().catch(() => null),
+    getOwnOrganization().catch(() => null),
   ]);
+  // OSS-FIN-3: every row the org_admin sees concerns its own organization.
+  const orgNames: Record<string, string> = ownOrg?.id
+    ? { [ownOrg.id]: ownOrg.name || "This organization" }
+    : {};
 
   const hasPrev = page > 1;
   const hasNext = result.ok && result.total_count > page * PAGE_SIZE;
@@ -203,6 +210,7 @@ export default async function OrgAdminAuditPage({
           {result.events.length > 0 ? (
             <AuditTable
               events={result.events}
+              orgNames={orgNames}
               sortOrder={filters.sortOrder}
               sortHref={pageHref(
                 1,
@@ -241,10 +249,12 @@ export default async function OrgAdminAuditPage({
 
 function AuditTable({
   events,
+  orgNames,
   sortOrder,
   sortHref,
 }: {
   events: AuditEventItem[];
+  orgNames: Record<string, string>;
   sortOrder: "asc" | "desc";
   sortHref: string;
 }) {
@@ -258,6 +268,7 @@ function AuditTable({
             </Th>
             <Th>Event</Th>
             <Th>Actor</Th>
+            <Th>Organization</Th>
             <Th>Target</Th>
             <Th>IP</Th>
             <Th>Priority</Th>
@@ -274,7 +285,10 @@ function AuditTable({
                 <span className="text-xs font-mono text-sky-950">{e.event_type}</span>
               </td>
               <td className="px-4 py-3 max-w-[180px]">
-                <AuditIdentityCell value={e.actor_email} fallback={e.actor_type} />
+                <AuditActorCell event={e} />
+              </td>
+              <td className="px-4 py-3 max-w-[160px]">
+                <AuditOrganizationCell event={e} names={orgNames} />
               </td>
               <td className="px-4 py-3 max-w-[180px]">
                 <AuditIdentityCell value={e.subject_email} fallback={e.subject_type} />

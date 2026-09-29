@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AuditActorCell, AuditOrganizationCell } from "@/components/shared/audit-actor-cell";
 import type { AuditFilterValues } from "@/components/shared/audit-filter-panel";
 import { AuditFilterPanel } from "@/components/shared/audit-filter-panel";
 import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
@@ -271,6 +272,7 @@ function AuditTable({
             </Th>
             <Th>Event</Th>
             <Th>Actor</Th>
+            <Th>Organization</Th>
             <Th>Target</Th>
             <Th>IP</Th>
             <Th>Priority</Th>
@@ -292,7 +294,18 @@ function AuditTable({
                 <AuditEventDetails event={e} />
               </td>
               <td className="px-4 py-3 max-w-[180px]">
-                <AuditIdentityCell value={e.actor_email} fallback={e.actor_type} />
+                <AuditActorCell event={e} />
+              </td>
+              <td className="px-4 py-3 max-w-[160px]">
+                <AuditOrganizationCell event={e} />
+                {e.organization_id && UUID_RE.test(e.organization_id) && (
+                  <a
+                    href={`/site-admin/organizations/${e.organization_id}`}
+                    className="block text-[10px] text-sky-600 hover:text-sky-800 transition-colors"
+                  >
+                    View →
+                  </a>
+                )}
               </td>
               <td className="px-4 py-3 max-w-[200px]">
                 <div className="space-y-0.5">
