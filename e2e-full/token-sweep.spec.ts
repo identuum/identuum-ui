@@ -349,7 +349,22 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
       failOnStatusCode: false,
       maxRedirects: 0,
     });
-    expect(logoutBare.status(), "logout bare → 204").toBe(204);
+    // D-018(a): without a redirect target the IdP shows its own signed-out page.
+    expect(logoutBare.status(), "logout bare → 200 signed-out page").toBe(200);
+    expect(logoutBare.headers()["content-type"] ?? "", "signed-out page is HTML").toMatch(
+      /^text\/html/
+    );
+    expect(logoutBare.headers()["cache-control"], "signed-out page is no-store").toBe("no-store");
+    expect(
+      logoutBare.headers()["content-security-policy"] ?? "",
+      "signed-out page CSP forbids scripts"
+    ).toContain("script-src 'none'");
+    const signedOut = await logoutBare.text();
+    expect(signedOut, "signed-out text").toContain("You are signed out");
+    for (const v of [SITE_ADMIN_EMAIL, logoutClientId]) {
+      expect(signedOut.includes(v), "the page names no user or client").toBe(false);
+    }
+    expect(signedOut, "the page carries no state").not.toMatch(/state=/);
     const logoutBadRedir = await request.get(
       `${IDP_BASE}/api/v1/oidc/logout?post_logout_redirect_uri=${encodeURIComponent("https://evil.test/x")}&client_id=${logoutClientId}`,
       { failOnStatusCode: false, maxRedirects: 0 }

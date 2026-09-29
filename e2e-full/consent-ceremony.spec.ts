@@ -1939,7 +1939,24 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       failOnStatusCode: false,
       maxRedirects: 0,
     });
-    expect(logout.status(), "end-session without a redirect target → 204").toBe(204);
+    // D-018(a): without a redirect target the IdP shows its own signed-out page.
+    expect(logout.status(), "end-session without a redirect target → 200 signed-out page").toBe(
+      200
+    );
+    expect(logout.headers()["content-type"] ?? "", "signed-out page is HTML").toMatch(
+      /^text\/html/
+    );
+    expect(logout.headers()["cache-control"], "signed-out page is no-store").toBe("no-store");
+    expect(
+      logout.headers()["content-security-policy"] ?? "",
+      "signed-out page CSP forbids scripts"
+    ).toContain("script-src 'none'");
+    const signedOut = await logout.text();
+    expect(signedOut, "signed-out text").toContain("You are signed out");
+    for (const v of [userEmail, clientId]) {
+      expect(signedOut.includes(v), "the page names no user or client").toBe(false);
+    }
+    expect(signedOut, "the page carries no state").not.toMatch(/state=/);
     expect(
       logout.headers()["x-identuum-logout"],
       "healthy store: no unconfirmed marker"
