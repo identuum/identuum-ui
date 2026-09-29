@@ -122,7 +122,7 @@ function InvalidLink({ reason }: { reason: "missing" | "invalid" }) {
       </h2>
       <p className="text-sm text-stone-500 leading-relaxed">
         {reason === "missing"
-          ? "This page requires a one-time setup link. Check your email for an invitation from your administrator."
+          ? "This page requires a one-time setup link. Open the link your administrator gave you, or ask them for a new one."
           : "This setup link is invalid, has already been used, or has expired. One-time links are valid for 48 hours."}
       </p>
       <p className="text-sm text-stone-500 leading-relaxed">

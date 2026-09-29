@@ -334,3 +334,24 @@ export function getOrganizationActionLabel(action: OrganizationAction): string {
 export function getOrganizationActionHref(orgID: string, action: OrganizationAction): string {
   return `/site-admin/organizations/${orgID}/${ORGANIZATION_ACTION_META[action].route}`;
 }
+
+/**
+ * OSS-FINAL (D-016): the organization is still waiting for its administrator's
+ * activation — inactive, not deleted, with org_admins none of whom has ever
+ * verified. The same state OSS's PUT active=true refuses with 409
+ * activation_pending; re-issuing the activation link is the way forward.
+ * Admins that could not be loaded (null) are never read as pending.
+ */
+export function isActivationPending(
+  org: Pick<OperationalStatusInput, "active" | "deleted" | "has_admin">,
+  admins: ReadonlyArray<{ email_verified: boolean }> | null
+): boolean {
+  return (
+    !org.active &&
+    !org.deleted &&
+    org.has_admin === true &&
+    admins !== null &&
+    admins.length > 0 &&
+    admins.every((a) => !a.email_verified)
+  );
+}

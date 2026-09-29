@@ -1,8 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
+import { ActivationIssuedPanel } from "@/components/shared/activation-issued-panel";
 import { Button } from "@/components/ui/button";
-import { LocalTime } from "@/components/ui/local-time";
 import { type AssignAdminActionState, assignAdminAction } from "./actions";
 
 interface AssignAdminFormProps {
@@ -38,8 +38,8 @@ export function AssignAdminForm({ orgId, orgName }: AssignAdminFormProps) {
             activation token (any earlier token stops working).
           </li>
           <li>
-            If SMTP is configured, the activation email is re-sent automatically; the token is also
-            shown here for secure out-of-band delivery.
+            The new activation link is shown here once for you to hand over; it is also mailed only
+            when email delivery is configured on the IdP.
           </li>
           <li>
             Only inactive organizations with a pending administrator qualify — an active
@@ -65,58 +65,14 @@ export function AssignAdminForm({ orgId, orgName }: AssignAdminFormProps) {
 
 export function SuccessPanel({
   success,
-  orgName,
 }: {
   success: NonNullable<AssignAdminActionState["success"]>;
   orgName: string;
 }) {
-  const { adminEmail, adminEmailUnavailable, activationToken, expiresAt } = success;
-
-  const expiryDisplay = <LocalTime value={expiresAt} fallback="24 hours from now" />;
-
+  const { orgId: _orgId, ...activation } = success;
   return (
     <div className="max-w-lg space-y-5">
-      {/* Primary confirmation */}
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4">
-        <p className="text-sm font-semibold text-emerald-700">Activation token re-issued</p>
-        {adminEmail ? (
-          <p className="text-xs text-stone-500 mt-1">
-            A fresh one-time activation token was issued for{" "}
-            <span className="font-mono font-medium text-sky-950">{adminEmail}</span>, the pending
-            administrator of <span className="font-medium text-sky-950">{orgName}</span>. Any
-            earlier token no longer works. If SMTP is configured, the activation email was re-sent.
-          </p>
-        ) : (
-          <p className="text-xs text-stone-500 mt-1">
-            A fresh one-time activation token was issued for{" "}
-            <span className="font-medium text-sky-950">{orgName}</span>. Any earlier token no longer
-            works. No administrator email:{" "}
-            {adminEmailUnavailable ?? "the identity provider named none."}
-          </p>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
-          One-time activation token
-        </p>
-        {/* Token displayed for copy — never placed in URL or storage */}
-        <pre className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs text-sky-950 break-all whitespace-pre-wrap font-mono overflow-x-auto shadow-inner">
-          {activationToken}
-        </pre>
-        <p className="text-xs text-amber-600 leading-relaxed">
-          ⚠ Copy this token now. It will not be shown again after you leave this page. Deliver it
-          {adminEmail ? (
-            <>
-              {" "}
-              to <span className="font-mono">{adminEmail}</span>
-            </>
-          ) : (
-            " to the intended administrator"
-          )}{" "}
-          through a secure channel. It expires {expiryDisplay}.
-        </p>
-      </div>
+      <ActivationIssuedPanel activation={activation} />
 
       {/* Navigation */}
       <div className="flex items-center gap-3">

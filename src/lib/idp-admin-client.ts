@@ -204,7 +204,8 @@ export async function listOrganizations(opts?: {
  * The backend also returns 409 when domain is already in use.
  *
  * If admin_email is supplied, the IdP atomically creates the org plus an
- * initial org_admin user and sends an activation email. If omitted, a "shell"
+ * initial org_admin user and answers its one-time activation link to hand
+ * over (D-016; mailed too only when SMTP is configured). If omitted, a "shell"
  * organization (inactive, no admin) is created.
  *
  * Returns a narrow UI-safe shape on success — never raw backend fields.
@@ -552,6 +553,10 @@ export type AssignOrgAdminResult =
        * (identuum-idp-ce: the re-issued claim is bound to no email).
        */
       adminEmailUnavailable?: string;
+      /** The link that consumes the token, when the IdP could build one. */
+      activationUrl?: string;
+      /** Why no link exists (names the setting). Never set with activationUrl. */
+      activationUrlUnavailable?: string;
       /** ISO timestamp when the token expires. */
       expiresAt: string;
     }
@@ -613,6 +618,12 @@ export async function assignOrgAdmin(opts: AssignOrgAdminOptions): Promise<Assig
       ...(typeof data.admin_email_unavailable === "string" && data.admin_email_unavailable !== ""
         ? { adminEmailUnavailable: data.admin_email_unavailable }
         : {}),
+      ...(typeof data.activation_url === "string" && data.activation_url !== ""
+        ? { activationUrl: data.activation_url }
+        : typeof data.activation_url_unavailable === "string" &&
+            data.activation_url_unavailable !== ""
+          ? { activationUrlUnavailable: data.activation_url_unavailable }
+          : {}),
       expiresAt: String(data.expires_at ?? ""),
     };
   } catch {

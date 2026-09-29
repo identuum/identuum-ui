@@ -41,7 +41,7 @@ export async function reactivateOrgAction(
     if (result.conflict) {
       return {
         error:
-          "This organization's administrator has not activated it yet. Re-issue the activation link instead of reactivating.",
+          "This organization's administrator has not activated it yet. Use Re-issue activation link on the organization's page to hand over a new link instead of reactivating.",
       };
     }
     return { error: "Could not reactivate the organization. Try again." };

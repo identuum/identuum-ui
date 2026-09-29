@@ -1,7 +1,8 @@
 /**
  * Public organization-activation page.
  *
- * Accessed via the one-time URL the ACTIVATION EMAIL builds:
+ * Accessed via the one-time link the site admin hands over (D-016), which the
+ * ACTIVATION EMAIL also carries when SMTP is configured:
  * /activate?token=... (idp-oss smtp_notifier.go linkBaseURL + "/activate").
  * THE-DEAD-ACTIVATE-LINK (2026-08-27): this page did not exist — the
  * pending org_admin's emailed link 404'd on the UI.
@@ -115,7 +116,7 @@ function InvalidLink({ reason }: { reason: "missing" | "invalid" | "already-acti
       </h2>
       <p className="text-sm text-stone-500 leading-relaxed">
         {reason === "missing"
-          ? "This page requires a one-time activation link. Check your email for the activation message, or ask your site administrator to re-issue the token."
+          ? "This page requires a one-time activation link. Open the link your site administrator gave you (or the activation email, if one was sent), or ask them to re-issue it."
           : reason === "already-active"
             ? "This organization has already been activated — its administrator account is ready. Sign in with your credentials instead."
             : "This activation link is invalid, has already been used, or has expired. Ask your site administrator to re-issue the activation token."}

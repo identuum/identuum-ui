@@ -21,10 +21,12 @@ import {
   deriveOrganizationActions,
   getOrganizationActionHref,
   getOrganizationActionLabel,
+  isActivationPending,
   LIFECYCLE_COPY,
   type LifecycleState,
 } from "./operational-status";
 import { ProtocolSettingsPanel } from "./protocol-settings-panel";
+import { ReissueActivationButton } from "./reissue-activation-button";
 import { ResetAdminMFAButton } from "./reset-admin-mfa-button";
 
 export const metadata: Metadata = { title: "Organization — Identuum Admin" };
@@ -224,6 +226,18 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
                   </p>
                 </div>
               </div>
+              {/* OSS-FINAL (D-016): the administrator has not activated yet — a lost
+                  link is re-issued here (the earlier one stops working). */}
+              {isActivationPending(org, adminsResult?.ok ? admins : null) && (
+                <div className="border-t border-stone-100 pt-3 space-y-2">
+                  <p className="text-xs text-amber-700 font-medium">Waiting for activation</p>
+                  <p className="text-xs text-stone-500 leading-relaxed">
+                    The administrator has not activated this organization yet. If the activation
+                    link was lost or has expired, issue a new one to hand over.
+                  </p>
+                  <ReissueActivationButton orgId={id} />
+                </div>
+              )}
               {/* Recovery affordance when the only admin account has an expired invitation */}
               {org.can_assign_admin && !org.deleted && (
                 <div className="border-t border-stone-100 pt-3 space-y-2">

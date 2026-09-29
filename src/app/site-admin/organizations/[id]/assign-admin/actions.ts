@@ -22,6 +22,9 @@ export interface AssignAdminSuccess {
    * Do NOT log this value.
    */
   activationToken: string;
+  /** The link that consumes the token, or why the IdP could not build one. */
+  activationUrl?: string;
+  activationUrlUnavailable?: string;
   expiresAt: string;
 }
 
@@ -85,6 +88,10 @@ export async function assignAdminAction(
         ? { adminEmailUnavailable: result.adminEmailUnavailable }
         : {}),
       activationToken: result.activationToken,
+      ...(result.activationUrl ? { activationUrl: result.activationUrl } : {}),
+      ...(result.activationUrlUnavailable
+        ? { activationUrlUnavailable: result.activationUrlUnavailable }
+        : {}),
       expiresAt: result.expiresAt,
     },
   };
