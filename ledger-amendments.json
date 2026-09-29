@@ -1,11 +1,5 @@
 {
   "schema_version": "ledger-amendments.v1",
   "base_commit": "62ff8162f8e8915de5e60039d6f283a2f64348d6",
-  "changes": [
-    {
-      "rule_id": "WIRE-READ-ORG-1",
-      "change_class": "test_fingerprint_changed",
-      "reason": "OSS-FIN-1 (2026-09-29, brief item 2): identuum-idp-oss's org read surface gains activation_pending (WIRE-CONTRACT-ORG-1, tri-state), which listOrganizations now reads for the list row's 'Waiting for activation'. The pinned WIRE_KEYS gain the key and the no-Boolean()-coercion guard covers it. Mutation watched: with Boolean(o.activation_pending) in the mapper the test read 'expected … listOrganizations… not to match /Boolean\\(\\s*o\\.(is_claimed|can_assign…/'; restored, green. Rehashed 1afa9c92992c -\u003e d5272ba60498."
-    }
-  ]
+  "changes": []
 }
