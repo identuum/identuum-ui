@@ -89,9 +89,9 @@ export function CreateOrgForm() {
           className={inputClass}
         />
         <p className="text-xs text-stone-400 leading-relaxed">
-          Optional. If provided, creates an initial org admin user and requests an activation email
-          (delivery depends on IdP SMTP configuration). If omitted, a shell organization is created
-          with no admin.
+          Optional. If provided, creates an initial org admin user and shows you a one-time
+          activation link to hand over; it is also mailed only when email delivery is configured on
+          the IdP. If omitted, a shell organization is created with no admin.
         </p>
         {state.fieldErrors?.admin_email && (
           <p className="text-xs text-red-600">{state.fieldErrors.admin_email}</p>
@@ -190,14 +190,13 @@ function SuccessPanel({ success }: { success: NonNullable<CreateOrgActionState["
         </div>
       )}
 
-      {/* Case: normal mode, email provided. */}
+      {/* Case: email provided but the IdP returned no activation link (D-016: it always should). */}
       {!activationToken && adminEmail && (
         <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3">
           <p className="text-xs text-stone-500">
-            If email delivery is configured on the IdP, an activation email was requested for{" "}
-            <span className="font-mono font-medium text-sky-950">{adminEmail}</span>. If the email
-            does not arrive, verify the IdP&apos;s SMTP configuration or use the resend activation
-            option when available.
+            The IdP returned no activation link for{" "}
+            <span className="font-mono font-medium text-sky-950">{adminEmail}</span>. The link is
+            mailed only when email delivery is configured on the IdP; otherwise nothing was sent.
           </p>
         </div>
       )}

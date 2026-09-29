@@ -38,6 +38,12 @@ export async function reactivateOrgAction(
   if (!result.ok) {
     if (result.notFound) return { error: "Organization not found." };
     if (result.status === 403) redirect("/login?reason=unauthorized");
+    if (result.conflict) {
+      return {
+        error:
+          "This organization's administrator has not activated it yet. Re-issue the activation link instead of reactivating.",
+      };
+    }
     return { error: "Could not reactivate the organization. Try again." };
   }
 
