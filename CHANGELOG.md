@@ -6,6 +6,28 @@ first published image. Format roughly follows
 [Semantic Versioning](https://semver.org/). The published artifact is the
 container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
+## Unreleased
+
+### Added
+
+- **First sign-in with an admin-set password** (OSS-FIN-1, D-017): when the
+  IdP answers `password_change_required`, the sign-in shows "Choose a new
+  password" (new + confirm); the new password goes to
+  `POST /api/v1/auth/login/password-change`, and the sign-in continues to MFA
+  enrolment or verification when the policy asks, else the dashboard.
+
+### Changed
+
+- **A pending organization's list row reads "Waiting for activation"** and
+  offers "Re-issue activation link" (the organization's page) instead of
+  "Admin active" + Reactivate, from the IdP's `activation_pending`.
+- **assign-admin and the organization page say what they do** (D-016): issue
+  or re-issue the activation link, or assign the first administrator — no
+  "delegation" or "claims".
+- **Audit From/To are the viewer's local days** (U-020): the form sends their
+  UTC instants (`start_utc`/`end_utc`); without script the day is read as UTC,
+  as before. The form says so.
+
 ## `v0.4.0`
 
 The static export that identuum-idp-oss `v0.7.0` embeds. Delta

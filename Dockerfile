@@ -49,9 +49,14 @@ RUN mkdir -p /app/config-mount
 # ENTRYPOINT ["/usr/bin/node"]; USER 65532 (`node`); WORKDIR /app; npm
 # at /usr/bin/npm; grype through the pinned judge lictor (`lictor grype`; the
 # idp-oss tools/grype-gate it was ported from is retired since OSS 63ee215):
-# matches=1 fixable=0 allowlisted=0 unfixable=1 severe=0 on ARM64 and AMD64.
-# The remaining Medium CVE-2026-89092 has fix state "unknown"; it is not
-# suppressed or claimed fixed. glibc (Wolfi), not Alpine: IMG-NONALPINE holds.
+# matches=1 fixable=0 allowlisted=0 unfixable=1 severe=0 on ARM64 and AMD64
+# (2026-09-22). Re-read 2026-09-29 at the same digest under a newer grype
+# database, on this host (ARM64), `make grype-scan`: matches=6 fixable=0
+# allowlisted=2 unfixable=4 severe=0 — the two allowlisted are npm's own
+# ip-address 10.3.1 (GHSA-2vr4-cq9g-pvrc, GHSA-rpw4-54j3-4h4q; owner ruling,
+# grype-allowlist.json). The Medium CVE-2026-89092 had fix state "unknown";
+# it is not suppressed or claimed fixed. glibc (Wolfi), not Alpine:
+# IMG-NONALPINE holds.
 # This move from sha256:4a274a26… patches zlib to 1.3.2.1_rc20260601-r0
 # and node-gyp to 13.0.2-r1, removing all eight fixable scan findings.
 #
