@@ -66,7 +66,7 @@ const MIN_PASSWORD_LENGTH = 12;
  *   1. Intro (read-only — explains what the wizard does and where the
  *      setup code lives).
  *   2. Setup code verification — operator pastes the code from the
- *      IDP container logs / `--show-setup-code <data-dir>`.
+ *      IDP container logs / `identuum-idp show-setup-code <data-dir>`.
  *   3. First organization + site administrator — operator picks the
  *      organization name, the admin email, and the admin password.
  *
@@ -391,7 +391,7 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
           </code>{" "}
           inside the container while setup is incomplete, and you can re-display it any time with{" "}
           <code className="rounded bg-stone-100 px-1 py-0.5 text-xs text-sky-950">
-            identuum-idp --show-setup-code &lt;data-dir&gt;
+            identuum-idp show-setup-code &lt;data-dir&gt;
           </code>
           . The setup code is single-use; it authorises this wizard only and is not your
           administrator password.

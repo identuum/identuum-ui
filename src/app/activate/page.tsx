@@ -20,7 +20,7 @@
 
 import type { Metadata } from "next";
 import { MailCeremonyUnavailable } from "@/components/auth/mail-ceremony-unavailable";
-import { mailCeremoniesAvailable } from "@/lib/mail-capabilities";
+import { activationLinkAvailable } from "@/lib/mail-capabilities";
 import { validateActivationToken } from "./actions";
 import { ActivateFormClient } from "./form-client";
 
@@ -33,8 +33,9 @@ export default async function ActivatePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   // CE-UI-2b: no mail, no activation mail (activation is the claim link
-  // there); the token is never sent.
-  if (!(await mailCeremoniesAvailable())) {
+  // there); the token is never sent. OSS-RC: a handed-over link works
+  // without mail where the IdP declares activation_link (D-016).
+  if (!(await activationLinkAvailable())) {
     return <MailCeremonyUnavailable title="Activate organization" />;
   }
   const params = await searchParams;

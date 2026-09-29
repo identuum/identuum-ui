@@ -366,6 +366,7 @@ const CAPABILITY_LABELS: Record<keyof ComponentCapabilities, string> = {
   admin_reset_link: "Admin reset link",
   user_approval: "User approval",
   user_invite: "User invite",
+  activation_link: "Activation link",
   public_clients: "Public clients",
   org_audit: "Organization audit",
 };

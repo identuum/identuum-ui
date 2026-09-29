@@ -37,6 +37,17 @@ export async function userInviteAvailable(): Promise<boolean> {
   return state?.components.idp?.capabilities?.user_invite === true;
 }
 
+/**
+ * OSS-RC: /activate is offered where the IdP mails the activation OR serves a
+ * handed-over activation link (capabilities.activation_link, identuum-idp-oss
+ * with or without SMTP — D-016). identuum-idp-ce declares neither.
+ */
+export async function activationLinkAvailable(): Promise<boolean> {
+  const state = await getServerRuntimeState();
+  const caps = state?.components.idp?.capabilities;
+  return caps?.mail_ceremonies !== false || caps?.activation_link === true;
+}
+
 export async function userApprovalAvailable(): Promise<boolean> {
   const state = await getServerRuntimeState();
   return state?.components.idp?.capabilities?.user_approval !== false;

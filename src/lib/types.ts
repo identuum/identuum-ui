@@ -771,6 +771,9 @@ export interface ComponentCapabilities {
   /** OSS-ONBOARD-B (D-016): the IdP mounts the user invite (identuum-idp-oss
    *  since OSS-ONBOARD-A). Absent is treated as unavailable. */
   user_invite?: boolean;
+  /** OSS-RC: the IdP redeems organization activation links, with or without
+   *  mail (identuum-idp-oss). Absent is treated as unavailable. */
+  activation_link?: boolean;
   /** CE-UI-3b: the IdP registers public clients (false on identuum-idp-ce).
    *  Absent is treated as available. */
   public_clients?: boolean;
