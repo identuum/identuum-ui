@@ -233,7 +233,10 @@ test.describe("token-landing + static pages (NINE-DARK-PAGES)", () => {
     await page.getByLabel("Email", { exact: true }).fill(email);
     await page.getByLabel("Name", { exact: true }).fill("E2E Invitee");
     await page.getByRole("button", { name: "Invite user" }).click();
-    const link = await page.getByLabel("Setup link").inputValue({ timeout: 15_000 });
+    // exact: the Copy button's aria-label "Copy setup link" also contains it.
+    const link = await page
+      .getByLabel("Setup link", { exact: true })
+      .inputValue({ timeout: 15_000 });
     expect(new URL(link).pathname, "the panel hands over an /invite link").toBe("/invite");
 
     const fresh = await browser.newContext();
