@@ -6,6 +6,58 @@ first published image. Format roughly follows
 [Semantic Versioning](https://semver.org/). The published artifact is the
 container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
+## `v0.4.0`
+
+The static export that identuum-idp-oss `v0.7.0` embeds. Delta
+`v0.3.3..HEAD`: 37 commits (measured at `da8f70b`) and this release commit.
+As for `v0.3.3`, the published artifact is the export
+(`publish-ui-export.yml` on the tag); no container image is published.
+Minor, not patch: new pages and actions (user invite, activation re-issue).
+
+### Added
+
+- **Invite a user** (`05f0c96`, D-016): Users → Invite user
+  (`/org-admin/users/new`) shows the one-time link with Copy, its token and
+  its expiry once; pending users read "Invitation pending", and their page
+  offers "Re-issue invitation". The public `/invite?token=` page validates
+  the link, sets the password and sends the user to sign-in. Each appears
+  only where the IdP declares `capabilities.user_invite`.
+- **Re-issue a pending organization's activation link** (`935873d`): a
+  pending organization's page offers "Re-issue activation link". It asks
+  first, then shows the new link with Copy, the token and the expiry once;
+  the earlier link stops working. assign-admin shows the same panel.
+
+### Changed
+
+- **`/activate` works without mail** (`12eb4e1`): it is offered where the IdP
+  can send mail OR declares `capabilities.activation_link`. The setup wizard
+  names the `show-setup-code` subcommand.
+- **The console says what D-016 says** (`9745185`, `935873d`): the
+  new-organization form, assign-admin, `/activate` and `/claim` say that the
+  one-time link is shown to hand over and is mailed only when email delivery
+  is configured. Reactivate on a never-activated organization explains the
+  IdP's `409 activation_pending` and points to "Re-issue activation link".
+- **A deleted organization's row links only to Restore** (`cf2f5f7`).
+- **Client reads match what the IdPs return** (`7b89515`): rotate reads the
+  nested client; service-account disable/enable take OSS's `204`; unlink
+  and the linked list read the safe client; assign-admin names an unbound
+  invitation; the TOTP step names a `429`.
+- **org-admin audit follows `capabilities.org_audit`** (`4d1f952`): no Audit
+  link, page fetch or recent-activity card where the IdP declares it false.
+- **Protocol settings have no site_admin save path** (`df025d5`): both
+  editions refuse site_admin.
+- **org-admin settings read the identity provider from the singular route
+  only** (`357429c`); `identity_provider: null` is none.
+
+### Verification machinery (repository-visible, not in the export)
+
+- e2e-full exercises the user invite and its two public endpoints
+  (`0c63dd6`, `43f05d0`, `b3e852e`). The role-matrix denominator is
+  144/94/30 -> 147/95/32 (`4f53af9`, owner-authorized).
+- `grype-allowlist.json` names GHSA-2vr4-cq9g-pvrc and GHSA-rpw4-54j3-4h4q
+  (npm's ip-address in the runner base image, not a ui dependency; owner
+  ruling) (`9c1e442`).
+
 ## `v0.3.3`
 
 The static export that identuum-idp-oss `v0.6.3` embeds. Delta
