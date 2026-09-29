@@ -1,0 +1,19 @@
+{
+  "schema_version": "grype-allowlist.v1",
+  "entries": [
+    {
+      "id": "GHSA-2vr4-cq9g-pvrc",
+      "package": "ip-address",
+      "reason": "ip-address 10.3.1 (fixed in 10.5.1) is npm's own dependency at /usr/lib/node_modules/npm in the cgr.dev/chainguard/node runner base, not a ui dependency (pnpm why ip-address: none); the app never runs npm. No fixed base digest exists: the newest, sha256:78a8d373 (created 2026-09-28), still ships 10.3.1. Remove this entry when a chainguard/node digest ships ip-address >= 10.5.1.",
+      "ruling": "Owner, OSS-BINARIES, 2026-09-29: allowlist by name after the runner-digest bump could not take the fix.",
+      "added": "2026-09-29"
+    },
+    {
+      "id": "GHSA-rpw4-54j3-4h4q",
+      "package": "ip-address",
+      "reason": "ip-address 10.3.1 (fixed in 10.5.1) is npm's own dependency at /usr/lib/node_modules/npm in the cgr.dev/chainguard/node runner base, not a ui dependency (pnpm why ip-address: none); the app never runs npm. No fixed base digest exists: the newest, sha256:78a8d373 (created 2026-09-28), still ships 10.3.1. Remove this entry when a chainguard/node digest ships ip-address >= 10.5.1.",
+      "ruling": "Owner, OSS-BINARIES, 2026-09-29: allowlist by name after the runner-digest bump could not take the fix.",
+      "added": "2026-09-29"
+    }
+  ]
+}

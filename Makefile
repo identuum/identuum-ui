@@ -390,7 +390,7 @@ toolchain-parity:
 ## github.com/ozgurcd/lictor, `brew install ozgurcd/tap/lictor`) — rule
 ## GRYPE-FIXABLE-FAILS-1 (OSS RULE-FLOOR.md): a finding with an AVAILABLE FIX
 ## fails, a High/Critical finding fails whether or not a fix exists, an
-## allowlist entry (grype-allowlist.json, absent today = empty; lictor's
+## allowlist entry (grype-allowlist.json, absent = empty; lictor's
 ## default path under --repo, so not passed) needs a reason AND a ruling and
 ## can excuse "you have not taken the fix", never severity. An IMAGE subject
 ## keeps its NOT APPLICABLE clauses (GRYPE-SUBJECT-1). Builds
