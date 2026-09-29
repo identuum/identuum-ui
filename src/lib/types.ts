@@ -115,6 +115,8 @@ export interface OrgListItem {
    * so an undefined state never yields an assignment affordance.
    */
   can_assign_admin: boolean | undefined;
+  /** OSS-FIN-1: org_admins exist and none has activated (absent ⇒ unknown). */
+  activation_pending?: boolean;
   created_at: string;
   updated_at: string;
 }

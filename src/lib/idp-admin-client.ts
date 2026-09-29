@@ -177,6 +177,9 @@ export async function listOrganizations(opts?: {
       // can_assign_admin: true when site_admin recovery delegation is allowed (same
       // semantics as GenerateClaimToken — expired pending invitations don't block).
       can_assign_admin: typeof o.can_assign_admin === "boolean" ? o.can_assign_admin : undefined,
+      ...(typeof o.activation_pending === "boolean"
+        ? { activation_pending: o.activation_pending }
+        : {}),
       created_at: String(o.created_at ?? ""),
       updated_at: String(o.updated_at ?? ""),
     }));

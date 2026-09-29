@@ -11,6 +11,8 @@ export const IDP_PATHS = {
   mfaLogin: "/api/idp/api/v1/auth/login/mfa",
   mfaEnrollInitiate: "/api/idp/api/v1/auth/login/mfa/enroll/initiate",
   mfaEnrollComplete: "/api/idp/api/v1/auth/login/mfa/enroll/complete",
+  // D-017: the required password change of a sign-in with an admin-set password.
+  loginPasswordChange: "/api/idp/api/v1/auth/login/password-change",
   // Authenticated MFA setup — distinct from the login-flow enrollment
   // chain above. The login-flow endpoints require a pending (IsValid=false)
   // session id opened by the password-step probe; these require a fully

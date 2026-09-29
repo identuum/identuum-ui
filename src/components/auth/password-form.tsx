@@ -23,6 +23,8 @@ interface PasswordFormProps {
   orgSlug?: string;
   onMfaRequired: (sessionId: string) => void;
   onMfaEnrollmentRequired: (sessionId: string) => void;
+  /** D-017: an admin-set password was proven; the user chooses their own first. */
+  onPasswordChangeRequired?: (sessionId: string) => void;
   onSuccess: (role: UserRole) => void;
   /** CE-UI-2b: false where the IdP sends no mail (capabilities.mail_ceremonies);
    *  the Forgot password? link then gives way to the administrator note. */
@@ -34,6 +36,7 @@ export function PasswordForm({
   orgSlug,
   onMfaRequired,
   onMfaEnrollmentRequired,
+  onPasswordChangeRequired,
   onSuccess,
   mailCeremonies = true,
 }: PasswordFormProps) {
@@ -57,6 +60,15 @@ export function PasswordForm({
         remember_me: data.remember_me,
         org_slug: orgSlug,
       });
+
+      if (outcome.kind === "password_change_required") {
+        if (onPasswordChangeRequired) {
+          onPasswordChangeRequired(outcome.sessionId);
+        } else {
+          setServerError("You must choose a new password before you can sign in.");
+        }
+        return;
+      }
 
       if (outcome.kind === "mfa_enrollment_required") {
         if (outcome.sessionId) {

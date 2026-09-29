@@ -12,9 +12,10 @@ import { IDP_PATHS } from "@/lib/idp-paths";
 import type { OrgConfig, PublicIDPInfo, UserRole } from "@/lib/types";
 import { MFAEnrollForm } from "./mfa-enroll-form";
 import { MFAForm } from "./mfa-form";
+import { PasswordChangeForm } from "./password-change-form";
 import { PasswordForm } from "./password-form";
 
-type Step = "EMAIL" | "SSO_SELECT" | "PASSWORD" | "MFA" | "MFA_ENROLL";
+type Step = "EMAIL" | "SSO_SELECT" | "PASSWORD" | "PASSWORD_CHANGE" | "MFA" | "MFA_ENROLL";
 
 const emailSchema = z.object({
   email: z.string().min(3, "Enter your email or domain"),
@@ -52,6 +53,7 @@ export function LoginFlow({ onSuccess, mailCeremonies = true }: LoginFlowProps) 
   const [orgConfig, setOrgConfig] = useState<OrgConfig | null>(null);
   const [mfaSessionId, setMfaSessionId] = useState("");
   const [enrollSessionId, setEnrollSessionId] = useState("");
+  const [changeSessionId, setChangeSessionId] = useState("");
   const [serverError, setServerError] = useState<string | null>(null);
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
@@ -171,6 +173,12 @@ export function LoginFlow({ onSuccess, mailCeremonies = true }: LoginFlowProps) 
   const handleMfaEnrollmentRequired = (sessionId: string) => {
     setEnrollSessionId(sessionId);
     setStep("MFA_ENROLL");
+  };
+
+  // D-017: the admin-set password comes first; MFA follows it when required.
+  const handlePasswordChangeRequired = (sessionId: string) => {
+    setChangeSessionId(sessionId);
+    setStep("PASSWORD_CHANGE");
   };
 
   // Passkey login ceremony — runs entirely in the EMAIL step without a step change.
@@ -412,10 +420,26 @@ export function LoginFlow({ onSuccess, mailCeremonies = true }: LoginFlowProps) 
           orgSlug={orgConfig?.slug}
           onMfaRequired={handleMfaRequired}
           onMfaEnrollmentRequired={handleMfaEnrollmentRequired}
+          onPasswordChangeRequired={handlePasswordChangeRequired}
           onSuccess={onSuccess}
           mailCeremonies={mailCeremonies}
         />
       </div>
+    );
+  }
+
+  if (step === "PASSWORD_CHANGE") {
+    return (
+      <PasswordChangeForm
+        sessionId={changeSessionId}
+        onMfaRequired={handleMfaRequired}
+        onMfaEnrollmentRequired={handleMfaEnrollmentRequired}
+        onSuccess={onSuccess}
+        onExpired={() => {
+          setServerError("Your sign-in expired. Sign in again with the password you were given.");
+          setStep("EMAIL");
+        }}
+      />
     );
   }
 

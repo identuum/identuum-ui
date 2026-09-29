@@ -102,6 +102,8 @@ describe("org mappers stay inside the wire contract", () => {
     "deleted_at",
     "is_claimed",
     "can_assign_admin",
+    // OSS-FIN-1: identuum-idp-oss WIRE-CONTRACT-ORG-1 gained it (tri-state).
+    "activation_pending",
   ];
   // `deleted` is not on the OSS wire (it emits deleted_at); the mappers
   // still read it from the legacy/CE wrapped shape they tolerate.
@@ -128,7 +130,9 @@ describe("org mappers stay inside the wire contract", () => {
         expect(allowed.has(k), `${fn} reads unpinned wire key o.${k}`).toBe(true);
       }
       // Tri-state fields must never be Boolean()-coerced (ABSENT ≠ NEGATIVE).
-      expect(span).not.toMatch(/Boolean\(\s*o\.(is_claimed|can_assign_admin)\s*\)/);
+      expect(span).not.toMatch(
+        /Boolean\(\s*o\.(is_claimed|can_assign_admin|activation_pending)\s*\)/
+      );
     }
   });
 });

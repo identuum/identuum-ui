@@ -45,6 +45,8 @@ export type LoginOutcome =
       sessionId: string | null;
     }
   | { kind: "mfa_required"; sessionId: string }
+  /** D-017: the admin-set password was proven; the user must choose their own first. */
+  | { kind: "password_change_required"; sessionId: string }
   | { kind: "success"; role: UserRole };
 
 interface LoginPayload {
@@ -80,6 +82,11 @@ export async function login(payload: LoginPayload): Promise<LoginOutcome> {
   // is not yet complete — it is NOT a failure indicator.
   // biome-ignore lint/suspicious/noExplicitAny: raw API response, discriminated below
   const body: any = await res.json();
+
+  // D-017: an admin-set password is proven; the password change comes first
+  // (before any MFA step). No session exists yet.
+  const change = passwordChangeOutcome(body);
+  if (change) return change;
 
   // MFA enrollment required (more specific): valid admin credentials but no TOTP
   // configured — must go through first-login enrollment before access is granted.
@@ -140,6 +147,54 @@ export async function login(payload: LoginPayload): Promise<LoginOutcome> {
     throw new ApiError(res.status, "Invalid credentials");
   }
 
+  return { kind: "success", role: body.role ?? "org_user" };
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: raw API response, discriminated here
+function passwordChangeOutcome(body: any): LoginOutcome | null {
+  if (
+    body?.password_change_required === true &&
+    typeof body.session_id === "string" &&
+    body.session_id.length > 0
+  ) {
+    return { kind: "password_change_required", sessionId: body.session_id };
+  }
+  return null;
+}
+
+/**
+ * D-017: redeems the password-change step with the user's own new password,
+ * then answers what the sign-in needs next — MFA enrolment or verification
+ * when the organization's policy asks, else success (cookies set).
+ * Throws ApiError: 400 with the IdP's displayable message (policy, or the
+ * admin-set password reused); 401 "SESSION_EXPIRED" when the step is gone.
+ */
+export async function loginPasswordChange(
+  sessionId: string,
+  newPassword: string
+): Promise<LoginOutcome> {
+  const res = await fetch(IDP.loginPasswordChange, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ session_id: sessionId, new_password: newPassword }),
+  });
+  // biome-ignore lint/suspicious/noExplicitAny: raw API response, discriminated below
+  const body: any = await res.json().catch(() => ({}));
+  if (res.status === 400) {
+    throw new ApiError(
+      400,
+      typeof body.message === "string" && body.message
+        ? body.message
+        : "Choose a stronger password."
+    );
+  }
+  if (body.mfa_required === true && typeof body.session_id === "string" && body.session_id) {
+    return body.mfa_enrollment_required === true
+      ? { kind: "mfa_enrollment_required", sessionId: body.session_id }
+      : { kind: "mfa_required", sessionId: body.session_id };
+  }
+  if (!res.ok) throw new ApiError(res.status, "SESSION_EXPIRED");
   return { kind: "success", role: body.role ?? "org_user" };
 }
 
