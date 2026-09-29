@@ -81,7 +81,12 @@ describe("the actor and organization cells", () => {
     expect(sa).toContain("01990000…");
     const anon = renderToStaticMarkup(
       <AuditActorCell
-        event={row({ actor_type: "anonymous", actor_email: null, actor_id: null, actor_role: null })}
+        event={row({
+          actor_type: "anonymous",
+          actor_email: null,
+          actor_id: null,
+          actor_role: null,
+        })}
       />
     );
     expect(anon).toContain("Anonymous");
