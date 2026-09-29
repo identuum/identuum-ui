@@ -115,6 +115,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
         password: `Usr!${runId}3kpZ`,
         role: "org_user",
         organization_id: A.id,
+        must_change_password: false,
       },
       A.bearer
     );
@@ -130,6 +131,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
         password: `Usr!${runId}3kpZ`,
         role: "org_user",
         organization_id: B.id,
+        must_change_password: false,
       },
       B.bearer
     );

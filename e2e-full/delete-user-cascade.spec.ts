@@ -110,7 +110,13 @@ test.describe("delete-user cascade (census row: DELETE /api/v1/users/:id)", () =
       IDP_BASE,
       "POST",
       "/api/v1/users",
-      { email: victimEmail, password: victimPassword, role: "org_user", organization_id: orgId },
+      {
+        email: victimEmail,
+        password: victimPassword,
+        role: "org_user",
+        organization_id: orgId,
+        must_change_password: false,
+      },
       orgAdmin.bearer
     );
     expectStatus(victim, 201, "create victim → 201");

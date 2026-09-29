@@ -298,6 +298,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
         password: `Us3r!${tag}xQ`,
         name: "Update Subject",
         role: "org_user",
+        must_change_password: false,
       },
       orgAdmin.bearer
     );

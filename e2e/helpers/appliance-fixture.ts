@@ -478,7 +478,9 @@ async function createVerifiedUser(
     base,
     "POST",
     "/api/v1/users",
-    { email, password, role, organization_id: orgId },
+    // D-017: the fixture keeps the password it set (the creator's option);
+    // without it the first sign-in would be the change step.
+    { email, password, role, organization_id: orgId, must_change_password: false },
     bearer
   );
   must(create.status >= 200 && create.status < 300, `create ${role} → ${create.status}`);

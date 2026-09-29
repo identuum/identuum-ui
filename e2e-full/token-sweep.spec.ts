@@ -107,7 +107,14 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
       IDP_BASE,
       "POST",
       "/api/v1/users",
-      { email: oaEmail, password: adminPw, role: "org_admin", organization_id: org },
+      // D-017: the fixture keeps the password it set (the creator's option).
+      {
+        email: oaEmail,
+        password: adminPw,
+        role: "org_admin",
+        organization_id: org,
+        must_change_password: false,
+      },
       site.bearer
     );
     await api(
@@ -128,11 +135,21 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
       orgBearer
     );
     await api(IDP_BASE, "PUT", `/api/v1/users/${uc.json.id}`, { email_verified: true }, orgBearer);
+    // OSS-FIN-1 (D-017): a user created with an admin-set password proves it
+    // and gets the change step only — no token — then chooses their own.
     const ul = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
       email: userEmail,
       password: userPw,
     });
-    userBearer = (ul.json.access_token as string) ?? "";
+    expectStatus(ul, 401, "admin-set password sign-in → the change step");
+    expect(ul.json.error).toBe("password_change_required");
+    expect(ul.json.access_token).toBeUndefined();
+    const changed = await api(IDP_BASE, "POST", "/api/v1/auth/login/password-change", {
+      session_id: (ul.json.session_id as string) ?? "",
+      new_password: `${userPw}Own7`,
+    });
+    expectStatus(changed, 200, "the required change → the session");
+    userBearer = (changed.json.access_token as string) ?? "";
     expect(userBearer.length).toBeGreaterThan(0);
     // THE-REMAINING-FOUR (2026-08-30): service accounts are the org's own
     // org_admin's now — site_admin is refused, so the M2M bundle is minted by
@@ -389,7 +406,13 @@ test.describe("token sweep (20 census rows — closes the census)", () => {
       IDP_BASE,
       "POST",
       "/api/v1/users",
-      { email: adminBEmail, password: adminBPw, role: "org_admin", organization_id: orgB },
+      {
+        email: adminBEmail,
+        password: adminBPw,
+        role: "org_admin",
+        organization_id: orgB,
+        must_change_password: false,
+      },
       site.bearer
     );
     await api(

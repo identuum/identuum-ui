@@ -108,7 +108,13 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       IDP_BASE,
       "POST",
       "/api/v1/users",
-      { email: userEmail, password: userPw, role: "org_user", organization_id: org },
+      {
+        email: userEmail,
+        password: userPw,
+        role: "org_user",
+        organization_id: org,
+        must_change_password: false,
+      },
       orgAdmin.bearer
     );
     expectStatus(uc, 201);

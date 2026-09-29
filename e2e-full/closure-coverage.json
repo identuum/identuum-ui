@@ -200,6 +200,12 @@
       "statuses": [200, 401]
     },
     {
+      "endpoint": "POST /api/v1/auth/login/password-change",
+      "kind": "session",
+      "sources": ["jsonl"],
+      "statuses": [200]
+    },
+    {
       "endpoint": "POST /api/v1/auth/login/webauthn/begin",
       "kind": "class",
       "sources": ["jsonl", "trace"],

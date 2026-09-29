@@ -301,7 +301,13 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       IDP_BASE,
       "POST",
       "/api/v1/users",
-      { email: userEmail, password: userPw, role: "org_user", organization_id: A.id },
+      {
+        email: userEmail,
+        password: userPw,
+        role: "org_user",
+        organization_id: A.id,
+        must_change_password: false,
+      },
       A.bearer
     );
     expectStatus(uc, 201, "create org_user in A → 201");
@@ -826,6 +832,7 @@ test.describe("agent-communication authorizations sweep (4 rows × 3 roles, cros
       {
         email: successorEmail,
         password: `Adm!${runId}succ7Qx`,
+        must_change_password: false,
         role: "org_admin",
         organization_id: A.id,
       },

@@ -98,7 +98,13 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
       IDP_BASE,
       "POST",
       "/api/v1/users",
-      { email: userEmail, password: userPw, role: "org_user", organization_id: org1 },
+      {
+        email: userEmail,
+        password: userPw,
+        role: "org_user",
+        organization_id: org1,
+        must_change_password: false,
+      },
       orgAdmin.bearer
     );
     expectStatus(uc, 201);
