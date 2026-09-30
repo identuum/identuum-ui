@@ -10,7 +10,10 @@
 #                                      (identuum-idp-oss internal/uiexport's):
 #                                      ui commit, lockfile sha256, node and pnpm
 #                                      versions, every file's sha256, tree digest
-#   identuum-ui-export-<name>.spdx.json  an SPDX SBOM of the source tree
+#   identuum-ui-export-<name>.spdx.json  an SPDX SBOM of what ships: the
+#                                      production dependency closure, written
+#                                      by `make export-sbom` — the same file
+#                                      the ui security gate judges (D-019)
 #
 # and a GitHub build-provenance attestation over all three.
 #
@@ -50,6 +53,13 @@ env:
   # node is pinned to the patch release, never a floating major.
   NODE_VERSION: '26.8.1'
   PNPM_VERSION: '11.3.0'
+  # The SBOM writer (D-019, 2026-09-30): `make export-sbom` runs syft, and
+  # the gate's `make sbom-scan` runs the same target locally, so syft is ONE
+  # pin — toolchain-parity holds SYFT_VERSION equal to the local syft.
+  # SYFT_SHA256 is the linux_amd64 release tarball's digest from the
+  # release's syft_<version>_checksums.txt. Bump both together.
+  SYFT_VERSION: v1.52.0
+  SYFT_SHA256: caeedb81fb0491615f1ebd1761e4145d41ee86dd2cc7bf80669f9f5ad9d6133d
 
 jobs:
   export:
@@ -160,14 +170,22 @@ jobs:
             -cf - -C out . | gzip -n -9 > "identuum-ui-export-${NAME}.tar.gz"
           sha256sum "identuum-ui-export-${NAME}.tar.gz" "identuum-ui-export-${NAME}.json"
 
-      - name: SBOM (SPDX, source tree)
-        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
-        with:
-          path: .
-          format: spdx-json
-          output-file: identuum-ui-export-${{ steps.target.outputs.name }}.spdx.json
-          upload-artifact: false
-          upload-release-assets: false
+      - name: Install syft (exact, sha256-pinned)
+        run: |
+          set -euo pipefail
+          v="${SYFT_VERSION#v}"
+          curl -sSfL -o syft.tar.gz "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/syft_${v}_linux_amd64.tar.gz"
+          echo "${SYFT_SHA256}  syft.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/syft"
+          tar -xzf syft.tar.gz -C "$RUNNER_TEMP/syft" syft
+          rm -f syft.tar.gz
+          echo "$RUNNER_TEMP/syft" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/syft/syft" version | grep -E "^Version:[[:space:]]+${v}$"
+
+      - name: SBOM of what ships (make export-sbom, the gate's own recipe)
+        env:
+          NAME: ${{ steps.target.outputs.name }}
+        run: make --no-print-directory export-sbom SBOM_OUT="identuum-ui-export-${NAME}.spdx.json"
 
       - name: Build-provenance attestation
         id: attest

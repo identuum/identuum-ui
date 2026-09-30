@@ -18,7 +18,7 @@ DEV_PLATFORM_STATUS_URL ?= http://127.0.0.1:7104/platform-status
 # 127.0.0.1:7315 instead of the monolith on 7215.
 AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 
-.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory ci-witness ci-fetch toolchain-parity grype-scan ledger-diff-gate ledger-rebase workflow-yaml workflow-yaml-parity
+.PHONY: verify tool-versions wiki-fresh dev-up dev-rebuild dev-recreate dev-ps dev-logs dev-down dev-smoke dev-health dev-smoke-runtime image-base-check image-base-parity tracked-binary-check credential-transparency frozen-lockfile advisory ci-witness ci-fetch toolchain-parity export-sbom sbom-scan ledger-diff-gate ledger-rebase workflow-yaml workflow-yaml-parity
 .PHONY: dev-rebuild-ag-oss-alt dev-recreate-ag-oss-alt dev-smoke-runtime-ag-oss-alt dev-smoke-platform-status-ag-oss-alt
 .PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
 .PHONY: e2e-full
@@ -344,13 +344,17 @@ ci-fetch:
 ##  11. ci.yml YQ_VERSION equals the local yq (THE-CI-PARSES-ITS-OWN-WORKFLOWS,
 ##      2026-09-06: CI now installs yq from a sha256-pinned release binary so
 ##      the workflow-yaml gate runs there too; two declarations, one pin).
+##  12. publish-ui-export.yml SYFT_VERSION equals the local syft
+##      (UI-GATE-WHAT-SHIPS, D-019, 2026-09-30: `make export-sbom` writes the
+##      SBOM the release attaches AND the one sbom-scan judges, so the syft
+##      that writes it is one pin in two places).
 ## Measured at landing (2026-09-06, ten pins): image 22 in matrix 22/24,
 ## engines and @types/node 22, local node 24 in the matrix, pnpm 11.3.0, go
 ## 1.27.1, rulefloor v0.9.1, both digests. A disagreement prints the pin and
 ## the two values and FAILS; an absent tool is exit 2 by name. Local grype is
 ## not a pin here: the ui CI installs no grype.
 toolchain-parity:
-	@for t in node pnpm go rulefloor yq shasum; do command -v "$$t" >/dev/null 2>&1 || { echo "toolchain-parity: $$t is not installed — cannot compare the pins; refusing to pass silently" >&2; exit 2; }; done; \
+	@for t in node pnpm go rulefloor yq syft shasum; do command -v "$$t" >/dev/null 2>&1 || { echo "toolchain-parity: $$t is not installed — cannot compare the pins; refusing to pass silently" >&2; exit 2; }; done; \
 	bad=0; agree=0; \
 	img=$$( { grep -E '^FROM node:' Dockerfile | sed -E 's/^FROM node:([0-9]+).*/\1/'; grep -E '^# node-major=[0-9]+' Dockerfile | sed -E 's/^# node-major=([0-9]+).*/\1/'; } | sort -u | tr '\n' ' ' | sed 's/ $$//'); \
 	case "$$img" in *" "*|"") echo "  DISAGREE  Dockerfile node majors (FROM node:<N> lines and # node-major=<N> annotations): '$$img' — every stage must name one major"; bad=1;; *) agree=$$((agree+1));; esac; \
@@ -372,6 +376,8 @@ toolchain-parity:
 	[ "$$cirf" = "$$lrf" ] && agree=$$((agree+1)) || { echo "  DISAGREE  ci.yml RULEFLOOR_VERSION $$cirf vs local rulefloor $$lrf"; bad=1; }; \
 	ciyq=$$(grep -E '^[[:space:]]+YQ_VERSION:' .github/workflows/ci.yml | head -1 | sed -E 's/.*YQ_VERSION:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/'); lyq=$$(yq --version | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1); \
 	[ -n "$$ciyq" ] && [ "$$ciyq" = "$$lyq" ] && agree=$$((agree+1)) || { echo "  DISAGREE  ci.yml YQ_VERSION '$$ciyq' vs local yq '$$lyq'"; bad=1; }; \
+	pusyft=$$(grep -E '^[[:space:]]+SYFT_VERSION:' .github/workflows/publish-ui-export.yml | head -1 | sed -E 's/.*SYFT_VERSION:[[:space:]]*"?([^"[:space:]]+)"?.*/\1/'); lsyft=v$$(syft version | awk '/^Version:/{print $$2}'); \
+	[ -n "$$pusyft" ] && [ "$$pusyft" = "$$lsyft" ] && agree=$$((agree+1)) || { echo "  DISAGREE  publish-ui-export.yml SYFT_VERSION '$$pusyft' vs local syft '$$lsyft'"; bad=1; }; \
 	for pair in GATE_WITNESS_SHA256=scripts/gate-witness.sh RULEFLOOR_GATE_SHA256=scripts/rulefloor-install-gate.sh; do \
 		key=$${pair%%=*}; file=$${pair#*=}; \
 		pin=$$(grep -E "^[[:space:]]+$$key:" .github/workflows/ci.yml | head -1 | sed -E 's/.*:[[:space:]]*"?([0-9a-f]{64})"?.*/\1/'); \
@@ -382,9 +388,70 @@ toolchain-parity:
 		echo "check FAILED: toolchain-parity — the pins above disagree; align the declaration or the machine, never the gate"; \
 		exit 1; \
 	fi; \
-	echo "check OK: toolchain-parity $$agree pins agree (node $$img in matrix [$$matrix], engines/@types/node $$eng/$$types, local node $$lnode, pnpm $$lpnpm, go $$lgo, rulefloor $$lrf, yq $$lyq, both vendored digests)"
+	echo "check OK: toolchain-parity $$agree pins agree (node $$img in matrix [$$matrix], engines/@types/node $$eng/$$types, local node $$lnode, pnpm $$lpnpm, go $$lgo, rulefloor $$lrf, yq $$lyq, syft $$lsyft, both vendored digests)"
 
-## grype-scan: the published image, judged by lictor (`lictor grype --repo
+## export-sbom / sbom-scan: THE GATE JUDGES WHAT SHIPS (UI-GATE-WHAT-SHIPS,
+## owner ruling D-019, 2026-09-30). The UI ships only as the static export
+## embedded in the identuum-idp-oss and identuum-idp-ce binaries; the Next
+## runner image (the repo-root Dockerfile) is a development artifact, never a
+## product, so no release gate judges it. What the export carries from third
+## parties is the production dependency closure, and that is the subject:
+##   export-sbom SBOM_OUT=<file>  copies package.json, pnpm-lock.yaml and
+##     pnpm-workspace.yaml into a scratch directory, installs the production
+##     closure there (pnpm install --prod --frozen-lockfile --offline
+##     --ignore-scripts — the store the checkout's own install filled), and
+##     has syft catalogue the INSTALLED modules only (--exclude
+##     ./pnpm-lock.yaml --override-default-catalogers
+##     javascript-package-cataloger; the lock cataloguer would re-add every
+##     dev dependency, the default directory catalogers find nothing) into
+##     SPDX JSON. publish-ui-export.yml runs THIS target and attaches its
+##     output, so the file the gate judges is the file the release ships.
+##     Measured 2026-09-30 (log/0258): 203 packages, 202 npm — react,
+##     react-dom, next, zod, react-hook-form in; typescript, vitest, biome and
+##     TypeScript 7's native Go compiler out.
+##   sbom-scan  writes that SBOM to a scratch file (or judges SBOM=<file>, the
+##     mutation proof's seam) and hands it to lictor (`lictor grype --repo
+##     $(CURDIR) --sbom <file>`, v0.4.3+), which runs grype live over it under
+##     the UNCHANGED rules of GRYPE-FIXABLE-FAILS-1: a finding with an
+##     available fix fails, a High/Critical fails whether or not a fix exists,
+##     an allowlist entry (grype-allowlist.json) needs a reason AND a ruling
+##     and excuses a missing fix, never severity. An SBOM subject's config and
+##     coverage predicates are NOT APPLICABLE, as for an image; the evidence
+##     line names the SBOM's sha256. Absent syft, grype, pnpm or lictor: exit 2
+##     by name.
+## grype-scan, the image scan below, is RETIRED from the plan and the
+## Makefile with it (D-019); its history stays readable here.
+SBOM_OUT ?=
+
+export-sbom:
+	@test -n "$(SBOM_OUT)" || { echo "usage: make export-sbom SBOM_OUT=<file.spdx.json>" >&2; exit 2; }; \
+	for t in pnpm syft; do command -v "$$t" >/dev/null 2>&1 || { echo "export-sbom: $$t is not installed — cannot write the SBOM; refusing to pass silently" >&2; exit 2; }; done; \
+	out="$(abspath $(SBOM_OUT))"; \
+	tmp=$$(mktemp -d -t ui-sbom); trap 'rm -rf "$$tmp"' EXIT; \
+	cp package.json pnpm-lock.yaml pnpm-workspace.yaml "$$tmp"/; \
+	( cd "$$tmp" && pnpm install --prod --frozen-lockfile --offline --ignore-scripts >"$$tmp.install.log" 2>&1 ) || { echo "export-sbom: the production install failed:" >&2; tail -20 "$$tmp.install.log" >&2; rm -f "$$tmp.install.log"; exit 1; }; \
+	rm -f "$$tmp.install.log"; \
+	syft scan "dir:$$tmp" -q --exclude ./pnpm-lock.yaml --override-default-catalogers javascript-package-cataloger -o "spdx-json=$$out" || { echo "export-sbom: syft could not write $$out" >&2; exit 1; }; \
+	echo "export-sbom: $$(node -p "require('$$out').packages.length") packages -> $(SBOM_OUT) (syft $$(syft version | awk '/^Version:/{print $$2}'))"
+
+sbom-scan:
+	@for t in grype syft pnpm; do command -v "$$t" >/dev/null 2>&1 || { echo "sbom-scan: $$t is not installed — cannot write or judge the SBOM; refusing to pass silently" >&2; exit 2; }; done; \
+	command -v "$(LICTOR)" >/dev/null 2>&1 || { \
+		echo "sbom-scan: lictor is not installed ($(LICTOR)) — refusing to pass silently. Install it:" >&2; \
+		echo "  brew install ozgurcd/tap/lictor" >&2; \
+		exit 2; \
+	}; \
+	if [ -n "$(SBOM)" ]; then \
+		sbom="$(abspath $(SBOM))"; tmp=""; \
+	else \
+		tmp=$$(mktemp -d -t ui-sbom-scan); sbom="$$tmp/identuum-ui-export.spdx.json"; \
+		$(MAKE) --no-print-directory export-sbom SBOM_OUT="$$sbom" || { rm -rf "$$tmp"; exit 2; }; \
+	fi; \
+	"$(LICTOR)" grype --repo "$(CURDIR)" --sbom "$$sbom"; rc=$$?; \
+	[ -z "$$tmp" ] || rm -rf "$$tmp"; \
+	exit $$rc
+
+## grype-scan (RETIRED 2026-09-30, D-019): the published image, judged by lictor (`lictor grype --repo
 ## $(CURDIR) -scan <report>`), the INSTALLED, PINNED port of identuum-idp-oss's
 ## judge tools/grype-gate (byte-faithful to OSS 1cbe9f6; lictor v0.1.0,
 ## github.com/ozgurcd/lictor, `brew install ozgurcd/tap/lictor`) — rule
@@ -428,25 +495,8 @@ toolchain-parity:
 ## chainguard node:latest-dev 3/2/0, chainguard node:latest 1/0/0); the owner
 ## ruled for the last, pinned by digest in the Dockerfile, and the entry went
 ## in only after `make grype-scan` was GREEN on that image. The policy was
-## never weakened to fit an image.
-grype-scan:
-	@for t in grype docker; do command -v "$$t" >/dev/null 2>&1 || { echo "grype-scan: $$t is not installed — cannot scan or judge the image; refusing to pass silently" >&2; exit 2; }; done; \
-	command -v "$(LICTOR)" >/dev/null 2>&1 || { \
-		echo "grype-scan: lictor is not installed ($(LICTOR)) — refusing to pass silently. Install it:" >&2; \
-		echo "  brew install ozgurcd/tap/lictor" >&2; \
-		exit 2; \
-	}; \
-	if [ -n "$(SCAN)" ]; then \
-		report="$(SCAN)"; tmp=""; \
-	else \
-		tmp=$$(mktemp -t ui-grype); report="$$tmp"; \
-		docker build -q -t identuum-ui:verify . >/dev/null || { echo "grype-scan: docker build of identuum-ui:verify failed — nothing to judge" >&2; rm -f "$$tmp"; exit 2; }; \
-		host=$$(docker context inspect --format '{{(index .Endpoints "docker").Host}}' 2>/dev/null); \
-		DOCKER_HOST="$${host:-$$DOCKER_HOST}" grype identuum-ui:verify -o json > "$$tmp" 2>/dev/null || { echo "grype-scan: grype could not scan identuum-ui:verify — nothing to judge" >&2; rm -f "$$tmp"; exit 2; }; \
-	fi; \
-	"$(LICTOR)" grype --repo "$(CURDIR)" -scan "$$report"; rc=$$?; \
-	[ -z "$$tmp" ] || rm -f "$$tmp"; \
-	exit $$rc
+## never weakened to fit an image. (Its recipe was removed 2026-09-30 with
+## D-019; the judge's rules now apply to the export's SBOM, above.)
 
 ## ledger-diff-gate: a RULE-FLOOR.md sentence never changes silently again (the
 ## idp-oss shape, THE-LEDGER-DIFF-GATE, rule LEDGER-DIFF-RECONCILED-1; ported
@@ -549,8 +599,6 @@ verify:
 	"$(LICTOR)" witness run --repo "$(CURDIR)" --record GATE-RUN.txt \
 		--label "identuum-ui make verify" -- \
 		'tool-versions=$(MAKE) --no-print-directory tool-versions' \
-		'image-base-check=$(MAKE) --no-print-directory image-base-check' \
-		'image-base-parity=$(MAKE) --no-print-directory image-base-parity' \
 		'witness-parity=$(MAKE) --no-print-directory witness-parity' \
 		'tracked-binary-check=$(MAKE) --no-print-directory tracked-binary-check' \
 		'credential-transparency=$(MAKE) --no-print-directory credential-transparency' \
@@ -562,7 +610,7 @@ verify:
 		'toolchain-parity=$(MAKE) --no-print-directory toolchain-parity' \
 		'rulefloor=pnpm rulefloor' \
 		'ledger-diff-gate=$(MAKE) --no-print-directory ledger-diff-gate' \
-		'grype-scan=$(MAKE) --no-print-directory grype-scan' \
+		'sbom-scan=$(MAKE) --no-print-directory sbom-scan' \
 		'biome=pnpm exec biome check . --reporter=json --max-diagnostics=none' \
 		'tsc=pnpm exec tsc --noEmit' \
 		'vitest=pnpm exec vitest run' \
@@ -579,9 +627,15 @@ verify:
 ## the missing target there is correct, not an oversight.
 ##
 ## THIS REPO COMPLIES TODAY and the gate is still worth having: `Dockerfile` and
-## `setup/Dockerfile` are both node:22-bookworm-slim. This repo PUBLISHES an
+## `setup/Dockerfile` are both node:22-bookworm-slim. This repo PUBLISHED an
 ## image (publish-image.yml) and had no gate at all, so nothing but review stood
 ## between a `node:22-alpine` edit and a musl image on the registry.
+##
+## DEV-ONLY since 2026-09-30 (D-019): the runner image is a development
+## artifact and publish-image.yml is deleted, so image-base-check and
+## image-base-parity left the verify plan. Both stay callable for whoever
+## builds the dev image (`make image-base-check image-base-parity`); the
+## shared digest below is unchanged, so the three sibling copies still agree.
 ##
 ## `.next/` is gitignored build output and is NOT scanned: the find below walks
 ## the working tree, and a stray Dockerfile under a build directory is not

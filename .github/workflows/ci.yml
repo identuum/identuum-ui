@@ -23,8 +23,9 @@
 # Permissions are least-privilege; the workflow reads the repo and
 # reports check status. No GITHUB_TOKEN-elevated steps, no PAT, no
 # deploy key. No GHCR login, no image publish, no workflow_dispatch.
-# The publish-image.yml workflow (workflow_dispatch only) is NOT
-# affected by this file.
+# The publish-image.yml workflow (workflow_dispatch only) that pushed the
+# Next runner image was deleted on 2026-09-30 (D-019: the UI ships only as
+# the export embedded in the Go binaries; the runner image is dev-only).
 
 name: CI
 
@@ -69,14 +70,15 @@ env:
   YQ_VERSION: v4.54.1
   YQ_SHA256: 8e34fc298390875de416e6a4afcb8cabeceb25d9aa8506c1a2f9353cf702ea5f
   # THE-SECOND-CONSUMER (2026-09-19): lictor is the pinned judge `make
-  # grype-scan` hands the image scan to (`lictor grype --repo … -scan …`,
-  # the installed port of identuum-idp-oss tools/grype-gate;
-  # github.com/ozgurcd/lictor, `brew install ozgurcd/tap/lictor`). Declared
-  # HERE so the recipe reads one pin and asserts `lictor version --json`
-  # against it where it runs. NO JOB INSTALLS OR RUNS IT: grype-scan is in the
-  # local verify plan only (ci.yml names no grype), and a runner install would
-  # need a private-release token — not this slice.
-  LICTOR_VERSION: v0.4.2
+  # sbom-scan` hands the export's SBOM to (`lictor grype --repo … --sbom …`,
+  # v0.4.3+, the installed port of identuum-idp-oss tools/grype-gate;
+  # github.com/ozgurcd/lictor, `brew install ozgurcd/tap/lictor`). Until
+  # UI-GATE-WHAT-SHIPS (D-019, 2026-09-30) its subject was the Next runner
+  # image (`make grype-scan`). Declared HERE so the judge reads one pin and
+  # refuses a mismatch where it runs. NO JOB INSTALLS OR RUNS IT: sbom-scan is
+  # in the local verify plan only (ci.yml names no grype), and a runner install
+  # would need a private-release token — not this slice.
+  LICTOR_VERSION: v0.4.3
 
 jobs:
   build-and-test:
