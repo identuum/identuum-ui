@@ -153,6 +153,11 @@ export interface OrgDetail {
    */
   can_assign_admin: boolean | undefined;
   /**
+   * org_admins exist and none has activated (a pending activation link);
+   * absent when the IdP does not report it.
+   */
+  activation_pending?: boolean;
+  /**
    * Organization-level invite policy projection (read-only for org_admin in
    * the current settings surface — write support is intentionally deferred
    * until product semantics across all four mode combinations are signed off).

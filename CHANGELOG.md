@@ -8,6 +8,14 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
 ## Unreleased
 
+- Site admin: an organization created without an admin email (active, no
+  administrator, none pending) now offers **Invite the first administrator**
+  on its Assign administrator page — an email, an optional name, and the
+  one-time invitation shown for hand-over (mailed only when email delivery is
+  configured). Before, that page could only re-issue a pending
+  administrator's activation and answered "already active" (GitHub issue #1).
+  A pending activation, and the recovery state, keep the re-issue.
+
 ## `v0.5.0`
 
 The static export that identuum-idp-oss `v0.8.0` embeds. Delta

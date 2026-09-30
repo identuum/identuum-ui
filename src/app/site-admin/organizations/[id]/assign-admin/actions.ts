@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { assignOrgAdmin } from "@/lib/idp-admin-client";
+import { assignOrgAdmin, type IssuedInvite, inviteFirstOrgAdmin } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
 
@@ -95,4 +95,53 @@ export async function assignAdminAction(
       expiresAt: result.expiresAt,
     },
   };
+}
+
+// ── Invite the first administrator (GitHub issue #1) ─────────────────────────
+//
+// For an organization with no administrator and no pending activation (one
+// created without an admin email): the site_admin invites the first org_admin
+// through the IdP's first-admin exception. The one-time link lives in this
+// action's returned state only.
+
+const inviteSchema = z.object({
+  org_id: z.string().uuid("Invalid organization ID"),
+  email: z.string().trim().email("Enter a valid email address"),
+  name: z.string().trim().max(255).optional(),
+});
+
+export interface InviteFirstAdminState {
+  error?: string;
+  invite?: IssuedInvite;
+}
+
+export async function inviteFirstOrgAdminAction(
+  _prev: InviteFirstAdminState,
+  formData: FormData
+): Promise<InviteFirstAdminState> {
+  const session = await getServerSession();
+  if (!session) {
+    redirect("/login?reason=session_expired");
+  }
+  const role = session.user?.role ?? session.role;
+  if (role !== "site_admin") {
+    redirect(roleToPath(role));
+  }
+  const parsed = inviteSchema.safeParse({
+    org_id: ((formData.get("org_id") as string | null) ?? "").trim(),
+    email: (formData.get("email") as string | null) ?? "",
+    name: ((formData.get("name") as string | null) ?? "").trim() || undefined,
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Check the email address." };
+  }
+  const result = await inviteFirstOrgAdmin({
+    organizationId: parsed.data.org_id,
+    email: parsed.data.email,
+    name: parsed.data.name ?? "",
+  });
+  if (!result.ok) {
+    return { error: result.message };
+  }
+  return { invite: result.invite };
 }

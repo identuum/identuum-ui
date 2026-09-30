@@ -311,6 +311,9 @@ export async function getOrganization(id: string): Promise<OrgDetail | null> {
       // detail page renders "status unavailable", never "No administrator".
       has_admin: typeof o.is_claimed === "boolean" ? o.is_claimed : undefined,
       can_assign_admin: typeof o.can_assign_admin === "boolean" ? o.can_assign_admin : undefined,
+      ...(typeof o.activation_pending === "boolean"
+        ? { activation_pending: o.activation_pending }
+        : {}),
       allow_public_registration: Boolean(o.allow_public_registration),
       require_registration_approval: Boolean(o.require_registration_approval),
       created_at: String(o.created_at ?? ""),
@@ -1035,6 +1038,29 @@ export async function inviteOrgUser(opts: {
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before typing
     String((b as any)?.user?.email ?? opts.email)
   );
+}
+
+/**
+ * Invites an organization's FIRST administrator as the site_admin (issue #1):
+ * POST /api/v1/users with the organization id, role org_admin and no
+ * password. The IdP allows it only while the organization has no active
+ * org_admin (403 otherwise).
+ */
+export async function inviteFirstOrgAdmin(opts: {
+  organizationId: string;
+  email: string;
+  name: string;
+}): Promise<InviteResult> {
+  const r = await postInvite(
+    "/api/v1/users",
+    { organization_id: opts.organizationId, email: opts.email, name: opts.name, role: "org_admin" },
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before typing
+    (b) => String((b as any)?.user?.email ?? opts.email)
+  );
+  if (!r.ok && r.status === 403) {
+    return { ...r, message: "This organization already has an administrator." };
+  }
+  return r;
 }
 
 /**

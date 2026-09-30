@@ -368,7 +368,7 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
       // Stale copy must never appear
       await expect(page.getByText("Already has an active administrator")).not.toBeVisible();
 
-      // Page must render one of the three valid states:
+      // Page must render one of the four valid states ((d) below):
       //   (a) Recovery form — when assignment is provably allowed
       //   (b) Blocked panel "Administrator already assigned" — when a
       //       verified admin blocks delegation (this became reachable once
@@ -385,8 +385,13 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
         .isVisible();
       const showsBlockedPanel = await page.getByText("Administrator already assigned").isVisible();
       const showsDeletedGuard = await page.getByText("Organization is deleted").isVisible();
+      // (d) OSS-ISSUES, GitHub issue #1: an organization with no administrator
+      // and no pending activation offers to invite its first administrator.
+      const showsInviteFirst = await page
+        .getByRole("button", { name: /invite administrator/i })
+        .isVisible();
 
-      expect(showsForm || showsBlockedPanel || showsDeletedGuard).toBe(true);
+      expect(showsForm || showsBlockedPanel || showsDeletedGuard || showsInviteFirst).toBe(true);
     } finally {
       await page.close();
     }

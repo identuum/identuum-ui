@@ -15,7 +15,7 @@
 
 import type { Metadata } from "next";
 import { getOrganization } from "@/lib/idp-admin-client";
-import { AssignAdminForm } from "./form-client";
+import { AssignAdminForm, InviteFirstAdminForm } from "./form-client";
 
 export const metadata: Metadata = { title: "Assign Admin — Identuum Admin" };
 
@@ -88,6 +88,8 @@ export default async function AssignAdminPage({ params }: { params: Promise<{ id
   // GenerateClaimToken guard (`adminCount == 0` or its recovery extension),
   // so don't block on `can_assign_admin` alone.
   const canAssign = !org.has_admin || org.can_assign_admin === true;
+  const inviteFirst =
+    !org.has_admin && org.activation_pending === false && org.can_assign_admin !== true;
 
   if (!canAssign) {
     return (
@@ -158,9 +160,16 @@ export default async function AssignAdminPage({ params }: { params: Promise<{ id
         </div>
       )}
 
-      {/* Form */}
+      {/* Form — no administrator and none pending (created without an admin
+          email, GitHub issue #1): invite the first one. A pending activation or
+          the recovery state keeps the re-issue. An absent activation_pending
+          (an IdP that does not emit it) keeps the re-issue, as before. */}
       <div className="bg-white border border-stone-200 rounded-[1.5rem] p-6 shadow-sm">
-        <AssignAdminForm orgId={org.id} orgName={org.name} />
+        {inviteFirst ? (
+          <InviteFirstAdminForm orgId={org.id} />
+        ) : (
+          <AssignAdminForm orgId={org.id} orgName={org.name} />
+        )}
       </div>
     </div>
   );

@@ -2,8 +2,14 @@
 
 import { useActionState } from "react";
 import { ActivationIssuedPanel } from "@/components/shared/activation-issued-panel";
+import { InviteIssuedPanel } from "@/components/shared/invite-issued-panel";
 import { Button } from "@/components/ui/button";
-import { type AssignAdminActionState, assignAdminAction } from "./actions";
+import {
+  type AssignAdminActionState,
+  assignAdminAction,
+  type InviteFirstAdminState,
+  inviteFirstOrgAdminAction,
+} from "./actions";
 
 interface AssignAdminFormProps {
   orgId: string;
@@ -51,6 +57,92 @@ export function AssignAdminForm({ orgId, orgName }: AssignAdminFormProps) {
       <div className="flex items-center gap-3 pt-1">
         <Button type="submit" loading={isPending} disabled={isPending}>
           {isPending ? "Re-issuing token…" : "Re-issue activation token"}
+        </Button>
+        <a
+          href="/site-admin/organizations"
+          className="text-sm text-stone-500 hover:text-sky-950 transition-colors"
+        >
+          Cancel
+        </a>
+      </div>
+    </form>
+  );
+}
+
+const initialInviteState: InviteFirstAdminState = {};
+
+/**
+ * For an organization with no administrator and no pending activation (one
+ * created without an admin email, GitHub issue #1): invite the first
+ * org_admin. The one-time invitation is shown here for the site_admin to hand
+ * over; it is also mailed only when email delivery is configured.
+ */
+export function InviteFirstAdminForm({ orgId }: { orgId: string }) {
+  const [state, action, isPending] = useActionState(inviteFirstOrgAdminAction, initialInviteState);
+
+  if (state.invite) {
+    return (
+      <div className="max-w-lg space-y-5">
+        <InviteIssuedPanel invite={state.invite} />
+        <div className="flex items-center gap-3">
+          <a
+            href={`/site-admin/organizations/${orgId}`}
+            className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 shadow-sm transition-colors"
+          >
+            Back to organization
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form action={action} className="space-y-5 max-w-lg">
+      <input type="hidden" name="org_id" value={orgId} />
+      <p className="text-sm font-semibold text-sky-950">Invite the first administrator</p>
+
+      {state.error && (
+        <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {state.error}
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <label htmlFor="first-admin-email" className="text-xs font-semibold text-stone-600">
+          Administrator email
+        </label>
+        <input
+          id="first-admin-email"
+          name="email"
+          type="email"
+          required
+          autoComplete="off"
+          className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <label htmlFor="first-admin-name" className="text-xs font-semibold text-stone-600">
+          Name (optional)
+        </label>
+        <input
+          id="first-admin-name"
+          name="name"
+          type="text"
+          maxLength={255}
+          autoComplete="off"
+          className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+        />
+      </div>
+
+      <p className="text-xs text-stone-400 leading-relaxed">
+        The invitation link is shown here once for you to hand over; it is also mailed only when
+        email delivery is configured on the IdP. Opening it lets the administrator set a password
+        and sign in.
+      </p>
+
+      <div className="flex items-center gap-3 pt-1">
+        <Button type="submit" loading={isPending} disabled={isPending}>
+          {isPending ? "Inviting…" : "Invite administrator"}
         </Button>
         <a
           href="/site-admin/organizations"
