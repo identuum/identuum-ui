@@ -427,7 +427,8 @@ export-sbom:
 	@test -n "$(SBOM_OUT)" || { echo "usage: make export-sbom SBOM_OUT=<file.spdx.json>" >&2; exit 2; }; \
 	for t in pnpm syft; do command -v "$$t" >/dev/null 2>&1 || { echo "export-sbom: $$t is not installed — cannot write the SBOM; refusing to pass silently" >&2; exit 2; }; done; \
 	out="$(abspath $(SBOM_OUT))"; \
-	tmp=$$(mktemp -d -t ui-sbom); trap 'rm -rf "$$tmp"' EXIT; \
+	tmp=$$(mktemp -d "$${TMPDIR:-/tmp}/ui-sbom.XXXXXX") && [ -d "$$tmp" ] || { echo "export-sbom: mktemp gave no scratch directory — refusing to install anywhere else" >&2; exit 2; }; \
+	trap 'rm -rf "$$tmp"' EXIT; \
 	cp package.json pnpm-lock.yaml pnpm-workspace.yaml "$$tmp"/; \
 	( cd "$$tmp" && pnpm install --prod --frozen-lockfile --offline --ignore-scripts >"$$tmp.install.log" 2>&1 ) || { echo "export-sbom: the production install failed:" >&2; tail -20 "$$tmp.install.log" >&2; rm -f "$$tmp.install.log"; exit 1; }; \
 	rm -f "$$tmp.install.log"; \
@@ -444,7 +445,8 @@ sbom-scan:
 	if [ -n "$(SBOM)" ]; then \
 		sbom="$(abspath $(SBOM))"; tmp=""; \
 	else \
-		tmp=$$(mktemp -d -t ui-sbom-scan); sbom="$$tmp/identuum-ui-export.spdx.json"; \
+		tmp=$$(mktemp -d "$${TMPDIR:-/tmp}/ui-sbom-scan.XXXXXX") && [ -d "$$tmp" ] || { echo "sbom-scan: mktemp gave no scratch directory" >&2; exit 2; }; \
+		sbom="$$tmp/identuum-ui-export.spdx.json"; \
 		$(MAKE) --no-print-directory export-sbom SBOM_OUT="$$sbom" || { rm -rf "$$tmp"; exit 2; }; \
 	fi; \
 	"$(LICTOR)" grype --repo "$(CURDIR)" --sbom "$$sbom"; rc=$$?; \
