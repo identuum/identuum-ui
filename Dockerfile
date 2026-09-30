@@ -67,8 +67,13 @@ RUN mkdir -p /app/config-mount
 # fails a finding WITH A FIX by design, so the pin moved to a digest that
 # carries the fix; nothing was suppressed.
 #
+# DEV-ONLY since 2026-09-30 (D-019): this image is a development artifact,
+# never a product. No workflow publishes it and no gate scans it
+# (`make grype-scan` is retired; the security gate judges the export's
+# SBOM, `make sbom-scan`). The measurements above are its history.
+#
 # THE SHELL BELONGS TO THIS DIGEST, NOT TO THE TAG. A bump must re-measure
-# both the scan (`make grype-scan`) and the shell
+# both the scan (`grype` over the built image, by hand) and the shell
 # (`docker run --rm --entrypoint /bin/sh <ref> -c id`), and move the
 # node-major annotation below to whatever node the new digest ships —
 # toolchain-parity reads that annotation and holds it equal to the build

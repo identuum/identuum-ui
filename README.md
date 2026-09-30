@@ -86,7 +86,14 @@ bind-mounted read-only into the container at
 `/app/config/ui-runtime.json`. Edit that file on the host to change
 runtime configuration without rebuilding the image.
 
-### Production-shape build
+### Production-shape build (development only)
+
+**The runner image is a development artifact, never a product (owner
+ruling D-019, 2026-09-30).** The UI ships only as the static export
+(`pnpm build:export`, published by `publish-ui-export.yml`) embedded in
+the identuum-idp-oss and identuum-idp-ce binaries. No workflow publishes
+this image and no release gate judges it; the security gate
+(`make sbom-scan`) judges the export's SBOM instead.
 
 The Compose file builds the existing `Dockerfile` at the repo root,
 which uses Next.js standalone output (`node server.js`, port 7104, no
