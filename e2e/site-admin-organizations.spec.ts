@@ -397,7 +397,7 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
     }
   });
 
-  test("list 'Assign admin' affordance opens recovery form (skips if no can_assign_admin=true org)", async () => {
+  test("list 'Assign admin' affordance opens the assign-admin form (skips if no row offers it)", async () => {
     if (skipAuthTests) {
       test.skip(true, SKIP_AUTH_MSG);
     }
@@ -407,10 +407,11 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
       await page.goto("/site-admin/organizations");
       await page.waitForLoadState("networkidle");
 
-      // "Assign admin" only appears in list rows where can_assign_admin=true
+      // "Assign admin" appears in list rows with has_admin === false or
+      // can_assign_admin === true (organizations/client.tsx).
       const assignLinks = page.getByRole("link", { name: "Assign admin" });
       if ((await assignLinks.count()) === 0) {
-        test.skip(true, "No organizations with can_assign_admin=true in current DB — skipping");
+        test.skip(true, "No organization row offers Assign admin in current DB — skipping");
         return;
       }
 
@@ -420,10 +421,16 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
       // Must be on the assign-admin page
       expect(page.url()).toMatch(/\/site-admin\/organizations\/[0-9a-f-]{36}\/assign-admin$/i);
 
-      // Recovery form must be visible — the shipped submit copy (see the
-      // stale-regex note in the sibling test above).
+      // EXACTLY ONE form: the re-issue (a pending activation or the recovery
+      // state — the shipped submit copy, see the stale-regex note in the
+      // sibling test above) or, for an organization with no administrator and
+      // none pending, the first-administrator invite (OSS-ISSUES, GitHub
+      // issue #1; owner ruling 2026-09-30).
       await expect(page.getByRole("heading", { name: "Assign administrator" })).toBeVisible();
-      await expect(page.getByRole("button", { name: /re-issue activation token/i })).toBeVisible();
+      const reissue = page.getByRole("button", { name: /re-issue activation token/i });
+      const invite = page.getByRole("button", { name: /invite administrator/i });
+      await expect(reissue.or(invite)).toBeVisible();
+      expect((await reissue.count()) + (await invite.count())).toBe(1);
 
       // Stale copy must not appear
       await expect(page.getByText("Already has an active administrator")).not.toBeVisible();
