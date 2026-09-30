@@ -8,6 +8,16 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
 ## Unreleased
 
+## `v0.5.1`
+
+The static export that identuum-idp-oss `v0.8.1` embeds. Delta
+`v0.5.0..HEAD`: 8 commits (measured at `da4a168`) and this release commit.
+The published artifact is the export (`publish-ui-export.yml` on the tag);
+no container image is published. Patch: one fix, no removed or renamed
+page, field or call.
+
+### Fixed
+
 - Site admin: an organization created without an admin email (active, no
   administrator, none pending) now offers **Invite the first administrator**
   on its Assign administrator page — an email, an optional name, and the
