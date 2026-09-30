@@ -14,6 +14,41 @@
       "reason": "ip-address 10.3.1 (fixed in 10.5.1) is npm's own dependency at /usr/lib/node_modules/npm in the cgr.dev/chainguard/node runner base, not a ui dependency (pnpm why ip-address: none); the app never runs npm. No fixed base digest exists: the newest, sha256:78a8d373 (created 2026-09-28), still ships 10.3.1. Remove this entry when a chainguard/node digest ships ip-address >= 10.5.1.",
       "ruling": "Owner, OSS-BINARIES, 2026-09-29: allowlist by name after the runner-digest bump could not take the fix.",
       "added": "2026-09-29"
+    },
+    {
+      "id": "GHSA-6j4f-fj2g-mc7p",
+      "package": "brace-expansion",
+      "reason": "brace-expansion 5.0.9 (fixed in 5.0.10) is npm's own dependency at /usr/lib/node_modules/npm in the cgr.dev/chainguard/node runner base, not a ui dependency; the app never runs npm. No fixed base digest exists: the newest, sha256:76f000d6 (created 2026-09-29), still ships 5.0.9. Remove this entry when a chainguard/node digest ships brace-expansion >= 5.0.10.",
+      "ruling": "Owner, OSS-V0.8.1, 2026-09-30: allowlist by name; the newest runner digest cannot take the fix.",
+      "added": "2026-09-30"
+    },
+    {
+      "id": "GHSA-q2hr-2g5m-vwhr",
+      "package": "brace-expansion",
+      "reason": "brace-expansion 5.0.9 (fixed in 5.0.12) is npm's own dependency at /usr/lib/node_modules/npm in the cgr.dev/chainguard/node runner base, not a ui dependency; the app never runs npm. No fixed base digest exists: the newest, sha256:76f000d6 (created 2026-09-29), still ships 5.0.9. Remove this entry when a chainguard/node digest ships brace-expansion >= 5.0.12.",
+      "ruling": "Owner, OSS-V0.8.1, 2026-09-30: allowlist by name; the newest runner digest cannot take the fix.",
+      "added": "2026-09-30"
+    },
+    {
+      "id": "GHSA-qhr7-859c-m2p7",
+      "package": "brace-expansion",
+      "reason": "brace-expansion 5.0.9 (fixed in 5.0.11) is npm's own dependency at /usr/lib/node_modules/npm in the cgr.dev/chainguard/node runner base, not a ui dependency; the app never runs npm. No fixed base digest exists: the newest, sha256:76f000d6 (created 2026-09-29), still ships 5.0.9. Remove this entry when a chainguard/node digest ships brace-expansion >= 5.0.11.",
+      "ruling": "Owner, OSS-V0.8.1, 2026-09-30: allowlist by name; the newest runner digest cannot take the fix.",
+      "added": "2026-09-30"
+    },
+    {
+      "id": "GHSA-h3mg-xc3c-68pw",
+      "package": "ip-address",
+      "reason": "ip-address 10.3.1 (fixed in 10.7.1) is npm's own dependency at /usr/lib/node_modules/npm in the cgr.dev/chainguard/node runner base, not a ui dependency; the app never runs npm. No fixed base digest exists: the newest, sha256:76f000d6 (created 2026-09-29), still ships 10.3.1. Remove this entry when a chainguard/node digest ships ip-address >= 10.7.1.",
+      "ruling": "Owner, OSS-V0.8.1, 2026-09-30: allowlist by name; the newest runner digest cannot take the fix.",
+      "added": "2026-09-30"
+    },
+    {
+      "id": "GHSA-j6r3-76f7-8jcv",
+      "package": "ip-address",
+      "reason": "ip-address 10.3.1 (fixed in 10.7.1) is npm's own dependency at /usr/lib/node_modules/npm in the cgr.dev/chainguard/node runner base, not a ui dependency; the app never runs npm. No fixed base digest exists: the newest, sha256:76f000d6 (created 2026-09-29), still ships 10.3.1. Remove this entry when a chainguard/node digest ships ip-address >= 10.7.1.",
+      "ruling": "Owner, OSS-V0.8.1, 2026-09-30: allowlist by name; the newest runner digest cannot take the fix.",
+      "added": "2026-09-30"
     }
   ]
 }
