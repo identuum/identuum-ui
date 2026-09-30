@@ -8,7 +8,26 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
 ## Unreleased
 
+## `v0.5.2`
+
+The static export that identuum-idp-oss `v0.8.1` embeds: everything listed
+under `v0.5.1` below, plus the fix that lets it publish. Delta
+`v0.5.0..HEAD`: 21 commits (measured at `6a0d32e`) and this notes commit.
+Patch: no removed or renamed page, field or call.
+
+### Fixed
+
+- **The release SBOM recipe runs on Linux.** `make export-sbom` (and
+  `make sbom-scan`) created its scratch directory with `mktemp -d -t`,
+  which GNU mktemp refuses without `XXXXXX`; the `v0.5.1` export workflow
+  failed there before publishing anything. Both now use
+  `mktemp -d "${TMPDIR:-/tmp}/<name>.XXXXXX"` and stop if no directory is
+  made.
+
 ## `v0.5.1`
+
+Tagged (`4e4a637`) and never published: its export workflow failed in
+`make export-sbom` (fixed in `v0.5.2`, which carries all of the below).
 
 The static export that identuum-idp-oss `v0.8.1` embeds. Delta
 `v0.5.0..HEAD`: 17 commits (measured at `bcd0783`) and this notes commit.
