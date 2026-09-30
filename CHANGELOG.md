@@ -11,10 +11,30 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 ## `v0.5.1`
 
 The static export that identuum-idp-oss `v0.8.1` embeds. Delta
-`v0.5.0..HEAD`: 8 commits (measured at `da4a168`) and this release commit.
+`v0.5.0..HEAD`: 17 commits (measured at `bcd0783`) and this notes commit.
 The published artifact is the export (`publish-ui-export.yml` on the tag);
-no container image is published. Patch: one fix, no removed or renamed
-page, field or call.
+no container image is published. Patch: no removed or renamed page, field
+or call.
+
+### Security
+
+- **next 16.3.4 → 16.3.6** (GHSA-vcvr-r3jv-pc5j, critical: remote code
+  execution in `next/og` `ImageResponse`, vulnerable `>=16.2.0 <16.3.6`).
+  The shipped UI is the static export, which runs no Next server, so the
+  vulnerable server path is not reachable in the embedded console; the
+  bump keeps the dependency tree clean. 16.3.8 (latest) waits for pnpm's
+  release-age safeguard.
+
+### Changed
+
+- **The release SBOM describes what ships** (owner ruling D-019): the
+  attached `identuum-ui-export-<tag>.spdx.json` is the production
+  dependency closure (`make export-sbom`: 203 packages at this release)
+  instead of syft over the whole checkout, which listed dev tooling. The
+  same file is what the security gate (`make sbom-scan`, lictor v0.4.3)
+  judges.
+- **The Next.js runner image is development-only** (D-019): no workflow
+  publishes it (`publish-image.yml` removed) and no release gate judges it.
 
 ### Fixed
 
