@@ -8,9 +8,17 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
 ## Unreleased
 
+## `v0.5.3`
+
+The static export that identuum-idp-oss `v0.8.2` embeds. Delta
+`v0.5.2..HEAD`: 8 commits (measured at `46042f7`) and the release commit.
+Patch: no removed or renamed page, field or call.
+
+- next 16.3.6 → 16.3.7, the newest stable that clears pnpm's release age
+  without an exclude list (16.3.8 does not yet).
 - Sign-in: an MFA sign-in on `/login` no longer logs a browser console
   error. The password step sends `X-Identuum-Login-Step-Status: 200`; an IdP
-  that supports it (identuum-idp-oss after `v0.8.1`) answers the MFA next
+  that supports it (identuum-idp-oss `v0.8.2`) answers the MFA next
   step with 200 and the same body instead of 401. An IdP without it still
   answers 401, and both forms reach the MFA step.
 - Sign-in, activation and claim: the same opt-in now covers the
