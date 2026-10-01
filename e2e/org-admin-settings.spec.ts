@@ -200,9 +200,17 @@ test.describe("/org-admin/settings — Organization record (read-only)", () => {
       expect(await page.getByRole("button", { name: /save policy/i }).count()).toBe(0);
       expect(await page.getByRole("button", { name: /save invite policy/i }).count()).toBe(0);
 
-      // Exactly ONE Save remains on the page — the Protocol settings panel's
-      // (protocol settings ARE one of the model's seven org_admin areas).
-      expect(await page.getByRole("button", { name: /^Save\b/i }).count()).toBe(1);
+      // Exactly TWO Saves remain on the page — the Protocol settings panel's
+      // (protocol settings ARE one of the model's seven org_admin areas) and,
+      // since OSS-REGISTER-UI, the organization's Self-registration section
+      // (D-021: the org_admin sets its own organization's sign-up policy).
+      expect(await page.getByRole("button", { name: /^Save\b/i }).count()).toBe(2);
+      expect(
+        await page
+          .getByTestId("org-self-registration")
+          .getByRole("button", { name: /^Save\b/i })
+          .count()
+      ).toBe(1);
     } finally {
       await page.close();
     }

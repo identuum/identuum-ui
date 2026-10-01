@@ -483,10 +483,12 @@ if planned closure; then bash "$GW" step "$RECORD" 'closure=node e2e-full/script
 # OSS-REGISTER-UI item 7: the export's own specs (export/e2e: console-clean,
 # claim-link, register) against the console THIS appliance's binary serves on
 # :7113, signed in as the run's fixture administrators
-# (IDENTUUM_E2E_EXPORT_FIXTURE=1). A failing spec fails the phase. Before
+# (IDENTUUM_E2E_EXPORT_FIXTURE=1), read from the envelope copy admin-reset
+# also reads (the dev-loop phase removes the fixture file itself); an absent
+# envelope fails the phase. A failing spec fails the phase. Before
 # admin-reset, which rotates the site administrator they sign in as.
 echo "e2e-full: export specs against the binary's own console"
-if planned export-specs; then bash "$GW" step "$RECORD" 'export-specs=IDENTUUM_E2E_EXPORT_PHASE=ready IDENTUUM_E2E_EXPORT_FIXTURE=1 IDENTUUM_E2E_EXPORT_BASE_URL=http://localhost:7113 bash e2e-full/scripts/pw-phase.sh export-specs '"$UI_DIR"'/e2e/.auth/pw-export.json -- --config export/playwright.config.ts --workers=1 --output='"$UI_DIR"'/e2e/.auth/export-results console-clean.spec.ts claim-link.spec.ts register.spec.ts' || rc=1; fi
+if planned export-specs; then bash "$GW" step "$RECORD" 'export-specs=IDENTUUM_E2E_EXPORT_PHASE=ready IDENTUUM_E2E_EXPORT_FIXTURE=1 IDENTUUM_E2E_FIXTURE_FILE='"$ADMIN_RESET_ENVELOPE"' IDENTUUM_E2E_EXPORT_BASE_URL=http://localhost:7113 bash e2e-full/scripts/pw-phase.sh export-specs '"$UI_DIR"'/e2e/.auth/pw-export.json -- --config export/playwright.config.ts --workers=1 --output='"$UI_DIR"'/e2e/.auth/export-results console-clean.spec.ts claim-link.spec.ts register.spec.ts' || rc=1; fi
 
 # THE-ADMIN-RESET (T-R2a): the LAST CREDENTIALED phase, because it rotates
 # site_admin's credentials — nothing after it may depend on them (only the

@@ -43,6 +43,11 @@ if (process.env.IDENTUUM_E2E_EXPORT_FIXTURE === "1") {
     rememberSecret(oa.email, oa.totpSecret);
     orgAdmin = { email: oa.email, password: oa.password };
   }
+  // Inside the run an absent envelope is a failure, never a quiet skip: a
+  // phase whose specs all skipped would read green having proven nothing.
+  if (!siteAdmin || !orgAdmin) {
+    throw new Error("IDENTUUM_E2E_EXPORT_FIXTURE=1 but the run's fixture envelope is absent");
+  }
 }
 
 /** The site administrator: the run's fixture inside e2e-full, else the environment. */
