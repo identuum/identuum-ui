@@ -108,6 +108,27 @@ describe("a 401 is read for what the server said", () => {
         const notEnrolled = await call();
         expect(!notEnrolled.ok && notEnrolled.notEnrolled && !notEnrolled.invalidProof).toBe(true);
       });
+
+      // OSS-HARDEN item 2 (2026-10-01): a 400 is read by its error code. Only
+      // `mfa_not_enrolled` means "not enrolled"; OSS `invalid_request`, OSS/CE
+      // `code_required`, an unknown code or no body is some other refusal and
+      // falls through to the action's generic error.
+      for (const body of [
+        { error: "invalid_request" },
+        { error: "code_required" },
+        { error: "something_new" },
+        undefined,
+      ]) {
+        it(`a 400 ${body ? body.error : "with no body"} is NOT not-enrolled`, async () => {
+          serverAnswers(400, body);
+          const r = await call();
+          expect(r.ok).toBe(false);
+          if (r.ok) return;
+          expect(r.status).toBe(400);
+          expect(r.notEnrolled).toBe(false);
+          expect(r.unauthorized || r.invalidProof || r.forbidden).toBe(false);
+        });
+      }
     });
   }
 });

@@ -427,9 +427,9 @@ export async function loginAsSiteAdminMFAOptional(page: Page): Promise<void> {
   // the page-wide brute-force warning is role="alert" by design, outside
   // every form, always present on the harness appliance, and its copy says
   // "disabled" — an unscoped alert read, or an unscoped regex, reports the
-  // banner instead of the login error. A form-scoped first pass + a
-  // form-scoped regex fallback so a role-less copy change still yields a
-  // diagnostic.
+  // banner instead of the login error. Both auth forms announce their
+  // refusal as role="alert" (OSS-HARDEN, 2026-10-01: the MFA form too), so
+  // the role is the only read; the former wording-regex fallback is gone.
   let bannerText = "";
   try {
     const alertText = await page
@@ -438,19 +438,7 @@ export async function loginAsSiteAdminMFAOptional(page: Page): Promise<void> {
       .textContent({ timeout: 1000 });
     bannerText = (alertText ?? "").trim();
   } catch {
-    // No form error visible — try the fallback.
-  }
-  if (!bannerText) {
-    try {
-      const errish = await page
-        .locator("form")
-        .locator("text=/invalid|incorrect|wrong|denied|locked|disabled|policy|MFA|verification/i")
-        .first()
-        .textContent({ timeout: 1000 });
-      bannerText = (errish ?? "").trim();
-    } catch {
-      // No error-shaped text visible.
-    }
+    // No form error visible.
   }
   const bannerLine = bannerText
     ? `Visible inline error/banner: "${bannerText}"`

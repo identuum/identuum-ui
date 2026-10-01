@@ -96,8 +96,13 @@ export function MFAForm({ sessionId, onBack, onSuccess }: MFAFormProps) {
           {...register("code")}
         />
 
+        {/* OSS-HARDEN (2026-10-01): announced as an alert, like the password
+            step's, so the e2e helper reads the role scoped to this form. */}
         {serverError && (
-          <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div
+            role="alert"
+            className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          >
             {serverError}
           </div>
         )}

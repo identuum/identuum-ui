@@ -24,6 +24,18 @@ const TOLERANT_GUARD = /if\s*\(!res\.ok\s*&&\s*res\.status\s*!==\s*401\)\s*retur
 const OK_ONLY_GUARD = /if\s*\(!res\.ok\)\s*return\s*""/;
 
 describe("pending-MFA-enrollment login probes accept the measured 401 shape", () => {
+  // OSS-HARDEN item 3 (2026-10-01): both probes opt in to the 200 step
+  // status, so the activation and claim answers are not a logged 401; the
+  // 401 tolerance above stays for an IdP without the opt-in.
+  it("every copy of the probe sends X-Identuum-Login-Step-Status: 200", () => {
+    for (const rel of PROBE_FILES) {
+      const src = readFileSync(resolve(ROOT, rel), "utf8");
+      const probe = src.slice(src.indexOf("async function openPendingMFAEnrollmentSession"));
+      const call = probe.slice(0, probe.indexOf("body: JSON.stringify"));
+      expect(call, rel).toMatch(/\[LOGIN_STEP_STATUS_HEADER\]:\s*"200"/);
+    }
+  });
+
   it("every copy of the probe tolerates the 401 pending-session response, and no unpinned copy exists [ENROLL-PROBE-401-1]", async () => {
     for (const rel of PROBE_FILES) {
       const src = readFileSync(resolve(ROOT, rel), "utf8");

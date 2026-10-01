@@ -13,6 +13,19 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
   that supports it (identuum-idp-oss after `v0.8.1`) answers the MFA next
   step with 200 and the same body instead of 401. An IdP without it still
   answers 401, and both forms reach the MFA step.
+- Sign-in, activation and claim: the same opt-in now covers the
+  password-change step (its MFA continuation) and the activation and claim
+  pending-MFA probes, and the console's session probe and refresh. With an
+  IdP that supports it, a signed-out visit to `/` and a sign-in that must
+  change its password log no browser console error; the probe reads the
+  IdP's 200 `{"authenticated":false}` as signed out, still tries the refresh
+  cookie first, and a call that did not opt in still sees the 401.
+- Account MFA: a 400 from recovery-code regeneration or MFA disable is read
+  by its error code. Only `mfa_not_enrolled` shows "MFA is not enrolled on
+  this account."; any other 400 shows the generic error.
+- The MFA sign-in step announces its error as `role="alert"`, like the
+  password step; the e2e sign-in helper reads that role and no longer
+  matches error wording.
 
 ## `v0.5.2`
 

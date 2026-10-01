@@ -9,10 +9,25 @@
  * through CORS — which is the CSRF mechanism this proof selected.
  */
 
+import { LOGIN_STEP_STATUS_HEADER } from "@/lib/idp-client";
+
 export const BFF_PREFIX = "/bff";
 export const BFF_REQUEST_HEADER = "X-Requested-With";
 export const BFF_REQUEST_HEADER_VALUE = "identuum-ui";
 export const BFF_LOGOUT_PATH = "/session/logout";
+
+/**
+ * OSS-HARDEN (2026-10-01): the login-step opt-in. A request carrying it that
+ * presents no credential is answered 200 {"authenticated":false} by the
+ * session probe and the refresh, instead of a 401 the browser logs. The
+ * refresh always sends it; a caller that did not send it gets the 401 back.
+ */
+export const SIGNED_OUT_OPT_IN = { [LOGIN_STEP_STATUS_HEADER]: "200" } as const;
+const MISSING_REFRESH_CREDENTIAL = JSON.stringify({ reason: "missing_refresh_credential" });
+
+async function isSignedOut(response: Response): Promise<boolean> {
+  return response.status === 200 && (await readJson(response.clone()))?.authenticated === false;
+}
 
 let refreshInFlight: Promise<Response> | null = null;
 let refreshEpoch = 0;
@@ -23,7 +38,11 @@ function refreshSession(signal: AbortSignal): Promise<Response> {
     refreshInFlight = fetch(
       `${BFF_PREFIX}/session/refresh`,
       // One caller cancelling must not cancel the other callers' renewal.
-      withBoundaryHeaders({ method: "POST", signal: AbortSignal.timeout(6000) })
+      withBoundaryHeaders({
+        method: "POST",
+        headers: SIGNED_OUT_OPT_IN,
+        signal: AbortSignal.timeout(6000),
+      })
     )
       .then((response) => {
         if (response.status === 204) refreshEpoch += 1;
@@ -88,12 +107,20 @@ export async function bff(path: string, init: RequestInit = {}): Promise<Respons
     const confirmed = await bff("/api/v1/validate", { signal: request.signal });
     if (!confirmed.ok) return confirmed;
   }
+  const optedIn = new Headers(request.headers).get(LOGIN_STEP_STATUS_HEADER) === "200";
   const epochAtRequest = refreshEpoch;
   const response = await fetch(`${BFF_PREFIX}${path}`, request);
-  if (!readOnly || !api || explicitBearer || response.status !== 401) return response;
-  const failure = await readJson(response.clone());
-  if (!["missing_credential", "token_invalid", "token_expired"].includes(String(failure?.reason))) {
-    return response;
+  if (!readOnly || !api || explicitBearer) return response;
+  // An opted-in "signed out" is the 401 missing_credential of a caller that
+  // did not opt in: the refresh cookie is still tried before it is believed.
+  if (!(optedIn && (await isSignedOut(response)))) {
+    if (response.status !== 401) return response;
+    const failure = await readJson(response.clone());
+    if (
+      !["missing_credential", "token_invalid", "token_expired"].includes(String(failure?.reason))
+    ) {
+      return response;
+    }
   }
   const signal = request.signal as AbortSignal;
   signal.throwIfAborted();
@@ -101,7 +128,15 @@ export async function bff(path: string, init: RequestInit = {}): Promise<Respons
   // request renewed them. Retry with the browser's current cookies first.
   if (epochAtRequest === refreshEpoch) {
     const refreshed = await refreshSession(signal);
-    if (refreshed.status !== 204) return refreshed.clone();
+    if (refreshed.status !== 204) {
+      if (!optedIn && (await isSignedOut(refreshed))) {
+        return new Response(MISSING_REFRESH_CREDENTIAL, {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return refreshed.clone();
+    }
   }
   signal.throwIfAborted();
   // Safe reads alone are retried, once. A failed refresh never clears the

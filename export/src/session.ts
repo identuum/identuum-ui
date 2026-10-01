@@ -13,7 +13,7 @@ import { roleToPath } from "@/lib/role-routing";
 import { upgradeStateNeedsWizard } from "@/lib/runtime-composition";
 import { validateSessionResponse } from "@/lib/session-validation";
 import type { IdpUpgradeStateView } from "@/lib/types";
-import { bff, direct, readJson } from "./bff";
+import { bff, direct, readJson, SIGNED_OUT_OPT_IN } from "./bff";
 
 export type UserRole = "site_admin" | "org_admin" | "org_user";
 
@@ -37,7 +37,9 @@ export type SessionState =
     };
 
 export async function validateSession(): Promise<SessionState> {
-  const state = await validateSessionResponse((signal) => bff("/api/v1/validate", { signal }));
+  const state = await validateSessionResponse((signal) =>
+    bff("/api/v1/validate", { signal, headers: SIGNED_OUT_OPT_IN })
+  );
   if (state.kind === "authenticated") {
     const user = state.session?.user;
     if (

@@ -7,7 +7,7 @@
  */
 import { type SessionState, validateSessionResponse } from "@/lib/session-validation";
 import type { ValidateResponse } from "@/lib/types";
-import { bff } from "../bff";
+import { bff, SIGNED_OUT_OPT_IN } from "../bff";
 import { routeGeneration } from "../router";
 import { redirect } from "./next-navigation";
 
@@ -27,7 +27,9 @@ export function getServerSessionState(): Promise<SessionState> {
   if (memo?.generation !== generation) {
     memo = {
       generation,
-      state: validateSessionResponse((signal) => bff("/api/v1/validate", { signal })),
+      state: validateSessionResponse((signal) =>
+        bff("/api/v1/validate", { signal, headers: SIGNED_OUT_OPT_IN })
+      ),
     };
   }
   return memo.state;

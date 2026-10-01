@@ -184,7 +184,8 @@ export async function loginPasswordChange(
 ): Promise<LoginOutcome> {
   const res = await fetch(IDP.loginPasswordChange, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    // OSS-HARDEN: its MFA continuation as 200 where the IdP supports it.
+    headers: { "Content-Type": "application/json", [LOGIN_STEP_STATUS_HEADER]: "200" },
     credentials: "include",
     body: JSON.stringify({ session_id: sessionId, new_password: newPassword }),
   });

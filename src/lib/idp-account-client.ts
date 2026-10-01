@@ -135,7 +135,10 @@ function failedMutation(status: number, serverError?: string): AccountMutationFa
     // On a 401 the two are exclusive: a refused proof is not a lost session.
     unauthorized: status === 401 && !invalidProof,
     forbidden: status === 403,
-    notEnrolled: status === 400,
+    // OSS-HARDEN (2026-10-01): a 400 is read by its code — both editions name
+    // the not-enrolled case `mfa_not_enrolled`; any other 400 (OSS
+    // `invalid_request`, `code_required`, an unknown code) is a generic refusal.
+    notEnrolled: status === 400 && serverError === "mfa_not_enrolled",
     invalidProof,
   };
 }

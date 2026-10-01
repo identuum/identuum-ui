@@ -21,7 +21,12 @@ function recallSecret(email: string): string {
  * the page once, the recovery codes are acknowledged and never read), or a
  * code for an account enrolled earlier in this process.
  */
-export async function login(page: Page, email: string, password: string): Promise<void> {
+export async function login(
+  page: Page,
+  email: string,
+  password: string,
+  newPassword?: string
+): Promise<void> {
   if (!password) throw new Error("the requested disposable login fixture is not configured");
   await page.goto("/login");
   await page.getByLabel("Email or domain").fill(email);
@@ -32,13 +37,17 @@ export async function login(page: Page, email: string, password: string): Promis
     .locator("p", { hasText: "Secret key" })
     .locator("xpath=following-sibling::code");
   const code = page.getByLabel("Verification code");
-  const outcome = page
-    .getByTestId("home")
-    .or(secretEl)
-    .or(code)
-    .or(page.getByTestId("login-error"))
-    .first();
-  await outcome.waitFor();
+  const loginError = page.getByTestId("login-error");
+  // D-017: an admin-set password is changed first, when the caller gives the
+  // new one (OSS-HARDEN's password-change walk); then the second factor.
+  const change = page.getByTestId("password-change-form");
+  await page.getByTestId("home").or(secretEl).or(code).or(change).or(loginError).first().waitFor();
+  if (newPassword && (await change.isVisible())) {
+    await proofRequest(() => page.getByLabel("New password", { exact: true }).fill(newPassword));
+    await proofRequest(() => page.getByLabel("Confirm new password").fill(newPassword));
+    await page.getByRole("button", { name: "Change password and continue" }).click();
+    await page.getByTestId("home").or(secretEl).or(code).or(loginError).first().waitFor();
+  }
   if (await page.getByTestId("login-error").isVisible()) {
     // Fail fast without copying a potentially sensitive server response into
     // the test error.

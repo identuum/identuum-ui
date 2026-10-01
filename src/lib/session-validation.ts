@@ -113,7 +113,13 @@ export async function validateSessionResponse(
       );
       const res = await request(AbortSignal.timeout(timeoutMs));
       if (res.ok) {
-        return { kind: "authenticated", session: (await res.json()) as ValidateResponse };
+        const body = await readBody(res);
+        // OSS-HARDEN: an opted-in probe that presented no credential is
+        // answered 200 {"authenticated":false} — signed out, never a session.
+        if (body?.authenticated === false) {
+          return { kind: "unauthenticated", status: res.status, reason: "signed_out" };
+        }
+        return { kind: "authenticated", session: body as unknown as ValidateResponse };
       }
       if (res.status < 500 && res.status !== 429) {
         // A VERDICT. 401 bodies name it (AUTH-503: `reason`); keep it for the guards' logs.

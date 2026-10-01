@@ -6,7 +6,7 @@
  * body, and both forms must reach the MFA step.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LOGIN_STEP_STATUS_HEADER, login } from "../lib/idp-client";
+import { LOGIN_STEP_STATUS_HEADER, login, loginPasswordChange } from "../lib/idp-client";
 
 const SID = "pending-handle-0000";
 
@@ -59,6 +59,36 @@ describe("login() — the password step's opt-in step status", () => {
         })
       );
       expect(await login(creds)).toEqual({ kind: "mfa_enrollment_required", sessionId: SID });
+    });
+  }
+});
+
+// OSS-HARDEN item 3 (2026-10-01): the password-change step opts in too, so
+// its MFA continuation is not a logged 401; both statuses still reach MFA.
+describe("loginPasswordChange() — the same opt-in", () => {
+  it("sends the opt-in header with the value 200", async () => {
+    const f = respond(200, { success: true, role: "org_user" });
+    vi.stubGlobal("fetch", f);
+    await loginPasswordChange(SID, "placeholder-new");
+    const headers = new Headers((f.mock.calls[0][1] as RequestInit).headers);
+    expect(headers.get(LOGIN_STEP_STATUS_HEADER)).toBe("200");
+  });
+
+  for (const status of [200, 401]) {
+    it(`reaches the enrolment step from a ${status} mfa_enrollment_required answer`, async () => {
+      vi.stubGlobal(
+        "fetch",
+        respond(status, {
+          error: "mfa_enrollment_required",
+          mfa_required: true,
+          mfa_enrollment_required: true,
+          session_id: SID,
+        })
+      );
+      expect(await loginPasswordChange(SID, "placeholder-new")).toEqual({
+        kind: "mfa_enrollment_required",
+        sessionId: SID,
+      });
     });
   }
 });

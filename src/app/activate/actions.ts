@@ -30,6 +30,7 @@
  */
 
 import { z } from "zod";
+import { LOGIN_STEP_STATUS_HEADER } from "@/lib/idp-client";
 import { idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 
 export interface ActivationValidation {
@@ -165,7 +166,8 @@ async function openPendingMFAEnrollmentSession(
   try {
     const res = await fetch(`${idpURL}/api/v1/auth/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      // OSS-HARDEN: the pending-MFA answer as 200 where the IdP supports it.
+      headers: { "Content-Type": "application/json", [LOGIN_STEP_STATUS_HEADER]: "200" },
       body: JSON.stringify({ email, password }),
       cache: "no-store",
     });
