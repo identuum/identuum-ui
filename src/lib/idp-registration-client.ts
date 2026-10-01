@@ -97,6 +97,9 @@ export const rejectRegistration = (userId: string) =>
 const register = (slug: string) => `/api/v1/auth/register/${encodeURIComponent(slug)}`;
 export const getRegistrationInfo = (slug: string) =>
   call<RegistrationInfo>("GET", register(slug), undefined, false);
+/** The same public read from a signed-in administrator's page, through the boundary. */
+export const getRegistrationInfoSignedIn = (slug: string) =>
+  call<RegistrationInfo>("GET", register(slug));
 export const submitRegistration = (
   slug: string,
   body: { email: string; name: string; password: string }

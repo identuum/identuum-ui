@@ -19,7 +19,7 @@ import {
   listOrgRoles,
   listScopeTemplates,
 } from "@/lib/idp-admin-client";
-import { getOrgRegistration, getRegistrationInfo } from "@/lib/idp-registration-client";
+import { getOrgRegistration, getRegistrationInfoSignedIn } from "@/lib/idp-registration-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { SelfRegistrationSection } from "./self-registration-section";
 import {
@@ -83,7 +83,7 @@ export default async function OrgAdminSettingsPage() {
         scopeTemplatesCapabilityBoundary ? null : listScopeTemplates(),
         protocolSettingsCapabilityBoundary ? null : getOrgProtocolSettings(orgID).catch(() => null),
         getOrgRegistration(orgID),
-        org?.slug ? getRegistrationInfo(org.slug) : null,
+        org?.slug ? getRegistrationInfoSignedIn(org.slug) : null,
       ])
     : ([null, null, null, null, null, null, null] as const);
   // An org_admin cannot read the site_admin instance switch. An organization
