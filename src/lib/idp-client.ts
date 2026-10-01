@@ -68,10 +68,19 @@ interface LoginPayload {
  * We check mfa_required BEFORE checking !res.ok or body.success to avoid
  * mis-treating a valid MFA-required response as a failure.
  */
+/**
+ * The password step's opt-in (F5): with this header set to "200", an IdP that
+ * supports it answers an MFA next step (mfa_required / mfa_enrollment_required)
+ * with 200 and the same body, so the browser does not log it as a failed
+ * resource. An IdP without it still answers 401; both forms are read the same
+ * way below, because the body is checked before the status.
+ */
+export const LOGIN_STEP_STATUS_HEADER = "X-Identuum-Login-Step-Status";
+
 export async function login(payload: LoginPayload): Promise<LoginOutcome> {
   const res = await fetch(IDP.login, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", [LOGIN_STEP_STATUS_HEADER]: "200" },
     credentials: "include",
     body: JSON.stringify(payload),
   });

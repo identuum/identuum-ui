@@ -268,11 +268,12 @@ async function saveSession(ctx: BrowserContext, stateFile: string): Promise<void
  * in quick succession. Callers must set test.setTimeout to at least 90s in
  * their beforeAll hook to accommodate up to ~31s cooldown wait.
  */
-export async function loginAsSiteAdmin(page: Page): Promise<void> {
+export async function loginAsSiteAdmin(page: Page, opts: { fresh?: boolean } = {}): Promise<void> {
   // Fast path: restore saved session cookies if available and recent.
   // This skips TOTP entirely for back-to-back runs within the access_token TTL.
+  // `fresh` (F5's console check) always runs the password and TOTP steps.
   const ctx = page.context();
-  const restored = await tryRestoreSession(ctx, SITE_ADMIN_SESSION_FILE);
+  const restored = !opts.fresh && (await tryRestoreSession(ctx, SITE_ADMIN_SESSION_FILE));
   if (restored) return;
 
   // Full login with TOTP cooldown

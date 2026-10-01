@@ -8,6 +8,12 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
 ## Unreleased
 
+- Sign-in: an MFA sign-in on `/login` no longer logs a browser console
+  error. The password step sends `X-Identuum-Login-Step-Status: 200`; an IdP
+  that supports it (identuum-idp-oss after `v0.8.1`) answers the MFA next
+  step with 200 and the same body instead of 401. An IdP without it still
+  answers 401, and both forms reach the MFA step.
+
 ## `v0.5.2`
 
 The static export that identuum-idp-oss `v0.8.1` embeds: everything listed
