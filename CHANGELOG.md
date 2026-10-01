@@ -6,8 +6,38 @@ first published image. Format roughly follows
 [Semantic Versioning](https://semver.org/). The published artifact is the
 container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
-## Unreleased
+## `v0.6.0`
 
+The static export that identuum-idp-oss `v0.9.0` embeds. Delta
+`v0.5.3..HEAD`: 29 commits (measured at `e93c626`) and the release commit.
+Minor: new pages and sections; no removed or renamed page, field or call.
+
+- Self-registration (D-021, identuum-idp-oss `v0.9.0`), behind two switches
+  that both start off:
+  - Site admin, **Settings → Self-registration**: the instance switch, with
+    its one-line explanation.
+  - Org admin, **Organization settings → Self-registration**: allow
+    sign-up, hold new accounts for approval, require a verified email
+    (disabled, with the reason, where the IdP sends no mail; a 400
+    `smtp_not_configured` is shown plainly) and email domains; read-only
+    with a note while the instance switch is off; the organization's
+    sign-up link with Copy.
+  - The public **`/register/<org_slug>`** page: a closed and an unknown
+    organization both read "Sign-up is not available"; the form takes
+    email, name and password with the organization's stated policy, checks
+    the policy before sending, shows a `weak_password` refusal inline, and
+    every accepted sign-up reads one neutral message for the organization's
+    settings. Its calls reach the IdP's public routes directly.
+  - Org admin, **Users**: sign-ups waiting for approval, with Approve and
+    Reject (Reject asks first).
+- Archived organizations: the console reads the IdP's `deleted_at` as
+  deleted (organization page and own organization), so an archived
+  organization's page offers no action but Restore; its administrator rows
+  say why instead of showing a disabled Reset MFA.
+- e2e-full runs the export's own specs (console-clean, claim-link, register)
+  against the binary it builds, as the `export-specs` phase.
+- next 16.3.7 → 16.3.8, which now clears pnpm's release age without an
+  exclude list.
 - Site admin, organization page: **Issue claim link** for an active
   organization with no administrator (D-022, identuum-idp-oss
   `POST /api/v1/organizations/:id/claim`). An optional email binds the link
