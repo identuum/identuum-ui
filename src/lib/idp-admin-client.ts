@@ -1063,6 +1063,70 @@ export async function inviteFirstOrgAdmin(opts: {
   return r;
 }
 
+/** An organization claim link, held only in the issuing action's state (D-022). */
+export interface IssuedClaim {
+  claimUrl: string;
+  expiresAt: string;
+  emailBound: boolean;
+}
+
+export type IssueClaimResult =
+  | { ok: true; claim: IssuedClaim }
+  | { ok: false; status: number; message: string };
+
+const CLAIM_MESSAGES: Record<string, string> = {
+  organization_not_claimable:
+    "This organization already has an administrator (perhaps one invited and not yet activated), or it is not active, so a claim link cannot be issued for it.",
+  claim_url_unavailable:
+    "No claim link can be built because IDENTUUM_IDP_UI_PUBLIC_BASE_URL is not set on the identity provider. Set it to the console's browser-facing address and issue the link again.",
+};
+
+/**
+ * Issues an organization claim link (D-022): POST
+ * /api/v1/organizations/:id/claim {email?} → 201 {claim_url, expires_at,
+ * email_bound}; 409 organization_not_claimable | claim_url_unavailable.
+ * A new link retires every earlier one of the organization.
+ */
+export async function issueOrganizationClaim(opts: {
+  orgId: string;
+  email: string;
+}): Promise<IssueClaimResult> {
+  const generic = "Could not issue the claim link. Try again.";
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, message: generic };
+  try {
+    const res = await idpFetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(opts.orgId)}/claim`,
+      {
+        method: "POST",
+        headers: { ...(await idpAuthHeaders()), "Content-Type": "application/json" },
+        body: JSON.stringify(opts.email ? { email: opts.email } : {}),
+        cache: "no-store",
+      }
+    );
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before typing
+    const data: any = await res.json().catch(() => null);
+    if (res.status === 201 && typeof data?.claim_url === "string" && data.claim_url) {
+      return {
+        ok: true,
+        claim: {
+          claimUrl: data.claim_url,
+          expiresAt: String(data.expires_at ?? ""),
+          emailBound: data.email_bound === true,
+        },
+      };
+    }
+    const code = typeof data?.error === "string" ? data.error : "";
+    return {
+      ok: false,
+      status: res.status,
+      message: (res.status === 409 && CLAIM_MESSAGES[code]) || generic,
+    };
+  } catch {
+    return { ok: false, status: 0, message: generic };
+  }
+}
+
 /**
  * Re-issues a pending user's invite: POST /api/v1/users/:id/invite → 200
  * {email, invite_token, invite_url | invite_url_unavailable, expires_at}; the

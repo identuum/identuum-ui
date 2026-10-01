@@ -8,6 +8,15 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
 ## Unreleased
 
+- Site admin, organization page: **Issue claim link** for an active
+  organization with no administrator (D-022, identuum-idp-oss
+  `POST /api/v1/organizations/:id/claim`). An optional email binds the link
+  (mailed only when email delivery is configured on the IdP); the link is
+  shown once with Copy and its expiry; issuing again warns first that the
+  earlier link stops working. A refusal says why: the organization already
+  has an administrator (an invited one counts), or the IdP cannot build a
+  link without `IDENTUUM_IDP_UI_PUBLIC_BASE_URL`.
+
 ## `v0.5.3`
 
 The static export that identuum-idp-oss `v0.8.2` embeds. Delta

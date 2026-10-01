@@ -13,10 +13,12 @@ import type { OrgAdminRecoveryCandidate } from "@/lib/idp-admin-client";
  */
 import { getOrganization, listAuditEvents, listOrgAdminsForRecovery } from "@/lib/idp-admin-client";
 import type { GetOrgProtocolSettingsResult, OrgDetail } from "@/lib/types";
+import { IssueClaimButton } from "./issue-claim-button";
 import {
   ADMIN_STATE_COPY,
   type AdminState,
   BOUNDARY_COPY,
+  canIssueClaimLink,
   deriveOperationalStatus,
   deriveOrganizationActions,
   getOrganizationActionHref,
@@ -285,6 +287,16 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
                   >
                     Assign administrator →
                   </a>
+                </div>
+              )}
+              {/* OSS-CLAIM-UI (D-022): or hand the organization over with a claim link. */}
+              {canIssueClaimLink(org) && (
+                <div className="border-t border-stone-100 pt-3 space-y-2">
+                  <p className="text-xs text-stone-500 leading-relaxed">
+                    Or issue a one-time claim link: whoever opens it sets a password and becomes
+                    this organization&apos;s administrator.
+                  </p>
+                  <IssueClaimButton orgId={id} />
                 </div>
               )}
             </>

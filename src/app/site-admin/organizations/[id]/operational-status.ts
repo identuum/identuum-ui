@@ -355,3 +355,15 @@ export function isActivationPending(
     admins.every((a) => !a.email_verified)
   );
 }
+
+/**
+ * OSS-CLAIM-UI (D-022): a claim link is offered only for an active, not
+ * deleted organization with no administrator — the IdP's predicate (it
+ * counts a pending, invited admin as one and answers 409 otherwise). Unknown
+ * admin state (undefined) never offers it.
+ */
+export function canIssueClaimLink(
+  org: Pick<OperationalStatusInput, "active" | "deleted" | "has_admin">
+): boolean {
+  return org.active && !org.deleted && org.has_admin === false;
+}
