@@ -678,13 +678,19 @@ function AdminRow({
       </div>
 
       <div className="shrink-0 flex items-center gap-2">
-        <ResetAdminMFAButton
-          orgId={orgId}
-          userId={admin.id}
-          email={admin.email}
-          disabled={disabled}
-          disabledReason={disabledReason}
-        />
+        {/* OSS-REGISTER-UI item 6: an archived organization offers no
+            action but Restore, so the reset is not shown, only why. */}
+        {orgDeleted ? (
+          <p className="text-xs text-stone-400 max-w-[12rem] text-right">{disabledReason}</p>
+        ) : (
+          <ResetAdminMFAButton
+            orgId={orgId}
+            userId={admin.id}
+            email={admin.email}
+            disabled={disabled}
+            disabledReason={disabledReason}
+          />
+        )}
       </div>
     </li>
   );

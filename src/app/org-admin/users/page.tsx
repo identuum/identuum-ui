@@ -17,6 +17,7 @@
 import type { Metadata } from "next";
 import { LocalTime } from "@/components/ui/local-time";
 import { getOwnOrganization, listOrgUsers } from "@/lib/idp-admin-client";
+import { listPendingRegistrations } from "@/lib/idp-registration-client";
 import { userInviteAvailable } from "@/lib/mail-capabilities";
 import type { OrgUserItem } from "@/lib/types";
 import {
@@ -25,6 +26,7 @@ import {
   isNoEmailSentinel,
   type OrgRegistrationPolicy,
 } from "./[id]/user-detail-actions";
+import { PendingRegistrations } from "./pending-registrations";
 import { UserRowActions } from "./user-row-actions";
 
 export const metadata: Metadata = { title: "Users — Identuum Org Admin" };
@@ -63,6 +65,7 @@ export default async function OrgAdminUsersPage({
     userInviteAvailable(),
   ]);
   const users = listResult?.users ?? null;
+  const pending = org?.id ? await listPendingRegistrations(org.id) : null;
   // Whether a banned org_user can be a self-registrant awaiting approval
   // (null when the organization could not be read: both stay possible).
   const policy: OrgRegistrationPolicy | null = org
@@ -118,6 +121,8 @@ export default async function OrgAdminUsersPage({
           </a>
         )}
       </div>
+
+      {pending?.ok && <PendingRegistrations registrations={pending.value.registrations ?? []} />}
 
       {/* Filter tabs */}
       {totalByStatus && (

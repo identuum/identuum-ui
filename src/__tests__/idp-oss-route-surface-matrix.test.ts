@@ -115,6 +115,14 @@ const IDP_ROUTE_SURFACE_MATRIX: SurfaceMatrixRow[] = [
     ],
   },
   {
+    // OSS-REGISTER-UI (D-021): public self-registration.
+    route: "/register/[slug]",
+    classification: "OSS-supported",
+    coveredRoutes: ["/register/[slug]"],
+    files: ["app/register/[slug]/page.tsx", "lib/idp-registration-client.ts"],
+    signals: ["/api/v1/auth/register/", "getRegistrationInfo"],
+  },
+  {
     route: "/dashboard + /dashboard/security",
     classification: "OSS-supported",
     coveredRoutes: ["/dashboard", "/dashboard/security"],
@@ -365,6 +373,7 @@ describe("IDP OSS route/surface matrix", () => {
       "/account/settings",
       "/login + MFA session handling",
       "/claim + /activate + password recovery + /verify-email",
+      "/register/[slug]",
       "/dashboard + /dashboard/security",
       "/org-admin overview + users",
       "/org-admin/settings",

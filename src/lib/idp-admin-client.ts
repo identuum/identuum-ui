@@ -304,7 +304,8 @@ export async function getOrganization(id: string): Promise<OrgDetail | null> {
       domain: String(o.domain ?? ""),
       slug: String(o.org_slug ?? ""),
       active: Boolean(o.active),
-      deleted: Boolean(o.deleted),
+      // OSS sends deleted_at (a timestamp), not a deleted flag.
+      deleted: Boolean(o.deleted) || (typeof o.deleted_at === "string" && o.deleted_at !== ""),
       auth_policy: String(o.auth_policy ?? "local_only"),
       mfa_policy: String(o.mfa_policy ?? "optional"),
       // ABSENT ≠ NEGATIVE: undefined admin state stays undefined so the
@@ -359,7 +360,8 @@ export async function getOwnOrganization(): Promise<OrgDetail | null> {
       domain: String(o.domain ?? ""),
       slug: String(o.org_slug ?? ""),
       active: Boolean(o.active),
-      deleted: Boolean(o.deleted),
+      // OSS sends deleted_at (a timestamp), not a deleted flag.
+      deleted: Boolean(o.deleted) || (typeof o.deleted_at === "string" && o.deleted_at !== ""),
       auth_policy: String(o.auth_policy ?? "local_only"),
       mfa_policy: String(o.mfa_policy ?? "optional"),
       // /current does not emit admin state today; preserve absence.

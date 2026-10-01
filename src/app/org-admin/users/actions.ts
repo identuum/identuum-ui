@@ -24,6 +24,7 @@ import {
   resetUserMFA,
   setUserActive,
 } from "@/lib/idp-admin-client";
+import { rejectRegistration } from "@/lib/idp-registration-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
 
@@ -208,6 +209,33 @@ export async function approveRegistrationAction(
     revalidatePath("/org-admin/users");
     revalidatePath(`/org-admin/users/${userId}`);
     return { phase: "success", activationUrl: result.activationUrl };
+  }
+  return { phase: "error", error: result.message };
+}
+
+// ── Reject pending registration (POST /api/v1/users/:id/reject, D-021) ──────
+
+export interface RejectRegistrationState {
+  phase: "idle" | "success" | "error";
+  error?: string;
+}
+
+export async function rejectRegistrationAction(
+  _prev: RejectRegistrationState,
+  formData: FormData
+): Promise<RejectRegistrationState> {
+  const session = await getServerSession();
+  if (!session) redirect("/login?reason=session_expired");
+  const role = session.user?.role ?? session.role;
+  if (role !== "org_admin") redirect(roleToPath(role));
+
+  const userId = ((formData.get("userId") as string | null) ?? "").trim();
+  if (!userId) return { phase: "error", error: "Missing user ID." };
+
+  const result = await rejectRegistration(userId);
+  if (result.ok) {
+    revalidatePath("/org-admin/users");
+    return { phase: "success" };
   }
   return { phase: "error", error: result.message };
 }

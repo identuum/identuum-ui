@@ -16,6 +16,7 @@
  */
 
 import type { Metadata } from "next";
+import { getInstanceRegistration } from "@/lib/idp-registration-client";
 import {
   type LicenseProbeOutcome,
   licenseBadge,
@@ -23,6 +24,7 @@ import {
   type SafeLicenseStatus,
 } from "@/lib/license-status";
 import { agBaseUrl, idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
+import { SelfRegistrationCard } from "./self-registration-card";
 
 export const metadata: Metadata = { title: "Settings — Identuum Admin" };
 
@@ -104,12 +106,13 @@ async function loadSystemStatus(): Promise<ServiceStatus[]> {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function SiteAdminSettingsPage() {
-  const [services, licenseOutcome] = await Promise.all([
+  const [services, licenseOutcome, selfRegistration] = await Promise.all([
     loadSystemStatus().catch((): ServiceStatus[] => [
       { name: "Identity Provider (IdP)", enabled: false, healthy: null },
       { name: "Agentic Governor (AG)", enabled: false, healthy: null },
     ]),
     loadLicenseStatus().catch((): LicenseProbeOutcome => ({ kind: "unknown" })),
+    getInstanceRegistration(),
   ]);
 
   return (
@@ -118,6 +121,9 @@ export default async function SiteAdminSettingsPage() {
         <h1 className="text-2xl font-extrabold tracking-tight text-sky-950">Settings</h1>
         <p className="text-sm text-stone-500 mt-0.5">System and infrastructure configuration.</p>
       </div>
+
+      {/* D-021: the instance self-registration switch. */}
+      <SelfRegistrationCard enabled={selfRegistration.ok ? selfRegistration.value.enabled : null} />
 
       {/* Admin account — personal settings live at /account/settings */}
       <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">

@@ -19,7 +19,9 @@ import {
   listOrgRoles,
   listScopeTemplates,
 } from "@/lib/idp-admin-client";
+import { getOrgRegistration, getRegistrationInfo } from "@/lib/idp-registration-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
+import { SelfRegistrationSection } from "./self-registration-section";
 import {
   deriveOrgAdminInvitePolicyMode,
   ORG_ADMIN_DOMAINS_CARD_COPY,
@@ -71,6 +73,8 @@ export default async function OrgAdminSettingsPage() {
     rolesResult,
     scopeTemplatesResult,
     protocolSettings,
+    registration,
+    registrationInfo,
   ] = orgID
     ? await Promise.all([
         listOrganizationDomains(orgID),
@@ -78,8 +82,18 @@ export default async function OrgAdminSettingsPage() {
         listOrgRoles(orgID),
         scopeTemplatesCapabilityBoundary ? null : listScopeTemplates(),
         protocolSettingsCapabilityBoundary ? null : getOrgProtocolSettings(orgID).catch(() => null),
+        getOrgRegistration(orgID),
+        org?.slug ? getRegistrationInfo(org.slug) : null,
       ])
-    : ([null, null, null, null, null] as const);
+    : ([null, null, null, null, null, null, null] as const);
+  // An org_admin cannot read the site_admin instance switch. An organization
+  // whose own setting is open but whose public sign-up reads closed is held
+  // shut by the switch; a save the IdP refuses with 409 says the same.
+  const registrationSettings = registration?.ok ? registration.value : null;
+  const instanceOff =
+    registrationSettings?.allow_public_registration === true &&
+    registrationInfo?.ok === true &&
+    registrationInfo.value.open === false;
   const domains = domainsResult?.ok ? domainsResult.data.domains : [];
   const domainsLoadError =
     domainsResult && !domainsResult.ok ? ORG_ADMIN_DOMAINS_CARD_COPY.loadError : null;
@@ -119,6 +133,16 @@ export default async function OrgAdminSettingsPage() {
           orgId={orgID}
           initialSettings={protocolSettings}
           capabilityBoundary={protocolSettingsCapabilityBoundary}
+        />
+      )}
+
+      {orgID && (
+        <SelfRegistrationSection
+          orgId={orgID}
+          slug={org?.slug ?? ""}
+          initial={registrationSettings}
+          mailDelivery={idpCapabilities?.mail_ceremonies !== false}
+          instanceOff={instanceOff}
         />
       )}
 
