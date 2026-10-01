@@ -143,7 +143,11 @@ describe("the (endpoint, role) coverage matrix stays enforced every harness run 
     // THE-SESSION-REJECTION-ROOT-CAUSE: the credential-free AUTH-503 log scan
     // is the only phase allowed after admin-reset (it reads the appliance log,
     // it needs no credential).
-    expect(sh, "closure phase is planned").toMatch(/coverage closure admin-reset auth503-scan\)/);
+    // OSS-REGISTER-UI item 7: the export specs run between closure and
+    // admin-reset (they sign in as the site administrator admin-reset rotates).
+    expect(sh, "closure phase is planned").toMatch(
+      /coverage closure export-specs admin-reset auth503-scan\)/
+    );
     expect(sh, "enforcement runs as its own witnessed step").toMatch(
       /step "\$RECORD" 'closure=node e2e-full\/scripts\/closure-from-run\.mjs/
     );

@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { type BrowserContext, expect, type Page, test } from "@playwright/test";
 import { unconsumedTOTP } from "../../e2e/helpers/totp";
-import { login } from "./export-login";
+import { login, onBaseURL, siteAdminAccount } from "./export-login";
 
 /**
  * OSS-CLAIM-UI (D-022): in the binary, a site_admin issues a claim link for
@@ -17,8 +17,7 @@ import { login } from "./export-login";
  */
 
 const PHASE = process.env.IDENTUUM_E2E_EXPORT_PHASE ?? "ready";
-const SA_EMAIL = process.env.IDENTUUM_E2E_EXPORT_SITE_ADMIN_EMAIL ?? "site_admin@system.local";
-const SA_PASSWORD = process.env.IDENTUUM_E2E_EXPORT_SITE_ADMIN_PASSWORD ?? "";
+const { email: SA_EMAIL, password: SA_PASSWORD } = siteAdminAccount();
 const run = randomBytes(3).toString("hex");
 const OWNER = `owner-${run}@claim-${run}.example`;
 const OWNER_PASSWORD = `Cl-${randomBytes(12).toString("hex")}-Aa7!`;
@@ -54,6 +53,7 @@ test.describe("claim link in the binary", () => {
 
   test("issue, re-issue retires, claim in a fresh browser, sign in as org_admin", async ({
     browser,
+    baseURL,
   }) => {
     test.setTimeout(180_000);
     const admin = await browser.newContext();
@@ -76,9 +76,9 @@ test.describe("claim link in the binary", () => {
       const second = await issueFromPage(a.page, first);
 
       const c = await watched(fresh);
-      await c.page.goto(first);
+      await c.page.goto(onBaseURL(first, baseURL ?? ""));
       await expect(c.page.getByText("Link invalid or expired")).toBeVisible();
-      await c.page.goto(second);
+      await c.page.goto(onBaseURL(second, baseURL ?? ""));
       await c.page.locator("#claim-email").first().fill(OWNER);
       await c.page.locator("#claim-name").fill("Claim Owner");
       await c.page.locator("#claim-password").fill(OWNER_PASSWORD);

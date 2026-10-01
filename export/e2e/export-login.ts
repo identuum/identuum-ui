@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import { loadOrgAdminFixture, loadSiteAdminFixture } from "../../e2e/helpers/fixture";
 import { unconsumedTOTP } from "../../e2e/helpers/totp";
 import { proofRequest } from "./proof-privacy";
 
@@ -12,6 +13,60 @@ function rememberSecret(email: string, secret: string): void {
 
 function recallSecret(email: string): string {
   return enrolledSecrets.get(email) ?? "";
+}
+
+const enrolled = new Set<string>();
+
+/** True once `email` enrolled its authenticator in this process. */
+export function enrolledHere(email: string): boolean {
+  return enrolled.has(email);
+}
+
+// OSS-REGISTER-UI item 7: inside e2e-full (IDENTUUM_E2E_EXPORT_FIXTURE=1) the
+// appliance's site administrator and organization administrator enrolled
+// earlier in the run; their authenticators come from the run's fixture
+// envelope (e2e/helpers/fixture.ts), read here and never printed.
+interface Account {
+  email: string;
+  password: string;
+}
+let siteAdmin: Account | null = null;
+let orgAdmin: Account | null = null;
+if (process.env.IDENTUUM_E2E_EXPORT_FIXTURE === "1") {
+  const sa = loadSiteAdminFixture();
+  const oa = loadOrgAdminFixture();
+  if (sa) {
+    rememberSecret(sa.email, sa.totpSecret);
+    siteAdmin = { email: sa.email, password: sa.password };
+  }
+  if (oa) {
+    rememberSecret(oa.email, oa.totpSecret);
+    orgAdmin = { email: oa.email, password: oa.password };
+  }
+}
+
+/** The site administrator: the run's fixture inside e2e-full, else the environment. */
+export function siteAdminAccount(): Account {
+  return (
+    siteAdmin ?? {
+      email: process.env.IDENTUUM_E2E_EXPORT_SITE_ADMIN_EMAIL ?? "site_admin@system.local",
+      password: process.env.IDENTUUM_E2E_EXPORT_SITE_ADMIN_PASSWORD ?? "",
+    }
+  );
+}
+
+/** The run fixture's organization administrator (e2e-full only). */
+export function orgAdminAccount(): Account | null {
+  return orgAdmin;
+}
+
+/**
+ * A link the appliance issued names the UI origin it was configured with;
+ * the proof follows it on the binary under test, keeping path and query.
+ */
+export function onBaseURL(link: string, baseURL: string): string {
+  const u = new URL(link);
+  return new URL(`${u.pathname}${u.search}`, baseURL).href;
 }
 
 /**
@@ -57,6 +112,7 @@ export async function login(
     const secret = ((await secretEl.textContent()) ?? "").trim();
     expect(secret.length).toBeGreaterThan(0);
     rememberSecret(email, secret);
+    enrolled.add(email);
     const totp = await proofRequest(() => unconsumedTOTP(secret, email));
     await proofRequest(() => code.fill(totp));
     await page.getByRole("button", { name: "Verify and sign in" }).click();

@@ -236,7 +236,7 @@ export E2E_EVIDENCE_DIR
 # requested, so an absent baseline is a declared subtraction, never INCOMPLETE.
 PLAN=(mail-sink fresh-appliance api-suite)
 [ "${IDENTUUM_E2E_MEASURE:-}" = "1" ] && PLAN+=(plain-baseline)
-PLAN+=(provisioner static-rows-sweep static-rows role-matrix verify-record-ui verify-record-idp-oss devloop-provisioned skip-ceiling coverage closure admin-reset auth503-scan)
+PLAN+=(provisioner static-rows-sweep static-rows role-matrix verify-record-ui verify-record-idp-oss devloop-provisioned skip-ceiling coverage closure export-specs admin-reset auth503-scan)
 # The quick plan and its specs: the eight that caught defects (gate-cost.md
 # §3/§5.1), one sign-in per role among them. tools/mint-reachability's
 # QuickSpecs names the same eight; a change to one of them needs only this mode.
@@ -479,6 +479,14 @@ if planned coverage; then bash "$GW" step "$RECORD" 'coverage=node e2e-full/scri
 # a per-run fact that fails loudly when a test stops exercising one.
 echo "e2e-full: enforcing outside-matrix closure (session + class endpoints)"
 if planned closure; then bash "$GW" step "$RECORD" 'closure=node e2e-full/scripts/closure-from-run.mjs e2e/.auth/role-matrix-observations.jsonl e2e/.auth/pw-devloop.json' || rc=1; fi
+
+# OSS-REGISTER-UI item 7: the export's own specs (export/e2e: console-clean,
+# claim-link, register) against the console THIS appliance's binary serves on
+# :7113, signed in as the run's fixture administrators
+# (IDENTUUM_E2E_EXPORT_FIXTURE=1). A failing spec fails the phase. Before
+# admin-reset, which rotates the site administrator they sign in as.
+echo "e2e-full: export specs against the binary's own console"
+if planned export-specs; then bash "$GW" step "$RECORD" 'export-specs=IDENTUUM_E2E_EXPORT_PHASE=ready IDENTUUM_E2E_EXPORT_FIXTURE=1 IDENTUUM_E2E_EXPORT_BASE_URL=http://localhost:7113 bash e2e-full/scripts/pw-phase.sh export-specs '"$UI_DIR"'/e2e/.auth/pw-export.json -- --config export/playwright.config.ts --workers=1 --output='"$UI_DIR"'/e2e/.auth/export-results console-clean.spec.ts claim-link.spec.ts register.spec.ts' || rc=1; fi
 
 # THE-ADMIN-RESET (T-R2a): the LAST CREDENTIALED phase, because it rotates
 # site_admin's credentials — nothing after it may depend on them (only the
