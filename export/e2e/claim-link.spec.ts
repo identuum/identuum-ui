@@ -33,11 +33,19 @@ async function watched(ctx: BrowserContext): Promise<{ page: Page; errors: strin
   return { page, errors };
 }
 
-async function issueFromPage(page: Page): Promise<string> {
+// Issues from the open form and returns the link the panel then shows: a
+// re-issue waits for the panel to show a different link than `previous`.
+// Links are compared as booleans so a failure never prints one.
+async function issueFromPage(page: Page, previous = ""): Promise<string> {
   await page.getByRole("button", { name: "Issue link" }).click();
-  const panel = page.getByTestId("claim-issued");
-  await expect(panel).toBeVisible();
-  return panel.locator("input").first().inputValue();
+  const input = page.getByTestId("claim-issued").locator("input").first();
+  await expect
+    .poll(async () => {
+      const v = await input.inputValue().catch(() => "");
+      return v !== "" && v !== previous;
+    })
+    .toBe(true);
+  return input.inputValue();
 }
 
 test.describe("claim link in the binary", () => {
@@ -65,8 +73,7 @@ test.describe("claim link in the binary", () => {
       const first = await issueFromPage(a.page);
       await a.page.getByRole("button", { name: "Issue a new claim link" }).click();
       await expect(a.page.getByText("The link issued before stops working.")).toBeVisible();
-      const second = await issueFromPage(a.page);
-      expect(second).not.toBe(first);
+      const second = await issueFromPage(a.page, first);
 
       const c = await watched(fresh);
       await c.page.goto(first);
