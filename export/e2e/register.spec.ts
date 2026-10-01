@@ -10,12 +10,13 @@ import { enrolledHere, login, onBaseURL, orgAdminAccount, siteAdminAccount } fro
  * enrols MFA. With approval on, a second registrant is refused at sign-in
  * until the organization administrator approves it on the users page. Closed
  * again, the link reads "Sign-up is not available", as an unknown
- * organization's does. No console error anywhere.
+ * organization's does. No other console error anywhere.
  *
  * Fixture: the e2e-full run's site and organization administrators
  * (IDENTUUM_E2E_EXPORT_FIXTURE=1). Registrants are made here; their
  * passwords, the link and the authenticator secrets stay in memory. The
- * switch and the organization's policy are restored at the end.
+ * switch and the organization's policy are restored at the end. One console
+ * error is expected and pinned: the pending registrant's refused sign-in.
  */
 
 const PHASE = process.env.IDENTUUM_E2E_EXPORT_PHASE ?? "ready";
@@ -23,12 +24,21 @@ const run = randomBytes(3).toString("hex");
 const password = () => `Rg-${randomBytes(12).toString("hex")}-Aa7!`;
 const BFF = { "X-Requested-With": "identuum-ui", "Content-Type": "application/json" };
 
-async function watched(ctx: BrowserContext, errors: string[]): Promise<Page> {
+// Every answer of 400 or more, by method, status and PATH only (a query can
+// carry a token), so a console error names the request behind it.
+const failed: string[] = [];
+
+async function watched(ctx: BrowserContext, errors: string[], who: string): Promise<Page> {
   const page = await ctx.newPage();
   page.on("console", (m) => {
-    if (m.type() === "error") errors.push(m.text());
+    if (m.type() === "error") errors.push(`${who}: ${m.text()}`);
   });
-  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("pageerror", (e) => errors.push(`${who}: ${e.message}`));
+  page.on("response", (r) => {
+    if (r.status() >= 400) {
+      failed.push(`${who}: ${r.status()} ${r.request().method()} ${new URL(r.url()).pathname}`);
+    }
+  });
   return page;
 }
 
@@ -78,8 +88,8 @@ test.describe("self-registration in the binary", () => {
     const oa = orgAdminAccount() as { email: string; password: string };
     const siteCtx = await browser.newContext();
     const orgCtx = await browser.newContext();
-    const site = await watched(siteCtx, errors);
-    const org = await watched(orgCtx, errors);
+    const site = await watched(siteCtx, errors, "site_admin");
+    const org = await watched(orgCtx, errors, "org_admin");
     let instanceWas: boolean | null = null;
     let policyWas: unknown = null;
     let orgId = "";
@@ -97,7 +107,12 @@ test.describe("self-registration in the binary", () => {
 
       await login(org, oa.email, oa.password);
       const current = await org.request.get("/bff/api/v1/organizations/current", { headers: BFF });
-      orgId = ((await current.json()) as { id: string }).id;
+      const own = (await current.json()) as { id: string; domain: string };
+      orgId = own.id;
+      // Registrants sign up at the organization's own domain, so the sign-in
+      // page's domain lookup finds it (a lookup miss is a logged 404).
+      const at = own.domain;
+      expect(at.length, "the fixture organization has a domain").toBeGreaterThan(0);
       const before = await org.request.get(`/bff/api/v1/organizations/${orgId}/registration`, {
         headers: BFF,
       });
@@ -108,11 +123,11 @@ test.describe("self-registration in the binary", () => {
       await savePolicy(org, true, false);
       const panel = org.getByTestId("org-self-registration").locator("input[readonly]");
       const link = onBaseURL(await panel.inputValue(), baseURL ?? "");
-      const first = `self-${run}@reg-${run}.example`;
+      const first = `self-${run}@${at}`;
       const firstPw = password();
       const r1 = await browser.newContext();
       try {
-        const p = await watched(r1, errors);
+        const p = await watched(r1, errors, "registrant 1");
         await register(p, link, first, firstPw);
         await expect(p.getByText("the account is ready")).toBeVisible();
         await login(p, first, firstPw);
@@ -123,11 +138,11 @@ test.describe("self-registration in the binary", () => {
 
       // Approval on: refused at sign-in until approved.
       await savePolicy(org, true, true);
-      const second = `held-${run}@reg-${run}.example`;
+      const second = `held-${run}@${at}`;
       const secondPw = password();
       const r2 = await browser.newContext();
       try {
-        const p = await watched(r2, errors);
+        const p = await watched(r2, errors, "registrant 2");
         await register(p, link, second, secondPw);
         await expect(p.getByText("an administrator reviews the request")).toBeVisible();
         await expect(login(p, second, secondPw)).rejects.toThrow("login refused");
@@ -148,7 +163,7 @@ test.describe("self-registration in the binary", () => {
       await savePolicy(org, false, false);
       const r3 = await browser.newContext();
       try {
-        const p = await watched(r3, errors);
+        const p = await watched(r3, errors, "visitor");
         await p.goto(link);
         await expect(p.getByText("Sign-up is not available")).toBeVisible();
         await expect(p.getByTestId("register-form")).toHaveCount(0);
@@ -158,7 +173,14 @@ test.describe("self-registration in the binary", () => {
         await r3.close();
       }
 
-      expect(errors).toEqual([]);
+      // Exactly one console error, and it is the one the flow requires: the
+      // pending registrant's refused sign-in (403 registration_pending, an
+      // answer the browser logs; owner ruling, OSS-REGISTER-UI). Any other
+      // console error or answer of 400 or more fails.
+      expect(errors, `answers of 400 or more: ${failed.join("; ")}`).toEqual([
+        "registrant 2: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      ]);
+      expect(failed).toEqual(["registrant 2: 403 POST /bff/api/v1/auth/login"]);
     } finally {
       if (orgId && policyWas) {
         await org.request.put(`/bff/api/v1/organizations/${orgId}/registration`, {
