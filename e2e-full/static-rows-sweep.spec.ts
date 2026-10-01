@@ -846,6 +846,21 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       { method: "GET", path: "/system/info", ok: [200], label: "system-info anon" },
       { method: "GET", path: "/api/v1/component", ok: [200], label: "component anon" },
       { method: "GET", path: "/api/setup/status", ok: [200], label: "setup-status anon" },
+      // D-021: self-registration is off on the appliance, so every
+      // organization answers as closed — 200 {"open":false}, one 202.
+      {
+        method: "GET",
+        path: "/api/v1/auth/register/e2e-closed-org",
+        ok: [200],
+        label: "register-info anon (closed)",
+      },
+      {
+        method: "POST",
+        path: "/api/v1/auth/register/e2e-closed-org",
+        body: { email: "nobody@e2e-closed.invalid", password: "Closed-Org-Pass-2026!x" },
+        ok: [202],
+        label: "register anon (closed — accepted, nothing created)",
+      },
       {
         method: "POST",
         path: "/api/setup/verify-token",

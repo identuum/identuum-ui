@@ -68,6 +68,12 @@
       "statuses": [200, 400]
     },
     {
+      "endpoint": "GET /api/v1/auth/register/:org_slug",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200]
+    },
+    {
       "endpoint": "GET /api/v1/auth/step-up",
       "kind": "session",
       "sources": ["jsonl"],
@@ -224,6 +230,12 @@
       "statuses": [204]
     },
     {
+      "endpoint": "POST /api/v1/auth/register/:org_slug",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [202]
+    },
+    {
       "endpoint": "POST /api/v1/auth/invite",
       "kind": "class",
       "sources": ["jsonl"],
@@ -320,5 +332,5 @@
       "statuses": [200, 400]
     }
   ],
-  "closure_floor": 53
+  "closure_floor": 55
 }
