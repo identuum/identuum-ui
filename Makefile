@@ -549,8 +549,8 @@ tool-versions:
 ## app on 7113): destroys ITS postgres volume, rebuilds the appliance from the
 ## sibling working tree, bootstraps a run-local site_admin, runs the e2e-full
 ## Playwright project serially (--workers=1, TOTP physics), then tears its own
-## project down again. The operator's dev stack (project identuum-idp-oss,
-## 5513) is never touched; a host port it needs that is already taken is a
+## project down again. The operator's dev stack (project identuum-idp-oss-dev
+## since D-024, identuum-idp-oss before; 5513) is never touched; a host port it needs that is already taken is a
 ## refusal naming the holder. OPT-IN ONLY — never wired into verify, wiki make
 ## check, or CI.
 e2e-full:
@@ -761,7 +761,7 @@ witness-parity:
 ## scaffold runtime contract (e2e/oss-contract.spec.ts).
 ##
 ## Run this target against an OSS `--gin-serve` runtime — typically
-## the local `identuum-idp-oss` container on 127.0.0.1:7113 brought up
+## the local `identuum-idp-oss-dev` container (D-024) on 127.0.0.1:7113 brought up
 ## via `identuum-idp-oss/Makefile`'s dev-up target. The spec asserts
 ## the four positive scaffold endpoints (/health,
 ## /.well-known/openid-configuration, /.well-known/jwks.json) and the
