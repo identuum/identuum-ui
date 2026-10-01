@@ -221,7 +221,11 @@ describe("item 4: the public /register/<org_slug> page", () => {
 
   const render = async (answer: Routes[string]) => {
     const env = installExport("/register/acme", { "GET /api/v1/auth/register/acme": answer });
-    return (await env.render()).html;
+    const { html } = await env.render();
+    const info = env.calls.filter((c) => c.path === "/api/v1/auth/register/acme");
+    expect(info.length).toBe(1);
+    expect(info.every((c) => !c.viaBff)).toBe(true);
+    return html;
   };
 
   it("closed, unknown and unreachable all read the same", async () => {
@@ -281,6 +285,9 @@ describe("item 4: the public /register/<org_slug> page", () => {
     expect(r).toEqual({ phase: "accepted" });
     const post = env.calls.find((c) => c.method === "POST");
     expect(post?.path).toBe("/api/v1/auth/register/acme");
+    // A public route, reached directly: through /bff the boundary validates a
+    // session before any mutation, and a signed-out visitor has none (401).
+    expect(post?.viaBff).toBe(false);
     expect(post?.body).toEqual({ email: "new@capture.test", name: "New", password: "pw-fixture" });
   });
 

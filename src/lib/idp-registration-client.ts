@@ -53,7 +53,10 @@ async function call<T>(
   const cfg = loadRuntimeConfig();
   if (!cfg?.idp.enabled) return { ok: false, status: 503, message: GENERIC };
   try {
-    const res = await idpFetch(`${idpBaseUrl(cfg)}${path}`, {
+    // The public sign-up routes are reached directly, as every public
+    // ceremony is: the export's idpFetch is the /bff boundary, which
+    // validates a session before a mutation that a visitor does not have.
+    const res = await (authed ? idpFetch : fetch)(`${idpBaseUrl(cfg)}${path}`, {
       method,
       headers: {
         ...(authed ? await idpAuthHeaders() : {}),
