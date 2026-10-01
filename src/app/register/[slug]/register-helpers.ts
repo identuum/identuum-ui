@@ -5,6 +5,30 @@ import type { RegistrationInfo } from "@/lib/idp-registration-client";
 export const REGISTER_CLOSED = "Sign-up is not available";
 
 /**
+ * The organization's stated policy, checked before the form is sent so an
+ * ordinary weak password never becomes a 400 the browser logs. The IdP stays
+ * the authority: what passes here and fails there shows the IdP's sentence.
+ */
+export function passwordPolicyMessage(
+  password: string,
+  policy: RegistrationInfo["password_policy"]
+): string | null {
+  if (!policy) return null;
+  if (password.length < policy.min_length) {
+    return `The password needs at least ${policy.min_length} characters.`;
+  }
+  const complex =
+    /\p{Lu}/u.test(password) &&
+    /\p{Ll}/u.test(password) &&
+    /\p{N}/u.test(password) &&
+    /[^\p{L}\p{N}]/u.test(password);
+  if (policy.complexity && !complex) {
+    return "The password needs an upper- and a lower-case letter, a digit and a symbol.";
+  }
+  return null;
+}
+
+/**
  * The one message every accepted submission reads, per the organization's
  * settings. The IdP answers 202 for a new address, an existing one and a
  * refused domain alike, so the message never says which it was.

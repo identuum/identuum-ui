@@ -4,6 +4,7 @@ import { SELF_REGISTRATION_COPY } from "@/app/org-admin/settings/self-registrati
 import { rejectRegistrationAction } from "@/app/org-admin/users/actions";
 import { registerAction } from "@/app/register/[slug]/actions";
 import {
+  passwordPolicyMessage,
   REGISTER_CLOSED,
   registrationAcceptedMessage,
 } from "@/app/register/[slug]/register-helpers";
@@ -261,6 +262,19 @@ describe("item 4: the public /register/<org_slug> page", () => {
       json: { open: true, password_policy: { min_length: 8, complexity: false } },
     });
     expect(html).toContain("At least 8 characters.");
+  });
+
+  it("a password the stated policy refuses is caught before it is sent", () => {
+    const strict = { min_length: 12, complexity: true };
+    expect(passwordPolicyMessage("Aa1!", strict)).toBe(
+      "The password needs at least 12 characters."
+    );
+    expect(passwordPolicyMessage("abcdefghijk12345", strict)).toBe(
+      "The password needs an upper- and a lower-case letter, a digit and a symbol."
+    );
+    expect(passwordPolicyMessage("Abcdefghijk1234!", strict)).toBeNull();
+    expect(passwordPolicyMessage("abcdefgh", { min_length: 8, complexity: false })).toBeNull();
+    expect(passwordPolicyMessage("x", undefined)).toBeNull();
   });
 
   it("every accepted submission reads one neutral message per the settings", () => {

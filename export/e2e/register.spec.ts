@@ -45,6 +45,18 @@ async function savePolicy(page: Page, allow: boolean, approval: boolean): Promis
 
 async function register(page: Page, link: string, email: string, pw: string): Promise<void> {
   await page.goto(link);
+  // Where the policy asks for complexity, a password without it is refused
+  // on the form before it is sent: no request, so no 400 in the console.
+  const hint = (await page.locator("#register-password-hint").textContent()) ?? "";
+  if (hint.includes("upper- and lower-case")) {
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Name").fill(`Registrant ${run}`);
+    await page.getByLabel("Password").fill("abcdefghijklmnop1234");
+    await page.getByRole("button", { name: "Create account" }).click();
+    await expect(page.getByTestId("register-form").getByRole("alert")).toContainText(
+      "an upper- and a lower-case letter"
+    );
+  }
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Name").fill(`Registrant ${run}`);
   await page.getByLabel("Password").fill(pw);
@@ -123,7 +135,8 @@ test.describe("self-registration in the binary", () => {
         await org.goto("/org-admin/users");
         const row = org.getByTestId("pending-registration").filter({ hasText: second });
         await row.getByRole("button", { name: "Approve" }).click();
-        await expect(row.getByText("Approved.")).toBeVisible();
+        // The approval revalidates the page: the sign-up leaves the list.
+        await expect(row).toHaveCount(0);
 
         await login(p, second, secondPw);
         expect(enrolledHere(second)).toBe(true);

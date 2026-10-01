@@ -1,9 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import type { RegistrationInfo } from "@/lib/idp-registration-client";
 import { type RegisterState, registerAction } from "./actions";
-import { registrationAcceptedMessage } from "./register-helpers";
+import { passwordPolicyMessage, registrationAcceptedMessage } from "./register-helpers";
 
 const input =
   "w-full rounded-xl border border-stone-200 px-3 py-2 text-sm text-sky-950 focus:outline-none focus:ring-2 focus:ring-sky-500";
@@ -12,6 +12,8 @@ export function RegisterFormClient({ slug, info }: { slug: string; info: Registr
   const [state, action, pending] = useActionState(registerAction, {
     phase: "form",
   } as RegisterState);
+  // The stated policy's refusal, found before sending (see passwordPolicyMessage).
+  const [refused, setRefused] = useState<string | null>(null);
   if (state.phase === "accepted") {
     return (
       <div className="space-y-4" data-testid="register-accepted">
@@ -30,7 +32,19 @@ export function RegisterFormClient({ slug, info }: { slug: string; info: Registr
   }
   const policy = info.password_policy;
   return (
-    <form action={action} className="space-y-4" data-testid="register-form">
+    <form
+      action={action}
+      onSubmit={(e) => {
+        const m = passwordPolicyMessage(
+          String(new FormData(e.currentTarget).get("password")),
+          policy
+        );
+        setRefused(m);
+        if (m) e.preventDefault();
+      }}
+      className="space-y-4"
+      data-testid="register-form"
+    >
       <h1 className="text-lg font-bold text-sky-950 tracking-tight">Create your account</h1>
       <input type="hidden" name="slug" value={slug} />
       <div className="space-y-1">
@@ -79,9 +93,9 @@ export function RegisterFormClient({ slug, info }: { slug: string; info: Registr
             {policy.complexity ? ", with upper- and lower-case letters, a digit and a symbol" : ""}.
           </p>
         )}
-        {state.error && (
+        {(refused ?? state.error) && (
           <p role="alert" className="text-xs text-red-600">
-            {state.error}
+            {refused ?? state.error}
           </p>
         )}
       </div>
