@@ -1,5 +1,9 @@
 import { expect, type Page } from "@playwright/test";
-import { loadOrgAdminFixture, loadSiteAdminFixture } from "../../e2e/helpers/fixture";
+import {
+  loadOrgAdminFixture,
+  loadPasswordChangeFixture,
+  loadSiteAdminFixture,
+} from "../../e2e/helpers/fixture";
 import { unconsumedTOTP } from "../../e2e/helpers/totp";
 import { proofRequest } from "./proof-privacy";
 
@@ -32,9 +36,11 @@ interface Account {
 }
 let siteAdmin: Account | null = null;
 let orgAdmin: Account | null = null;
+let passwordChange: Account | null = null;
 if (process.env.IDENTUUM_E2E_EXPORT_FIXTURE === "1") {
   const sa = loadSiteAdminFixture();
   const oa = loadOrgAdminFixture();
+  passwordChange = loadPasswordChangeFixture();
   if (sa) {
     rememberSecret(sa.email, sa.totpSecret);
     siteAdmin = { email: sa.email, password: sa.password };
@@ -45,8 +51,10 @@ if (process.env.IDENTUUM_E2E_EXPORT_FIXTURE === "1") {
   }
   // Inside the run an absent envelope is a failure, never a quiet skip: a
   // phase whose specs all skipped would read green having proven nothing.
-  if (!siteAdmin || !orgAdmin) {
-    throw new Error("IDENTUUM_E2E_EXPORT_FIXTURE=1 but the run's fixture envelope is absent");
+  if (!siteAdmin || !orgAdmin || !passwordChange) {
+    throw new Error(
+      "IDENTUUM_E2E_EXPORT_FIXTURE=1 but the run's fixture envelope is absent or lacks a block (site_admin, org_admin, password_change_user)"
+    );
   }
 }
 
@@ -63,6 +71,17 @@ export function siteAdminAccount(): Account {
 /** The run fixture's organization administrator (e2e-full only). */
 export function orgAdminAccount(): Account | null {
   return orgAdmin;
+}
+
+/**
+ * The account whose admin-set password must be changed at first sign-in:
+ * the environment's, else the run fixture's (e2e-full).
+ */
+export function passwordChangeAccount(): Account {
+  const email = process.env.IDENTUUM_E2E_EXPORT_PASSWORD_CHANGE_EMAIL ?? "";
+  const password = process.env.IDENTUUM_E2E_EXPORT_PASSWORD_CHANGE_PASSWORD ?? "";
+  if (email && password) return { email, password };
+  return passwordChange ?? { email: "", password: "" };
 }
 
 /**

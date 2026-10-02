@@ -6,6 +6,17 @@ first published image. Format roughly follows
 [Semantic Versioning](https://semver.org/). The published artifact is the
 container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
+## Unreleased
+
+- Sign-in: the organization lookup sends `X-Identuum-Login-Step-Status: 200`
+  and reads a miss by its body, so an email domain that is no organization's
+  is not logged as a failed resource. A pending self-registrant's correct
+  password reads "Your account is waiting for an administrator's approval."
+  (it read "Login failed. Try again."), under either status the IdP answers.
+- e2e-full: the provisioner seeds a must-change-password user into the run's
+  envelope, so console-clean's password-change walks run inside export-specs
+  (no skip), and register.spec asserts zero console errors.
+
 ## `v0.6.0`
 
 The static export that identuum-idp-oss `v0.9.0` embeds. Delta

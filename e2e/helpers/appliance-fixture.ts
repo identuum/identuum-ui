@@ -45,6 +45,7 @@ export const E2E_FIXTURE_SCHEMA_VERSION = 1;
 const SITE_ADMIN_PASSWORD = "e2e-site-admin-not-a-secret-Aa1!";
 const ORG_ADMIN_PASSWORD = "e2e-org-admin-not-a-secret-Aa1!";
 const ORG_USER_PASSWORD = "e2e-org-user-not-a-secret-Aa1!";
+const PASSWORD_CHANGE_PASSWORD = "e2e-password-change-not-a-secret-Aa1!";
 
 export interface FixtureEnvelope {
   fixture_marker: string;
@@ -54,6 +55,10 @@ export interface FixtureEnvelope {
   organization: { name: string; slug: string; domain: string; id: string };
   org_admin: { email: string; password: string; totp_secret: string; user_id: string };
   org_user: { email: string; password: string; totp_secret: string; user_id: string };
+  // OSS-TIDY-2: an org_user created with an admin-set password it must change
+  // at first sign-in (D-017), never signed in and never MFA-enrolled — the
+  // export's console-clean password-change walks sign in as it.
+  password_change_user: { email: string; password: string; user_id: string };
   // FIXTURE-DEPTH (Order B) — tenant-owned OAuth clients the org_admin
   // [dynamic mode only] specs consume. Never carry secret material: the public
   // sample client has no secret, and the confidential client discards the
@@ -638,6 +643,33 @@ export async function seedFixtureFromSiteAdmin(
   // login for site_admin, org_admin, AND org_user.
   const orgUser = await firstLoginBearerAsync(base, orgUserEmail, ORG_USER_PASSWORD);
 
+  // OSS-TIDY-2: the password-change account. Created by the org_admin with the
+  // default must_change_password (D-017: an admin-set password is verified at
+  // once and must be changed at first sign-in); nothing signs in as it here.
+  const changeEmail = `change@e2e-${runId}.test`;
+  const changeCreate = await api(
+    base,
+    "POST",
+    "/api/v1/users",
+    {
+      email: changeEmail,
+      password: PASSWORD_CHANGE_PASSWORD,
+      role: "org_user",
+      organization_id: org.id,
+    },
+    orgAdmin.bearer
+  );
+  must(
+    changeCreate.status >= 200 && changeCreate.status < 300,
+    `create password-change user → ${changeCreate.status}`
+  );
+  const changeId = (changeCreate.json.id as string) ?? (changeCreate.json.ID as string) ?? "";
+  must(changeId.length > 0, "create password-change user returned no id");
+  must(
+    changeCreate.json.requires_password_change === true,
+    "the password-change user must be created requiring a password change"
+  );
+
   // FIXTURE-DEPTH (THE-ALL-GREEN-SUITE Order B): seed the tenant-owned OAuth
   // clients the org_admin [dynamic mode only] specs consume — a PUBLIC client
   // and a CONFIDENTIAL client — both created with the org_admin's OWN authority
@@ -708,6 +740,11 @@ export async function seedFixtureFromSiteAdmin(
       password: ORG_USER_PASSWORD,
       totp_secret: orgUser.totpSecret,
       user_id: orgUserId,
+    },
+    password_change_user: {
+      email: changeEmail,
+      password: PASSWORD_CHANGE_PASSWORD,
+      user_id: changeId,
     },
     sample_client: sampleClient,
     confidential_sample_client: confidentialClient,

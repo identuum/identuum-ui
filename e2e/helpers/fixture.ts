@@ -240,6 +240,29 @@ export function loadOrgUserFixture(): OrgUserFixtureCredentials | null {
 }
 
 /**
+ * OSS-TIDY-2: an org_user whose password was admin-set (it must change it at
+ * first sign-in, D-017) and who has not enrolled MFA — the account the
+ * export's console-clean password-change walks sign in as. Same
+ * null-on-absent contract; returns email + password.
+ */
+export function loadPasswordChangeFixture(): { email: string; password: string } | null {
+  const path = resolveFixturePath();
+  try {
+    statSync(path);
+  } catch {
+    return null;
+  }
+  const parsed = JSON.parse(readFileSync(path, "utf-8")) as unknown;
+  validateFixture(parsed, path);
+  const pc = (parsed as { password_change_user?: unknown }).password_change_user;
+  if (!isObject(pc)) return null;
+  const { email, password } = pc as Record<string, unknown>;
+  if (typeof email !== "string" || email.length === 0) return null;
+  if (typeof password !== "string" || password.length === 0) return null;
+  return { email, password };
+}
+
+/**
  * Returns the fixture org's primary domain (e2e-<runID>.test) when the
  * dynamic fixture file is present and valid. Returns null when the
  * file is absent (durable-env mode) — same null-on-absent contract as

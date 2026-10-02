@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { type BrowserContext, expect, type Page, test } from "@playwright/test";
-import { login } from "./export-login";
+import { login, passwordChangeAccount } from "./export-login";
 
 /**
  * OSS-HARDEN (2026-10-01): what the binary serves logs no browser console
@@ -12,13 +12,13 @@ import { login } from "./export-login";
  *
  * Fixture (ready phase): one account whose password was admin-set
  * (users.requires_password_change) and which has not enrolled MFA. Its
- * password arrives in the environment; the new one is made here, held in
- * memory and never printed. Two sign-ins in all.
+ * password arrives in the environment, or inside e2e-full from the run's
+ * fixture envelope (password_change_user, OSS-TIDY-2); the new one is made
+ * here, held in memory and never printed. Two sign-ins in all.
  */
 
 const PHASE = process.env.IDENTUUM_E2E_EXPORT_PHASE ?? "ready";
-const EMAIL = process.env.IDENTUUM_E2E_EXPORT_PASSWORD_CHANGE_EMAIL ?? "";
-const PASSWORD = process.env.IDENTUUM_E2E_EXPORT_PASSWORD_CHANGE_PASSWORD ?? "";
+const { email: EMAIL, password: PASSWORD } = passwordChangeAccount();
 const NEW_PASSWORD = `Pc-${randomBytes(12).toString("hex")}-Aa7!`;
 
 async function watched(ctx: BrowserContext): Promise<{ page: Page; errors: string[] }> {
