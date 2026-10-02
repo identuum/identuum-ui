@@ -22,14 +22,22 @@ export const IDP = IDP_PATHS;
 
 /**
  * Looks up an organization by domain.
- * Returns null when no organization matches (HTTP 404).
+ * Returns null when no organization matches: HTTP 404, or — under the
+ * step-status opt-in, which an IdP that supports it (identuum-idp-oss
+ * OSS-TIDY-2) honours — 200 with the same {"error":"organization_not_found"}
+ * body, so the sign-in page's miss is not logged as a failed resource.
  * Throws ApiError for unexpected errors.
  */
 export async function orgLookup(domain: string): Promise<OrgConfig | null> {
-  const res = await fetch(`${IDP.orgLookup}?domain=${encodeURIComponent(domain)}`);
+  const res = await fetch(`${IDP.orgLookup}?domain=${encodeURIComponent(domain)}`, {
+    headers: { [LOGIN_STEP_STATUS_HEADER]: "200" },
+  });
   if (res.status === 404) return null;
   if (!res.ok) throw new ApiError(res.status, "Organization lookup failed");
-  return res.json() as Promise<OrgConfig>;
+  // biome-ignore lint/suspicious/noExplicitAny: raw API response, discriminated below
+  const body: any = await res.json();
+  if (body?.error === "organization_not_found") return null;
+  return body as OrgConfig;
 }
 
 export type LoginOutcome =
@@ -137,6 +145,12 @@ export async function login(payload: LoginPayload): Promise<LoginOutcome> {
     body.error === "auth_policy_blocks_local_login"
   ) {
     throw new ApiError(res.status, "AUTH_POLICY_BLOCKS_LOCAL_LOGIN");
+  }
+
+  // D-021: a self-registrant waiting for approval (403 by default, 200 with
+  // the same body under the opt-in). A refusal either way, never a sign-in.
+  if (body?.error === "registration_pending") {
+    throw new ApiError(res.status, "REGISTRATION_PENDING");
   }
 
   // OSS backend: HTTP 401 + {"error":"mfa_enrollment_required"} — no session_id.

@@ -10,13 +10,12 @@ import { enrolledHere, login, onBaseURL, orgAdminAccount, siteAdminAccount } fro
  * enrols MFA. With approval on, a second registrant is refused at sign-in
  * until the organization administrator approves it on the users page. Closed
  * again, the link reads "Sign-up is not available", as an unknown
- * organization's does. No other console error anywhere.
+ * organization's does. No console error anywhere.
  *
  * Fixture: the e2e-full run's site and organization administrators
  * (IDENTUUM_E2E_EXPORT_FIXTURE=1). Registrants are made here; their
  * passwords, the link and the authenticator secrets stay in memory. The
- * switch and the organization's policy are restored at the end. One console
- * error is expected and pinned: the pending registrant's refused sign-in.
+ * switch and the organization's policy are restored at the end.
  */
 
 const PHASE = process.env.IDENTUUM_E2E_EXPORT_PHASE ?? "ready";
@@ -107,12 +106,11 @@ test.describe("self-registration in the binary", () => {
 
       await login(org, oa.email, oa.password);
       const current = await org.request.get("/bff/api/v1/organizations/current", { headers: BFF });
-      const own = (await current.json()) as { id: string; domain: string };
-      orgId = own.id;
-      // Registrants sign up at the organization's own domain, so the sign-in
-      // page's domain lookup finds it (a lookup miss is a logged 404).
-      const at = own.domain;
-      expect(at.length, "the fixture organization has a domain").toBeGreaterThan(0);
+      orgId = ((await current.json()) as { id: string }).id;
+      // Registrants sign up at a domain that is no organization's: the
+      // sign-in page's lookup misses, which the console reads under the
+      // step-status opt-in without a logged failure (OSS-TIDY-2).
+      const at = `reg-${run}.example`;
       const before = await org.request.get(`/bff/api/v1/organizations/${orgId}/registration`, {
         headers: BFF,
       });
@@ -146,6 +144,7 @@ test.describe("self-registration in the binary", () => {
         await register(p, link, second, secondPw);
         await expect(p.getByText("an administrator reviews the request")).toBeVisible();
         await expect(login(p, second, secondPw)).rejects.toThrow("login refused");
+        await expect(p.getByTestId("login-error")).toContainText("waiting for an administrator");
 
         await org.goto("/org-admin/users");
         const row = org.getByTestId("pending-registration").filter({ hasText: second });
@@ -173,14 +172,11 @@ test.describe("self-registration in the binary", () => {
         await r3.close();
       }
 
-      // Exactly one console error, and it is the one the flow requires: the
-      // pending registrant's refused sign-in (403 registration_pending, an
-      // answer the browser logs; owner ruling, OSS-REGISTER-UI). Any other
-      // console error or answer of 400 or more fails.
-      expect(errors, `answers of 400 or more: ${failed.join("; ")}`).toEqual([
-        "registrant 2: Failed to load resource: the server responded with a status of 403 (Forbidden)",
-      ]);
-      expect(failed).toEqual(["registrant 2: 403 POST /bff/api/v1/auth/login"]);
+      // No console error and no answer of 400 or more anywhere: the lookup
+      // miss and the pending registrant's refused sign-in answer 200 under
+      // the console's step-status opt-in (OSS-TIDY-2).
+      expect(errors, `answers of 400 or more: ${failed.join("; ")}`).toEqual([]);
+      expect(failed).toEqual([]);
     } finally {
       if (orgId && policyWas) {
         await org.request.put(`/bff/api/v1/organizations/${orgId}/registration`, {

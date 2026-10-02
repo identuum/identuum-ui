@@ -102,6 +102,11 @@ export function PasswordForm({
         setServerError(
           "Local sign-in is not available for this organization. Please contact your administrator."
         );
+      } else if (err instanceof ApiError && err.message === "REGISTRATION_PENDING") {
+        // D-021: the password was right; the sign-up waits for approval.
+        setServerError(
+          "Your account is waiting for an administrator's approval. You can sign in once it is approved."
+        );
       } else if (err instanceof ApiError && err.status === 401) {
         setServerError("Invalid credentials.");
       } else {

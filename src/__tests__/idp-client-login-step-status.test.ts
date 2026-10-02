@@ -6,7 +6,7 @@
  * body, and both forms must reach the MFA step.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LOGIN_STEP_STATUS_HEADER, login, loginPasswordChange } from "../lib/idp-client";
+import { LOGIN_STEP_STATUS_HEADER, login, loginPasswordChange, orgLookup } from "../lib/idp-client";
 
 const SID = "pending-handle-0000";
 
@@ -91,4 +91,48 @@ describe("loginPasswordChange() — the same opt-in", () => {
       });
     });
   }
+});
+
+// OSS-TIDY-2: a pending self-registrant's correct password is refused as
+// registration_pending — 403 by default, 200 with the same body under the
+// opt-in. Either way it is a refusal, never a sign-in.
+describe("login() — registration_pending under either status", () => {
+  for (const status of [200, 403]) {
+    it(`a ${status} registration_pending is the REGISTRATION_PENDING refusal`, async () => {
+      vi.stubGlobal("fetch", respond(status, { error: "registration_pending" }));
+      await expect(login(creds)).rejects.toMatchObject({ message: "REGISTRATION_PENDING" });
+    });
+  }
+});
+
+// OSS-TIDY-2: the sign-in page's organization lookup opts in too, so a domain
+// that is no organization's (a 404, or 200 with the same body under the
+// opt-in) is "no organization", not a logged failure.
+describe("orgLookup() — the same opt-in", () => {
+  it("sends the opt-in header with the value 200", async () => {
+    const f = respond(200, { error: "organization_not_found" });
+    vi.stubGlobal("fetch", f);
+    await orgLookup("nobody.example.invalid");
+    const headers = new Headers((f.mock.calls[0][1] as RequestInit | undefined)?.headers);
+    expect(headers.get(LOGIN_STEP_STATUS_HEADER)).toBe("200");
+  });
+
+  for (const status of [200, 404]) {
+    it(`a ${status} organization_not_found is no organization`, async () => {
+      vi.stubGlobal("fetch", respond(status, { error: "organization_not_found" }));
+      expect(await orgLookup("nobody.example.invalid")).toBeNull();
+    });
+  }
+
+  it("a found organization is returned", async () => {
+    const org = {
+      slug: "acme",
+      name: "Acme",
+      domain: "acme.example.invalid",
+      auth_policy: "local_only",
+      identity_providers: [],
+    };
+    vi.stubGlobal("fetch", respond(200, org));
+    expect(await orgLookup("acme.example.invalid")).toEqual(org);
+  });
 });
