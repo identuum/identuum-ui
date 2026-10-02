@@ -2119,6 +2119,7 @@ export async function listOwnOrganizationClients(opts?: {
         name: String(c.name ?? ""),
         is_public: Boolean(c.is_public),
         skip_consent: Boolean(c.skip_consent),
+        disabled: c.disabled === true,
         redirect_uris: Array.isArray(c.redirect_uris)
           ? c.redirect_uris.map((s: unknown) => String(s))
           : [],
@@ -2230,6 +2231,7 @@ export async function getOrganizationClientById(
         name: String(c.name ?? ""),
         is_public: Boolean(c.is_public),
         skip_consent: Boolean(c.skip_consent),
+        disabled: c.disabled === true,
         redirect_uris: Array.isArray(c.redirect_uris)
           ? c.redirect_uris.map((s: unknown) => String(s))
           : [],
@@ -2583,6 +2585,7 @@ export async function updateOrganizationClient(
         name: String(c.name ?? ""),
         is_public: Boolean(c.is_public),
         skip_consent: Boolean(c.skip_consent),
+        disabled: c.disabled === true,
         redirect_uris: Array.isArray(c.redirect_uris)
           ? c.redirect_uris.map((s: unknown) => String(s))
           : [],

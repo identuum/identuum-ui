@@ -361,6 +361,11 @@ export interface OrgClientItem {
   is_public: boolean;
   /** Skip-consent flag — only meaningful for first-party clients. */
   skip_consent: boolean;
+  /**
+   * Disabled flag (identuum-idp-ce: a client the OSS upgrade carried in
+   * disabled). An IdP that omits it (identuum-idp-oss) reads as enabled.
+   */
+  disabled?: boolean;
   /** Configured redirect URIs. Empty array when none configured. */
   redirect_uris: string[];
   /** Configured post-logout redirect URIs. Empty array when none. */

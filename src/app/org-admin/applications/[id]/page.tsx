@@ -42,6 +42,7 @@ import {
 } from "@/lib/idp-admin-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { OrgClientItem } from "@/lib/types";
+import { ClientStatusBadge, clientActionsApply } from "../client-status";
 import { FIRST_PARTY_LABEL, FIRST_PARTY_WARNING } from "../first-party-field";
 import {
   APPLICATION_RECENT_ACTIVITY_COPY,
@@ -150,12 +151,14 @@ export default async function OrgAdminApplicationDetailPage({
       {orgAudit && (
         <ApplicationRecentActivity applicationID={result.data.id} result={recentAuditResult} />
       )}
-      <SecuritySection
-        clientId={result.data.id}
-        clientName={result.data.name}
-        clientID={result.data.client_id}
-        isPublic={result.data.is_public}
-      />
+      {clientActionsApply(result.data) && (
+        <SecuritySection
+          clientId={result.data.id}
+          clientName={result.data.name}
+          clientID={result.data.client_id}
+          isPublic={result.data.is_public}
+        />
+      )}
       <DangerZone
         clientId={result.data.id}
         clientName={result.data.name}
@@ -189,6 +192,7 @@ function DetailHeader({ client }: { client: OrgClientItem }) {
         <p className="text-xs font-mono text-stone-500 mt-1 break-all">{client.client_id}</p>
       </div>
       <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <ClientStatusBadge disabled={client.disabled} />
         <Badge
           tone={client.is_public ? "amber" : "sky"}
           label={client.is_public ? "Public" : "Confidential"}
@@ -196,13 +200,15 @@ function DetailHeader({ client }: { client: OrgClientItem }) {
         {client.token_endpoint_auth_method && (
           <Badge tone="stone" label={client.token_endpoint_auth_method} />
         )}
-        <a
-          href={`/org-admin/applications/${encodeURIComponent(client.id)}/edit`}
-          aria-label={`Edit application ${client.name}`}
-          className="inline-flex items-center rounded-xl bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 transition-colors"
-        >
-          Edit application
-        </a>
+        {clientActionsApply(client) && (
+          <a
+            href={`/org-admin/applications/${encodeURIComponent(client.id)}/edit`}
+            aria-label={`Edit application ${client.name}`}
+            className="inline-flex items-center rounded-xl bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 transition-colors"
+          >
+            Edit application
+          </a>
+        )}
       </div>
     </div>
   );
@@ -214,8 +220,9 @@ function DetailCard({ client }: { client: OrgClientItem }) {
       <div className="px-6 py-4 border-b border-stone-100">
         <p className="text-sm font-semibold text-sky-950">Configuration</p>
         <p className="text-xs text-stone-400 mt-0.5">
-          Operator-safe public configuration for this OAuth client. Use Edit application to change
-          the safe fields.
+          {clientActionsApply(client)
+            ? "Operator-safe public configuration for this OAuth client. Use Edit application to change the safe fields."
+            : "This application is disabled: it cannot sign anyone in, so editing it and changing its credentials do not apply. Delete it when it is no longer needed."}
         </p>
       </div>
       <dl className="px-6 py-4 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-3 text-xs">

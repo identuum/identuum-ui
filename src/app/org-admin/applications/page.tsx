@@ -37,6 +37,7 @@ import {
 import { listOwnOrganizationClients } from "@/lib/idp-admin-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { OrgClientItem } from "@/lib/types";
+import { ClientStatusBadge } from "./client-status";
 
 export const metadata: Metadata = {
   title: "Applications — Identuum Org Admin",
@@ -117,6 +118,7 @@ function ApplicationRow({ client }: { client: OrgClientItem }) {
           <p className="text-xs font-mono text-stone-500 truncate">{client.client_id}</p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+          <ClientStatusBadge disabled={client.disabled} />
           <Badge
             tone={client.is_public ? "amber" : "sky"}
             label={client.is_public ? "Public" : "Confidential"}
