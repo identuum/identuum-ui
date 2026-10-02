@@ -23,6 +23,7 @@ import {
   loadLicenseStatus,
   type SafeLicenseStatus,
 } from "@/lib/license-status";
+import { selfRegistrationAvailable } from "@/lib/mail-capabilities";
 import { agBaseUrl, idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 import { SelfRegistrationCard } from "./self-registration-card";
 
@@ -106,13 +107,15 @@ async function loadSystemStatus(): Promise<ServiceStatus[]> {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function SiteAdminSettingsPage() {
+  // CE-UI-5a: an IdP without self-registration (identuum-idp-ce) is not asked.
+  const selfRegistrationServed = await selfRegistrationAvailable();
   const [services, licenseOutcome, selfRegistration] = await Promise.all([
     loadSystemStatus().catch((): ServiceStatus[] => [
       { name: "Identity Provider (IdP)", enabled: false, healthy: null },
       { name: "Agentic Governor (AG)", enabled: false, healthy: null },
     ]),
     loadLicenseStatus().catch((): LicenseProbeOutcome => ({ kind: "unknown" })),
-    getInstanceRegistration(),
+    selfRegistrationServed ? getInstanceRegistration() : null,
   ]);
 
   return (
@@ -123,7 +126,11 @@ export default async function SiteAdminSettingsPage() {
       </div>
 
       {/* D-021: the instance self-registration switch. */}
-      <SelfRegistrationCard enabled={selfRegistration.ok ? selfRegistration.value.enabled : null} />
+      {selfRegistration && (
+        <SelfRegistrationCard
+          enabled={selfRegistration.ok ? selfRegistration.value.enabled : null}
+        />
+      )}
 
       {/* Admin account — personal settings live at /account/settings */}
       <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">

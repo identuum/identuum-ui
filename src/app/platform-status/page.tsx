@@ -369,6 +369,8 @@ const CAPABILITY_LABELS: Record<keyof ComponentCapabilities, string> = {
   activation_link: "Activation link",
   public_clients: "Public clients",
   org_audit: "Organization audit",
+  claim_links: "Organization claim links",
+  self_registration: "Self-registration",
 };
 
 function CapabilitiesList({ capabilities }: { capabilities: ComponentCapabilities }) {

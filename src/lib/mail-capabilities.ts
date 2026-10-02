@@ -52,3 +52,18 @@ export async function userApprovalAvailable(): Promise<boolean> {
   const state = await getServerRuntimeState();
   return state?.components.idp?.capabilities?.user_approval !== false;
 }
+
+/**
+ * CE-UI-5a: organization claim links (D-022) and self-registration (D-021)
+ * are false on identuum-idp-ce, which serves neither. A binary that does not
+ * report the key (identuum-idp-oss) keeps them, as before the keys existed.
+ */
+export async function claimLinksAvailable(): Promise<boolean> {
+  const state = await getServerRuntimeState();
+  return state?.components.idp?.capabilities?.claim_links !== false;
+}
+
+export async function selfRegistrationAvailable(): Promise<boolean> {
+  const state = await getServerRuntimeState();
+  return state?.components.idp?.capabilities?.self_registration !== false;
+}

@@ -12,6 +12,7 @@ import type { OrgAdminRecoveryCandidate } from "@/lib/idp-admin-client";
  * Sanitized to OrgDetail — no secrets, internal URLs, or credential material.
  */
 import { getOrganization, listAuditEvents, listOrgAdminsForRecovery } from "@/lib/idp-admin-client";
+import { claimLinksAvailable } from "@/lib/mail-capabilities";
 import type { GetOrgProtocolSettingsResult, OrgDetail } from "@/lib/types";
 import { IssueClaimButton } from "./issue-claim-button";
 import {
@@ -49,10 +50,11 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
     return <NotFoundPanel />;
   }
 
-  const [org, recentAuditResult, adminsResult] = await Promise.all([
+  const [org, recentAuditResult, adminsResult, claimLinks] = await Promise.all([
     getOrganization(id),
     listAuditEvents({ subjectId: id, subjectType: "organization", pageSize: 8 }).catch(() => null),
     listOrgAdminsForRecovery(id).catch(() => null),
+    claimLinksAvailable(),
   ]);
   // Protocol settings are the tenant's own resource: every edition refuses
   // site_admin (OSS answers 403), so this page shows that refusal without
@@ -290,7 +292,7 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
                 </div>
               )}
               {/* OSS-CLAIM-UI (D-022): or hand the organization over with a claim link. */}
-              {canIssueClaimLink(org) && (
+              {claimLinks && canIssueClaimLink(org) && (
                 <div className="border-t border-stone-100 pt-3 space-y-2">
                   <p className="text-xs text-stone-500 leading-relaxed">
                     Or issue a one-time claim link: whoever opens it sets a password and becomes

@@ -795,6 +795,12 @@ export interface ComponentCapabilities {
    *  org_admin (false on identuum-idp-ce, whose audit rows carry no
    *  organization). Absent is treated as available. */
   org_audit?: boolean;
+  /** CE-UI-5a: the IdP issues organization claim links (D-022; false on
+   *  identuum-idp-ce). Absent is treated as available. */
+  claim_links?: boolean;
+  /** CE-UI-5a: the IdP serves self-registration (D-021; false on
+   *  identuum-idp-ce). Absent is treated as available. */
+  self_registration?: boolean;
 }
 
 /**

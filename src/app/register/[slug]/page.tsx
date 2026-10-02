@@ -8,6 +8,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { getRegistrationInfo } from "@/lib/idp-registration-client";
+import { selfRegistrationAvailable } from "@/lib/mail-capabilities";
 import { RegisterFormClient } from "./form-client";
 import { REGISTER_CLOSED } from "./register-helpers";
 
@@ -16,7 +17,9 @@ export const metadata: Metadata = { title: "Sign up — Identuum" };
 
 export default async function RegisterPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const info = slug ? await getRegistrationInfo(slug) : null;
+  // CE-UI-5a: an IdP without self-registration (identuum-idp-ce) is not
+  // asked; the page reads closed, as for any closed organization.
+  const info = slug && (await selfRegistrationAvailable()) ? await getRegistrationInfo(slug) : null;
   return (
     <RegisterLayout>
       {info?.ok && info.value.open ? (

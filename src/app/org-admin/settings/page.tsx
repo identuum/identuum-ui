@@ -52,6 +52,8 @@ export default async function OrgAdminSettingsPage() {
     ORG_ADMIN_INVITE_POLICY_MODE_COPY[deriveOrgAdminInvitePolicyMode(invitePolicy)];
   const runtimeState = await getServerRuntimeState();
   const idpCapabilities = runtimeState?.components.idp.capabilities;
+  // CE-UI-5a: an IdP without self-registration (identuum-idp-ce) is not asked.
+  const selfRegistrationServed = idpCapabilities?.self_registration !== false;
   const scopeTemplatesCapabilityBoundary = getAuthorizationServerPageBoundary({
     capabilities: idpCapabilities,
     surface: "scope_templates",
@@ -82,8 +84,8 @@ export default async function OrgAdminSettingsPage() {
         listOrgRoles(orgID),
         scopeTemplatesCapabilityBoundary ? null : listScopeTemplates(),
         protocolSettingsCapabilityBoundary ? null : getOrgProtocolSettings(orgID).catch(() => null),
-        getOrgRegistration(orgID),
-        org?.slug ? getRegistrationInfoSignedIn(org.slug) : null,
+        selfRegistrationServed ? getOrgRegistration(orgID) : null,
+        selfRegistrationServed && org?.slug ? getRegistrationInfoSignedIn(org.slug) : null,
       ])
     : ([null, null, null, null, null, null, null] as const);
   // An org_admin cannot read the site_admin instance switch. An organization
@@ -136,7 +138,7 @@ export default async function OrgAdminSettingsPage() {
         />
       )}
 
-      {orgID && (
+      {orgID && selfRegistrationServed && (
         <SelfRegistrationSection
           orgId={orgID}
           slug={org?.slug ?? ""}

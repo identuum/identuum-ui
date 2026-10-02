@@ -66,6 +66,8 @@ const KNOWN_CAPABILITY_KEYS: ReadonlyArray<keyof ComponentCapabilities> = [
   "activation_link",
   "public_clients",
   "org_audit",
+  "claim_links",
+  "self_registration",
 ];
 
 export type CapabilityAvailability = "available" | "unavailable" | "unknown";

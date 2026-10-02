@@ -18,7 +18,7 @@ import type { Metadata } from "next";
 import { LocalTime } from "@/components/ui/local-time";
 import { getOwnOrganization, listOrgUsers } from "@/lib/idp-admin-client";
 import { listPendingRegistrations } from "@/lib/idp-registration-client";
-import { userInviteAvailable } from "@/lib/mail-capabilities";
+import { selfRegistrationAvailable, userInviteAvailable } from "@/lib/mail-capabilities";
 import type { OrgUserItem } from "@/lib/types";
 import {
   BANNED_AMBIGUOUS_STATUS_LABEL,
@@ -65,7 +65,9 @@ export default async function OrgAdminUsersPage({
     userInviteAvailable(),
   ]);
   const users = listResult?.users ?? null;
-  const pending = org?.id ? await listPendingRegistrations(org.id) : null;
+  // CE-UI-5a: an IdP without self-registration (identuum-idp-ce) is not asked.
+  const pending =
+    org?.id && (await selfRegistrationAvailable()) ? await listPendingRegistrations(org.id) : null;
   // Whether a banned org_user can be a self-registrant awaiting approval
   // (null when the organization could not be read: both stay possible).
   const policy: OrgRegistrationPolicy | null = org
