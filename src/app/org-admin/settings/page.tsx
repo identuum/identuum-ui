@@ -151,7 +151,11 @@ export default async function OrgAdminSettingsPage() {
       {/* Domains card — list/add/verify/set-primary/remove. The DNS-TXT
           challenge value surfaces ONLY immediately after a successful
           add; subsequent renders show only the operator-safe row state. */}
-      <DomainsCard domains={domains} loadError={domainsLoadError} />
+      <DomainsCard
+        domains={domains}
+        loadError={domainsLoadError}
+        selfRegistration={selfRegistrationServed}
+      />
 
       {/* Read-only observability sections landed by
           identuum-20260530-org-admin-settings-readonly-tabs. Each
@@ -162,7 +166,9 @@ export default async function OrgAdminSettingsPage() {
         <IdentityProvidersReadOnlySection result={identityProvidersResult} />
       )}
       {rolesResult && <OrgRolesReadOnlySection result={rolesResult} />}
-      {(scopeTemplatesResult || scopeTemplatesCapabilityBoundary) && (
+      {/* CE-UI-5a: an IdP that does not serve scope templates gets no
+          section at all, not a "not exposed" panel. */}
+      {scopeTemplatesResult && (
         <ScopeTemplatesReadOnlySection
           result={scopeTemplatesResult}
           capabilityBoundary={scopeTemplatesCapabilityBoundary}

@@ -123,6 +123,9 @@ export const ORG_ADMIN_DOMAINS_CARD_COPY = {
     "Verify the domains your organization owns. Verified domains gate self-registration to people whose email matches one of them.",
   /** Empty-list copy. */
   emptyState: "No domains yet. Add one below to enable self-registration for that email domain.",
+  /** The same two lines for an IdP without self-registration (CE-UI-5a). */
+  cardSubtitleNoSelfRegistration: "Verify the domains your organization owns.",
+  emptyStateNoSelfRegistration: "No domains yet. Add one below.",
   /** Section above the add-domain input. */
   addLabel: "Add a domain",
   addHelp:

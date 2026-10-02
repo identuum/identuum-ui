@@ -46,6 +46,8 @@ interface DomainsCardProps {
    * Null when the list loaded successfully (even if empty).
    */
   loadError: string | null;
+  /** False on an IdP without self-registration: the copy does not name it. */
+  selfRegistration?: boolean;
 }
 
 const addInitialState: AddOrganizationDomainState = { phase: "idle" };
@@ -53,7 +55,13 @@ const verifyInitialState: VerifyOrganizationDomainState = { phase: "idle" };
 const removeInitialState: DeleteOrganizationDomainState = { phase: "idle" };
 const primaryInitialState: SetPrimaryOrganizationDomainState = { phase: "idle" };
 
-export function DomainsCard({ domains, loadError }: DomainsCardProps) {
+export function DomainsCard({ domains, loadError, selfRegistration = true }: DomainsCardProps) {
+  const subtitle = selfRegistration
+    ? ORG_ADMIN_DOMAINS_CARD_COPY.cardSubtitle
+    : ORG_ADMIN_DOMAINS_CARD_COPY.cardSubtitleNoSelfRegistration;
+  const emptyState = selfRegistration
+    ? ORG_ADMIN_DOMAINS_CARD_COPY.emptyState
+    : ORG_ADMIN_DOMAINS_CARD_COPY.emptyStateNoSelfRegistration;
   const [addState, addAction, addPending] = useActionState(
     addOrganizationDomainAction,
     addInitialState
@@ -77,7 +85,7 @@ export function DomainsCard({ domains, loadError }: DomainsCardProps) {
         <p className="text-sm font-semibold text-sky-950">
           {ORG_ADMIN_DOMAINS_CARD_COPY.cardTitle}
         </p>
-        <p className="text-xs text-stone-400 mt-0.5">{ORG_ADMIN_DOMAINS_CARD_COPY.cardSubtitle}</p>
+        <p className="text-xs text-stone-400 mt-0.5">{subtitle}</p>
       </div>
 
       <div className="px-6 py-5 space-y-5">
@@ -181,7 +189,7 @@ export function DomainsCard({ domains, loadError }: DomainsCardProps) {
 
         {/* Domains list */}
         {domains.length === 0 ? (
-          <p className="text-sm text-stone-500">{ORG_ADMIN_DOMAINS_CARD_COPY.emptyState}</p>
+          <p className="text-sm text-stone-500">{emptyState}</p>
         ) : (
           <ul className="space-y-3">
             {domains.map((d) => (

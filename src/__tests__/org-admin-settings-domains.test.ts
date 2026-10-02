@@ -850,9 +850,9 @@ describe("/org-admin/settings page wiring — DomainsCard replaces placeholder",
     expect(PAGE_SRC).toMatch(/listOrganizationDomains/);
   });
 
-  it("renders <DomainsCard domains=... loadError=... />", () => {
+  it("renders <DomainsCard domains=... loadError=... selfRegistration=... />", () => {
     expect(PAGE_SRC).toMatch(
-      /<DomainsCard\s+domains=\{\s*domains\s*\}\s+loadError=\{\s*domainsLoadError\s*\}\s*\/>/
+      /<DomainsCard\s+domains=\{\s*domains\s*\}\s+loadError=\{\s*domainsLoadError\s*\}\s+selfRegistration=\{\s*selfRegistrationServed\s*\}\s*\/>/
     );
   });
 

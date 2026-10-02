@@ -121,4 +121,16 @@ describe("the CE-hidden surfaces already gated (service accounts, public clients
     const { html } = await page("/org-admin/applications/new", ceFalse);
     expect(html.toLowerCase()).not.toContain("public client");
   });
+
+  it("organization settings: no scope-templates section and no self-registration wording", async () => {
+    const { html, env } = await page("/org-admin/settings", ceFalse);
+    expect(html).not.toContain("Scope templates");
+    expect(html.toLowerCase()).not.toContain("self-registration");
+    expect(called(env.calls, /scope-templates/)).toEqual([]);
+  });
+
+  it("organization settings without the keys keep the domains card's self-registration wording", async () => {
+    const { html } = await page("/org-admin/settings", {});
+    expect(html).toContain("Verified domains gate self-registration");
+  });
 });
