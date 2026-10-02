@@ -8,6 +8,13 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
 ## Unreleased
 
+## `v0.6.1`
+
+The static export that identuum-idp-oss `v0.9.1` embeds. Delta
+`v0.6.0..HEAD`: 16 commits (measured at `19fac27`) and the release commit.
+Patch: fixes, and console behaviour keyed on capabilities identuum-idp-oss
+does not send; nothing removed or renamed.
+
 - Sign-in: the organization lookup sends `X-Identuum-Login-Step-Status: 200`
   and reads a miss by its body, so an email domain that is no organization's
   is not logged as a failed resource. A pending self-registrant's correct
@@ -15,7 +22,17 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
   (it read "Login failed. Try again."), under either status the IdP answers.
 - e2e-full: the provisioner seeds a must-change-password user into the run's
   envelope, so console-clean's password-change walks run inside export-specs
-  (no skip), and register.spec asserts zero console errors.
+  (no skip), and register.spec asserts zero console errors; a phase's record
+  names each skipped test and why.
+- Console for identuum-idp-ce (no change on identuum-idp-oss, which sends
+  none of these keys):
+  - claim links and self-registration follow `capabilities.claim_links` and
+    `capabilities.self_registration`; absent means served;
+  - organization settings show no scope-templates section and no
+    self-registration wording where the IdP serves neither;
+  - an application the IdP reports `disabled` shows a Disabled badge, and
+    its page offers no Edit application and no secret actions; absent means
+    enabled.
 
 ## `v0.6.0`
 
