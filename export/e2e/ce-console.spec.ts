@@ -143,12 +143,10 @@ test.describe("the CE console on its own origin", () => {
         "/org-admin/applications/new",
         "/org-admin/settings",
       ]);
-      test
-        .info()
-        .annotations.push({
-          type: "pages",
-          description: `site_admin ${sitePages}, org_admin ${orgPages}`,
-        });
+      test.info().annotations.push({
+        type: "pages",
+        description: `site_admin ${sitePages}, org_admin ${orgPages}`,
+      });
     } finally {
       await site.close();
       await org.close();
