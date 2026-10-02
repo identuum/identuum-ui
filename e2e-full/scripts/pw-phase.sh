@@ -105,6 +105,31 @@ elif [ "$rc" -ne 0 ]; then
 	echo "check FAILED: $PHASE failed: no test is marked failed in the JSON report, but playwright exited $rc — read the phase output above"
 fi
 
+# NAME every skipped test and why (OSS-V0.9.0, owner ruling): the count alone
+# cannot tell a skip by design from a spec that silently proved nothing. The
+# reason is the test's skip annotation (the description its test.skip gave);
+# a test skipped because an earlier serial test failed carries "serial".
+skipped_names=$(node -e '
+const j = require(require("node:path").resolve(process.argv[1]));
+const out = [];
+const walk = (suite, file) => {
+  const f = (suite.file || file || "").replace(/^(\.\.\/)+/, "");
+  for (const s of suite.specs || []) for (const t of s.tests || []) {
+    if (t.status !== "skipped") continue;
+    const why = (t.annotations || []).filter((a) => a.type === "skip").map((a) => a.description || "no reason given");
+    out.push(`${f}:${s.line}:${s.column} › ${s.title} [${why.length ? why.join("; ") : "no skip annotation"}]`);
+  }
+  for (const c of suite.suites || []) walk(c, f);
+};
+for (const s of j.suites || []) walk(s, s.file);
+for (const line of out) console.log(line);
+' "$JSON_OUT" 2>/dev/null || true)
+if [ -n "$skipped_names" ]; then
+	while IFS= read -r line; do
+		echo "check OK: $PHASE skipped: $line"
+	done <<<"$skipped_names"
+fi
+
 # THE-ELEVEN-MISMATCHES (2026-09-15): READ THE BROWSER CONSOLE. For four days
 # every mint's dev server printed "Hydration failed because the server
 # rendered HTML didn't match the client" eleven times while every spec
