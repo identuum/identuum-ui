@@ -172,6 +172,31 @@ function extractLicenseInfo(raw: unknown): ComponentLicenseInfo {
   return info;
 }
 
+/**
+ * The IdP's build commit from its public /system/info (`build_commit`), or
+ * null when it serves none, answers an error or cannot be reached — the page
+ * then shows the version alone. Read only by /platform-status.
+ */
+export async function fetchIdpBuildCommit(baseUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${baseUrl.replace(/\/$/, "")}/system/info`, {
+      signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    const body: unknown = await res.json();
+    const commit = (body as { build_commit?: unknown } | null)?.build_commit;
+    return typeof commit === "string" && commit.trim() !== "" ? commit.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** "0.9.1 (commit 1633ffb25f7e)" — the version alone without a commit. */
+export function versionWithCommit(version: string, commit: string | null): string {
+  return commit ? `${version} (commit ${commit.slice(0, 12)})` : version;
+}
+
 async function fetchComponent(
   baseUrl: string,
   expectedComponent: string

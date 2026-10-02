@@ -17,8 +17,12 @@ import type { ReactNode } from "react";
 import { AGCEOrgLinkAvailabilityCard } from "@/components/shared/ag-ce-org-link-availability-card";
 import { LocalTime } from "@/components/ui/local-time";
 import { fetchAgAuthProviders } from "@/lib/ag-auth-providers";
-import { getCapabilityAvailability } from "@/lib/runtime-composition";
-import { agBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
+import {
+  fetchIdpBuildCommit,
+  getCapabilityAvailability,
+  versionWithCommit,
+} from "@/lib/runtime-composition";
+import { agBaseUrl, idpBaseUrl, loadRuntimeConfig } from "@/lib/runtime-config";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type {
   AgAuthProviderDiscoveryState,
@@ -37,6 +41,7 @@ export default async function PlatformStatusPage() {
   const agUrl = cfg?.ag.enabled ? agBaseUrl(cfg) : null;
 
   const agProviders = await fetchAgAuthProviders(agUrl);
+  const idpCommit = cfg?.idp.enabled ? await fetchIdpBuildCommit(idpBaseUrl(cfg)) : null;
 
   if (!state) {
     return <SetupRequiredPrompt />;
@@ -75,6 +80,7 @@ export default async function PlatformStatusPage() {
               abbreviation="IDP"
               backend={state.components.idp}
               expectedComponent="identuum-idp"
+              commit={idpCommit}
             />
           )}
           {cfg?.ag.enabled && (
@@ -247,11 +253,13 @@ function BackendCard({
   abbreviation,
   backend,
   expectedComponent,
+  commit = null,
 }: {
   label: string;
   abbreviation: string;
   backend: BackendComponentState;
   expectedComponent: string;
+  commit?: string | null;
 }) {
   const statusColor = backend.usable
     ? "text-emerald-600"
@@ -302,7 +310,9 @@ function BackendCard({
           />
         )}
         <LicenseRows lic={backend.license} />
-        {backend.version && <StatusRow label="Version" value={backend.version} />}
+        {backend.version && (
+          <StatusRow label="Version" value={versionWithCommit(backend.version, commit)} />
+        )}
         {backend.error && (
           <StatusRow label="Error" value={backend.error} valueClass="text-amber-700 font-mono" />
         )}

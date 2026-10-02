@@ -6,7 +6,7 @@ import { consumeResetTokenAction } from "@/app/reset-password/actions";
 import { nextProxyFetch } from "../src/next-proxy";
 import { ExportRedirect } from "../src/platform/next-navigation";
 import { isServerRoute } from "../src/server-routes";
-import { installExport, type Routes, session } from "./harness";
+import { installExport, OSS_COMPONENT, type Routes, session } from "./harness";
 
 // PLAN-D-4: the public ceremony and appliance-state pages, and the org_user
 // dashboard's security redirect, as the export renders them — the SAME page
@@ -119,6 +119,31 @@ describe("platform-status", () => {
     });
     expect(html).toContain(">Platform Status</h1>");
     expect(env.calls.find((c) => c.path === "/api/v1/component")).toMatchObject({ viaBff: false });
+  });
+
+  it("shows the IdP's version with the commit it serves on /system/info", async () => {
+    const { html, env } = await render("/platform-status", {
+      "GET /api/v1/component": { json: { ...OSS_COMPONENT, version: "0.9.1" } },
+      "GET /api/setup/status": { json: { state: "setup_complete", setup_complete: true } },
+      "GET /system/info": {
+        json: {
+          status: "healthy",
+          version: "0.9.1",
+          build_commit: "1633ffb25f7eb9557e6062f125f0979b8da9ae48",
+        },
+      },
+    });
+    expect(html).toContain("0.9.1 (commit 1633ffb25f7e)");
+    expect(env.calls.find((c) => c.path === "/system/info")).toMatchObject({ viaBff: false });
+  });
+
+  it("shows the version alone where the IdP serves no commit", async () => {
+    const { html } = await render("/platform-status", {
+      "GET /api/v1/component": { json: { ...OSS_COMPONENT, version: "0.9.1" } },
+      "GET /api/setup/status": { json: { state: "setup_complete", setup_complete: true } },
+    });
+    expect(html).toContain(">0.9.1<");
+    expect(html).not.toContain("(commit");
   });
 });
 
