@@ -78,7 +78,7 @@ env:
   # refuses a mismatch where it runs. NO JOB INSTALLS OR RUNS IT: sbom-scan is
   # in the local verify plan only (ci.yml names no grype), and a runner install
   # would need a private-release token — not this slice.
-  LICTOR_VERSION: v0.4.3
+  LICTOR_VERSION: v0.4.4
 
 jobs:
   build-and-test:
