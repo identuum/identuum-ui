@@ -8,6 +8,18 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
 ## Unreleased
 
+## `v0.6.2`
+
+The static export that identuum-idp-oss `v0.9.2` embeds. Delta
+`v0.6.1..HEAD`: 3 commits (measured at `99d5c9a`: one product change, a
+ledger rebase, a witness) and the release commit. Patch: nothing removed or
+renamed.
+
+- /platform-status: the IdP's version shows the commit it serves, read from
+  the public `/system/info` `build_commit` ("0.9.2 (commit <short>)"); an
+  IdP that serves no commit, answers an error or cannot be reached shows the
+  version alone.
+
 ## `v0.6.1`
 
 The static export that identuum-idp-oss `v0.9.1` embeds. Delta
