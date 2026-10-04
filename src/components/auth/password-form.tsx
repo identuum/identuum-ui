@@ -107,6 +107,11 @@ export function PasswordForm({
         setServerError(
           "Your account is waiting for an administrator's approval. You can sign in once it is approved."
         );
+      } else if (err instanceof ApiError && err.message === "LOGIN_THROTTLED") {
+        // The account-wide slow-down: a short wait, never a lock.
+        setServerError(
+          "Too many failed sign-ins for this account. Wait up to a minute, then try again."
+        );
       } else if (err instanceof ApiError && err.status === 401) {
         setServerError("Invalid credentials.");
       } else {

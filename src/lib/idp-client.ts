@@ -153,6 +153,12 @@ export async function login(payload: LoginPayload): Promise<LoginOutcome> {
     throw new ApiError(res.status, "REGISTRATION_PENDING");
   }
 
+  // identuum-idp-oss v0.9.5: the account-wide slow-down after repeated
+  // failed sign-ins (from any address) — a short wait, never a lock.
+  if (res.status === 429 && body?.error === "login_throttled") {
+    throw new ApiError(res.status, "LOGIN_THROTTLED");
+  }
+
   // OSS backend: HTTP 401 + {"error":"mfa_enrollment_required"} — no session_id.
   // Fires when MFA is required but the user has not yet enrolled a TOTP secret.
   // Must be checked BEFORE the generic !res.ok path so the caller receives a
