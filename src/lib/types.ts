@@ -421,6 +421,11 @@ export interface CreateOrgClientOptions {
    * (D-018). The IDP refuses it for a public client (400).
    */
   skip_consent?: boolean;
+  /**
+   * The admin's current authenticator (TOTP) code. The IDP requires it when
+   * skip_consent is true (D-026); it is sent only together with that flag.
+   */
+  mfa_code?: string;
   /** Optional allowed token audiences. */
   allowed_audiences?: string[];
 }
@@ -481,6 +486,11 @@ export interface CreatedOrgClient {
 export interface UpdateOrgClientOptions {
   /** First-party flag (D-018); omit to leave unchanged. Audited by the IDP. */
   skip_consent?: boolean;
+  /**
+   * The admin's current authenticator (TOTP) code, required by the IDP when
+   * skip_consent is turned on (D-026); sent only together with that flag.
+   */
+  mfa_code?: string;
   /** New display name; omit to leave unchanged. */
   name?: string;
   /** New redirect URI list (REPLACES the existing list when supplied). */

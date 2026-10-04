@@ -43,7 +43,7 @@ import {
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { OrgClientItem } from "@/lib/types";
 import { ClientStatusBadge, clientActionsApply } from "../client-status";
-import { FIRST_PARTY_LABEL, FIRST_PARTY_WARNING } from "../first-party-field";
+import { FIRST_PARTY_LABEL, FIRST_PARTY_WARNING, SKIPS_CONSENT_BADGE } from "../first-party-field";
 import {
   APPLICATION_RECENT_ACTIVITY_COPY,
   buildOrgAdminApplicationAuditHref,
@@ -197,6 +197,7 @@ function DetailHeader({ client }: { client: OrgClientItem }) {
           tone={client.is_public ? "amber" : "sky"}
           label={client.is_public ? "Public" : "Confidential"}
         />
+        {client.skip_consent && <Badge tone="amber" label={SKIPS_CONSENT_BADGE} />}
         {client.token_endpoint_auth_method && (
           <Badge tone="stone" label={client.token_endpoint_auth_method} />
         )}

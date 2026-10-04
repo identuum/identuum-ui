@@ -2278,22 +2278,57 @@ export async function getOrganizationClientById(
 export const SKIP_CONSENT_PUBLIC_MESSAGE =
   "A public application cannot skip consent: its identity cannot be verified.";
 
+/** Safe copy for the IDP's D-026 refusal of skip_consent on a dynamically registered app. */
+export const SKIP_CONSENT_DYNAMIC_MESSAGE =
+  "An application created through dynamic registration cannot skip consent.";
+/** Safe copy for the IDP's D-026 authenticator-code refusals. */
+export const MFA_CODE_REQUIRED_MESSAGE =
+  "Enter your authenticator code to mark an application first-party.";
+export const MFA_NOT_ENROLLED_MESSAGE =
+  "Set up an authenticator in your account settings before marking an application first-party.";
+export const MFA_CODE_INVALID_MESSAGE =
+  "That authenticator code was not accepted. Wait for the next code and try again.";
+
+/** The safe copy above, for a caller deciding whether a message is one of them. */
+export const SKIP_CONSENT_MESSAGES: readonly string[] = [
+  SKIP_CONSENT_PUBLIC_MESSAGE,
+  SKIP_CONSENT_DYNAMIC_MESSAGE,
+  MFA_CODE_REQUIRED_MESSAGE,
+  MFA_NOT_ENROLLED_MESSAGE,
+  MFA_CODE_INVALID_MESSAGE,
+];
+
 /**
- * True when a 400 is the IDP's skip_consent refusal
- * ({"error":"invalid_request","error_description":"skip_consent requires a
- * confidential client"}). The body is read for that one marker only.
+ * The safe copy for one of the IDP's skip_consent refusals, or null when the
+ * body is not one: {"error":"invalid_request","error_description":"skip_consent
+ * requires a confidential client"} (D-018), "skip_consent is not available for
+ * an app created through dynamic client registration" (D-026), and the
+ * authenticator-code answers mfa_code_required, mfa_not_enrolled and
+ * invalid_mfa_code (D-026). Only the error code and the leading words of the
+ * description are read; backend prose is never forwarded.
  */
-async function isSkipConsentRefusal(res: Response): Promise<boolean> {
+async function skipConsentRefusalMessage(res: Response): Promise<string | null> {
   try {
     // biome-ignore lint/suspicious/noExplicitAny: raw API error body
     const b: any = await res.json();
-    return (
-      b?.error === "invalid_request" &&
-      typeof b?.error_description === "string" &&
-      b.error_description.startsWith("skip_consent")
-    );
+    switch (b?.error) {
+      case "mfa_code_required":
+        return MFA_CODE_REQUIRED_MESSAGE;
+      case "mfa_not_enrolled":
+        return MFA_NOT_ENROLLED_MESSAGE;
+      case "invalid_mfa_code":
+        return MFA_CODE_INVALID_MESSAGE;
+      case "invalid_request": {
+        const d = typeof b?.error_description === "string" ? b.error_description : "";
+        if (d.startsWith("skip_consent requires")) return SKIP_CONSENT_PUBLIC_MESSAGE;
+        if (d.startsWith("skip_consent is not available")) return SKIP_CONSENT_DYNAMIC_MESSAGE;
+        return null;
+      }
+      default:
+        return null;
+    }
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -2334,6 +2369,10 @@ export async function createOrganizationClient(
   }
   if (opts.skip_consent === true) {
     body.skip_consent = true;
+    // D-026: the IDP asks for the admin's authenticator code to turn it on.
+    if (typeof opts.mfa_code === "string" && opts.mfa_code.trim().length > 0) {
+      body.mfa_code = opts.mfa_code.trim();
+    }
   }
   if (opts.allowed_audiences && opts.allowed_audiences.length > 0) {
     body.allowed_audiences = opts.allowed_audiences;
@@ -2366,9 +2405,20 @@ export async function createOrganizationClient(
         status: 400,
         conflict: false,
         invalid: true,
-        message: (await isSkipConsentRefusal(res))
-          ? SKIP_CONSENT_PUBLIC_MESSAGE
-          : "The application could not be created with the supplied values.",
+        message:
+          (await skipConsentRefusalMessage(res)) ??
+          "The application could not be created with the supplied values.",
+      };
+    }
+    if (res.status === 403) {
+      // D-026: a wrong authenticator code is the IDP's 403 invalid_mfa_code.
+      const refusal = await skipConsentRefusalMessage(res);
+      return {
+        ok: false,
+        status: 403,
+        conflict: false,
+        invalid: refusal !== null,
+        message: refusal ?? "Could not create application. Please try again.",
       };
     }
     if (!res.ok) {
@@ -2498,6 +2548,11 @@ export async function updateOrganizationClient(
   }
   if (typeof opts.skip_consent === "boolean") {
     body.skip_consent = opts.skip_consent;
+    // D-026: turning it on needs the admin's authenticator code; it travels
+    // only with skip_consent true.
+    if (opts.skip_consent && typeof opts.mfa_code === "string" && opts.mfa_code.trim().length > 0) {
+      body.mfa_code = opts.mfa_code.trim();
+    }
   }
 
   try {
@@ -2519,12 +2574,26 @@ export async function updateOrganizationClient(
         forbidden: false,
         invalid: true,
         conflict: false,
-        message: (await isSkipConsentRefusal(res))
-          ? SKIP_CONSENT_PUBLIC_MESSAGE
-          : "The application could not be updated with the supplied values.",
+        message:
+          (await skipConsentRefusalMessage(res)) ??
+          "The application could not be updated with the supplied values.",
       };
     }
     if (res.status === 403) {
+      // D-026: a wrong authenticator code is the IDP's 403 invalid_mfa_code,
+      // not a permission failure.
+      const refusal = await skipConsentRefusalMessage(res);
+      if (refusal !== null) {
+        return {
+          ok: false,
+          status: 403,
+          notFound: false,
+          forbidden: false,
+          invalid: true,
+          conflict: false,
+          message: refusal,
+        };
+      }
       return {
         ok: false,
         status: 403,

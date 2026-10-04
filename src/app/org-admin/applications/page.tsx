@@ -38,6 +38,7 @@ import { listOwnOrganizationClients } from "@/lib/idp-admin-client";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import type { OrgClientItem } from "@/lib/types";
 import { ClientStatusBadge } from "./client-status";
+import { SKIPS_CONSENT_BADGE } from "./first-party-field";
 
 export const metadata: Metadata = {
   title: "Applications — Identuum Org Admin",
@@ -123,6 +124,7 @@ function ApplicationRow({ client }: { client: OrgClientItem }) {
             tone={client.is_public ? "amber" : "sky"}
             label={client.is_public ? "Public" : "Confidential"}
           />
+          {client.skip_consent && <Badge tone="amber" label={SKIPS_CONSENT_BADGE} />}
           {client.token_endpoint_auth_method && (
             <Badge tone="stone" label={client.token_endpoint_auth_method} />
           )}

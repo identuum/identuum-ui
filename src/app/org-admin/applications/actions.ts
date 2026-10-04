@@ -31,7 +31,7 @@ import {
   createOrganizationClient,
   deleteOrganizationClient,
   rotateOrganizationClientSecret,
-  SKIP_CONSENT_PUBLIC_MESSAGE,
+  SKIP_CONSENT_MESSAGES,
   updateOrganizationClient,
 } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
@@ -161,6 +161,9 @@ export async function createApplicationAction(
   const scope = ((formData.get("scope") as string | null) ?? "").trim();
   const isPublic = formData.get("is_public") === "on";
   const skipConsent = formData.get("skip_consent") === "on";
+  // D-026: the authenticator code travels only with the first-party flag and is
+  // never echoed back or logged.
+  const mfaCode = ((formData.get("mfa_code") as string | null) ?? "").trim();
 
   const result = await createOrganizationClient({
     name,
@@ -170,6 +173,7 @@ export async function createApplicationAction(
     scope: scope.length > 0 ? scope : undefined,
     is_public: isPublic,
     skip_consent: skipConsent,
+    mfa_code: skipConsent && mfaCode.length > 0 ? mfaCode : undefined,
   });
 
   if (result.ok) {
@@ -203,10 +207,9 @@ export async function createApplicationAction(
   if (result.invalid) {
     return {
       phase: "error",
-      error:
-        result.message === SKIP_CONSENT_PUBLIC_MESSAGE
-          ? SKIP_CONSENT_PUBLIC_MESSAGE
-          : "The application could not be created. Check the values and try again.",
+      error: SKIP_CONSENT_MESSAGES.includes(result.message)
+        ? result.message
+        : "The application could not be created. Check the values and try again.",
     };
   }
   return {
@@ -325,6 +328,8 @@ export async function updateApplicationAction(
   const allowedAudiences = splitLines(formData.get("allowed_audiences") as string | null);
   const scope = ((formData.get("scope") as string | null) ?? "").trim();
   const skipConsent = formData.get("skip_consent") === "on";
+  // D-026: needed when the flag is turned on; never echoed back or logged.
+  const mfaCode = ((formData.get("mfa_code") as string | null) ?? "").trim();
 
   // Always send the full editable subset. The IDP's update path replaces
   // each non-nil array slice and re-applies each non-nil scalar; the
@@ -337,6 +342,7 @@ export async function updateApplicationAction(
     allowed_audiences: allowedAudiences,
     scope,
     skip_consent: skipConsent,
+    mfa_code: skipConsent && mfaCode.length > 0 ? mfaCode : undefined,
   });
 
   if (result.ok) {
@@ -376,10 +382,9 @@ export async function updateApplicationAction(
   if (result.invalid) {
     return {
       phase: "error",
-      error:
-        result.message === SKIP_CONSENT_PUBLIC_MESSAGE
-          ? SKIP_CONSENT_PUBLIC_MESSAGE
-          : "The application could not be updated. Check the values and try again.",
+      error: SKIP_CONSENT_MESSAGES.includes(result.message)
+        ? result.message
+        : "The application could not be updated. Check the values and try again.",
     };
   }
   return {

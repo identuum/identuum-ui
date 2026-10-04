@@ -129,6 +129,139 @@ describe("the wire helpers send and read skip_consent", () => {
   });
 });
 
+// D-026: turning first-party on needs the org admin's authenticator code, the
+// IdP's refusals read as safe copy, and the console shows a "Skips consent"
+// badge on an application that has it.
+describe("D-026: first-party takes the admin's authenticator code", () => {
+  it("both forms carry the code field beside the checkbox", async () => {
+    const { CreateApplicationForm } = await import(
+      "../app/org-admin/applications/new/create-application-form"
+    );
+    expect(renderToStaticMarkup(<CreateApplicationForm publicClients />)).toMatch(
+      /name="mfa_code"[^>]*autoComplete="one-time-code"|autoComplete="one-time-code"[^>]*name="mfa_code"/
+    );
+  });
+
+  it("create and update send mfa_code only together with skip_consent true", async () => {
+    const { createOrganizationClient, updateOrganizationClient } = await import(
+      "@/lib/idp-admin-client"
+    );
+    const sentBody = (spy: ReturnType<typeof stubFetch>) =>
+      JSON.parse(String((spy.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+
+    let spy = stubFetch(201, { client: { id: "i", client_id: "c", name: "n" } });
+    await createOrganizationClient({
+      name: "n",
+      redirect_uris: ["https://rp.example.test/cb"],
+      skip_consent: true,
+      mfa_code: "123456",
+    });
+    expect(sentBody(spy).mfa_code).toBe("123456");
+
+    spy = stubFetch(201, { client: { id: "i", client_id: "c", name: "n" } });
+    await createOrganizationClient({
+      name: "n",
+      redirect_uris: ["https://rp.example.test/cb"],
+      mfa_code: "123456",
+    });
+    expect("mfa_code" in sentBody(spy)).toBe(false);
+
+    spy = stubFetch(200, { id: "i", client_id: "c", name: "n", skip_consent: true });
+    await updateOrganizationClient("01990000-0000-7000-8000-0000000000c1", {
+      skip_consent: true,
+      mfa_code: "654321",
+    });
+    expect(sentBody(spy).mfa_code).toBe("654321");
+
+    spy = stubFetch(200, { id: "i", client_id: "c", name: "n", skip_consent: false });
+    await updateOrganizationClient("01990000-0000-7000-8000-0000000000c1", {
+      skip_consent: false,
+      mfa_code: "654321",
+    });
+    expect("mfa_code" in sentBody(spy)).toBe(false);
+  });
+
+  it("the IdP's code refusals read as safe copy, on create and on update", async () => {
+    const m = await import("@/lib/idp-admin-client");
+    const cases: Array<[number, unknown, string]> = [
+      [400, { error: "mfa_code_required" }, m.MFA_CODE_REQUIRED_MESSAGE],
+      [400, { error: "mfa_not_enrolled" }, m.MFA_NOT_ENROLLED_MESSAGE],
+      [403, { error: "invalid_mfa_code" }, m.MFA_CODE_INVALID_MESSAGE],
+      [
+        400,
+        {
+          error: "invalid_request",
+          error_description:
+            "skip_consent is not available for an app created through dynamic client registration",
+        },
+        m.SKIP_CONSENT_DYNAMIC_MESSAGE,
+      ],
+    ];
+    for (const [status, body, want] of cases) {
+      stubFetch(status, body);
+      const created = await m.createOrganizationClient({
+        name: "n",
+        redirect_uris: ["https://rp.example.test/cb"],
+        skip_consent: true,
+        mfa_code: "123456",
+      });
+      expect(!created.ok && created.message).toBe(want);
+      stubFetch(status, body);
+      const updated = await m.updateOrganizationClient("01990000-0000-7000-8000-0000000000c1", {
+        skip_consent: true,
+        mfa_code: "123456",
+      });
+      expect(!updated.ok && updated.message).toBe(want);
+    }
+    // A plain 403 stays a permission message.
+    stubFetch(403, { error: "forbidden" });
+    const denied = await m.updateOrganizationClient("01990000-0000-7000-8000-0000000000c1", {
+      name: "x",
+    });
+    expect(!denied.ok && denied.message).toBe(
+      "You do not have permission to update this application."
+    );
+  });
+
+  it("the application list and detail show a Skips consent badge only for such an app", async () => {
+    vi.resetModules();
+    const client = {
+      id: "01990000-0000-7000-8000-0000000000c1",
+      client_id: "cid",
+      name: "App",
+      is_public: false,
+      skip_consent: true,
+      redirect_uris: ["https://rp.example.test/cb"],
+      post_logout_redirect_uris: [],
+      allowed_audiences: [],
+      scope: "openid",
+      token_endpoint_auth_method: "client_secret_basic",
+      jwks_uri: "",
+      token_endpoint_auth_signing_alg: "",
+      organization_id: null,
+      created_at: "",
+    };
+    let current = client;
+    vi.doMock("@/lib/server-runtime-state", () => ({
+      getServerRuntimeState: async () => ({
+        components: { idp: { capabilities: { org_audit: false } } },
+      }),
+    }));
+    vi.doMock("@/lib/idp-admin-client", async (orig) => ({
+      ...(await orig<object>()),
+      getOrganizationClientById: async () => ({ ok: true, data: current }),
+    }));
+    const Page = (await import("../app/org-admin/applications/[id]/page")).default;
+    const render = async () =>
+      renderToStaticMarkup(await Page({ params: Promise.resolve({ id: client.id }) }));
+    expect(await render()).toContain("Skips consent");
+    current = { ...client, skip_consent: false };
+    expect(await render()).not.toContain("Skips consent");
+    vi.doUnmock("@/lib/server-runtime-state");
+    vi.doUnmock("@/lib/idp-admin-client");
+  });
+});
+
 describe("the detail page shows First-party (skip consent)", () => {
   it("renders Yes with the warning for a first-party client and No otherwise", async () => {
     vi.resetModules();
