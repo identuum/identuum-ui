@@ -740,6 +740,14 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       site.bearer
     );
     expectStatus(getBadId, 400, "malformed id → 400");
+    const getOrgAdmin = await api(
+      IDP_BASE,
+      "GET",
+      `/api/v1/admin/backchannel-logout-deliveries/${GHOST}`,
+      undefined,
+      A.bearer
+    );
+    expectStatus(getOrgAdmin, 404, "org_admin get of a delivery it does not own → 404");
 
     // ROW POST /admin/backchannel-logout-deliveries/:id/replay (D). The
     // outbound-delivery branch (202/409/503) is environment-unreachable: no
