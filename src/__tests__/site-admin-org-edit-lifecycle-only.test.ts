@@ -49,7 +49,7 @@ describe("site-admin organization edit", () => {
     vi.stubGlobal("fetch", spy);
     const { updateOrgAction } = await import("@/app/site-admin/organizations/[id]/edit/actions");
     await expect(updateOrgAction({}, submitted())).rejects.toThrow(
-      `redirect:/site-admin/organizations/${ORG_ID}`,
+      `redirect:/site-admin/organizations/${ORG_ID}`
     );
     const calls = spy.mock.calls as unknown as [string, RequestInit][];
     const put = calls.find(([, init]) => init?.method === "PUT");
@@ -60,7 +60,9 @@ describe("site-admin organization edit", () => {
   it("names the activation-pending refusal", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ error: "activation_pending" }), { status: 409 })),
+      vi.fn(
+        async () => new Response(JSON.stringify({ error: "activation_pending" }), { status: 409 })
+      )
     );
     const { updateOrgAction } = await import("@/app/site-admin/organizations/[id]/edit/actions");
     const state = await updateOrgAction({}, submitted());
