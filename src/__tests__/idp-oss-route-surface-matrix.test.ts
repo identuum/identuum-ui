@@ -301,7 +301,7 @@ const IDP_ROUTE_SURFACE_MATRIX: SurfaceMatrixRow[] = [
       "app/site-admin/organizations/[id]/operational-status.ts",
       "lib/idp-admin-client.ts",
     ],
-    signals: ["resetOrgAdminMFA", "sovereign bunker"],
+    signals: ["listOrgAdminsForRecovery", "sovereign bunker"],
   },
   {
     route: "/site-admin/keys",

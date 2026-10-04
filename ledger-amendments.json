@@ -1,5 +1,11 @@
 {
   "schema_version": "ledger-amendments.v1",
   "base_commit": "0e428cecaee915ee3c79685a6c739e562ccab1e4",
-  "changes": []
+  "changes": [
+    {
+      "rule_id": "MFA-RESET-REENROLL-1",
+      "change_class": "test_fingerprint_changed",
+      "reason": "A site_admin no longer resets a tenant user (D-025), so the site-admin recovery card lost its Reset MFA action. The disposable recovery organization now seeds a second org_admin whose MFA the organization's own admin resets, and the bound test signs that account in. The assertion is unchanged: after an MFA reset the next sign-in shows the TOTP enrollment form and does not reach /org-admin."
+    }
+  ]
 }

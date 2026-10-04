@@ -121,7 +121,7 @@ describe("BOUNDARY_COPY — Organization administrators recovery card descriptio
 
   it("pins the exact phrasing", () => {
     expect(copy).toBe(
-      "Reset MFA for an administrator who has lost their authenticator. Only org_admin accounts are shown — tenant org_users remain hidden under the sovereign bunker policy."
+      "Sign-in status of the organization's administrators. Only org_admin accounts are shown — tenant org_users remain hidden under the sovereign bunker policy. A site administrator does not reset an administrator's authenticator."
     );
   });
 

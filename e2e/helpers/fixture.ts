@@ -283,10 +283,14 @@ export const E2E_RECOVERY_FIXTURE_MARKER = "identuum-e2e-recovery-v1";
 
 /**
  * THE-DISPOSABLE-IDENTITIES: loads the DISPOSABLE recovery-org pointers the
- * provisioner wrote (org id + admin email — no secrets live in this file).
- * Returns null when absent (normal outside the harness).
+ * provisioner wrote (org id + the two admin emails — no secrets live in this
+ * file). Returns null when absent (normal outside the harness).
  */
-export function loadRecoveryFixture(): { orgId: string; orgAdminEmail: string } | null {
+export function loadRecoveryFixture(): {
+  orgId: string;
+  orgAdminEmail: string;
+  resetAdminEmail: string;
+} | null {
   const path = resolve(fixtureDirectory(), "e2e-recovery-fixture.json");
   let raw: string;
   try {
@@ -298,6 +302,7 @@ export function loadRecoveryFixture(): { orgId: string; orgAdminEmail: string } 
     fixture_marker?: unknown;
     org_id?: unknown;
     org_admin_email?: unknown;
+    reset_admin_email?: unknown;
   };
   if (parsed.fixture_marker !== E2E_RECOVERY_FIXTURE_MARKER) {
     throw new Error(`recovery fixture at ${path}: wrong marker`);
@@ -308,7 +313,14 @@ export function loadRecoveryFixture(): { orgId: string; orgAdminEmail: string } 
   if (typeof parsed.org_admin_email !== "string" || !parsed.org_admin_email.includes("@")) {
     throw new Error(`recovery fixture at ${path}: org_admin_email missing`);
   }
-  return { orgId: parsed.org_id, orgAdminEmail: parsed.org_admin_email };
+  if (typeof parsed.reset_admin_email !== "string" || !parsed.reset_admin_email.includes("@")) {
+    throw new Error(`recovery fixture at ${path}: reset_admin_email missing`);
+  }
+  return {
+    orgId: parsed.org_id,
+    orgAdminEmail: parsed.org_admin_email,
+    resetAdminEmail: parsed.reset_admin_email,
+  };
 }
 
 export function loadOrgAdminFixtureOrgDomain(): string | null {

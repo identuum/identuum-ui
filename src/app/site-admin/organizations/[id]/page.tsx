@@ -30,7 +30,6 @@ import {
 } from "./operational-status";
 import { ProtocolSettingsPanel } from "./protocol-settings-panel";
 import { ReissueActivationButton } from "./reissue-activation-button";
-import { ResetAdminMFAButton } from "./reset-admin-mfa-button";
 
 export const metadata: Metadata = { title: "Organization — Identuum Admin" };
 
@@ -306,15 +305,11 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
         </div>
       </div>
 
-      {/* Administrator recovery card — narrow site_admin exception to the
-          Blind Sovereign Bunker policy. Lists only org_admin rows so the
-          operator can reset MFA without psql. Never lists org_users. */}
-      <OrgAdminRecoveryCard
-        orgId={id}
-        admins={admins}
-        loadError={adminsLoadError}
-        orgDeleted={org.deleted}
-      />
+      {/* Administrators card — narrow, read-only site_admin exception to the
+          Blind Sovereign Bunker policy. Lists only org_admin rows, with
+          their sign-in status. Never lists org_users, and never resets an
+          administrator's MFA (D-025). */}
+      <OrgAdminRecoveryCard admins={admins} loadError={adminsLoadError} />
 
       {/* Protocol settings card — site_admin only. Fetched in parallel with
           the rest of the page data. Returns a discriminated result; the panel
@@ -579,30 +574,24 @@ function OperationalStatusCard({ org, id }: { org: OrgDetail; id: string }) {
 
 // ── Organization administrators recovery card ────────────────────────────────
 //
-// Renders the org_admin row(s) of an organisation specifically for the
-// site_admin recovery surface. Backed by
+// Renders the org_admin row(s) of an organisation, read-only, for the
+// site_admin. Backed by
 // GET /api/v1/organizations/:id/admin-recovery-candidates, which exposes
-// only the org_admin rows (no org_user data) and only the fields the
-// reset-MFA flow needs: id, email, name, role, mfa_enabled,
-// email_verified, active, deleted. Password hashes, MFA secret
-// ciphertext, claim tokens, and sessions never reach the wire.
+// only the org_admin rows (no org_user data) and only the status fields:
+// id, email, name, role, mfa_enabled, email_verified, active, deleted.
+// Password hashes, MFA secret ciphertext, claim tokens, and sessions never
+// reach the wire.
 //
-// Why this card exists: the previous workflow required a site_admin to
-// shell into psql or curl the IDP directly to identify the right user_id
-// for the MFA-reset endpoint. That is both error-prone and an audit
-// blind-spot. This card lets the operator perform the recovery from the
-// organisation's detail page in one step.
+// The card used to carry a "Reset MFA" action. D-025: a site_admin never
+// resets a user of an organization, and the IdP refuses it, so the action
+// is gone and the card only shows status.
 
 function OrgAdminRecoveryCard({
-  orgId,
   admins,
   loadError,
-  orgDeleted,
 }: {
-  orgId: string;
   admins: OrgAdminRecoveryCandidate[];
   loadError: string | null;
-  orgDeleted: boolean;
 }) {
   return (
     <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
@@ -629,7 +618,7 @@ function OrgAdminRecoveryCard({
         {!loadError && admins.length > 0 && (
           <ul className="divide-y divide-stone-100 -my-3">
             {admins.map((admin) => (
-              <AdminRow key={admin.id} orgId={orgId} admin={admin} orgDeleted={orgDeleted} />
+              <AdminRow key={admin.id} admin={admin} />
             ))}
           </ul>
         )}
@@ -638,31 +627,7 @@ function OrgAdminRecoveryCard({
   );
 }
 
-function AdminRow({
-  orgId,
-  admin,
-  orgDeleted,
-}: {
-  orgId: string;
-  admin: OrgAdminRecoveryCandidate;
-  orgDeleted: boolean;
-}) {
-  const isInactive = admin.deleted || !admin.active;
-  // The reset is allowed for an active org_admin row; we still surface
-  // the button for an MFA-already-disabled admin so the operator can
-  // clear stale MFA state if needed, but mark the row's MFA status
-  // explicitly. We DO suppress the button for deleted/banned rows and
-  // for archived organisations — both states would surface as backend
-  // errors anyway.
-  const disabled = isInactive || orgDeleted;
-  const disabledReason = orgDeleted
-    ? "Organization is archived. Restore it before resetting MFA."
-    : admin.deleted
-      ? "Administrator account is deleted."
-      : !admin.active
-        ? "Administrator account is suspended."
-        : undefined;
-
+function AdminRow({ admin }: { admin: OrgAdminRecoveryCandidate }) {
   return (
     <li className="py-3 flex items-start justify-between gap-4">
       <div className="min-w-0 space-y-0.5">
@@ -677,22 +642,6 @@ function AdminRow({
           {admin.deleted && <StatusPill label="Deleted" tone="red" />}
           {!admin.deleted && !admin.active && <StatusPill label="Suspended" tone="red" />}
         </div>
-      </div>
-
-      <div className="shrink-0 flex items-center gap-2">
-        {/* OSS-REGISTER-UI item 6: an archived organization offers no
-            action but Restore, so the reset is not shown, only why. */}
-        {orgDeleted ? (
-          <p className="text-xs text-stone-400 max-w-[12rem] text-right">{disabledReason}</p>
-        ) : (
-          <ResetAdminMFAButton
-            orgId={orgId}
-            userId={admin.id}
-            email={admin.email}
-            disabled={disabled}
-            disabledReason={disabledReason}
-          />
-        )}
       </div>
     </li>
   );

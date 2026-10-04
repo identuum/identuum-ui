@@ -129,6 +129,7 @@ test.describe("provision the dev-loop fixture (opt-in)", () => {
             fixture_marker: E2E_RECOVERY_FIXTURE_MARKER,
             org_id: recovery.orgId,
             org_admin_email: recovery.orgAdminEmail,
+            reset_admin_email: recovery.resetAdminEmail,
           },
           null,
           2

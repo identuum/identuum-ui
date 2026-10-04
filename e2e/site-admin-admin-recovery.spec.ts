@@ -1,23 +1,18 @@
 /**
- * Local-demo regression coverage for the site_admin → org_admin MFA
- * recovery flow on /site-admin/organizations/[id].
- *
- * Covers behaviors 7–18 of identuum-20260527-playwright-local-demo-regression-suite:
+ * Local-demo regression coverage for the org_admin status card on
+ * /site-admin/organizations/[id], and for sign-in after an MFA reset.
  *
  *   - site_admin login + navigation to the target organization detail page.
- *   - The "Organization administrators" recovery card renders.
+ *   - The "Organization administrators" card renders.
  *   - The configured org_admin email appears in that card with an MFA
  *     status pill.
- *   - The "Reset MFA" button opens a confirmation dialog whose copy is
- *     interpolated with the actual admin email — must read
- *       "Reset MFA for <email>? This will revoke active sessions.
- *        The administrator must sign in again and enroll a new authenticator."
- *     and NEVER "Reset MFA for ?".
- *   - (DESTRUCTIVE, opt-in) Confirming the reset shows a success badge,
- *     refreshes the row's MFA badge to "MFA disabled".
- *   - (DESTRUCTIVE, opt-in) The org_admin's next login routes into the
- *     TOTP enrollment form ("Set up two-factor authentication"), not
- *     directly into /org-admin.
+ *   - The card offers NO "Reset MFA" action: a site_admin never resets a
+ *     user of an organization (D-025), and the IdP refuses it.
+ *   - (DESTRUCTIVE, opt-in) An org_admin whose MFA another org_admin of the
+ *     same organization reset signs in and is routed into the TOTP
+ *     enrollment form ("Set up two-factor authentication"), not directly
+ *     into /org-admin. The reset is made while the harness seeds the
+ *     disposable recovery organization; this spec proves the sign-in.
  *
  * Env-gating:
  *   - Read-only tests require:
@@ -25,20 +20,17 @@
  *       IDENTUUM_TEST_ORG_ID                                (org UUID; default is a placeholder)
  *       IDENTUUM_TEST_ORG_ADMIN_EMAIL                       (default: admin@example.org placeholder)
  *
- *   - Destructive tests additionally require:
+ *   - The sign-in test additionally requires:
  *       IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true
- *     This flag exists so a routine `pnpm e2e` never wipes a local
- *     demo's admin MFA enrollment by accident.
+ *     and the disposable recovery organization the harness seeds (it holds
+ *     the account whose MFA was reset). Outside the harness the test skips.
  *
- *     For the "next login routes to enrollment" check, IDENTUUM_TEST_ORG_ADMIN_PASSWORD
- *     must also be set so the password step can be exercised.
+ *     The password step needs IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD, which
+ *     the harness sets.
  *
- * Mutation footprint when the destructive flag is on:
- *   - users.mfa_enabled flips false for the target org_admin row.
- *   - users.mfa_secret is cleared.
- *   - The target org_admin's active sessions are revoked.
- *   The org_admin can immediately re-enroll on next login. No other state
- *   is touched, and tenant org_user rows are never read or modified.
+ * Mutation footprint: none from this spec. The sign-in leaves an unfinished
+ * enrolment on a disposable account; no other state is touched, and tenant
+ * org_user rows are never read or modified.
  *
  *   These tests print neither credentials, TOTP codes, secret blobs,
  *   nor session cookies. No setup/claim/recovery URL is ever surfaced
@@ -112,6 +104,11 @@ const ORG_ADMIN_PASSWORD =
   (recoveryFx ? process.env.IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD : undefined) ??
   process.env.IDENTUUM_TEST_ORG_ADMIN_PASSWORD ??
   "";
+
+// The org_admin whose MFA the recovery org's own admin reset while the
+// harness seeded it (D-025: a site_admin never resets a tenant user). Only the
+// harness's disposable recovery fixture carries it.
+const RESET_ADMIN_EMAIL = recoveryFx?.resetAdminEmail ?? "";
 
 // Opt-in safety latch. Keep the literal string "true" — any other value
 // (including unset, empty, "1", "yes") leaves destructive tests skipped.
@@ -272,7 +269,7 @@ test.describe("/site-admin/organizations/[id] — admin recovery card (read-only
     }
   });
 
-  test("'Reset MFA' button opens dialog with the actual email interpolated into the copy", async () => {
+  test("the card offers no 'Reset MFA' action — a site_admin never resets a tenant user (D-025)", async () => {
     if (skipAuthTests) {
       test.skip(true, SKIP_AUTH_MSG);
     }
@@ -285,48 +282,32 @@ test.describe("/site-admin/organizations/[id] — admin recovery card (read-only
       const row = adminRowFor(page, ORG_ADMIN_EMAIL);
       await expect(row).toHaveCount(1);
 
-      // Click the row's "Reset MFA" trigger. The same string is the
-      // accessible name of both the trigger button and the dialog's
-      // confirm button, so we click via the row scope.
-      await row.getByRole("button", { name: /Reset MFA/i }).click();
-
-      // The dialog is a single role="dialog" element.
-      const dialog = page.getByRole("dialog");
-      await expect(dialog).toBeVisible();
-
-      // PIN: the dialog copy MUST include the actual email — regression
-      // guard against "Reset MFA for ?" (the empty-interpolation bug).
-      // We assert that the email appears somewhere in the dialog body.
-      await expect(dialog).toContainText(ORG_ADMIN_EMAIL);
-
-      // PIN: the destructive-side-effect copy must be present.
-      await expect(dialog).toContainText(/revoke active sessions/i);
-      await expect(dialog).toContainText(/sign in again and enroll a new authenticator/i);
-
-      // Negative pin: empty interpolation must never render.
-      await expect(dialog).not.toContainText("Reset MFA for ?");
-
-      // Cancel without confirming — non-destructive.
-      await dialog.getByRole("button", { name: /Cancel/i }).click();
-      await expect(dialog).not.toBeVisible();
+      // The row shows status only: no button, so no dialog either.
+      await expect(row.getByRole("button")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /Reset MFA/i })).toHaveCount(0);
     } finally {
       await page.close();
     }
   });
 });
 
-// ── Destructive coverage (items 16–18, opt-in) ────────────────────────────────
+// ── Sign-in after an MFA reset (opt-in) ───────────────────────────────────────
 
-test.describe("/site-admin/organizations/[id] — admin recovery flow (DESTRUCTIVE)", () => {
-  test("confirming reset clears MFA on the row and shows the success badge", async () => {
+test.describe("sign-in after an MFA reset (DESTRUCTIVE latch)", () => {
+  test("the card shows an org_admin whose MFA the organization's own admin reset as 'MFA disabled'", async () => {
     if (skipAuthTests) {
       test.skip(true, SKIP_AUTH_MSG);
     }
     if (!DESTRUCTIVE_ALLOWED) {
       test.skip(true, SKIP_DESTRUCTIVE_MSG);
     }
-    // SAFETY: refuse placeholder targets BEFORE any page interaction so
-    // no MFA-reset endpoint can be reached against an unintended fixture.
+    if (!RESET_ADMIN_EMAIL) {
+      test.skip(
+        true,
+        "The reset account exists only in the harness's disposable recovery organization"
+      );
+    }
+    // SAFETY: refuse placeholder targets BEFORE any page interaction.
     requireConcreteDestructiveRecoveryTarget();
 
     const page = await getSiteAdminContext().newPage();
@@ -334,44 +315,15 @@ test.describe("/site-admin/organizations/[id] — admin recovery flow (DESTRUCTI
       await page.goto(`/site-admin/organizations/${ORG_ID}`);
       await page.waitForLoadState("networkidle");
 
-      const row = adminRowFor(page, ORG_ADMIN_EMAIL);
+      const row = adminRowFor(page, RESET_ADMIN_EMAIL);
       await expect(row).toHaveCount(1);
-
-      // Capture the row's button strictly — the dialog's submit button
-      // has the same accessible name and we don't want to bind to it
-      // yet.
-      const triggerBtn = row.getByRole("button", { name: /Reset MFA/i }).first();
-      await triggerBtn.click();
-
-      const dialog = page.getByRole("dialog");
-      await expect(dialog).toBeVisible();
-      // Sanity: confirm the email is interpolated. Reuse the same
-      // assertion here so a failure points clearly at this step.
-      await expect(dialog).toContainText(ORG_ADMIN_EMAIL);
-
-      // The dialog has its own submit button with the same name. Filter
-      // to the one inside <form> (the trigger sits outside any form).
-      const confirmBtn = dialog.locator("form").getByRole("button", {
-        name: /Reset MFA/i,
-      });
-      await confirmBtn.click();
-
-      // Dialog closes on success. Wait for it to detach before checking
-      // page state — revalidatePath rerenders the row inline.
-      await expect(dialog).not.toBeVisible({ timeout: 10_000 });
-
-      // After revalidation, the row should re-render with the
-      // MFA-disabled pill. The page rerender may take a tick.
-      const updatedRow = adminRowFor(page, ORG_ADMIN_EMAIL);
-      await expect(updatedRow.getByText("MFA disabled")).toBeVisible({
-        timeout: 10_000,
-      });
+      await expect(row.getByText("MFA disabled")).toBeVisible({ timeout: 10_000 });
     } finally {
       await page.close();
     }
   });
 
-  test("the configured org_admin's next login routes into TOTP enrollment, not /org-admin [MFA-RESET-REENROLL-1]", async ({
+  test("an org_admin whose MFA was reset signs in to TOTP enrollment, not /org-admin [MFA-RESET-REENROLL-1]", async ({
     browser,
   }) => {
     if (!DESTRUCTIVE_ALLOWED) {
@@ -381,6 +333,12 @@ test.describe("/site-admin/organizations/[id] — admin recovery flow (DESTRUCTI
       test.skip(
         true,
         "Set IDENTUUM_TEST_ORG_ADMIN_PASSWORD to verify post-reset MFA enrollment routing"
+      );
+    }
+    if (!RESET_ADMIN_EMAIL) {
+      test.skip(
+        true,
+        "The reset account exists only in the harness's disposable recovery organization"
       );
     }
     // SAFETY: refuse placeholder targets BEFORE any page interaction so
@@ -397,7 +355,7 @@ test.describe("/site-admin/organizations/[id] — admin recovery flow (DESTRUCTI
       await page.waitForURL(/\/login/);
 
       // Email step.
-      await page.getByLabel("Email or domain").fill(ORG_ADMIN_EMAIL);
+      await page.getByLabel("Email or domain").fill(RESET_ADMIN_EMAIL);
       await page.getByRole("button", { name: "Continue" }).click();
 
       // Password step.

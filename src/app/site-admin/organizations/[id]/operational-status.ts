@@ -198,12 +198,13 @@ export const BOUNDARY_COPY = {
 
   /**
    * Rendered as the description on the Organization administrators
-   * recovery card (Section 5). Scopes the card to `org_admin` rows only
-   * and reassures the operator that tenant `org_user` data is NOT
-   * exposed even though a per-user listing surface exists.
+   * card (Section 5). Scopes the card to `org_admin` rows only, reassures
+   * the operator that tenant `org_user` data is NOT exposed even though a
+   * per-user listing surface exists, and says what the card does not do:
+   * a site administrator never resets an administrator's MFA (D-025).
    */
   recoveryCardDescription:
-    "Reset MFA for an administrator who has lost their authenticator. Only org_admin accounts are shown — tenant org_users remain hidden under the sovereign bunker policy.",
+    "Sign-in status of the organization's administrators. Only org_admin accounts are shown — tenant org_users remain hidden under the sovereign bunker policy. A site administrator does not reset an administrator's authenticator.",
 } as const;
 
 // ── Actions-card visibility derivation ────────────────────────────────────────

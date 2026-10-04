@@ -771,20 +771,32 @@ export async function seedFixtureFromSiteAdmin(
  *     e2e-recovery.test), mfa_policy OPTIONAL — so the rotate-user below can
  *     complete a plain no-MFA login, which the change-password ceremony
  *     drives.
- *   - a disposable org_admin (TOTP-enrolled via first login — the MFA-reset
- *     ceremony's target; resetting it stales NOTHING shared).
+ *   - a disposable org_admin (TOTP-enrolled via first login). It is the
+ *     actor of the MFA reset below and the admin the recovery card lists.
+ *   - a second disposable org_admin, created by the first (tenant authority),
+ *     TOTP-enrolled via ITS first login and then RESET by the first through
+ *     POST /users/:id/recovery/reset-mfa. A site_admin never resets a tenant
+ *     user (D-025), so the org's own admin does it. The spec then proves that
+ *     this account's next login routes into TOTP enrolment
+ *     (MFA-RESET-REENROLL-1); resetting it stales NOTHING shared.
  *   - a disposable org_user "rotate" target with a password and NO MFA
  *     enrollment (never logged in here), for the password-rotate ceremony.
  *
  * Passwords come from the harness run's environment (generated run-local in
- * full-run.sh, never printed). Returns only non-secret identifiers.
+ * full-run.sh, never printed). Both org_admins share the admin password.
+ * Returns only non-secret identifiers.
  */
 export async function seedDisposableRecoveryFixture(
   base: string,
   siteAdminBearer: string,
   adminPassword: string,
   rotatePassword: string
-): Promise<{ orgId: string; orgAdminEmail: string; rotateEmail: string }> {
+): Promise<{
+  orgId: string;
+  orgAdminEmail: string;
+  resetAdminEmail: string;
+  rotateEmail: string;
+}> {
   const create = await api(
     base,
     "POST",
@@ -803,18 +815,39 @@ export async function seedDisposableRecoveryFixture(
   must(orgId.length > 0, "recovery org returned no id");
 
   const orgAdminEmail = "admin@e2e-recovery.test";
+  const resetAdminEmail = "reset@e2e-recovery.test";
   const rotateEmail = "rotate@e2e-recovery.test";
 
   await createVerifiedUser(base, siteAdminBearer, orgAdminEmail, adminPassword, "org_admin", orgId);
-  // Enroll the disposable admin's TOTP via first login (captures nothing we
-  // keep — the MFA-reset ceremony only needs the enrollment to EXIST).
+  // Enroll the disposable admin's TOTP via first login (the bearer is the
+  // actor of the reset below).
   const admin = await firstLoginBearerAsync(base, orgAdminEmail, adminPassword);
+
+  // The reset target: a second org_admin, enrolled through its own first
+  // login, then reset by the first. Its TOTP secret is never kept.
+  const resetAdminId = await createVerifiedUser(
+    base,
+    admin.bearer,
+    resetAdminEmail,
+    adminPassword,
+    "org_admin",
+    orgId
+  );
+  await firstLoginBearerAsync(base, resetAdminEmail, adminPassword);
+  const reset = await api(
+    base,
+    "POST",
+    `/api/v1/users/${resetAdminId}/recovery/reset-mfa`,
+    {},
+    admin.bearer
+  );
+  must(reset.status === 200, `reset MFA of the recovery org's second admin → ${reset.status}`);
 
   // The rotate-user is created by the disposable admin (tenant authority) and
   // NEVER logged in here — mfa_enabled stays false by construction.
   await createVerifiedUser(base, admin.bearer, rotateEmail, rotatePassword, "org_user", orgId);
 
-  return { orgId, orgAdminEmail, rotateEmail };
+  return { orgId, orgAdminEmail, resetAdminEmail, rotateEmail };
 }
 
 /**
