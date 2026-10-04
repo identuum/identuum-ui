@@ -8,6 +8,11 @@
  * Validates form data, calls updateOrganization() server-side via the IdP
  * proxy using internal_base_url. Never exposes internal URLs, cookies, or
  * tokens to browser-side code.
+ *
+ * A site administrator changes only the lifecycle of a tenant organization —
+ * its name and whether it is active (owner ruling, identuum-idp-oss v0.9.5).
+ * The policy fields belong to the organization's administrator, and any that
+ * reach this action are not sent.
  */
 
 import { redirect } from "next/navigation";
@@ -16,20 +21,15 @@ import { updateOrganization } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
 
-const AUTH_POLICIES = ["local_only", "idp_only", "mixed"] as const;
-const MFA_POLICIES = ["optional", "required"] as const;
-
 const schema = z.object({
   org_id: z.string().uuid("Invalid organization ID"),
   name: z.string().min(1, "Name is required").max(255, "Name must be 255 characters or fewer"),
   active: z.enum(["true", "false"]).transform((v) => v === "true"),
-  auth_policy: z.enum(AUTH_POLICIES).optional().or(z.literal("")),
-  mfa_policy: z.enum(MFA_POLICIES).optional().or(z.literal("")),
 });
 
 export interface UpdateOrgActionState {
   error?: string;
-  fieldErrors?: Partial<Record<"name" | "active" | "auth_policy" | "mfa_policy", string>>;
+  fieldErrors?: Partial<Record<"name" | "active", string>>;
 }
 
 export async function updateOrgAction(
@@ -51,8 +51,6 @@ export async function updateOrgAction(
     org_id: ((formData.get("org_id") as string | null) ?? "").trim(),
     name: ((formData.get("name") as string | null) ?? "").trim(),
     active: formData.get("active") as string,
-    auth_policy: ((formData.get("auth_policy") as string | null) ?? "").trim(),
-    mfa_policy: ((formData.get("mfa_policy") as string | null) ?? "").trim(),
   };
 
   const parsed = schema.safeParse(raw);
@@ -62,8 +60,6 @@ export async function updateOrgAction(
       fieldErrors: {
         name: flat.name?.[0],
         active: flat.active?.[0],
-        auth_policy: flat.auth_policy?.[0],
-        mfa_policy: flat.mfa_policy?.[0],
       },
     };
   }
@@ -71,8 +67,6 @@ export async function updateOrgAction(
   const result = await updateOrganization(parsed.data.org_id, {
     name: parsed.data.name,
     active: parsed.data.active,
-    auth_policy: parsed.data.auth_policy || undefined,
-    mfa_policy: parsed.data.mfa_policy || undefined,
   });
 
   if (!result.ok) {
@@ -80,7 +74,12 @@ export async function updateOrgAction(
       return { error: "Organization not found. It may have been deleted." };
     }
     if (result.conflict) {
-      return { error: "Another organization already uses that domain or slug." };
+      // The route's 409: the organization is activated by its
+      // administrator's activation link, so turning it on here is refused.
+      return {
+        error:
+          "This organization is activated by its administrator's activation link. Re-issue the activation link from the organization's page.",
+      };
     }
     if (result.status === 403) {
       redirect("/login?reason=unauthorized");

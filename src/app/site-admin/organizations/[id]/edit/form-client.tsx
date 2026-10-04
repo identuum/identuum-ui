@@ -16,10 +16,6 @@ const inputClass =
   "font-medium shadow-inner placeholder:text-stone-400 " +
   "focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500 transition-colors";
 
-const selectClass =
-  "block w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-sky-950 " +
-  "font-medium focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500 transition-colors";
-
 export function EditOrgForm({ org }: EditOrgFormProps) {
   const [state, action, isPending] = useActionState(updateOrgAction, initialState);
 
@@ -85,50 +81,10 @@ export function EditOrgForm({ org }: EditOrgFormProps) {
         )}
       </fieldset>
 
-      {/* Auth policy */}
-      <div className="space-y-1.5">
-        <label
-          htmlFor="edit-org-auth-policy"
-          className="block text-sm font-semibold text-stone-700"
-        >
-          Authentication policy
-        </label>
-        <select
-          name="auth_policy"
-          id="edit-org-auth-policy"
-          defaultValue={org.auth_policy}
-          className={selectClass}
-        >
-          <option value="local_only">Local credentials only</option>
-          <option value="idp_only">External IdP only</option>
-          <option value="mixed">Mixed (local + external IdP)</option>
-        </select>
-        <p className="text-xs text-stone-400">
-          Controls which authentication methods are permitted for org users.
-        </p>
-        {state.fieldErrors?.auth_policy && (
-          <p className="text-xs text-red-600">{state.fieldErrors.auth_policy}</p>
-        )}
-      </div>
-
-      {/* MFA policy */}
-      <div className="space-y-1.5">
-        <label htmlFor="edit-org-mfa-policy" className="block text-sm font-semibold text-stone-700">
-          MFA policy
-        </label>
-        <select
-          name="mfa_policy"
-          id="edit-org-mfa-policy"
-          defaultValue={org.mfa_policy}
-          className={selectClass}
-        >
-          <option value="optional">Optional</option>
-          <option value="required">Required for all users</option>
-        </select>
-        {state.fieldErrors?.mfa_policy && (
-          <p className="text-xs text-red-600">{state.fieldErrors.mfa_policy}</p>
-        )}
-      </div>
+      <p className="text-xs text-stone-400">
+        The organization&apos;s policies — MFA, sign-in methods and registration — are set by its
+        administrator.
+      </p>
 
       {/* Actions */}
       <div className="flex items-center gap-3 pt-1">
