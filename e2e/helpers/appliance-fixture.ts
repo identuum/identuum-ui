@@ -491,11 +491,14 @@ async function createVerifiedUser(
   must(create.status >= 200 && create.status < 300, `create ${role} → ${create.status}`);
   const id = (create.json.id as string) ?? (create.json.ID as string) ?? "";
   must(id.length > 0, `create ${role} returned no id`);
-  // Newly-created accounts are unverified; login refuses them. email_verified
-  // is an admin-settable field (identuum-idp tools/devseed documents this as
-  // the supported capability, not a bypass).
-  const verify = await api(base, "PUT", `/api/v1/users/${id}`, { email_verified: true }, bearer);
-  must(verify.status >= 200 && verify.status < 300, `verify ${role} → ${verify.status}`);
+  // An account an admin creates is verified at once (D-017: the admin vouches
+  // for it), and the response says so. Only an account that came back
+  // unverified is verified here; a site_admin has no write on a tenant user
+  // (D-025), so it is never asked to verify the org_admin it appointed.
+  if (create.json.email_verified !== true) {
+    const verify = await api(base, "PUT", `/api/v1/users/${id}`, { email_verified: true }, bearer);
+    must(verify.status >= 200 && verify.status < 300, `verify ${role} → ${verify.status}`);
+  }
   return id;
 }
 
