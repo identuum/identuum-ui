@@ -1010,14 +1010,16 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
 
     // ── Enrol the user in TOTP through the pending-MFA login flow: the org
     // policy is set to required for the enrolment and restored afterwards.
+    // The policy is the org_admin's (identuum-idp-oss v0.9.5): a site_admin
+    // changes only a tenant organization's lifecycle.
     const requirePolicy = await api(
       IDP_BASE,
       "PUT",
       `/api/v1/organizations/${orgId}`,
       { mfa_policy: "required" },
-      site.bearer
+      orgAdminBearer
     );
-    expectStatus(requirePolicy, 200, "site_admin sets org mfa_policy=required");
+    expectStatus(requirePolicy, 200, "org_admin sets its org's mfa_policy=required");
     const pending = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
       email: userEmail,
       password: userPw,
@@ -1051,7 +1053,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
       "PUT",
       `/api/v1/organizations/${orgId}`,
       { mfa_policy: "optional" },
-      site.bearer
+      orgAdminBearer
     );
     expectStatus(restorePolicy, 200, "org mfa_policy restored to optional");
 

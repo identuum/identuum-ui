@@ -8,16 +8,17 @@
  * row, recording WHICH status: a 404 hiding a 403 is the audi.de class).
  *
  * Auth scoping (docgen, verified): admin/*, api-resources/*,
- * scope-templates/* are the org-own org_admin’s (site_admin → 403, THE-SCOPE-TEMPLATES); users/restore is site_admin-only;
- * clients/* and users roles/approve/reset-mfa are site_admin|org_admin.
+ * scope-templates/* are the org-own org_admin’s (site_admin → 403, THE-SCOPE-TEMPLATES);
+ * clients/*, admin backchannel deliveries, and users roles/approve/reset-mfa/restore
+ * are site_admin|org_admin (restore and deliveries since identuum-idp-oss v0.9.5).
  *
  * MEASURED behaviors pinned (findings recorded in the wiki, suite stays
  * green — a defect is a queue row, never a red spec):
  *  - user restore RECOVERS a soft-deleted user (200 {"restored": id}) —
  *    RestoreUserForActor now reads through the deleted-inclusive admin
  *    lookup (USER-RESTORE-DEAD-1 FIXED, rule RESTORE-RECOVERS-DELETED-1).
- *    The route stays site_admin-only; cross-tenant refusal is pinned in the
- *    Go teeth test.
+ *    The org_admin restores its own organization's user; another
+ *    organization's is a 404.
  *  - approve + reset-mfa on a NONEXISTENT user id → 404 (the repo not-found
  *    now maps to the service sentinel; USER-APPROVE-RESETMFA-GHOST-500-1
  *    FIXED, rule USER-NOTFOUND-MAPPING-1). The cross-tenant case still 404s.
@@ -268,13 +269,13 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
     ).toBe(404);
   });
 
-  test("users/:id/restore — a site_admin is refused on a tenant user (D-025)", async () => {
+  test("users/:id/restore — the org_admin restores its own; a site_admin is refused (D-025)", async () => {
     // ROW POST /users/:id/restore (D). A site_admin never acts on a tenant
-    // user (D-025): it cannot soft-delete one, and it cannot restore one. The
-    // route admits only a site_admin, so over HTTP no actor reaches the
-    // recovery itself; that path (RESTORE-RECOVERS-DELETED-1) is pinned in the
-    // Go teeth test TestRestoreUserForActor_RecoversSoftDeletedUser, and the
-    // cross-tenant refusal in TestRestoreUserForActor_CrossTenantStillRefused.
+    // user (D-025): it cannot soft-delete one, and it cannot restore one.
+    // identuum-idp-oss v0.9.5 (owner ruling): the org_admin restores the
+    // deleted users of its own organization, so the recovery itself
+    // (RESTORE-RECOVERS-DELETED-1) is now reachable over HTTP. Another
+    // organization's user is a 404, never a 403 (no enumeration).
     // The user is left active for the tests that follow.
     const del = await api(IDP_BASE, "DELETE", `/api/v1/users/${uId}`, undefined, site.bearer);
     expectStatus(del, 403, "soft-delete by a site_admin → 403 (D-025)");
@@ -282,8 +283,18 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
     expectStatus(restore, 403, "restore of a tenant user by a site_admin → 403 (D-025)");
     const ghost = await api(IDP_BASE, "POST", `/api/v1/users/${GHOST}/restore`, {}, site.bearer);
     expectStatus(ghost, 404, "restore of a nonexistent user → 404");
-    const orgAdmin = await api(IDP_BASE, "POST", `/api/v1/users/${uId}/restore`, {}, A.bearer);
-    expectStatus(orgAdmin, 403, "restore by org_admin (site_admin-only route) → 403");
+
+    const ownDel = await api(IDP_BASE, "DELETE", `/api/v1/users/${uId}`, undefined, A.bearer);
+    expectStatus(ownDel, 200, "org_admin soft-delete of its own user → 200");
+    const gone = await api(IDP_BASE, "GET", `/api/v1/users/${uId}`, undefined, A.bearer);
+    expectStatus(gone, 404, "the soft-deleted user is no longer found");
+    const xtenant = await api(IDP_BASE, "POST", `/api/v1/users/${uId}/restore`, {}, B.bearer);
+    expectStatus(xtenant, 404, "restore of another organization's user → 404 (anti-enumeration)");
+    const ownRestore = await api(IDP_BASE, "POST", `/api/v1/users/${uId}/restore`, {}, A.bearer);
+    expectStatus(ownRestore, 200, "org_admin restore of its own deleted user → 200");
+    expect(ownRestore.json.restored, "response names the restored id").toBe(uId);
+    const back = await api(IDP_BASE, "GET", `/api/v1/users/${uId}`, undefined, A.bearer);
+    expectStatus(back, 200, "the restored user is found again");
   });
 
   test("users invite — create without a password, validate, redeem, re-issue, cross-tenant (OSS-ONBOARD-A)", async () => {
@@ -697,6 +708,8 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       site.bearer
     );
     expectStatus(list, 200, "list → 200");
+    // identuum-idp-oss v0.9.5 (owner ruling): an org_admin sees the
+    // deliveries of its own organization's apps; this one has none yet.
     const listOrgAdmin = await api(
       IDP_BASE,
       "GET",
@@ -704,7 +717,11 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       undefined,
       A.bearer
     );
-    expectStatus(listOrgAdmin, 403, "org_admin list (site_admin-only) → 403");
+    expectStatus(listOrgAdmin, 200, "org_admin list of its own organization → 200");
+    expect(
+      (listOrgAdmin.json.deliveries as unknown[] | undefined) ?? [],
+      "a new organization's apps have no deliveries"
+    ).toHaveLength(0);
 
     // ROW GET /admin/backchannel-logout-deliveries/:id (SR)
     const getGhost = await api(
@@ -751,6 +768,6 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       {},
       A.bearer
     );
-    expectStatus(replayOrgAdmin, 403, "org_admin replay → 403");
+    expectStatus(replayOrgAdmin, 404, "org_admin replay of a delivery it does not own → 404");
   });
 });

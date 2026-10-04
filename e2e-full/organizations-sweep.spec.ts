@@ -163,20 +163,48 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
     // wrote the raw string, so "LEXUS.COM " and "lexus.com" could become two
     // rows. The sweep only ever exercised POST, which is how the gap
     // survived the previous slice's "every create/update path" claim.
-    const subjectId = `upd-${Math.random().toString(36).slice(2, 9)}`;
-    const created = await api(
+    //
+    // identuum-idp-oss v0.9.5 (owner ruling): a tenant organization's domain
+    // and policy fields are its own org_admin's; a site_admin changes only its
+    // lifecycle (active, and the name). So the validation teeth run as org1's
+    // org_admin on org1, and the site_admin's refusal is pinned first.
+    const subject = org1;
+    const originalDomain = `${runId}-1.test`;
+
+    const siteDomain = await api(
       IDP_BASE,
-      "POST",
-      "/api/v1/organizations",
-      { name: `Update Subject ${subjectId}`, slug: subjectId, domain: `${subjectId}.test` },
+      "PUT",
+      `/api/v1/organizations/${subject}`,
+      { domain: `${runId}-site.test` },
       site.bearer
     );
-    expectStatus(created, 201, "subject org created");
-    const subject =
-      ((created.json as { organization?: { id?: string } }).organization?.id ??
-        (created.json as { id?: string }).id) ||
-      "";
-    expect(subject.length).toBeGreaterThan(0);
+    expectStatus(siteDomain, 403, "a site_admin may not change a tenant's domain");
+    expect((siteDomain.json as { error?: string }).error).toBe("forbidden_field");
+    const sitePolicy = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/organizations/${subject}`,
+      { mfa_policy: "sometimes" },
+      site.bearer
+    );
+    expectStatus(sitePolicy, 403, "a site_admin policy write is refused before its value is read");
+    const siteBadName = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/organizations/${subject}`,
+      { name: "   " },
+      site.bearer
+    );
+    expectStatus(siteBadName, 400, "the site_admin's own field (name) is still validated");
+    const adminActive = await api(
+      IDP_BASE,
+      "PUT",
+      `/api/v1/organizations/${subject}`,
+      { active: false },
+      orgAdmin.bearer
+    );
+    expectStatus(adminActive, 403, "an org_admin never changes its organization's lifecycle");
+    expect((adminActive.json as { error?: string }).error).toBe("forbidden_field");
 
     const badUpdates: Array<{ why: string; body: Record<string, unknown> }> = [
       {
@@ -199,7 +227,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
         "PUT",
         `/api/v1/organizations/${subject}`,
         c.body,
-        site.bearer
+        orgAdmin.bearer
       );
       expectStatus(res, 400, `update must refuse: ${c.why}`);
     }
@@ -214,31 +242,34 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
     );
     expectStatus(after, 200);
     expect((after.json as { domain?: string }).domain, "no refused update touched the row").toBe(
-      `${subjectId}.test`
+      originalDomain
     );
 
     // CONTROL: a well-formed rename succeeds AND is stored normalized, so
-    // two spellings cannot become two rows.
-    const renamed = `${subjectId}-renamed.test`;
-    const ok = await api(
-      IDP_BASE,
-      "PUT",
-      `/api/v1/organizations/${subject}`,
-      { domain: `  ${renamed.toUpperCase()}.  ` },
-      site.bearer
-    );
-    expectStatus(ok, 200, "a well-formed rename is accepted");
-    const reread = await api(
-      IDP_BASE,
-      "GET",
-      `/api/v1/organizations/${subject}`,
-      undefined,
-      site.bearer
-    );
-    expect(
-      (reread.json as { domain?: string }).domain,
-      "the accepted rename is stored lowercased, trimmed and without the FQDN dot"
-    ).toBe(renamed);
+    // two spellings cannot become two rows. The original domain is then put
+    // back, through the same normalization, for the tests that follow.
+    const renamed = `${runId}-1-renamed.test`;
+    for (const target of [renamed, originalDomain]) {
+      const ok = await api(
+        IDP_BASE,
+        "PUT",
+        `/api/v1/organizations/${subject}`,
+        { domain: `  ${target.toUpperCase()}.  ` },
+        orgAdmin.bearer
+      );
+      expectStatus(ok, 200, "a well-formed rename is accepted");
+      const reread = await api(
+        IDP_BASE,
+        "GET",
+        `/api/v1/organizations/${subject}`,
+        undefined,
+        site.bearer
+      );
+      expect(
+        (reread.json as { domain?: string }).domain,
+        "the accepted rename is stored lowercased, trimmed and without the FQDN dot"
+      ).toBe(target);
+    }
   });
 
   test("[ORG-SYSTEM-RENAME-FORBIDDEN-1] renaming the SYSTEM organization is 403 forbidden, not 404 not-found", async () => {
