@@ -876,21 +876,19 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
 
     // The admin surface now LISTS a real delivery row (before this, the table
     // was empty and only the 400/404/403 refusal branches were reachable).
-    const listRes = await api(
-      IDP_BASE,
-      "GET",
-      `/api/v1/admin/backchannel-logout-deliveries?client_id=${encodeURIComponent(bcClientId)}`,
-      undefined,
-      site.bearer
-    );
+    // The IdP delivers after the response (a slow relying party never holds
+    // the sign-out), so the row lands a few milliseconds after the 302: the
+    // list is read until it shows, for at most five seconds.
+    type DeliveryRow = { id: string; client_id: string; status: string; delivered_at?: string };
+    const listPath = `/api/v1/admin/backchannel-logout-deliveries?client_id=${encodeURIComponent(bcClientId)}`;
+    let listRes = await api(IDP_BASE, "GET", listPath, undefined, site.bearer);
+    let rows = (listRes.json.deliveries as DeliveryRow[] | undefined) ?? [];
+    for (let i = 0; i < 50 && listRes.status === 200 && rows.length === 0; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      listRes = await api(IDP_BASE, "GET", listPath, undefined, site.bearer);
+      rows = (listRes.json.deliveries as DeliveryRow[] | undefined) ?? [];
+    }
     expectStatus(listRes, 200, "admin list → 200");
-    const rows =
-      (listRes.json.deliveries as Array<{
-        id: string;
-        client_id: string;
-        status: string;
-        delivered_at?: string;
-      }>) ?? [];
     expect(rows.length, "end_session created exactly one delivery row for this client").toBe(1);
     const row = rows[0];
     expect(row.client_id, "row is for our client").toBe(bcClientId);
