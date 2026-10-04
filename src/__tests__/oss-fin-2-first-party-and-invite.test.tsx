@@ -223,6 +223,15 @@ describe("D-026: first-party takes the admin's authenticator code", () => {
     );
   });
 
+  it("the wrong-code copy does not promise the next code will work", async () => {
+    // The IdP refuses even a correct code once several wrong codes were
+    // spent in 15 minutes, with the same 403 invalid_mfa_code.
+    const { MFA_CODE_INVALID_MESSAGE } = await import("@/lib/idp-admin-client");
+    expect(MFA_CODE_INVALID_MESSAGE).not.toMatch(/wait for the next code/i);
+    expect(MFA_CODE_INVALID_MESSAGE).toMatch(/current code from your authenticator app/);
+    expect(MFA_CODE_INVALID_MESSAGE).toMatch(/refused for up to 15 minutes/);
+  });
+
   it("the application list and detail show a Skips consent badge only for such an app", async () => {
     vi.resetModules();
     const client = {
@@ -341,5 +350,39 @@ describe("a pre-D-017 user is offered Send invitation", () => {
     expect(renderToStaticMarkup(<ReissueInviteButton userId="u" />)).toContain(
       "Re-issue invitation"
     );
+  });
+});
+
+// The IdP refuses an app scope from its own catalogue that the admin does not
+// hold with 400 {"error":"invalid_scope"} (requireClientScopeWithinActor).
+describe("an app scope the admin does not hold", () => {
+  it("reads as its own safe copy on create and on update", async () => {
+    const m = await import("@/lib/idp-admin-client");
+    stubFetch(400, { error: "invalid_scope" });
+    const created = await m.createOrganizationClient({
+      name: "n",
+      redirect_uris: ["https://rp.example.test/cb"],
+      scope: "openid admin:write",
+    });
+    expect(!created.ok && created.invalid).toBe(true);
+    expect(!created.ok && created.message).toBe(m.CLIENT_SCOPE_NOT_HELD_MESSAGE);
+    stubFetch(400, { error: "invalid_scope" });
+    const updated = await m.updateOrganizationClient("01990000-0000-7000-8000-0000000000c1", {
+      scope: "openid admin:write",
+    });
+    expect(!updated.ok && updated.invalid).toBe(true);
+    expect(!updated.ok && updated.message).toBe(m.CLIENT_SCOPE_NOT_HELD_MESSAGE);
+    expect(m.CLIENT_REFUSAL_MESSAGES).toContain(m.CLIENT_SCOPE_NOT_HELD_MESSAGE);
+    expect(m.CLIENT_SCOPE_NOT_HELD_MESSAGE).toMatch(/permission your role does not hold/);
+  });
+
+  it("any other 400 keeps the generic copy", async () => {
+    const m = await import("@/lib/idp-admin-client");
+    stubFetch(400, { error: "invalid_request", error_description: "invalid_scope" });
+    const r = await m.createOrganizationClient({
+      name: "n",
+      redirect_uris: ["https://rp.example.test/cb"],
+    });
+    expect(!r.ok && r.message).not.toBe(m.CLIENT_SCOPE_NOT_HELD_MESSAGE);
   });
 });

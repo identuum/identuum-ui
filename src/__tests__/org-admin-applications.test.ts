@@ -1140,12 +1140,16 @@ describe("EditApplicationForm — single-shot update; no secret render", () => {
 
   it("prefills via defaultValue from the server-rendered props (NOT useEffect, NOT controlled state)", () => {
     // Each editable field uses defaultValue so the IDP-fetched values
-    // are present on first paint without any client-side fetch.
-    expect(FORM_SRC).toMatch(/defaultValue=\{props\.initialName\}/);
+    // are present on first paint without any client-side fetch. A refused
+    // save's submitted values take precedence (React resets the form after
+    // every submission); otherwise each default is the server-rendered prop.
+    expect(FORM_SRC).toMatch(/defaultName\s*=\s*values\?\.name\s*\?\?\s*props\.initialName/);
+    expect(FORM_SRC).toMatch(/values\?\.scope\s*\?\?\s*props\.initialScope/);
+    expect(FORM_SRC).toMatch(/defaultValue=\{defaultName\}/);
     expect(FORM_SRC).toMatch(/defaultValue=\{defaultRedirectURIs\}/);
     expect(FORM_SRC).toMatch(/defaultValue=\{defaultPostLogoutRedirectURIs\}/);
     expect(FORM_SRC).toMatch(/defaultValue=\{defaultAllowedAudiences\}/);
-    expect(FORM_SRC).toMatch(/defaultValue=\{props\.initialScope\}/);
+    expect(FORM_SRC).toMatch(/defaultValue=\{defaultScope\}/);
     // No useState / useEffect that would mirror values into longer-
     // lived component state.
     expect(FORM_SRC_NO_COMMENTS).not.toMatch(/useState/);

@@ -76,9 +76,20 @@ function Form({
 }) {
   const errorMessage = state.phase === "error" ? state.error : null;
   const fieldErrors = state.phase === "error" ? (state.fieldErrors ?? {}) : {};
-  const defaultRedirectURIs = props.initialRedirectURIs.join("\n");
-  const defaultPostLogoutRedirectURIs = props.initialPostLogoutRedirectURIs.join("\n");
-  const defaultAllowedAudiences = props.initialAllowedAudiences.join("\n");
+  // React resets this form after every submission. A refused save hands back
+  // what was typed, and the inputs take it as their defaults, so the reset
+  // restores the admin's edits instead of the stored values (and a second
+  // save cannot silently drop them). The authenticator code has no default:
+  // it is never handed back and is empty after every submission.
+  const values = state.phase === "error" ? state.values : undefined;
+  const defaultName = values?.name ?? props.initialName;
+  const defaultRedirectURIs = values?.redirect_uris ?? props.initialRedirectURIs.join("\n");
+  const defaultPostLogoutRedirectURIs =
+    values?.post_logout_redirect_uris ?? props.initialPostLogoutRedirectURIs.join("\n");
+  const defaultAllowedAudiences =
+    values?.allowed_audiences ?? props.initialAllowedAudiences.join("\n");
+  const defaultScope = values?.scope ?? props.initialScope;
+  const defaultSkipConsent = values?.skip_consent ?? props.initialSkipConsent;
 
   return (
     <form action={action} className="space-y-5">
@@ -121,7 +132,7 @@ function Form({
           maxLength={255}
           autoComplete="off"
           spellCheck={false}
-          defaultValue={props.initialName}
+          defaultValue={defaultName}
           disabled={pending}
           className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:opacity-50"
         />
@@ -209,7 +220,7 @@ function Form({
           type="text"
           autoComplete="off"
           spellCheck={false}
-          defaultValue={props.initialScope}
+          defaultValue={defaultScope}
           disabled={pending}
           className="w-full font-mono rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:opacity-50"
         />
@@ -217,7 +228,7 @@ function Form({
 
       {/* D-018: a public client cannot be first-party (the IdP refuses it). */}
       {!props.initialIsPublic && (
-        <FirstPartyField defaultChecked={props.initialSkipConsent} disabled={pending} />
+        <FirstPartyField defaultChecked={defaultSkipConsent} disabled={pending} />
       )}
 
       <div className="flex items-center gap-3 pt-2">

@@ -63,8 +63,25 @@ export const PASSKEY_ENROLLMENT_ERROR_COPY = {
     "Your session expired before the passkey could be saved. Sign in again and retry.",
   finishUnavailable:
     "Could not verify your passkey with the server. Try again, or contact your administrator if the problem persists.",
+  deleteFailed: "Could not remove the passkey. Please try again.",
   generic: "An unexpected error occurred. Please try again.",
 } as const;
+
+/**
+ * The banner a passkey removal leaves: null when the removal succeeded (the
+ * caller clears any banner, including a `reauth_required` one from an earlier
+ * refused removal), otherwise the copy to show. `status` is the HTTP status,
+ * or 0 when the request never got an answer; `errorCode` is the response
+ * body's `error` field. Backend prose is never read.
+ */
+export function classifyPasskeyDeleteResult(status: number, errorCode: unknown): string | null {
+  if (status >= 200 && status < 300) return null;
+  // H6: removing a passkey needs a recent sign-in as well.
+  if (status === 403 && errorCode === "reauth_required") {
+    return PASSKEY_ENROLLMENT_ERROR_COPY.reauthRequired;
+  }
+  return PASSKEY_ENROLLMENT_ERROR_COPY.deleteFailed;
+}
 
 /**
  * Shape-tagged errors thrown by PasskeySection.handleAddPasskey.

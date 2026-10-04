@@ -28,18 +28,62 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
+  CLIENT_REFUSAL_MESSAGES,
   createOrganizationClient,
   deleteOrganizationClient,
   rotateOrganizationClientSecret,
-  SKIP_CONSENT_MESSAGES,
   updateOrganizationClient,
 } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
 
+/**
+ * What the admin typed, handed back with every refused create/update so the
+ * form keeps it. React 19 resets a `<form action>` after each submission; the
+ * forms render their inputs with these values as defaults, so the reset
+ * restores the admin's input instead of emptying it. The authenticator code
+ * (mfa_code) is NEVER part of it — that field is empty after every
+ * submission — and neither is any secret.
+ */
+export interface ApplicationFormValues {
+  name: string;
+  redirect_uris: string;
+  post_logout_redirect_uris: string;
+  allowed_audiences: string;
+  scope: string;
+  skip_consent: boolean;
+}
+
+/** The create form's values: the editable fields plus the public-client choice. */
+export interface CreateApplicationFormValues extends ApplicationFormValues {
+  is_public: boolean;
+}
+
+function submittedText(formData: FormData, key: string): string {
+  const v = formData.get(key);
+  return typeof v === "string" ? v : "";
+}
+
+/** The editable fields exactly as submitted. Reads no code and no secret. */
+function submittedApplicationValues(formData: FormData): ApplicationFormValues {
+  return {
+    name: submittedText(formData, "name"),
+    redirect_uris: submittedText(formData, "redirect_uris"),
+    post_logout_redirect_uris: submittedText(formData, "post_logout_redirect_uris"),
+    allowed_audiences: submittedText(formData, "allowed_audiences"),
+    scope: submittedText(formData, "scope"),
+    skip_consent: formData.get("skip_consent") === "on",
+  };
+}
+
 export type CreateApplicationState =
   | { phase: "idle" }
-  | { phase: "error"; error: string; fieldErrors?: { name?: string; redirect_uris?: string } }
+  | {
+      phase: "error";
+      error: string;
+      fieldErrors?: { name?: string; redirect_uris?: string };
+      values: CreateApplicationFormValues;
+    }
   | {
       phase: "success";
       created: {
@@ -107,6 +151,12 @@ export async function createApplicationAction(
   const role = session.user?.role ?? session.role;
   if (role !== "org_admin") redirect(roleToPath(role));
 
+  // Every refusal below hands back what was typed (never the code).
+  const values: CreateApplicationFormValues = {
+    ...submittedApplicationValues(formData),
+    is_public: formData.get("is_public") === "on",
+  };
+
   // Parse + validate form fields. Each branch returns a discriminated
   // error state so the form can render field-level feedback without
   // forwarding backend prose.
@@ -116,6 +166,7 @@ export async function createApplicationAction(
       phase: "error",
       error: "Enter an application name.",
       fieldErrors: { name: "Required." },
+      values,
     };
   }
   if (name.length > 255) {
@@ -123,6 +174,7 @@ export async function createApplicationAction(
       phase: "error",
       error: "Application name is too long (255 character maximum).",
       fieldErrors: { name: "Too long." },
+      values,
     };
   }
 
@@ -132,6 +184,7 @@ export async function createApplicationAction(
       phase: "error",
       error: "Enter at least one redirect URI.",
       fieldErrors: { redirect_uris: "Required." },
+      values,
     };
   }
   for (const uri of redirectURIs) {
@@ -141,6 +194,7 @@ export async function createApplicationAction(
         error:
           "Each redirect URI must be a valid http(s) URL. Schemes like javascript:, data:, file:, and vbscript: are not allowed.",
         fieldErrors: { redirect_uris: "Invalid URI." },
+        values,
       };
     }
   }
@@ -153,6 +207,7 @@ export async function createApplicationAction(
         phase: "error",
         error:
           "Each post-logout redirect URI must be a valid http(s) URL. Schemes like javascript:, data:, file:, and vbscript: are not allowed.",
+        values,
       };
     }
   }
@@ -202,19 +257,22 @@ export async function createApplicationAction(
     return {
       phase: "error",
       error: "A client with this configuration already exists in your organization.",
+      values,
     };
   }
   if (result.invalid) {
     return {
       phase: "error",
-      error: SKIP_CONSENT_MESSAGES.includes(result.message)
+      error: CLIENT_REFUSAL_MESSAGES.includes(result.message)
         ? result.message
         : "The application could not be created. Check the values and try again.",
+      values,
     };
   }
   return {
     phase: "error",
     error: "Could not create application. Please try again.",
+    values,
   };
 }
 
@@ -252,6 +310,7 @@ export type UpdateApplicationState =
       phase: "error";
       error: string;
       fieldErrors?: { name?: string; redirect_uris?: string };
+      values: ApplicationFormValues;
     }
   | { phase: "success"; updated: { id: string; client_id: string; name: string } };
 
@@ -269,6 +328,10 @@ export async function updateApplicationAction(
   const role = session.user?.role ?? session.role;
   if (role !== "org_admin") redirect(roleToPath(role));
 
+  // Every refusal below hands back what was typed (never the code), so a
+  // refused save does not revert the admin's edits.
+  const values = submittedApplicationValues(formData);
+
   // Defence-in-depth: refuse a non-UUID id. The page-level binding
   // sources the id from the route params, but a hand-crafted POST that
   // bypassed the form binding would not reach here without this gate.
@@ -276,6 +339,7 @@ export async function updateApplicationAction(
     return {
       phase: "error",
       error: "The application could not be updated. Reload the page and try again.",
+      values,
     };
   }
 
@@ -285,6 +349,7 @@ export async function updateApplicationAction(
       phase: "error",
       error: "Enter an application name.",
       fieldErrors: { name: "Required." },
+      values,
     };
   }
   if (name.length > 255) {
@@ -292,6 +357,7 @@ export async function updateApplicationAction(
       phase: "error",
       error: "Application name is too long (255 character maximum).",
       fieldErrors: { name: "Too long." },
+      values,
     };
   }
 
@@ -301,6 +367,7 @@ export async function updateApplicationAction(
       phase: "error",
       error: "Enter at least one redirect URI.",
       fieldErrors: { redirect_uris: "Required." },
+      values,
     };
   }
   for (const uri of redirectURIs) {
@@ -310,6 +377,7 @@ export async function updateApplicationAction(
         error:
           "Each redirect URI must be a valid http(s) URL. Schemes like javascript:, data:, file:, and vbscript: are not allowed.",
         fieldErrors: { redirect_uris: "Invalid URI." },
+        values,
       };
     }
   }
@@ -321,6 +389,7 @@ export async function updateApplicationAction(
         phase: "error",
         error:
           "Each post-logout redirect URI must be a valid http(s) URL. Schemes like javascript:, data:, file:, and vbscript: are not allowed.",
+        values,
       };
     }
   }
@@ -365,31 +434,36 @@ export async function updateApplicationAction(
     return {
       phase: "error",
       error: "You do not have permission to update this application.",
+      values,
     };
   }
   if (result.notFound) {
     return {
       phase: "error",
       error: "The application no longer exists. It may have been removed.",
+      values,
     };
   }
   if (result.conflict) {
     return {
       phase: "error",
       error: "A client with this configuration already exists in your organization.",
+      values,
     };
   }
   if (result.invalid) {
     return {
       phase: "error",
-      error: SKIP_CONSENT_MESSAGES.includes(result.message)
+      error: CLIENT_REFUSAL_MESSAGES.includes(result.message)
         ? result.message
         : "The application could not be updated. Check the values and try again.",
+      values,
     };
   }
   return {
     phase: "error",
     error: "Could not update application. Please try again.",
+    values,
   };
 }
 

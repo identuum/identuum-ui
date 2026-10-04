@@ -64,6 +64,11 @@ function Form({
 }) {
   const errorMessage = state.phase === "error" ? state.error : null;
   const fieldErrors = state.phase === "error" ? (state.fieldErrors ?? {}) : {};
+  // React resets this form after every submission. A refused submission
+  // hands back what was typed, and the inputs take it as their defaults, so
+  // the reset restores it. The authenticator code has no default: it is
+  // never handed back and is empty after every submission.
+  const values = state.phase === "error" ? state.values : undefined;
 
   return (
     <form action={action} className="space-y-5">
@@ -89,6 +94,7 @@ function Form({
           autoComplete="off"
           spellCheck={false}
           placeholder="My web app"
+          defaultValue={values?.name}
           disabled={pending}
           className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:opacity-50"
         />
@@ -110,6 +116,7 @@ function Form({
           autoComplete="off"
           spellCheck={false}
           placeholder={"https://app.example.com/callback\nhttps://app.example.com/silent-renew"}
+          defaultValue={values?.redirect_uris}
           disabled={pending}
           className="w-full font-mono rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:opacity-50"
         />
@@ -135,6 +142,7 @@ function Form({
           autoComplete="off"
           spellCheck={false}
           placeholder="https://app.example.com/post-logout"
+          defaultValue={values?.post_logout_redirect_uris}
           disabled={pending}
           className="w-full font-mono rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:opacity-50"
         />
@@ -152,6 +160,7 @@ function Form({
           autoComplete="off"
           spellCheck={false}
           placeholder="https://api.example.com"
+          defaultValue={values?.allowed_audiences}
           disabled={pending}
           className="w-full font-mono rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:opacity-50"
         />
@@ -171,6 +180,7 @@ function Form({
           autoComplete="off"
           spellCheck={false}
           placeholder="openid profile email"
+          defaultValue={values?.scope}
           disabled={pending}
           className="w-full font-mono rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:opacity-50"
         />
@@ -182,6 +192,7 @@ function Form({
             id="app-public"
             name="is_public"
             type="checkbox"
+            defaultChecked={values?.is_public}
             disabled={pending}
             className="mt-0.5 rounded border-stone-300 text-sky-600 focus:ring-sky-500 disabled:opacity-50"
           />
@@ -195,7 +206,7 @@ function Form({
         </div>
       ) : null}
 
-      <FirstPartyField disabled={pending} />
+      <FirstPartyField defaultChecked={values?.skip_consent} disabled={pending} />
 
       <div className="flex items-center gap-3 pt-2">
         <Button type="submit" loading={pending} size="md">

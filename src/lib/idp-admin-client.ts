@@ -2214,28 +2214,42 @@ export const MFA_CODE_REQUIRED_MESSAGE =
   "Enter your authenticator code to mark an application first-party.";
 export const MFA_NOT_ENROLLED_MESSAGE =
   "Set up an authenticator in your account settings before marking an application first-party.";
+/**
+ * The IDP answers 403 invalid_mfa_code both for a wrong code and for any code
+ * once the wrong-code budget is spent (several wrong codes in 15 minutes,
+ * shared with step-up, MFA disable and recovery-code regeneration), so the
+ * copy must not promise that the next code will work.
+ */
 export const MFA_CODE_INVALID_MESSAGE =
-  "That authenticator code was not accepted. Wait for the next code and try again.";
+  "The authenticator code was not accepted. Use the current code from your authenticator app. After several wrong codes, codes are refused for up to 15 minutes.";
+/**
+ * Safe copy for the IDP's 400 {"error":"invalid_scope"} on create/update: the
+ * app asks for a scope from the IDP's catalogue that the admin does not hold.
+ */
+export const CLIENT_SCOPE_NOT_HELD_MESSAGE =
+  "This app asks for a permission your role does not hold. Remove that scope, or ask an administrator who holds it.";
 
 /** The safe copy above, for a caller deciding whether a message is one of them. */
-export const SKIP_CONSENT_MESSAGES: readonly string[] = [
+export const CLIENT_REFUSAL_MESSAGES: readonly string[] = [
   SKIP_CONSENT_PUBLIC_MESSAGE,
   SKIP_CONSENT_DYNAMIC_MESSAGE,
   MFA_CODE_REQUIRED_MESSAGE,
   MFA_NOT_ENROLLED_MESSAGE,
   MFA_CODE_INVALID_MESSAGE,
+  CLIENT_SCOPE_NOT_HELD_MESSAGE,
 ];
 
 /**
- * The safe copy for one of the IDP's skip_consent refusals, or null when the
+ * The safe copy for one of the IDP's create/update refusals, or null when the
  * body is not one: {"error":"invalid_request","error_description":"skip_consent
  * requires a confidential client"} (D-018), "skip_consent is not available for
- * an app created through dynamic client registration" (D-026), and the
+ * an app created through dynamic client registration" (D-026), the
  * authenticator-code answers mfa_code_required, mfa_not_enrolled and
- * invalid_mfa_code (D-026). Only the error code and the leading words of the
- * description are read; backend prose is never forwarded.
+ * invalid_mfa_code (D-026), and invalid_scope (an app scope the admin does not
+ * hold). Only the error code and the leading words of the description are
+ * read; backend prose is never forwarded.
  */
-async function skipConsentRefusalMessage(res: Response): Promise<string | null> {
+async function clientRefusalMessage(res: Response): Promise<string | null> {
   try {
     // biome-ignore lint/suspicious/noExplicitAny: raw API error body
     const b: any = await res.json();
@@ -2246,6 +2260,8 @@ async function skipConsentRefusalMessage(res: Response): Promise<string | null> 
         return MFA_NOT_ENROLLED_MESSAGE;
       case "invalid_mfa_code":
         return MFA_CODE_INVALID_MESSAGE;
+      case "invalid_scope":
+        return CLIENT_SCOPE_NOT_HELD_MESSAGE;
       case "invalid_request": {
         const d = typeof b?.error_description === "string" ? b.error_description : "";
         if (d.startsWith("skip_consent requires")) return SKIP_CONSENT_PUBLIC_MESSAGE;
@@ -2334,13 +2350,13 @@ export async function createOrganizationClient(
         conflict: false,
         invalid: true,
         message:
-          (await skipConsentRefusalMessage(res)) ??
+          (await clientRefusalMessage(res)) ??
           "The application could not be created with the supplied values.",
       };
     }
     if (res.status === 403) {
       // D-026: a wrong authenticator code is the IDP's 403 invalid_mfa_code.
-      const refusal = await skipConsentRefusalMessage(res);
+      const refusal = await clientRefusalMessage(res);
       return {
         ok: false,
         status: 403,
@@ -2503,14 +2519,14 @@ export async function updateOrganizationClient(
         invalid: true,
         conflict: false,
         message:
-          (await skipConsentRefusalMessage(res)) ??
+          (await clientRefusalMessage(res)) ??
           "The application could not be updated with the supplied values.",
       };
     }
     if (res.status === 403) {
       // D-026: a wrong authenticator code is the IDP's 403 invalid_mfa_code,
       // not a permission failure.
-      const refusal = await skipConsentRefusalMessage(res);
+      const refusal = await clientRefusalMessage(res);
       if (refusal !== null) {
         return {
           ok: false,

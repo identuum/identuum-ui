@@ -24,8 +24,8 @@ import { Button } from "./button";
 import { LocalTime } from "./local-time";
 import { arrayBufferToBase64url, base64urlToArrayBuffer } from "./passkey-base64url";
 import {
+  classifyPasskeyDeleteResult,
   classifyPasskeyEnrollmentError,
-  PASSKEY_ENROLLMENT_ERROR_COPY,
   PASSKEY_REAUTH_REQUIRED_TAG,
 } from "./passkey-enrollment-errors";
 
@@ -222,26 +222,32 @@ export function PasskeySection() {
 
   async function handleDeletePasskey(credId: string) {
     setDeletingId(credId);
+    // A request that never gets an answer is a failed removal (status 0).
+    let banner = classifyPasskeyDeleteResult(0, undefined);
     try {
       const res = await fetch(`${IDP_PATHS.webauthnCredentials}/${encodeURIComponent(credId)}`, {
         method: "DELETE",
         credentials: "include",
         cache: "no-store",
       });
-      if (res.ok || res.status === 204) {
+      // H6: a refusal's body may be `reauth_required` (sign in again).
+      const body = res.ok ? null : await res.json().catch(() => null);
+      banner = classifyPasskeyDeleteResult(res.status, body?.error);
+      if (banner === null) {
         setCredentials((prev) => prev.filter((c) => c.id !== credId));
-      } else if (res.status === 403) {
-        // H6: removing a passkey needs a recent sign-in as well.
-        const body = await res.json().catch(() => null);
-        if (body?.error === "reauth_required") {
-          setError(PASSKEY_ENROLLMENT_ERROR_COPY.reauthRequired);
-          setPhase("error");
-        }
       }
     } catch {
-      // Non-fatal.
+      // Network failure: the failed-removal banner below says so.
     } finally {
       setDeletingId(null);
+    }
+    if (banner === null) {
+      // A successful removal clears a banner left by an earlier refusal.
+      setError(null);
+      setPhase((p) => (p === "error" ? "idle" : p));
+    } else {
+      setError(banner);
+      setPhase("error");
     }
   }
 
