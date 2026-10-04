@@ -28,7 +28,7 @@
  * client; the measured wall time of end_session is recorded as a harness note.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { expect, test } from "@playwright/test";
+import { type APIRequestContext, expect, test } from "@playwright/test";
 import {
   api,
   expectStatus,
@@ -42,6 +42,23 @@ const IDP_BASE = process.env.IDENTUUM_E2E_FULL_IDP_BASE ?? "http://127.0.0.1:711
 const SITE_ADMIN_EMAIL = process.env.IDENTUUM_IDP_BOOTSTRAP_EMAIL ?? "site_admin@system.local";
 const REDIRECT_URI = "https://ui.example.test/consent-cb";
 const GHOST = "00000000-0000-0000-0000-00000000dead";
+
+/**
+ * End-session as a browser that holds a session cookie but no id_token_hint:
+ * the IdP asks first (a 200 page), and the page's one link repeats the request
+ * with the confirm value for that cookie. The link is token-bearing, so it is
+ * followed here and never asserted on or printed. Returns the confirmed answer.
+ */
+async function endSessionConfirmed(request: APIRequestContext, url: string) {
+  const ask = await request.get(url, { failOnStatusCode: false, maxRedirects: 0 });
+  expect(ask.status(), "end-session with a session and no hint asks first → 200").toBe(200);
+  const href = ((await ask.text()).match(/href="([^"]*\bconfirm=[^"]+)"/)?.[1] ?? "").replace(
+    /&amp;/g,
+    "&"
+  );
+  expect(href.length, "the confirmation page carries its confirm link").toBeGreaterThan(0);
+  return request.get(`${IDP_BASE}${href}`, { failOnStatusCode: false, maxRedirects: 0 });
+}
 
 test.describe.configure({ mode: "serial" });
 
@@ -837,10 +854,10 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     // → a delivery row is inserted, then POSTed to the dead URI on the
     // 3-second-timeout safe client. Record the wall time as a harness note.
     const t0 = Date.now();
-    const logout = await request.get(
+    const logout = await endSessionConfirmed(
+      request,
       `${IDP_BASE}/api/v1/oidc/logout?client_id=${encodeURIComponent(bcClientId)}` +
-        `&post_logout_redirect_uri=${encodeURIComponent(POST_LOGOUT)}&state=lo-${runId}`,
-      { failOnStatusCode: false, maxRedirects: 0 }
+        `&post_logout_redirect_uri=${encodeURIComponent(POST_LOGOUT)}&state=lo-${runId}`
     );
     const logoutMs = Date.now() - t0;
     expect(logout.status(), "end_session with a session + client → 302").toBe(302);
@@ -1935,10 +1952,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     });
     expect(login.status(), "browser-login → 303").toBe(303);
 
-    const logout = await request.get(`${IDP_BASE}/api/v1/oidc/logout`, {
-      failOnStatusCode: false,
-      maxRedirects: 0,
-    });
+    const logout = await endSessionConfirmed(request, `${IDP_BASE}/api/v1/oidc/logout`);
     // D-018(a): without a redirect target the IdP shows its own signed-out page.
     expect(logout.status(), "end-session without a redirect target → 200 signed-out page").toBe(
       200

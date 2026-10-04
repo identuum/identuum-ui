@@ -811,11 +811,13 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       },
       {
         method: "POST",
+        // myId is a tenant org_admin; a site_admin never acts on a tenant
+        // user, approval included (D-025), so the answer is the refusal.
         path: `/api/v1/users/${myId}/approve`,
         body: {},
         bearer: sa,
-        ok: [200, 400, 409],
-        label: "approve sa (already active — idempotent/benign)",
+        ok: [403],
+        label: "approve sa (tenant user — refused, D-025)",
       },
       {
         method: "POST",

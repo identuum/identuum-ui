@@ -268,18 +268,18 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
     ).toBe(404);
   });
 
-  test("users/:id/restore — recovers a soft-deleted user (RESTORE-RECOVERS-DELETED-1)", async () => {
-    // ROW POST /users/:id/restore (D). Soft-delete the user, then restore:
-    // the fix reads through the deleted-inclusive admin lookup, so restore
-    // now recovers the row (happy path 200 {"restored": <id>}). Authorization
-    // is unchanged — the route stays site_admin-only (org_admin → 403), and
-    // the service-level cross-tenant refusal is pinned in the Go teeth test
-    // TestRestoreUserForActor_CrossTenantStillRefused.
+  test("users/:id/restore — a site_admin is refused on a tenant user (D-025)", async () => {
+    // ROW POST /users/:id/restore (D). A site_admin never acts on a tenant
+    // user (D-025): it cannot soft-delete one, and it cannot restore one. The
+    // route admits only a site_admin, so over HTTP no actor reaches the
+    // recovery itself; that path (RESTORE-RECOVERS-DELETED-1) is pinned in the
+    // Go teeth test TestRestoreUserForActor_RecoversSoftDeletedUser, and the
+    // cross-tenant refusal in TestRestoreUserForActor_CrossTenantStillRefused.
+    // The user is left active for the tests that follow.
     const del = await api(IDP_BASE, "DELETE", `/api/v1/users/${uId}`, undefined, site.bearer);
-    expectStatus(del, 200, "soft-delete → 200");
+    expectStatus(del, 403, "soft-delete by a site_admin → 403 (D-025)");
     const restore = await api(IDP_BASE, "POST", `/api/v1/users/${uId}/restore`, {}, site.bearer);
-    expectStatus(restore, 200, "restore of a soft-deleted user → 200 (recovered)");
-    expect(restore.json.restored, "response names the restored id").toBe(uId);
+    expectStatus(restore, 403, "restore of a tenant user by a site_admin → 403 (D-025)");
     const ghost = await api(IDP_BASE, "POST", `/api/v1/users/${GHOST}/restore`, {}, site.bearer);
     expectStatus(ghost, 404, "restore of a nonexistent user → 404");
     const orgAdmin = await api(IDP_BASE, "POST", `/api/v1/users/${uId}/restore`, {}, A.bearer);
