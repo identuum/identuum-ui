@@ -425,12 +425,10 @@ describe("Page + InvitePolicyForm source — wiring and negative invariants", ()
     "utf-8"
   );
 
-  it("page.tsx presents the invite policy READ-ONLY via OrgRecordReadOnlySection (ruling C: the org record is infrastructure authority — no editable form is mounted)", () => {
+  it("page.tsx mounts no invite-policy form: the registration policy is the Self-registration section (one place to set it)", () => {
     expect(PAGE_SRC).not.toMatch(/InvitePolicyForm/);
-    expect(PAGE_SRC).toMatch(/<OrgRecordReadOnlySection\b/);
-    expect(PAGE_SRC).toMatch(/deriveOrgAdminInvitePolicyMode/);
-    expect(PAGE_SRC).toMatch(/allow_public_registration/);
-    expect(PAGE_SRC).toMatch(/require_registration_approval/);
+    expect(PAGE_SRC).not.toMatch(/<OrgRecordReadOnlySection\b/);
+    expect(PAGE_SRC).toMatch(/<SelfRegistrationSection\b/);
   });
 
   it("InvitePolicyForm imports the mode helpers, the form copy, and the server action", () => {

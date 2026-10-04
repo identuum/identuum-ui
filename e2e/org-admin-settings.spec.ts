@@ -103,14 +103,13 @@ test.describe("/org-admin/settings — main settings surface", () => {
       // Page heading
       await expect(page.getByRole("heading", { name: "Organization settings" })).toBeVisible();
 
-      // Card titles — the read-only Organization record card (ruling C:
-      // the org record is infrastructure authority; the old editable
-      // profile/security cards are gone) and the Domains card.
-      await expect(page.getByRole("heading", { name: "Organization record" })).toBeVisible();
-      await expect(page.getByText("Invite policy", { exact: true })).toBeVisible();
+      // Card titles — the organization's profile and security policy (its
+      // own administrator sets them, owner ruling identuum-idp-oss v0.9.5)
+      // and the Domains card.
+      await expect(page.getByRole("heading", { name: "Organization profile" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Security policy" })).toBeVisible();
       await expect(page.getByText("Domains", { exact: true })).toBeVisible();
-      expect(await page.getByText("Organization profile", { exact: true }).count()).toBe(0);
-      expect(await page.getByText("Security policy", { exact: true }).count()).toBe(0);
+      expect(await page.getByRole("heading", { name: "Organization record" }).count()).toBe(0);
 
       // Read-only headings landed by slice
       // identuum-20260530-org-admin-settings-readonly-tabs. Each
@@ -152,25 +151,21 @@ test.describe("/org-admin/settings — main settings surface", () => {
   });
 });
 
-// ── 2. Organization record — READ-ONLY (THE-V032-ALL-GREEN ruling C) ────────
+// ── 2. Organization profile and security policy — the org_admin's ──────────
 //
-// AdminPermissionsModel.md scopes org_admin to day-to-day control of the
-// seven resource areas (users, clients, service accounts, identity provider,
-// protocol settings, domains, RBAC roles) and EXCLUDES the organization
-// record itself — "cannot manage organization lifecycle (create/delete/
-// activate -- infrastructure authority)". The backend enforces this
-// (PUT /api/v1/organizations/:id is infrastructure authority; an org_admin
-// write is refused), so the page PRESENTS the record read-only. These pins
-// replace the editable-form pins that asserted name inputs, policy radios
-// and Save buttons — those saves could only ever fail.
+// Owner ruling (identuum-idp-oss v0.9.5): a site administrator changes only an
+// organization's lifecycle (active, and the name); the organization's own
+// administrator sets its name and policies and never its lifecycle. The page
+// therefore offers the profile and MFA policy forms (registration is the
+// Self-registration section), and the backend refuses an org_admin's write of
+// active with 403 forbidden_field while it accepts the policy.
 //
-// RED-PROOF: every assertion below is the direct negation of the previous
-// editable-form pins, which passed against the pre-flip UI — the old suite
-// state is the failing witness for these pins, and the flipped dynamic test
-// additionally proves the REFUSAL live.
+// RED-PROOF: the previous read-only pins asserted the opposite (no name
+// input, no policy radios, no Save profile / Save policy, an org_admin PUT
+// refused outright); they fail against this page and this backend.
 
-test.describe("/org-admin/settings — Organization record (read-only)", () => {
-  test("renders the record card with name/domain/policies as text — no inputs, no radios, no save affordances", async () => {
+test.describe("/org-admin/settings — Organization profile and security policy", () => {
+  test("renders the profile and MFA policy forms with their save buttons", async () => {
     if (skipOrgAdminTests) {
       test.skip(true, SKIP_MSG);
     }
@@ -180,31 +175,23 @@ test.describe("/org-admin/settings — Organization record (read-only)", () => {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
 
-      // Card heading + read-only justification copy.
-      await expect(page.getByRole("heading", { name: "Organization record" })).toBeVisible();
-      await expect(page.getByText(/managed at the infrastructure level/i)).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Organization profile" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Security policy" })).toBeVisible();
+      expect(await page.getByRole("heading", { name: "Organization record" }).count()).toBe(0);
 
-      // The four record rows render as definition text.
-      await expect(page.getByText("Organization name", { exact: true })).toBeVisible();
-      await expect(page.getByText("Primary domain", { exact: true }).first()).toBeVisible();
-      await expect(page.getByText("MFA policy", { exact: true })).toBeVisible();
-      await expect(page.getByText("Invite policy", { exact: true })).toBeVisible();
-
-      // NO editable affordances for the org record: no name input, no policy
-      // radios, no record-save buttons.
-      expect(await page.getByLabel("Organization name").count()).toBe(0);
+      // The profile form edits the name; the security form chooses the MFA
+      // policy. No invite-policy form: registration is its own section.
+      expect(await page.getByLabel("Organization name").count()).toBe(1);
+      expect(await page.getByRole("radio", { name: /^Optional/ }).count()).toBe(1);
+      expect(await page.getByRole("radio", { name: /^Required/ }).count()).toBe(1);
+      expect(await page.getByRole("button", { name: /save profile/i }).count()).toBe(1);
+      expect(await page.getByRole("button", { name: /save policy/i }).count()).toBe(1);
       expect(await page.locator('input[name="invite_policy_mode"]').count()).toBe(0);
-      expect(await page.getByRole("radio", { name: /^Optional/ }).count()).toBe(0);
-      expect(await page.getByRole("radio", { name: /^Required/ }).count()).toBe(0);
-      expect(await page.getByRole("button", { name: /save profile/i }).count()).toBe(0);
-      expect(await page.getByRole("button", { name: /save policy/i }).count()).toBe(0);
       expect(await page.getByRole("button", { name: /save invite policy/i }).count()).toBe(0);
 
-      // Exactly TWO Saves remain on the page — the Protocol settings panel's
-      // (protocol settings ARE one of the model's seven org_admin areas) and,
-      // since OSS-REGISTER-UI, the organization's Self-registration section
-      // (D-021: the org_admin sets its own organization's sign-up policy).
-      expect(await page.getByRole("button", { name: /^Save\b/i }).count()).toBe(2);
+      // FOUR Saves: Save profile, Save policy, the Protocol settings panel's
+      // and the organization's Self-registration section's (D-021).
+      expect(await page.getByRole("button", { name: /^Save\b/i }).count()).toBe(4);
       expect(
         await page
           .getByTestId("org-self-registration")
@@ -216,18 +203,19 @@ test.describe("/org-admin/settings — Organization record (read-only)", () => {
     }
   });
 
-  // FLIPPED write-path coverage (was: "toggling a radio enables Save;
-  // clicking persists"). The refusal is now asserted as CORRECT, live:
-  // an org_admin PUT against its own org record must be REFUSED by the
-  // backend, and the page must offer no path to attempt it.
-  test("[dynamic mode only] org_admin write to the org record is REFUSED (403) and the page offers no save path [ORGREC-READONLY-1]", async () => {
+  // The write path, live: the org_admin's own session (through the UI proxy,
+  // which carries the session's credentials) is refused its organization's
+  // lifecycle — active — with 403 forbidden_field, and its policy write is
+  // accepted. The policy write re-sends the CURRENT value, so the shared
+  // fixture organization is left as it was.
+  test("[dynamic mode only] an org_admin never changes its organization's lifecycle (active is 403 forbidden_field) and sets its own policy [ORGREC-READONLY-1]", async () => {
     if (skipOrgAdminTests) {
       test.skip(true, SKIP_MSG);
     }
     if (process.env.IDENTUUM_E2E_USE_DYNAMIC_FIXTURE !== "true") {
       test.skip(
         true,
-        "Set IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true to opt in. This test issues a (refused) write against the disposable fixture org."
+        "Set IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true to opt in. This test issues writes against the disposable fixture org."
       );
     }
 
@@ -236,28 +224,24 @@ test.describe("/org-admin/settings — Organization record (read-only)", () => {
       await page.goto("/org-admin/settings");
       await page.waitForLoadState("networkidle");
 
-      // No record-save affordance exists on the rendered page.
-      expect(await page.getByRole("button", { name: /save invite policy/i }).count()).toBe(0);
-      expect(await page.getByRole("button", { name: /save profile/i }).count()).toBe(0);
-
-      // Live refusal proof: the same org_admin session attempting the org-
-      // record write directly (through the UI proxy, which carries the
-      // session's own credentials) is REFUSED by the backend. 403 — not
-      // 404, not 2xx — the record exists and the actor is authenticated;
-      // the authority is what is missing (infrastructure authority).
       const orgRes = await page.request.get("/api/idp/api/v1/organizations/current");
       expect(orgRes.status()).toBe(200);
-      const org = (await orgRes.json()) as { id?: string };
+      const org = (await orgRes.json()) as { id?: string; mfa_policy?: string };
       expect(typeof org.id).toBe("string");
+      const orgPath = `/api/idp/api/v1/organizations/${encodeURIComponent(org.id as string)}`;
 
-      const put = await page.request.put(
-        `/api/idp/api/v1/organizations/${encodeURIComponent(org.id as string)}`,
-        { data: { allow_public_registration: true }, headers: uiOriginHeader() }
-      );
-      expect(
-        put.status(),
-        "org_admin org-record write must be refused (infrastructure authority)"
-      ).toBe(403);
+      const lifecycle = await page.request.put(orgPath, {
+        data: { active: false },
+        headers: uiOriginHeader(),
+      });
+      expect(lifecycle.status(), "an org_admin write of active must be refused").toBe(403);
+      expect(((await lifecycle.json()) as { error?: string }).error).toBe("forbidden_field");
+
+      const policy = await page.request.put(orgPath, {
+        data: { mfa_policy: org.mfa_policy ?? "optional" },
+        headers: uiOriginHeader(),
+      });
+      expect(policy.status(), "the org_admin's own policy write must be accepted").toBe(200);
     } finally {
       await page.close();
     }

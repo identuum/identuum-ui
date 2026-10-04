@@ -181,21 +181,18 @@ test.describe("/org-admin — authenticated route access", () => {
       expect(await page.title()).not.toMatch(/500|internal error|application error/i);
       await expect(page.getByRole("heading", { name: "Organization settings" })).toBeVisible();
 
-      // Organization record card — READ-ONLY (THE-V032-ALL-GREEN ruling C:
-      // the org record is infrastructure authority; the old editable
-      // profile/security forms are gone, and with them every always-failing
-      // save affordance).
-      await expect(page.getByRole("heading", { name: "Organization record" })).toBeVisible();
-      await expect(page.getByText("Organization name", { exact: true })).toBeVisible();
-      await expect(page.getByText("MFA policy", { exact: true })).toBeVisible();
-      expect(await page.getByLabel("Organization name").count()).toBe(0);
-      expect(await page.getByRole("radio", { name: /^Optional/ }).count()).toBe(0);
-      expect(await page.getByRole("button", { name: /save profile/i }).count()).toBe(0);
-      expect(await page.getByRole("button", { name: /save policy/i }).count()).toBe(0);
+      // The organization's profile and security policy are its own
+      // administrator's to set (owner ruling, identuum-idp-oss v0.9.5).
+      await expect(page.getByRole("heading", { name: "Organization profile" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Security policy" })).toBeVisible();
+      expect(await page.getByLabel("Organization name").count()).toBe(1);
+      expect(await page.getByRole("radio", { name: /^Optional/ }).count()).toBe(1);
+      expect(await page.getByRole("button", { name: /save profile/i }).count()).toBe(1);
+      expect(await page.getByRole("button", { name: /save policy/i }).count()).toBe(1);
+      expect(await page.getByRole("heading", { name: "Organization record" }).count()).toBe(0);
 
       // Remaining cards:
       expect(await page.getByText("Domains", { exact: true }).count()).toBeGreaterThan(0);
-      expect(await page.getByText("Invite policy", { exact: true }).count()).toBeGreaterThan(0);
       // The former "Coming soon" placeholders are gone: with the released
       // appliance resolving the org, the REAL sections render — pin them.
       expect(await page.getByText("Identity providers", { exact: true }).count()).toBeGreaterThan(

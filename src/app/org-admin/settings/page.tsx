@@ -10,6 +10,8 @@
 import type { Metadata } from "next";
 import { ProtocolSettingsPanel } from "@/app/site-admin/organizations/[id]/protocol-settings-panel";
 import { DomainsCard } from "@/components/org-admin/domains-card";
+import { MFAPolicyForm } from "@/components/org-admin/mfa-policy-form";
+import { OrgProfileForm } from "@/components/org-admin/org-profile-form";
 import { getAuthorizationServerPageBoundary } from "@/lib/capability-affordances";
 import {
   getOrgProtocolSettings,
@@ -23,16 +25,13 @@ import { getOrgRegistration, getRegistrationInfoSignedIn } from "@/lib/idp-regis
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { SelfRegistrationSection } from "./self-registration-section";
 import {
-  deriveOrgAdminInvitePolicyMode,
   ORG_ADMIN_DOMAINS_CARD_COPY,
-  ORG_ADMIN_INVITE_POLICY_MODE_COPY,
   ORG_ADMIN_SETTINGS_PAGE_COPY,
   ORG_ADMIN_SETTINGS_PLACEHOLDER_BADGE,
   ORG_ADMIN_SETTINGS_PLACEHOLDERS,
 } from "./settings-helpers";
 import {
   IdentityProvidersReadOnlySection,
-  OrgRecordReadOnlySection,
   OrgRolesReadOnlySection,
   ScopeTemplatesReadOnlySection,
 } from "./settings-readonly-sections";
@@ -44,12 +43,6 @@ export default async function OrgAdminSettingsPage() {
   const orgName = org?.name ?? "—";
   const domain = org?.domain;
   const mfaPolicy = org?.mfa_policy ?? "optional";
-  const invitePolicy = {
-    allow_public_registration: org?.allow_public_registration ?? false,
-    require_registration_approval: org?.require_registration_approval ?? false,
-  };
-  const invitePolicyModeCopy =
-    ORG_ADMIN_INVITE_POLICY_MODE_COPY[deriveOrgAdminInvitePolicyMode(invitePolicy)];
   const runtimeState = await getServerRuntimeState();
   const idpCapabilities = runtimeState?.components.idp.capabilities;
   // CE-UI-5a: an IdP without self-registration (identuum-idp-ce) is not asked.
@@ -109,20 +102,23 @@ export default async function OrgAdminSettingsPage() {
         <p className="text-sm text-stone-500 mt-0.5">{ORG_ADMIN_SETTINGS_PAGE_COPY.pageSubtitle}</p>
       </div>
 
-      {/* Organization record — READ-ONLY (THE-V032-ALL-GREEN ruling C).
-          AdminPermissionsModel.md scopes org_admin to the seven day-to-day
-          resource areas and excludes the org record (infrastructure
-          authority); the backend refuses org_admin writes to it, so this
-          page presents it without save affordances. The previous editable
-          profile/security/registration forms rendered saves that always
-          failed with 403. */}
-      <OrgRecordReadOnlySection
-        name={orgName}
-        domain={domain}
-        mfaPolicy={mfaPolicy}
-        invitePolicyLabel={invitePolicyModeCopy.label}
-        invitePolicyDescription={invitePolicyModeCopy.description}
-      />
+      {/* Organization profile and security policy — the organization's own
+          administrator sets its name and policies (owner ruling,
+          identuum-idp-oss v0.9.5: a site administrator changes only an
+          organization's lifecycle). The registration policy is the
+          Self-registration section below. */}
+      <SettingsCard
+        title={ORG_ADMIN_SETTINGS_PAGE_COPY.profileCardTitle}
+        subtitle={ORG_ADMIN_SETTINGS_PAGE_COPY.profileCardSubtitle}
+      >
+        <OrgProfileForm currentName={orgName} domain={domain} />
+      </SettingsCard>
+      <SettingsCard
+        title={ORG_ADMIN_SETTINGS_PAGE_COPY.securityCardTitle}
+        subtitle={ORG_ADMIN_SETTINGS_PAGE_COPY.securityCardSubtitle}
+      >
+        <MFAPolicyForm currentPolicy={mfaPolicy} />
+      </SettingsCard>
 
       {/* Protocol settings card — same-org org_admin can manage DCR Foundation
           and view the SCIM Enterprise/CE boundary for their own organization. Fetched in
@@ -180,6 +176,26 @@ export default async function OrgAdminSettingsPage() {
         <PlaceholderCard key={title} title={title} description={description} />
       ))}
     </div>
+  );
+}
+
+function SettingsCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-stone-100">
+        <h2 className="text-sm font-semibold text-sky-950">{title}</h2>
+        <p className="text-xs text-stone-400 mt-0.5">{subtitle}</p>
+      </div>
+      <div className="px-6 py-5">{children}</div>
+    </section>
   );
 }
 

@@ -1,5 +1,17 @@
 {
   "schema_version": "ledger-amendments.v1",
   "base_commit": "5627ba243fdeb81fc17fdf28586d23f2918ac687",
-  "changes": []
+  "changes": [
+    {
+      "rule_id": "ORGREC-READONLY-1",
+      "change_class": "sentence_changed",
+      "after_sentence_sha256": "72358a0e4ee4bf1a6e223863e24e182d8bd4022f93efe0b46a541aed5cadacc5",
+      "reason": "Owner ruling (identuum-idp-oss v0.9.5): a site_admin changes only the lifecycle of a tenant organization (active, and the name); its policy fields are its own org_admin's, who never changes active. The rule's sentence moves from 'the org record is read-only for org_admin' to that ruling."
+    },
+    {
+      "rule_id": "ORGREC-READONLY-1",
+      "change_class": "test_fingerprint_changed",
+      "reason": "Owner ruling (identuum-idp-oss v0.9.5): the bound dynamic test asserted that any org_admin write to its organization is refused; it now asserts that its write of active is refused with 403 forbidden_field and that its own policy write (the current mfa_policy re-sent, so the fixture is unchanged) is accepted."
+    }
+  ]
 }
