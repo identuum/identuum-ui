@@ -291,7 +291,7 @@ describe("PasskeySection — helper integration", () => {
 
   it("imports classifyPasskeyEnrollmentError from the helper module", () => {
     expect(SECTION_SRC).toMatch(
-      /import\s*\{\s*classifyPasskeyEnrollmentError\s*\}\s*from\s+["']\.\/passkey-enrollment-errors["']/
+      /import\s*\{[^}]*\bclassifyPasskeyEnrollmentError\b[^}]*\}\s*from\s+["']\.\/passkey-enrollment-errors["']/
     );
   });
 

@@ -57,6 +57,8 @@ export const PASSKEY_ENROLLMENT_ERROR_COPY = {
     "A passkey for this account is already registered on this device. Remove it first or use a different device.",
   ceremonySecurity:
     "The passkey ceremony was blocked. Make sure the page is served over HTTPS or localhost and that your browser allows passkeys here.",
+  reauthRequired:
+    "For your security, sign in again before adding or removing a passkey, then retry.",
   finishUnauthorized:
     "Your session expired before the passkey could be saved. Sign in again and retry.",
   finishUnavailable:
@@ -70,7 +72,13 @@ export const PASSKEY_ENROLLMENT_ERROR_COPY = {
  * that started throwing the same shape from another callsite would
  * surface as an unrelated test failure.
  */
-type PasskeyBeginError = Error & { __passkeyBeginStatus: number };
+/**
+ * Tag set on a begin failure whose body is the IdP's `reauth_required`: the
+ * session has not signed in recently enough to add or remove a passkey (H6).
+ */
+export const PASSKEY_REAUTH_REQUIRED_TAG = "__passkeyReauthRequired";
+
+type PasskeyBeginError = Error & { __passkeyBeginStatus: number; __passkeyReauthRequired?: true };
 type PasskeyFinishError = Error & { __passkeyFinishStatus: number };
 type PasskeyCeremonyCancelledError = Error & {
   __passkeyCeremonyCancelled: true;
@@ -97,6 +105,9 @@ function isPasskeyCeremonyCancelledError(v: unknown): v is PasskeyCeremonyCancel
 export function classifyPasskeyEnrollmentError(err: unknown): string {
   // 1. Begin-registration HTTP failure — status-aware.
   if (isPasskeyBeginError(err)) {
+    if (err.__passkeyReauthRequired === true) {
+      return PASSKEY_ENROLLMENT_ERROR_COPY.reauthRequired;
+    }
     if (err.__passkeyBeginStatus === 403) {
       return PASSKEY_ENROLLMENT_ERROR_COPY.beginForbidden;
     }

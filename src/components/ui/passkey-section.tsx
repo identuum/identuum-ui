@@ -23,7 +23,11 @@ import { IDP_PATHS } from "@/lib/idp-paths";
 import { Button } from "./button";
 import { LocalTime } from "./local-time";
 import { arrayBufferToBase64url, base64urlToArrayBuffer } from "./passkey-base64url";
-import { classifyPasskeyEnrollmentError } from "./passkey-enrollment-errors";
+import {
+  classifyPasskeyEnrollmentError,
+  PASSKEY_ENROLLMENT_ERROR_COPY,
+  PASSKEY_REAUTH_REQUIRED_TAG,
+} from "./passkey-enrollment-errors";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -121,8 +125,12 @@ export function PasskeySection() {
       });
 
       if (!beginRes.ok) {
+        // H6: 403 with `reauth_required` means the sign-in is too old, not
+        // that passkeys are unavailable for the account.
+        const body = await beginRes.json().catch(() => null);
         throw Object.assign(new Error("begin_failed"), {
           __passkeyBeginStatus: beginRes.status,
+          ...(body?.error === "reauth_required" ? { [PASSKEY_REAUTH_REQUIRED_TAG]: true } : {}),
         });
       }
 
@@ -222,6 +230,13 @@ export function PasskeySection() {
       });
       if (res.ok || res.status === 204) {
         setCredentials((prev) => prev.filter((c) => c.id !== credId));
+      } else if (res.status === 403) {
+        // H6: removing a passkey needs a recent sign-in as well.
+        const body = await res.json().catch(() => null);
+        if (body?.error === "reauth_required") {
+          setError(PASSKEY_ENROLLMENT_ERROR_COPY.reauthRequired);
+          setPhase("error");
+        }
       }
     } catch {
       // Non-fatal.
