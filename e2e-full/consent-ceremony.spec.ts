@@ -1370,7 +1370,9 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
         automaticPresenceSimulation: true,
       },
     });
-    await page.goto(`${IDP_ORIGIN}/api/v1/auth/browser-login`); // any document on the RP origin
+    // Any document on the RP origin that carries no page policy: the sign-in
+    // page loads nothing, so a fetch run from it is blocked (by design).
+    await page.goto(`${IDP_ORIGIN}/health`);
     const registered = await page.evaluate(async (token) => {
       const b64uToBuf = (s: string) => {
         const b = s.replace(/-/g, "+").replace(/_/g, "/");
