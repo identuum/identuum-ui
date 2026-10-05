@@ -71,7 +71,8 @@ describe("EnrollmentCTA — state-machine contract", () => {
 
   it("contains the canonical not-enrolled warning copy", () => {
     expect(src).toMatch(/Authenticator app not enrolled/);
-    expect(src).toMatch(/Your account requires two-factor authentication/);
+    // FUNC-M1: true for every user, whatever the policy.
+    expect(src).toMatch(/Two-factor authentication asks for a code from an authenticator app/);
   });
 
   it("does not persist enrollment state to localStorage or sessionStorage", () => {
