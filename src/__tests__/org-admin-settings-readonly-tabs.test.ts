@@ -196,9 +196,9 @@ describe("listScopeTemplates — explicit allowlist + feature gate", () => {
     expect(body).toMatch(/t\.updated_at/);
   });
 
-  it("reads from the raw array envelope (NOT a `data` / `templates` wrapper)", () => {
+  it("reads the IdP's {count, scope_templates} envelope (FUNC-M5; behaviour in scope-templates-envelope.test.ts)", () => {
     const body = isolateHelperBody("listScopeTemplates");
-    expect(body).toMatch(/Array\.isArray\(d\)\s*\?\s*d\s*:\s*\[\]/);
+    expect(body).toMatch(/d\?\.scope_templates/);
   });
 
   it("routes absent/license-gated responses through the shared IDP status classifier", () => {

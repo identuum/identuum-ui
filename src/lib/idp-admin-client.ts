@@ -3448,8 +3448,13 @@ export async function listScopeTemplates(): Promise<ListScopeTemplatesResult> {
     }
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitisation
     const d: any = await res.json();
-    // The endpoint returns a RAW array (no wrapping envelope).
-    const rawList = Array.isArray(d) ? d : [];
+    // FUNC-M5: the IdP answers {count, scope_templates}; a bare array is
+    // still read.
+    const rawList = Array.isArray(d)
+      ? d
+      : Array.isArray(d?.scope_templates)
+        ? d.scope_templates
+        : [];
     const templates: ScopeTemplateItem[] = rawList.map((t: Record<string, unknown>) => ({
       id: typeof t.id === "string" ? t.id : "",
       name: typeof t.name === "string" ? t.name : "",
