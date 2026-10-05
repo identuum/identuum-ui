@@ -11,6 +11,7 @@ import {
   AccountMFAAlreadyEnrolledError,
   accountMfaSetupComplete,
   accountMfaSetupInitiate,
+  loginWaitMessage,
 } from "@/lib/idp-client";
 import { ApiError } from "@/lib/ui-api";
 
@@ -125,6 +126,10 @@ export function AccountMFAEnrollForm({
         // does not guess which; it says only what it knows.
         if (err.status === 503) {
           setServerError("Two-factor enrollment is temporarily unavailable. Try again later.");
+          return;
+        }
+        if (err.status === 429) {
+          setServerError(loginWaitMessage(err));
           return;
         }
         setServerError("Could not verify your password. Try again.");

@@ -740,3 +740,24 @@ describe("mfa-enroll-form.tsx — recovery codes invariants", () => {
     expect(MFA_ENROLL_FORM_SRC).toContain("onSuccess(pendingRole)");
   });
 });
+
+// ── accountMfaSetupInitiate() — FUNC-M1: a spent proof budget says how long ──
+
+describe("accountMfaSetupInitiate() — 429 login_throttled", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("throws a 429 ApiError carrying the wait, which loginWaitMessage words", async () => {
+    vi.stubGlobal(
+      "fetch",
+      makeFetchMock(429, { error: "login_throttled", retry_after_seconds: 40 })
+    );
+    const { loginWaitMessage } = await import("../lib/idp-client");
+    const err = await accountMfaSetupInitiate("pw").catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(429);
+    expect(loginWaitMessage(err)).toBe("Too many attempts. Try again in 40 seconds.");
+  });
+});

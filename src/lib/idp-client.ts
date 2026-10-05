@@ -427,6 +427,10 @@ export async function accountMfaSetupInitiate(
   if (res.status === 409) {
     throw new AccountMFAAlreadyEnrolledError();
   }
+  if (res.status === 429) {
+    // Too many wrong passwords: the sign-in wait, with its Retry-After.
+    throw throttled(await res.json().catch(() => ({})));
+  }
   if (!res.ok) {
     throw new ApiError(res.status, "Failed to initiate MFA enrollment");
   }

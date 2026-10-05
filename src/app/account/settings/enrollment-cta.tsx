@@ -71,8 +71,8 @@ function NotEnrolledNotice() {
       <div className="space-y-1">
         <p className="text-xs font-semibold text-amber-700">Authenticator app not enrolled</p>
         <p className="text-xs text-stone-500 leading-relaxed">
-          Your account requires two-factor authentication. Follow the steps below to enroll an
-          authenticator app without signing out.
+          Two-factor authentication asks for a code from an authenticator app when you sign in.
+          Follow the steps below to enroll one without signing out.
         </p>
         <p className="text-xs text-stone-400 leading-relaxed">
           Changing your password on the Password tab will not enroll an authenticator.
