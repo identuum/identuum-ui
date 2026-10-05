@@ -1389,7 +1389,17 @@ export interface AuditEventItem {
 }
 
 export type ListAuditEventsResult =
-  | { ok: true; events: AuditEventItem[]; total_count: number; page: number; page_size: number }
+  | {
+      ok: true;
+      events: AuditEventItem[];
+      total_count: number;
+      /** FUNC-M16: the IdP's absolute total, or null when it reports none. */
+      total: number | null;
+      /** FUNC-M16: more (older) events follow this page. */
+      has_more: boolean;
+      page: number;
+      page_size: number;
+    }
   | { ok: false; status: number; featureUnavailable: boolean; forbidden: boolean };
 
 /**
@@ -1484,6 +1494,11 @@ export async function listAuditEvents(opts?: {
       // Released OSS reports { events, has_more } with no absolute total; the
       // returned batch length is the honest floor when total_count is absent.
       total_count: typeof body.total_count === "number" ? body.total_count : events.length,
+      total: typeof body.total_count === "number" ? body.total_count : null,
+      // FUNC-M16: has_more is the IdP's answer; a reported total implies it.
+      has_more:
+        body.has_more === true ||
+        (typeof body.total_count === "number" && body.total_count > page * pageSize),
       page: typeof body.page === "number" ? body.page : page,
       page_size: typeof body.page_size === "number" ? body.page_size : pageSize,
     };

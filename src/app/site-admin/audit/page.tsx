@@ -6,6 +6,7 @@ import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
 import { AuditIPAddressCell } from "@/components/shared/audit-ip-address-cell";
 import { FeatureBoundaryPanel } from "@/components/shared/feature-boundary-panel";
 import { LocalTime } from "@/components/ui/local-time";
+import { auditRangeLabel } from "@/lib/audit-paging";
 import type { AuditEventItem } from "@/lib/idp-admin-client";
 /**
  * Audit log viewer — site_admin only (read-only).
@@ -142,7 +143,7 @@ export default async function SiteAdminAuditPage({
   ]);
 
   const hasPrev = page > 1;
-  const hasNext = result.ok && result.total_count > page * PAGE_SIZE;
+  const hasNext = result.ok && result.has_more;
 
   return (
     <div className="space-y-5">
@@ -209,11 +210,7 @@ export default async function SiteAdminAuditPage({
 
       {result.ok && (
         <>
-          <p className="text-xs text-stone-400">
-            {result.total_count === 0
-              ? "No audit events found."
-              : `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, result.total_count)} of ${result.total_count} events`}
-          </p>
+          <p className="text-xs text-stone-400">{auditRangeLabel(page, PAGE_SIZE, result)}</p>
           {result.events.length > 0 ? (
             <AuditTable
               events={result.events}
