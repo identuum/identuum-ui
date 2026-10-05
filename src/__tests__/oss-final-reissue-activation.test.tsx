@@ -162,7 +162,11 @@ describe("re-issuing through the IdP", () => {
   it("a 409 is said plainly", async () => {
     const state = await issue({ status: 409, body: { error: "organization already active" } });
     expect(state).toMatchObject({ phase: "idle" });
-    expect((state as { error?: string }).error).toMatch(/already active/i);
+    // FUNC-M13: true in every case; it no longer claims the administrator
+    // completed activation, and it says where the invite is re-issued.
+    expect((state as { error?: string }).error).toMatch(
+      /organization is active.*re-issue the invite/i
+    );
   });
 });
 

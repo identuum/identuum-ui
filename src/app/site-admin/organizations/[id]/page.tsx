@@ -27,9 +27,11 @@ import {
   isActivationPending,
   LIFECYCLE_COPY,
   type LifecycleState,
+  pendingInvitedAdmin,
 } from "./operational-status";
 import { ProtocolSettingsPanel } from "./protocol-settings-panel";
 import { ReissueActivationButton } from "./reissue-activation-button";
+import { ReissueAdminInviteButton } from "./reissue-admin-invite-button";
 
 export const metadata: Metadata = { title: "Organization — Identuum Admin" };
 
@@ -70,6 +72,9 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
   // failure here is non-fatal — the rest of the page still renders.
   const admins: OrgAdminRecoveryCandidate[] = adminsResult?.ok ? adminsResult.admins : [];
   const adminsLoadError = adminsResult && !adminsResult.ok ? adminsResult.message : null;
+  // FUNC-M13: an active organization's administrator who never accepted the
+  // invite is re-invited, not re-activated (the organization is active).
+  const invitedAdmin = pendingInvitedAdmin(org, adminsResult?.ok ? admins : null);
 
   // Actions card visibility — derived from the same four boolean flags as
   // the Operational status card. The helper enforces the deleted-org
@@ -241,8 +246,23 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
                   <ReissueActivationButton orgId={id} />
                 </div>
               )}
-              {/* Recovery affordance when the only admin account has an expired invitation */}
-              {org.can_assign_admin && !org.deleted && (
+              {invitedAdmin && (
+                <div className="border-t border-stone-100 pt-3 space-y-2">
+                  <p className="text-xs text-amber-700 font-medium">
+                    Waiting for the administrator to accept the invite
+                  </p>
+                  <p className="text-xs text-stone-500 leading-relaxed">
+                    The administrator has not accepted their invite yet. If the invite link was lost
+                    or has expired, issue a new one to hand over.
+                  </p>
+                  <ReissueAdminInviteButton userId={invitedAdmin.id} />
+                </div>
+              )}
+              {/* Recovery affordance when the only admin account has an expired
+                  activation link. It re-issues an organization activation,
+                  which an ACTIVE organization does not have (409): there the
+                  administrator is re-invited above instead (FUNC-M13). */}
+              {org.can_assign_admin && !org.deleted && !invitedAdmin && (
                 <div className="border-t border-stone-100 pt-3 space-y-2">
                   <p className="text-xs text-amber-700 font-medium">Pending invitation expired</p>
                   <p className="text-xs text-stone-500 leading-relaxed">

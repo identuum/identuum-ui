@@ -10,7 +10,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import type { IssuedActivation } from "@/components/shared/activation-issued-panel";
-import { assignOrgAdmin } from "@/lib/idp-admin-client";
+import { assignOrgAdmin, type IssuedInvite, reissueUserInvite } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
 
@@ -40,7 +40,7 @@ export async function reissueActivationAction(
       return {
         phase: "idle",
         error:
-          "This organization is already active: its administrator has activated it. There is no activation to re-issue.",
+          "This organization is active, so it has no activation link to re-issue. If its administrator has not accepted their invite yet, re-issue the invite from the organization page.",
       };
     if (result.notFound)
       return {
@@ -53,4 +53,35 @@ export async function reissueActivationAction(
 
   const { ok: _ok, ...activation } = result;
   return { phase: "issued", activation };
+}
+
+// ── FUNC-M13: re-issue the invite of an active organization's administrator ──
+
+export type ReissueAdminInviteState =
+  | { phase: "idle"; error?: string }
+  | { phase: "issued"; invite: IssuedInvite };
+
+/**
+ * POST /api/v1/users/:id/invite for an administrator of an ACTIVE
+ * organization who never accepted their invite: the earlier link stops
+ * working and the new one is shown once, in memory. Independently
+ * revalidates site_admin before calling the IdP.
+ */
+export async function reissueAdminInviteAction(
+  _prev: ReissueAdminInviteState,
+  formData: FormData
+): Promise<ReissueAdminInviteState> {
+  const session = await getServerSession();
+  if (!session) redirect("/login?reason=session_expired");
+  const role = session.user?.role ?? session.role;
+  if (role !== "site_admin") redirect(roleToPath(role));
+
+  const parsed = z
+    .object({ user_id: z.string().uuid("Invalid user ID") })
+    .safeParse({ user_id: ((formData.get("user_id") as string | null) ?? "").trim() });
+  if (!parsed.success) return { phase: "idle", error: "Invalid user ID." };
+
+  const result = await reissueUserInvite(parsed.data.user_id);
+  if (!result.ok) return { phase: "idle", error: result.message };
+  return { phase: "issued", invite: result.invite };
 }

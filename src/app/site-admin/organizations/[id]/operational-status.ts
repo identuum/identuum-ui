@@ -337,6 +337,23 @@ export function getOrganizationActionHref(orgID: string, action: OrganizationAct
 }
 
 /**
+ * FUNC-M13: an ACTIVE organization whose administrators have all been invited
+ * and none has accepted (never verified) — the administrator assigned to an
+ * active organization gets a user invite, not an activation link, so the way
+ * forward is POST /api/v1/users/:id/invite for that administrator. Returns
+ * the administrator to re-invite, or null. Admins that could not be loaded
+ * (null) are never read as invited.
+ */
+export function pendingInvitedAdmin<T extends { id: string; email_verified: boolean }>(
+  org: Pick<OperationalStatusInput, "active" | "deleted" | "has_admin">,
+  admins: ReadonlyArray<T> | null
+): T | null {
+  if (!org.active || org.deleted || org.has_admin !== true) return null;
+  if (admins === null || admins.length === 0) return null;
+  return admins.every((a) => !a.email_verified) ? admins[0] : null;
+}
+
+/**
  * OSS-FINAL (D-016): the organization is still waiting for its administrator's
  * activation — inactive, not deleted, with org_admins none of whom has ever
  * verified. The same state OSS's PUT active=true refuses with 409

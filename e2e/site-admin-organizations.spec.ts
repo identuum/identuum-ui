@@ -477,15 +477,22 @@ test.describe("/site-admin/organizations — authenticated action page coverage"
       // The detail handler now defaults can_assign_admin=true on DB error (consistent with
       // the list handler), so this count should be > 0 whenever the list shows "Assign admin".
       const assignAdminLinkCount = await page.locator(`a[href*="/assign-admin"]`).count();
+      // FUNC-M13: an ACTIVE organization whose administrator never accepted
+      // the invite is offered "Re-issue invite" instead (assign re-issues an
+      // activation, which an active organization does not have).
+      const reinviteCount = await page.getByRole("button", { name: "Re-issue invite" }).count();
 
-      expect(assignAdminLinkCount).toBeGreaterThan(0);
+      expect(assignAdminLinkCount + reinviteCount).toBeGreaterThan(0);
 
       // Administrator status card must show recovery affordance
-      // (either "Pending invitation expired" sub-state or standard "No active administrator")
+      // ("Pending invitation expired", "No active administrator", or the
+      // invite re-issue of an active organization)
       const hasExpiredInvitation = (await page.getByText("Pending invitation expired").count()) > 0;
       const hasNoAdmin =
         (await page.getByText("No active administrator", { exact: true }).count()) > 0;
-      expect(hasExpiredInvitation || hasNoAdmin).toBe(true);
+      const hasInvitePending =
+        (await page.getByText("Waiting for the administrator to accept the invite").count()) > 0;
+      expect(hasExpiredInvitation || hasNoAdmin || hasInvitePending).toBe(true);
     } finally {
       await page.close();
     }

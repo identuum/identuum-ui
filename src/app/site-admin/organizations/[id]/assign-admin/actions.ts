@@ -68,7 +68,7 @@ export async function assignAdminAction(
     if (result.alreadyHasAdmin) {
       return {
         error:
-          "This organization is already active — its administrator has completed activation. Nothing to re-issue.",
+          "This organization is active, so it has no activation link to re-issue. If its administrator has not accepted their invite yet, re-issue the invite from the organization page.",
       };
     }
     if (result.status === 403) {
