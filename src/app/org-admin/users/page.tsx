@@ -21,10 +21,10 @@ import { listPendingRegistrations } from "@/lib/idp-registration-client";
 import { selfRegistrationAvailable, userInviteAvailable } from "@/lib/mail-capabilities";
 import type { OrgUserItem } from "@/lib/types";
 import {
-  BANNED_AMBIGUOUS_STATUS_LABEL,
   computeOrgUserStatus,
   isNoEmailSentinel,
   type OrgRegistrationPolicy,
+  pendingApprovalLabel,
 } from "./[id]/user-detail-actions";
 import { PendingRegistrations } from "./pending-registrations";
 import { UserRowActions } from "./user-row-actions";
@@ -64,10 +64,15 @@ export default async function OrgAdminUsersPage({
     getOwnOrganization(),
     userInviteAvailable(),
   ]);
-  const users = listResult?.users ?? null;
   // CE-UI-5a: an IdP without self-registration (identuum-idp-ce) is not asked.
   const pending =
     org?.id && (await selfRegistrationAvailable()) ? await listPendingRegistrations(org.id) : null;
+  // FUNC-M4: a sign-up held for approval is not banned, so only the IdP's
+  // list of held sign-ups says what it is.
+  const heldIds = new Set(pending?.ok ? (pending.value.registrations ?? []).map((r) => r.id) : []);
+  const users =
+    listResult?.users.map((u) => (heldIds.has(u.id) ? { ...u, registration_held: true } : u)) ??
+    null;
   // Whether a banned org_user can be a self-registrant awaiting approval
   // (null when the organization could not be read: both stay possible).
   const policy: OrgRegistrationPolicy | null = org
@@ -309,7 +314,7 @@ function UserRow({
   const statusBadge: Record<typeof status, { label: string; cls: string }> = {
     active: { label: "Active", cls: "text-emerald-700 bg-emerald-50" },
     pending: { label: "Invitation pending", cls: "text-amber-700 bg-amber-50" },
-    pending_approval: { label: BANNED_AMBIGUOUS_STATUS_LABEL, cls: "text-violet-700 bg-violet-50" },
+    pending_approval: { label: pendingApprovalLabel(user), cls: "text-violet-700 bg-violet-50" },
     disabled: { label: "Disabled", cls: "text-stone-500 bg-stone-100" },
     deleted: { label: "Deleted", cls: "text-red-500 bg-red-50" },
   };

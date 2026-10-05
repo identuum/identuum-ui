@@ -265,6 +265,11 @@ export interface OrgUserItem {
    * — never inferred from other fields.
    */
   banned: boolean;
+  /**
+   * Set by the console, not the IdP's user list: the user is among the
+   * organization's sign-ups held for approval (FUNC-M4).
+   */
+  registration_held?: boolean;
 }
 
 /**

@@ -28,8 +28,10 @@ import {
   listUserRoles,
   UserDetailUnavailable,
 } from "@/lib/idp-admin-client";
+import { listPendingRegistrations } from "@/lib/idp-registration-client";
 import {
   adminResetLinkAvailable,
+  selfRegistrationAvailable,
   userApprovalAvailable,
   userInviteAvailable,
 } from "@/lib/mail-capabilities";
@@ -40,11 +42,11 @@ import { ReissueInviteButton } from "./reissue-invite-button";
 import { ResetLinkButton } from "./reset-link-button";
 import {
   APPROVE_REGISTRATION_COPY,
-  BANNED_AMBIGUOUS_STATUS_LABEL,
   buildOrgAdminUserAuditHref,
   computeOrgUserStatus,
   deriveOrgAdminUserActions,
   isNoEmailSentinel,
+  pendingApprovalLabel,
   RECENT_ACTIVITY_COPY,
   SOLE_ACTIVE_ADMIN_COPY,
 } from "./user-detail-actions";
@@ -91,6 +93,16 @@ export default async function OrgAdminUserDetailPage({
   if (!user) {
     return <NotFoundPanel />;
   }
+  // FUNC-M4: a sign-up held for approval is not banned; only the IdP's list
+  // of held sign-ups says what it is (an IdP without self-registration is not
+  // asked).
+  const held =
+    org?.id && (await selfRegistrationAvailable())
+      ? await listPendingRegistrations(org.id).catch(() => null)
+      : null;
+  if (held?.ok && (held.value.registrations ?? []).some((r) => r.id === user.id)) {
+    user.registration_held = true;
+  }
 
   // Fetch the dropdown source only when the org id is available.
   const availableRolesResult = org?.id ? await listOrgRoles(org.id).catch(() => null) : null;
@@ -136,7 +148,7 @@ export default async function OrgAdminUserDetailPage({
     active: { label: "Active", cls: "text-emerald-700 bg-emerald-50 border-emerald-200" },
     pending: { label: "Invitation pending", cls: "text-amber-700 bg-amber-50 border-amber-200" },
     pending_approval: {
-      label: BANNED_AMBIGUOUS_STATUS_LABEL,
+      label: pendingApprovalLabel(user),
       cls: "text-violet-700 bg-violet-50 border-violet-200",
     },
     disabled: { label: "Disabled", cls: "text-stone-500 bg-stone-100 border-stone-200" },

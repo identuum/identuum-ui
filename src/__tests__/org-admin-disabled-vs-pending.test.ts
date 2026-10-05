@@ -17,6 +17,7 @@ import {
   deriveOrgAdminUserActions,
   type OrgAdminUserActionInput,
   type OrgRegistrationPolicy,
+  pendingApprovalLabel,
 } from "../app/org-admin/users/[id]/user-detail-actions";
 
 function user(overrides: Partial<OrgAdminUserActionInput> = {}): OrgAdminUserActionInput {
@@ -95,6 +96,10 @@ describe("the ambiguous label is truthful", () => {
     expect(BANNED_AMBIGUOUS_STATUS_LABEL).toBe("Disabled or awaiting approval");
   });
 
+  it("is what pendingApprovalLabel gives a banned row the IdP does not list as held", () => {
+    expect(pendingApprovalLabel(banned())).toBe(BANNED_AMBIGUOUS_STATUS_LABEL);
+  });
+
   it.each([
     ["users/page.tsx", ["app", "org-admin", "users", "page.tsx"]],
     ["users/[id]/page.tsx", ["app", "org-admin", "users", "[id]", "page.tsx"]],
@@ -103,7 +108,9 @@ describe("the ambiguous label is truthful", () => {
     (_n, parts) => {
       const src = readFileSync(resolve(__dirname, "..", ...parts), "utf-8");
       expect(src).toMatch(/computeOrgUserStatus\([^)]*,\s*[A-Za-z_.]+/);
-      expect(src).toContain("BANNED_AMBIGUOUS_STATUS_LABEL");
+      // Through pendingApprovalLabel since FUNC-M4: the ambiguous label for
+      // every row the IdP does not list as a held sign-up (pinned below).
+      expect(src).toContain("pendingApprovalLabel(");
       expect(src).not.toMatch(/label:\s*"Pending approval"\s*,\s*cls/);
     }
   );

@@ -90,6 +90,12 @@ export interface OrgAdminUserActionInput {
   invitation_pending: boolean;
   invitation_email_bound: boolean;
   banned: boolean;
+  /**
+   * FUNC-M4: the IdP lists this user among the organization's sign-ups held
+   * for approval (GET /organizations/:id/registrations). Such a user is not
+   * banned, so nothing else in the row says so.
+   */
+  registration_held?: boolean;
 }
 
 /**
@@ -126,11 +132,23 @@ export function bannedMayAwaitApproval(policy: OrgRegistrationPolicy | null): bo
 /** Label for a banned org_user whose state the backend cannot disambiguate. */
 export const BANNED_AMBIGUOUS_STATUS_LABEL = "Disabled or awaiting approval";
 
+/** Label for a sign-up the IdP lists as held for approval (FUNC-M4). */
+export const AWAITING_APPROVAL_STATUS_LABEL = "Awaiting approval";
+
+/** The label of a pending_approval row: certain when the IdP listed it. */
+export function pendingApprovalLabel(
+  u: Pick<OrgAdminUserActionInput, "registration_held">
+): string {
+  return u.registration_held ? AWAITING_APPROVAL_STATUS_LABEL : BANNED_AMBIGUOUS_STATUS_LABEL;
+}
+
 /**
  * Derives the operator-facing status from a user's flag set.
  *
  * Precedence:
  *   1. `deleted=true` → `deleted` (terminal — no action affordances).
+ *   1a. `registration_held` → `pending_approval` (the IdP listed the user
+ *      among the held sign-ups, FUNC-M4).
  *   2. `invitation_pending=true` → `pending`.
  *   3. No-email sentinel + not verified → `pending` (manual-invite case).
  *   4. `banned=true` && role==="org_user" → `pending_approval` when the
@@ -146,6 +164,7 @@ export function computeOrgUserStatus(
   policy: OrgRegistrationPolicy | null = null
 ): OrgAdminUserStatus {
   if (u.deleted) return "deleted";
+  if (u.registration_held) return "pending_approval";
   if (u.invitation_pending) return "pending";
   if (isNoEmailSentinel(u.email) && !u.email_verified) return "pending";
   if (u.banned && u.role === "org_user") {
@@ -231,7 +250,8 @@ export function deriveOrgAdminUserActions(
   // and Approve registration — unless the IdP has no approval state
   // (CE-UI-3a: capabilities.user_approval false), where only Enable applies.
   if (status === "pending_approval") {
-    actions.push("enable");
+    // A held sign-up is not disabled: Approve is its only way in.
+    if (!u.registration_held) actions.push("enable");
     if (options.userApproval !== false) {
       actions.push("approve-registration");
     }
