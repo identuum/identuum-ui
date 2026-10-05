@@ -27,30 +27,45 @@
 // but are not matrix cells.
 //
 // Usage: role-matrix-from-run.mjs <observations.jsonl>
+//        role-matrix-from-run.mjs --denominator-only [--golden <yaml>] [--matrix <json>]
+//
+// TOOLS-MATRIX-CONTAINERS (2026-10-05): --denominator-only runs the
+// DENOMINATOR DRIFT check alone, with no observations, for `make verify`
+// (target role-matrix-denominator): a golden that grew is refused in seconds
+// instead of ~45 minutes into e2e-full (OSS-V0.9.7). Same comparison, same
+// message, one function. --golden and --matrix point it at fixtures.
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const obsPath = process.argv[2];
-if (!obsPath) {
+const args = process.argv.slice(2);
+const option = (name) => {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1] : undefined;
+};
+const denominatorOnly = args.includes("--denominator-only");
+const obsPath = denominatorOnly ? null : args[0];
+if (!denominatorOnly && !obsPath) {
   console.error("usage: role-matrix-from-run.mjs <observations.jsonl>");
   process.exit(2);
 }
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const committedPath = join(HERE, "..", "role-matrix.json");
-const goldenPath = join(
-  HERE,
-  "..",
-  "..",
-  "..",
-  "identuum-idp-oss",
-  "tools",
-  "api-docgen",
-  "testdata",
-  "endpoints.golden.yaml"
-);
+const committedPath = option("--matrix") ?? join(HERE, "..", "role-matrix.json");
+const goldenPath =
+  option("--golden") ??
+  join(
+    HERE,
+    "..",
+    "..",
+    "..",
+    "identuum-idp-oss",
+    "tools",
+    "api-docgen",
+    "testdata",
+    "endpoints.golden.yaml"
+  );
 
 const ROLES = ["site_admin", "org_admin", "org_user"];
 
@@ -123,6 +138,42 @@ if (unknownClass.length > 0) {
 const roleEndpoints = endpoints.filter((e) => ROLE_CLASSES.has(e.auth));
 const onceEndpoints = endpoints.filter((e) => CLASS_ONCE.has(e.auth));
 const excludedEndpoints = endpoints.filter((e) => EXCLUDED_CLASSES.has(e.auth));
+
+// The committed matrix's denominators against the golden's, the one check
+// both modes run; drift exits 1 with the record's `check FAILED:` line.
+function refuseDenominatorDrift(committed) {
+  if (
+    committed.endpoints !== endpoints.length ||
+    committed.role_endpoints !== roleEndpoints.length ||
+    committed.class_endpoints !== onceEndpoints.length
+  ) {
+    console.error(
+      `role-matrix-from-run: DENOMINATOR DRIFT — committed matrix says ${committed.endpoints}/${committed.role_endpoints}/${committed.class_endpoints} (total/role/class endpoints), the golden has ${endpoints.length}/${roleEndpoints.length}/${onceEndpoints.length}. Re-derive the matrix deliberately.`
+    );
+    // THE-RED-MINT-HAS-NO-NAME: without this line a red role-matrix step recorded
+    // exit=1 and nothing else. THE-RECORD-SAYS-FAILED (2026-09-07): the record's
+    // evidence channel now captures "check FAILED:" (gate-witness.sh EVIDENCE_RE),
+    // so the verdict says what it means; the exit code is still the verdict.
+    console.log(
+      `check FAILED: role-matrix DENOMINATOR DRIFT: committed ${committed.endpoints}/${committed.role_endpoints}/${committed.class_endpoints} vs golden ${endpoints.length}/${roleEndpoints.length}/${onceEndpoints.length} (total/role/class endpoints)`
+    );
+    process.exit(1);
+  }
+}
+
+if (denominatorOnly) {
+  if (!existsSync(committedPath)) {
+    console.error(
+      `role-matrix-from-run: no committed matrix at ${committedPath} — nothing to compare`
+    );
+    process.exit(2);
+  }
+  refuseDenominatorDrift(JSON.parse(readFileSync(committedPath, "utf8")));
+  console.log(
+    `check OK: role-matrix denominator ${endpoints.length}/${roleEndpoints.length}/${onceEndpoints.length} (total/role/class endpoints) matches the golden`
+  );
+  process.exit(0);
+}
 
 // ── template matcher: same segment count; literal match or :param; prefer
 //    the template with the most literal segments (fewest params) ───────────
@@ -244,23 +295,7 @@ if (!existsSync(committedPath)) {
 }
 
 const committed = JSON.parse(readFileSync(committedPath, "utf8"));
-if (
-  committed.endpoints !== endpoints.length ||
-  committed.role_endpoints !== roleEndpoints.length ||
-  committed.class_endpoints !== onceEndpoints.length
-) {
-  console.error(
-    `role-matrix-from-run: DENOMINATOR DRIFT — committed matrix says ${committed.endpoints}/${committed.role_endpoints}/${committed.class_endpoints} (total/role/class endpoints), the golden has ${endpoints.length}/${roleEndpoints.length}/${onceEndpoints.length}. Re-derive the matrix deliberately.`
-  );
-  // THE-RED-MINT-HAS-NO-NAME: without this line a red role-matrix step recorded
-  // exit=1 and nothing else. THE-RECORD-SAYS-FAILED (2026-09-07): the record's
-  // evidence channel now captures "check FAILED:" (gate-witness.sh EVIDENCE_RE),
-  // so the verdict says what it means; the exit code is still the verdict.
-  console.log(
-    `check FAILED: role-matrix DENOMINATOR DRIFT: committed ${committed.endpoints}/${committed.role_endpoints}/${committed.class_endpoints} vs golden ${endpoints.length}/${roleEndpoints.length}/${onceEndpoints.length} (total/role/class endpoints)`
-  );
-  process.exit(1);
-}
+refuseDenominatorDrift(committed);
 const committedCells = [];
 for (const [key, roles] of Object.entries(committed.cells)) {
   for (const r of roles) committedCells.push(`${key} @ ${r}`);

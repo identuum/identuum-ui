@@ -525,6 +525,18 @@ ledger-diff-gate:
 ledger-rebase:
 	@go run -C "$(IDP_OSS_DIR)" ./tools/ledger-diff-gate --rebase --manifest "$(CURDIR)/ledger-amendments.json" --repo "$(CURDIR)"
 
+## role-matrix-denominator (TOOLS-MATRIX-CONTAINERS, 2026-10-05): e2e-full's
+## DENOMINATOR DRIFT check, run alone in seconds. e2e-full/role-matrix.json's
+## total/role/class endpoint counts must equal the ones the sibling's docgen
+## golden yields; OSS-V0.9.7 learned of two new routes only ~45 minutes into
+## e2e-full. Same script, same comparison, same message. Sibling-coupled like
+## ledger-diff-gate, so CI (no sibling checkout) does not run it; golden
+## absent: exit 2 by name.
+.PHONY: role-matrix-denominator
+role-matrix-denominator:
+	@test -f "$(IDP_OSS_DIR)/tools/api-docgen/testdata/endpoints.golden.yaml" || { echo "role-matrix-denominator: sibling golden absent at $(IDP_OSS_DIR)/tools/api-docgen/testdata/endpoints.golden.yaml — refusing to pass silently" >&2; exit 2; }; \
+	node e2e-full/scripts/role-matrix-from-run.mjs --denominator-only --golden "$(IDP_OSS_DIR)/tools/api-docgen/testdata/endpoints.golden.yaml"
+
 ## verify: THE UI gate set — biome + typecheck + vitest + rulefloor, all
 ## four, every slice (THE-UI-FORMAT-FLOOR). Slices run THIS target, never
 ## an ad-hoc subset: format drift accumulated invisibly across several
@@ -612,6 +624,7 @@ verify:
 		'toolchain-parity=$(MAKE) --no-print-directory toolchain-parity' \
 		'rulefloor=pnpm rulefloor' \
 		'ledger-diff-gate=$(MAKE) --no-print-directory ledger-diff-gate' \
+		'role-matrix-denominator=$(MAKE) --no-print-directory role-matrix-denominator' \
 		'sbom-scan=$(MAKE) --no-print-directory sbom-scan' \
 		'biome=pnpm exec biome check . --reporter=json --max-diagnostics=none' \
 		'tsc=pnpm exec tsc --noEmit' \
