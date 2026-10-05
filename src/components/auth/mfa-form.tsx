@@ -7,25 +7,43 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { mfaLogin } from "@/lib/idp-client";
+import { loginWaitMessage, mfaLogin } from "@/lib/idp-client";
 import type { UserRole } from "@/lib/types";
 import { ApiError } from "@/lib/ui-api";
+
+/**
+ * The code the field takes: the 6 digits of the authenticator app, or one of
+ * the recovery codes (16 characters of A-Z and 2-7), which sign in once each
+ * (identuum-idp-oss v0.9.6, FUNC-H3). A recovery code is sent as shown on the
+ * recovery-codes page: upper case, spaces and dashes removed.
+ */
+export function normalizeSignInCode(raw: string): string {
+  const compact = raw.replace(/[\s-]/g, "");
+  return /^\d+$/.test(compact) ? compact : compact.toUpperCase();
+}
 
 const schema = z.object({
   code: z
     .string()
-    .length(6, "Code must be exactly 6 digits")
-    .regex(/^\d+$/, "Code must contain only digits"),
+    .transform(normalizeSignInCode)
+    .refine(
+      (c) => /^\d{6}$/.test(c) || /^[A-Z2-7]{16}$/.test(c),
+      "Enter the 6-digit code or a 16-character recovery code"
+    ),
 });
 
-type FormData = z.infer<typeof schema>;
+type FormData = z.input<typeof schema>;
 
 /**
- * The message a failed TOTP submit shows. A 429 is the IdP's rate limit, not
- * a wrong code: saying "Invalid verification code" there sends the user to
- * retype a correct code into the same limit (SMALL-FIXES-2).
+ * The message a failed code submit shows. A 429 is a wait, not a wrong code:
+ * saying "Invalid verification code" there sends the user to retype a correct
+ * code into the same limit (SMALL-FIXES-2). login_throttled says how long
+ * (FUNC-M3); the per-route request limit does not.
  */
 export function mfaLoginErrorMessage(err: unknown): string {
+  if (err instanceof ApiError && err.message === "LOGIN_THROTTLED") {
+    return loginWaitMessage(err);
+  }
   if (err instanceof ApiError && err.status === 429) {
     return "Too many attempts. Wait a minute, then enter a new code.";
   }
@@ -45,11 +63,11 @@ export function MFAForm({ sessionId, onBack, onSuccess }: MFAFormProps) {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<FormData>({
+  } = useForm<FormData, unknown, z.output<typeof schema>>({
     resolver: zodResolver(schema),
   });
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = async (data: z.output<typeof schema>) => {
     setServerError(null);
     try {
       const result = await mfaLogin(sessionId, data.code);
@@ -77,7 +95,8 @@ export function MFAForm({ sessionId, onBack, onSuccess }: MFAFormProps) {
       <div>
         <h3 className="text-sm font-semibold text-slate-700">Two-factor authentication</h3>
         <p className="text-xs text-slate-500 mt-0.5">
-          Enter the 6-digit code from your authenticator app.
+          Enter the 6-digit code from your authenticator app. Without it, enter one of your recovery
+          codes; each works once.
         </p>
       </div>
 
@@ -86,9 +105,10 @@ export function MFAForm({ sessionId, onBack, onSuccess }: MFAFormProps) {
           id="mfa-code"
           label="Verification code"
           type="text"
-          inputMode="numeric"
           autoComplete="one-time-code"
-          maxLength={6}
+          autoCapitalize="characters"
+          spellCheck={false}
+          maxLength={24}
           placeholder="000000"
           autoFocus
           className="tracking-[0.4em] font-mono text-center text-base"

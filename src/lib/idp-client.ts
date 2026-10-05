@@ -154,9 +154,11 @@ export async function login(payload: LoginPayload): Promise<LoginOutcome> {
   }
 
   // identuum-idp-oss v0.9.5: the account-wide slow-down after repeated
-  // failed sign-ins (from any address) — a short wait, never a lock.
+  // failed sign-ins (from any address) — a short wait, never a lock. Since
+  // v0.9.6 a held per-address bound answers the same way (FUNC-M2), with a
+  // wait of up to fifteen minutes; the body says how long.
   if (res.status === 429 && body?.error === "login_throttled") {
-    throw new ApiError(res.status, "LOGIN_THROTTLED");
+    throw throttled(body);
   }
 
   // OSS backend: HTTP 401 + {"error":"mfa_enrollment_required"} — no session_id.
@@ -177,6 +179,32 @@ export async function login(payload: LoginPayload): Promise<LoginOutcome> {
   }
 
   return { kind: "success", role: body.role ?? "org_user" };
+}
+
+/** The wait a 429 login_throttled carries (seconds), when it says. */
+export interface LoginThrottle {
+  retryAfterSeconds: number | null;
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: raw API response, read for one field
+function throttled(body: any): ApiError {
+  const secs = Number(body?.retry_after_seconds);
+  const wait: LoginThrottle = {
+    retryAfterSeconds: Number.isFinite(secs) && secs > 0 ? Math.ceil(secs) : null,
+  };
+  return new ApiError(429, "LOGIN_THROTTLED", wait);
+}
+
+/**
+ * The sign-in wait in words: "Too many attempts. Try again in 40 seconds."
+ * Used by the password and the code step for a LOGIN_THROTTLED ApiError.
+ */
+export function loginWaitMessage(err: ApiError): string {
+  const secs = (err.body as LoginThrottle | undefined)?.retryAfterSeconds ?? null;
+  if (secs === null) return "Too many attempts. Wait a few minutes, then try again.";
+  if (secs < 60) return `Too many attempts. Try again in ${secs} second${secs === 1 ? "" : "s"}.`;
+  const mins = Math.ceil(secs / 60);
+  return `Too many attempts. Try again in ${mins} minute${mins === 1 ? "" : "s"}.`;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: raw API response, discriminated here
@@ -243,14 +271,21 @@ export async function mfaLogin(sessionId: string, code: string): Promise<{ role:
   });
   if (!res.ok) {
     let errMsg = "";
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response, read for its error fields
+    let b: any = {};
     try {
-      const b = await res.json();
+      b = await res.json();
       errMsg = String(b?.error ?? "");
     } catch {
       // Ignore non-JSON body.
     }
     if (errMsg.includes("session invalid") || errMsg.includes("session not found")) {
       throw new ApiError(res.status, "SESSION_EXPIRED");
+    }
+    // identuum-idp-oss v0.9.6 (FUNC-M3): the user's wrong-code budget is
+    // spent; every code, the right one included, waits.
+    if (res.status === 429 && errMsg === "login_throttled") {
+      throw throttled(b);
     }
     throw new ApiError(res.status, "Invalid verification code");
   }

@@ -12,7 +12,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { login } from "../lib/idp-client";
+import { login, loginWaitMessage } from "../lib/idp-client";
 import { ApiError } from "../lib/ui-api";
 
 afterEach(() => {
@@ -46,6 +46,31 @@ describe("login() — the account-wide slow-down", () => {
       "utf-8"
     );
     expect(src).toMatch(/LOGIN_THROTTLED/);
-    expect(src).toMatch(/Too many failed sign-ins/);
+    expect(src).toMatch(/loginWaitMessage\(err\)/);
+  });
+
+  // v0.9.6 (FUNC-M2): a held per-address bound answers the same 429 with a
+  // wait of up to fifteen minutes; the form says how long instead of "up to a
+  // minute".
+  it("carries the IdP's wait and says it in words", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        json: async () => ({ error: "login_throttled", retry_after_seconds: 840 }),
+      })
+    );
+    const err = (await login({
+      email: "u@acme.example",
+      password: "fixture-pw",
+      remember_me: false,
+    }).catch((e) => e)) as ApiError;
+    expect(err.body).toEqual({ retryAfterSeconds: 840 });
+    expect(loginWaitMessage(err)).toBe("Too many attempts. Try again in 14 minutes.");
+    expect(loginWaitMessage(new ApiError(429, "LOGIN_THROTTLED", { retryAfterSeconds: 4 }))).toBe(
+      "Too many attempts. Try again in 4 seconds."
+    );
+    expect(loginWaitMessage(new ApiError(429, "LOGIN_THROTTLED"))).toMatch(/Wait a few minutes/);
   });
 });

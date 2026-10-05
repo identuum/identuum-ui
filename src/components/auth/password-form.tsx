@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { login } from "@/lib/idp-client";
+import { login, loginWaitMessage } from "@/lib/idp-client";
 import type { UserRole } from "@/lib/types";
 import { ApiError } from "@/lib/ui-api";
 
@@ -108,10 +108,8 @@ export function PasswordForm({
           "Your account is waiting for an administrator's approval. You can sign in once it is approved."
         );
       } else if (err instanceof ApiError && err.message === "LOGIN_THROTTLED") {
-        // The account-wide slow-down: a short wait, never a lock.
-        setServerError(
-          "Too many failed sign-ins for this account. Wait up to a minute, then try again."
-        );
+        // Repeated failures slow sign-in down; the IdP says how long.
+        setServerError(loginWaitMessage(err));
       } else if (err instanceof ApiError && err.status === 401) {
         setServerError("Invalid credentials.");
       } else {
