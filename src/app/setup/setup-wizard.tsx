@@ -59,6 +59,10 @@ type SubmitState =
   | { kind: "error"; message: string };
 
 const MIN_PASSWORD_LENGTH = 12;
+// FUNC-M6: the site administrator's password is held to the strict policy
+// (internal/domain/password.go ValidatePassword), stated in full here.
+const ADMIN_PASSWORD_RULE =
+  "At least 12 characters, with an uppercase letter, a lowercase letter, a number and one of ! @ # % ^ & * - + = ? _ ~";
 
 /**
  * SetupWizard is a single-page three-section first-run wizard:
@@ -680,8 +684,12 @@ export function SetupWizard({ initialStatus, initialLicenseStatus }: Props) {
                 minLength={MIN_PASSWORD_LENGTH}
                 className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-sky-950 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-70 disabled:cursor-not-allowed"
                 placeholder="At least 12 characters"
+                aria-describedby="admin_password_rule"
                 data-testid="setup-admin-password"
               />
+              <p id="admin_password_rule" className="text-xs text-stone-500">
+                {ADMIN_PASSWORD_RULE}
+              </p>
             </div>
             <div className="flex flex-col gap-1">
               <label htmlFor="admin_password_confirm" className="text-sm text-sky-950">

@@ -225,10 +225,15 @@ export async function completeSetup(input: CompleteSetupInput): Promise<Complete
       let message = "Setup request was rejected";
       let code = "";
       try {
-        const body = (await res.json()) as { error?: unknown };
+        const body = (await res.json()) as { error?: unknown; message?: unknown };
         if (typeof body.error === "string" && body.error) {
           code = body.error;
           message = body.error.replace(/_/g, " ");
+        }
+        // FUNC-M6: a password refusal carries the policy rule it broke
+        // (rule text only, never the password).
+        if (code === "weak_password" && typeof body.message === "string" && body.message) {
+          message = body.message;
         }
       } catch {
         // ignore

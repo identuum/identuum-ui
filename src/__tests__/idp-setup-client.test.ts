@@ -6,6 +6,8 @@
  * narrow result shapes when rendering branch-specific UI.
  */
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { completeSetup, getSetupStatus, verifySetupToken } from "../lib/idp-setup-client";
 
@@ -210,6 +212,28 @@ describe("completeSetup", () => {
     const got = await completeSetup(validInput);
     expect(got.kind).toBe("invalid");
     if (got.kind === "invalid") expect(got.message).toBe("invalid request");
+  });
+
+  it("FUNC-M6: a password refusal carries the rule it broke", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch(() =>
+        jsonResponse(400, {
+          error: "weak_password",
+          message: "password must contain at least one uppercase letter",
+        })
+      )
+    );
+    const got = await completeSetup(validInput);
+    expect(got.kind).toBe("invalid");
+    if (got.kind === "invalid")
+      expect(got.message).toBe("password must contain at least one uppercase letter");
+  });
+
+  it("FUNC-M6: the wizard's password hint states the whole rule", () => {
+    const src = readFileSync(resolve(__dirname, "../app/setup/setup-wizard.tsx"), "utf8");
+    expect(src).toMatch(/uppercase letter, a lowercase letter, a number and one of/);
+    expect(src).toContain('aria-describedby="admin_password_rule"');
   });
 
   it("returns unreachable on network failure", async () => {
