@@ -8,6 +8,41 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
 ## Unreleased
 
+## `v0.9.7`
+
+The static export that identuum-idp-oss `v0.9.7` embeds. **From this release
+identuum-ui follows identuum-idp-oss version numbers** (owner ruling,
+2026-10-05): `package.json` is `0.9.7` and the tag is `v0.9.7`, the OSS
+release that embeds it. The earlier `v0.9.6` tag (on `57482c5`,
+`package.json` `0.6.2`) stays as it is; no tag was moved. Delta
+`v0.9.6..HEAD`: 12 commits (measured at `3717317`: 11 product and test
+commits, two of them test-pin follow-ups, and 1 ledger rebase) and the
+release commit. Nothing removed or renamed.
+
+- Account settings: adding an authenticator works on identuum-idp-oss (it
+  now serves `/api/v1/mfa/setup/*`); too many wrong passwords show how long
+  to wait; the not-enrolled notice no longer tells every user that their
+  account requires two-factor authentication.
+- Users: a sign-up held for approval shows **Awaiting approval** with
+  Approve (it showed Active and counted as Active).
+- Settings: scope templates are read from the IdP's `{count,
+  scope_templates}` answer (none showed).
+- Setup wizard: the password hint states the whole rule, and a refused
+  password shows the rule it broke.
+- Service accounts: the form's role default (`org_user`), a blank expiry
+  (never expires) and the way to a credential (the `with-client` API) match
+  the IdP.
+- Organizations (site admin): an active organization whose administrator
+  never accepted the invite offers **Re-issue invite**; the activation
+  refusal no longer claims the administrator completed activation.
+- Audit log: **Next** follows the IdP's `has_more`, so older events are
+  reachable; the label states the range, not an invented total.
+- New page **Sign-in provider** (`/org-admin/identity-provider`, linked from
+  Settings): create, edit and remove the organization's upstream OpenID
+  Connect provider; it shows the redirect URI to register and keeps the
+  client secret write-only.
+- Keys: the page points to the Operator Guide's rotation section.
+
 ## `v0.6.2`
 
 The static export that identuum-idp-oss `v0.9.2` embeds. Delta
