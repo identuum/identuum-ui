@@ -30,6 +30,7 @@ vi.mock("@/lib/mail-capabilities", () => ({
   adminResetLinkAvailable: async () => false,
   userApprovalAvailable: async () => true,
   userInviteAvailable: async () => true,
+  selfRegistrationAvailable: async () => false,
 }));
 
 const USER_ID = "01990000-0000-7000-8000-0000000000aa";
