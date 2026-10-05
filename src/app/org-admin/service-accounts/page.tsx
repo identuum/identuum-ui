@@ -59,9 +59,9 @@ export default async function OrgAdminServiceAccountsPage({
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-sky-950">Service accounts</h1>
           <p className="text-sm text-stone-500 mt-0.5">
-            Machine-to-machine identities for your organization. No usable credential is issued here
-            — link a service account to an OAuth client (a future feature) to obtain a
-            client_credentials grant.
+            Machine-to-machine identities for your organization. No credential is issued here; one
+            that signs in with client_credentials is created together with its OAuth client through
+            the API (Operator Guide, &quot;Service accounts&quot;).
           </p>
         </div>
         <a

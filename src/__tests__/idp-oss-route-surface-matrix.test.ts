@@ -273,7 +273,7 @@ const IDP_ROUTE_SURFACE_MATRIX: SurfaceMatrixRow[] = [
       "/org-admin/service-accounts/new",
     ],
     files: ["app/org-admin/service-accounts/page.tsx", "lib/idp-admin-client.ts"],
-    signals: ["service account", "No usable credential is issued here"],
+    signals: ["service account", "No credential is issued here"],
   },
   {
     route: "/site-admin overview + settings",

@@ -44,11 +44,13 @@ export function CreateServiceAccountForm() {
           <p className="text-xs text-stone-600 mt-1">
             <strong className="font-semibold text-sky-950">{state.created.name}</strong> is
             registered with role{" "}
-            <span className="font-mono text-stone-700">{state.created.role || "org_admin"}</span>.
+            <span className="font-mono text-stone-700">{state.created.role || "org_user"}</span>.
           </p>
           <p className="text-xs text-stone-500 mt-2 leading-relaxed">
-            No credential was issued. Link this service account to an OAuth client (a future
-            feature) to obtain a usable client_credentials grant.
+            No credential was issued. A service account that signs in with client_credentials is
+            created together with its OAuth client in one API call, POST
+            /api/v1/organizations/&#123;id&#125;/service-accounts/with-client (Operator Guide,
+            &quot;Service accounts&quot;).
           </p>
         </div>
 
@@ -121,8 +123,7 @@ export function CreateServiceAccountForm() {
 
       <div className="space-y-1">
         <label htmlFor="sa-role" className="block text-sm font-medium text-sky-950">
-          Role{" "}
-          <span className="text-stone-400 font-normal">(optional — defaults to org_admin)</span>
+          Role <span className="text-stone-400 font-normal">(optional — defaults to org_user)</span>
         </label>
         <select
           id="sa-role"
@@ -130,7 +131,7 @@ export function CreateServiceAccountForm() {
           defaultValue=""
           className={fieldErrors.role ? inputErrorClass : inputClass}
         >
-          <option value="">org_admin (default)</option>
+          <option value="">org_user (default)</option>
           <option value="org_admin">org_admin</option>
           <option value="org_user">org_user</option>
         </select>
@@ -153,10 +154,7 @@ export function CreateServiceAccountForm() {
           className={fieldErrors.expires_at ? inputErrorClass : inputClass}
         />
         {fieldErrors.expires_at && <p className="text-xs text-red-600">{fieldErrors.expires_at}</p>}
-        <p className="text-xs text-stone-400">
-          Leave blank for the organization-default expiry. The backend caps expiry per the org{"'"}s
-          ServiceAccountExpiryDays policy.
-        </p>
+        <p className="text-xs text-stone-400">Leave blank and the service account never expires.</p>
       </div>
 
       <div className="flex items-center gap-3 pt-1">

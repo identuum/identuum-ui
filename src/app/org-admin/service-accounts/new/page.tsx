@@ -43,9 +43,9 @@ export default async function CreateServiceAccountPage() {
           Create service account
         </h1>
         <p className="text-sm text-stone-500 mt-0.5">
-          Register a machine-to-machine identity. No credential is issued here — a future feature
-          will let you link a service account to an OAuth client to obtain a usable
-          client_credentials grant.
+          Register a machine-to-machine identity. No credential is issued here; to create one that
+          signs in with client_credentials, create it together with its OAuth client through the API
+          (Operator Guide, &quot;Service accounts&quot;).
         </p>
       </div>
       {capabilityBoundary ? (
