@@ -56,7 +56,7 @@ env:
   # scripts/gate-witness.sh must be the wiki master, or the record CI uploads
   # is written by something else. Held identical to the wiki-side digest
   # (contracts/gate-witness.master.sha256) by gate-witness.sh --sync-check.
-  GATE_WITNESS_SHA256: "651402aa7df9e76472496514aa26343f76268378ccc1c354b7762c635f448809"
+  GATE_WITNESS_SHA256: "60baeb2940059b61b69a49b852ee9126dccebc84c0b85bad5f8a5a6ba6f483f8"
   # THE-CI-PARSES-ITS-OWN-WORKFLOWS (2026-09-06): yq for the workflow-yaml
   # gate, which parses every file under .github/workflows the way GitHub
   # will (this repo shipped an invalid ci.yml through a green verify and a
