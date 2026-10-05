@@ -31,9 +31,9 @@ export default async function SiteAdminKeysPage() {
       <div>
         <h1 className="text-2xl font-extrabold tracking-tight text-sky-950">Signing keys</h1>
         <p className="text-sm text-stone-500 mt-0.5">
-          Read-only inventory of the IDP's JWT signing keys. Key rotation, generation, deprecation,
-          and deletion are not available from this page; contact your platform administrator for
-          those operations.
+          Read-only inventory of the IDP's JWT signing keys. Generation, rotation, deprecation and
+          deletion are done through the API as site administrator: see &quot;Rotate the token
+          signing key&quot; in the IdP&apos;s Operator Guide.
         </p>
       </div>
 

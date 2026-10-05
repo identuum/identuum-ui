@@ -315,7 +315,7 @@ const IDP_ROUTE_SURFACE_MATRIX: SurfaceMatrixRow[] = [
     classification: "OSS-supported",
     coveredRoutes: ["/site-admin/keys"],
     files: ["app/site-admin/keys/page.tsx", "lib/idp-admin-client.ts"],
-    signals: ["Signing keys", "listSigningKeys", "Key rotation"],
+    signals: ["Signing keys", "listSigningKeys", "Operator Guide"],
   },
   {
     route: "/site-admin/system info + sessions",
