@@ -3384,6 +3384,166 @@ export async function listOrganizationIdentityProviders(
   }
 }
 
+// ── The organization's upstream OIDC provider (editable) ─────────────────
+//
+// The org_admin page /org-admin/identity-provider (v0.9.7) configures the ONE
+// upstream OIDC provider of the organization through the routes
+// docs/guides/oidc-upstream-login.md describes: GET / POST / PUT / DELETE
+// /api/v1/organizations/:id/identity-provider. client_secret is write-only:
+// sent on create, and on update only when a new one is typed; no response
+// carries it and this projection has no field for it.
+
+export interface OrgOidcProviderView {
+  id: string;
+  name: string;
+  slug: string;
+  active: boolean;
+  issuer_url: string;
+  client_id: string;
+  scopes: string[];
+  email_domains: string[];
+  allow_external_domains: boolean;
+  redirect_uris: string[];
+}
+
+export type GetOrgOidcProviderResult =
+  | { ok: true; provider: OrgOidcProviderView | null }
+  | { ok: false; status: number; forbidden: boolean };
+
+export interface OrgOidcProviderInput {
+  name: string;
+  slug: string;
+  issuer_url: string;
+  client_id: string;
+  /** Write-only. Empty on update keeps the stored secret. */
+  client_secret: string;
+  scopes: string[];
+  email_domains: string[];
+  allow_external_domains: boolean;
+}
+
+export type SaveOrgOidcProviderResult =
+  | { ok: true; provider: OrgOidcProviderView }
+  | { ok: false; status: number; error: string };
+
+const strings = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+
+function toOidcProviderView(p: Record<string, unknown>): OrgOidcProviderView {
+  const c = isRecord(p.config) ? p.config : {};
+  return {
+    id: typeof p.id === "string" ? p.id : "",
+    name: typeof p.name === "string" ? p.name : "",
+    slug: typeof p.slug === "string" ? p.slug : "",
+    active: Boolean(p.active),
+    issuer_url: typeof c.issuer_url === "string" ? c.issuer_url : "",
+    client_id: typeof c.client_id === "string" ? c.client_id : "",
+    scopes: strings(c.scopes),
+    email_domains: strings(c.email_domains),
+    allow_external_domains: c.allow_external_domains === true,
+    redirect_uris: strings(c.redirect_uris),
+  };
+}
+
+// The IdP's refusals carry fixed, secret-free sentences ({"error": "..."}).
+async function oidcProviderError(res: Response, fallback: string): Promise<string> {
+  try {
+    const body: unknown = await res.json();
+    if (isRecord(body) && typeof body.error === "string" && body.error) return body.error;
+  } catch {
+    // no body
+  }
+  return fallback;
+}
+
+export async function getOrgOidcProvider(orgID: string): Promise<GetOrgOidcProviderResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, forbidden: false };
+  try {
+    const res = await idpFetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/identity-provider`,
+      { method: "GET", headers: await idpAuthHeaders(), cache: "no-store" }
+    );
+    if (res.status === 404) return { ok: true, provider: null };
+    if (!res.ok) return { ok: false, status: res.status, forbidden: res.status === 403 };
+    const body: unknown = await res.json();
+    const one = isRecord(body) ? body.identity_provider : null;
+    return { ok: true, provider: isRecord(one) ? toOidcProviderView(one) : null };
+  } catch {
+    return { ok: false, status: 0, forbidden: false };
+  }
+}
+
+export async function saveOrgOidcProvider(
+  orgID: string,
+  input: OrgOidcProviderInput,
+  mode: "create" | "update"
+): Promise<SaveOrgOidcProviderResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled)
+    return { ok: false, status: 503, error: "The IdP is not reachable." };
+  const config: Record<string, unknown> = {
+    issuer_url: input.issuer_url,
+    client_id: input.client_id,
+    scopes: input.scopes,
+    email_domains: input.email_domains,
+    allow_external_domains: input.allow_external_domains,
+  };
+  if (input.client_secret) config.client_secret = input.client_secret;
+  const body =
+    mode === "create"
+      ? { type: "oidc", name: input.name, slug: input.slug, config }
+      : { name: input.name, slug: input.slug, config };
+  try {
+    const res = await idpFetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/identity-provider`,
+      {
+        method: mode === "create" ? "POST" : "PUT",
+        headers: { ...(await idpAuthHeaders()), "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        cache: "no-store",
+      }
+    );
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: res.status,
+        error: await oidcProviderError(res, "The provider could not be saved."),
+      };
+    }
+    const out: unknown = await res.json();
+    const one = isRecord(out) ? out.identity_provider : null;
+    if (!isRecord(one)) return { ok: false, status: res.status, error: "Unexpected response." };
+    return { ok: true, provider: toOidcProviderView(one) };
+  } catch {
+    return { ok: false, status: 0, error: "The IdP is not reachable." };
+  }
+}
+
+export async function deleteOrgOidcProvider(
+  orgID: string
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled)
+    return { ok: false, status: 503, error: "The IdP is not reachable." };
+  try {
+    const res = await idpFetch(
+      `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}/identity-provider`,
+      { method: "DELETE", headers: await idpAuthHeaders(), cache: "no-store" }
+    );
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: res.status,
+        error: await oidcProviderError(res, "The provider could not be removed."),
+      };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false, status: 0, error: "The IdP is not reachable." };
+  }
+}
+
 // ── Org roles (GET /api/v1/organizations/:id/roles) ───────────────────────
 
 export interface OrgRoleItem {

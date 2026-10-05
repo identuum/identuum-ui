@@ -39,8 +39,16 @@ export function IdentityProvidersReadOnlySection({
     <Card
       headingId="identity-providers-heading"
       title="Identity providers"
-      subtitle="Read-only view of configured SSO providers for your organization. Create / edit / delete and connection-test are not available from this page."
+      subtitle="Read-only view of configured SSO providers for your organization. The OpenID Connect sign-in provider is configured on its own page."
     >
+      <p className="px-6 pt-3 text-xs">
+        <a
+          href="/org-admin/identity-provider"
+          className="font-semibold text-sky-700 hover:text-sky-900"
+        >
+          Configure the sign-in provider →
+        </a>
+      </p>
       {!result.ok && result.forbidden && (
         <Forbidden body="Your session does not have permission to view identity providers." />
       )}

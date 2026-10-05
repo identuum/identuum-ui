@@ -276,6 +276,13 @@ const IDP_ROUTE_SURFACE_MATRIX: SurfaceMatrixRow[] = [
     signals: ["service account", "No credential is issued here"],
   },
   {
+    route: "/org-admin/identity-provider",
+    classification: "OSS-supported",
+    coveredRoutes: ["/org-admin/identity-provider"],
+    files: ["app/org-admin/identity-provider/page.tsx", "lib/idp-admin-client.ts"],
+    signals: ["Sign-in provider", "getOrgOidcProvider"],
+  },
+  {
     route: "/site-admin overview + settings",
     classification: "backend-absent tolerant",
     coveredRoutes: ["/site-admin", "/site-admin/settings"],
@@ -389,6 +396,7 @@ describe("IDP OSS route/surface matrix", () => {
       "/org-admin/api-resources",
       "/org-admin/applications",
       "/org-admin/service-accounts",
+      "/org-admin/identity-provider",
       "/site-admin overview + settings",
       "/site-admin/organizations/* actions",
       "/site-admin/keys",
