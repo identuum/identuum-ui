@@ -23,7 +23,8 @@ AG_OSS_ALT_COMPOSE_OVERRIDE ?= deployment/docker-compose.local.ag-oss-alt.yml
 .PHONY: verify-live-upgrade-backup verify-ui-oss-contract verify-ui-oss-customer-smoke-passkey verify-ui-ce-auth verify-ui-ce-customer-smoke verify-ui-ce-customer-smoke-passkey verify-ui-ce-fresh-m1-setup verify-ui-ce-fresh-m1-setup-licensed
 .PHONY: e2e-full
 
-## wiki-fresh: WIKI-1 gate — fail verify when this repo's wiki page is BEHIND.
+## wiki-fresh: WIKI-1 gate — fail when this repo's wiki page is BEHIND. NOT in
+## the verify plan since OSS-GATE-TIDY (2026-10-05, P-066); a manual look.
 ## Runs `achta wiki check --only freshness` against the sibling wiki checkout,
 ## the same recipe identuum-idp-oss carries. Until THE-UI-HOUSEKEEPING
 ## (2026-09-06) this target still called tools/wiki-freshness.sh, a script the
@@ -577,6 +578,11 @@ e2e-full:
 e2e-quick:
 	@E2E_MODE=quick bash e2e-full/scripts/full-run.sh
 
+## OSS-GATE-TIDY (2026-10-05, owner ruling P-066): wiki-fresh LEFT this plan.
+## Its subject is the pin in ../wiki, which a ui-only slice cannot move; the
+## wiki stage's own `make check` judges freshness at the close and its witness.
+## The target stays for a manual look; vitest is now the last entry. The
+## paragraph below is history from when it was planned.
 ## WHY wiki-fresh RUNS LAST (THE-SEVENTEEN-MASKED-TARGETS, 2026-09-11; the
 ## rule is THE-SEALED-GATES, identuum-idp-oss, 2026-08-04)
 ## --------------------------------------------------------------------
@@ -628,8 +634,7 @@ verify:
 		'sbom-scan=$(MAKE) --no-print-directory sbom-scan' \
 		'biome=pnpm exec biome check . --reporter=json --max-diagnostics=none' \
 		'tsc=pnpm exec tsc --noEmit' \
-		'vitest=pnpm exec vitest run' \
-		'wiki-fresh=$(MAKE) --no-print-directory wiki-fresh'
+		'vitest=pnpm exec vitest run'
 
 ## image-base-check: fail if any Dockerfile builds FROM an Alpine base.
 ##
