@@ -291,7 +291,9 @@ test.describe("/org-admin/settings — Organization profile and security policy"
       await expect(page.getByTestId("sa-expiry-current")).toContainText("No expiry");
 
       await save("3651");
-      await expect(page.getByRole("alert")).toContainText(
+      // The form's own error banner: the appliance page carries other
+      // role="alert" elements (the insecure-mode banner, Next's announcer).
+      await expect(page.getByTestId("sa-expiry-error")).toContainText(
         "Service account expiry must be a whole number from 0 to 3650 days."
       );
       await page.reload();
