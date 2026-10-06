@@ -12,6 +12,7 @@ import { ProtocolSettingsPanel } from "@/app/site-admin/organizations/[id]/proto
 import { DomainsCard } from "@/components/org-admin/domains-card";
 import { MFAPolicyForm } from "@/components/org-admin/mfa-policy-form";
 import { OrgProfileForm } from "@/components/org-admin/org-profile-form";
+import { ServiceAccountExpiryForm } from "@/components/org-admin/service-account-expiry-form";
 import { getAuthorizationServerPageBoundary } from "@/lib/capability-affordances";
 import {
   getOrgProtocolSettings,
@@ -26,6 +27,7 @@ import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { SelfRegistrationSection } from "./self-registration-section";
 import {
   ORG_ADMIN_DOMAINS_CARD_COPY,
+  ORG_ADMIN_SA_EXPIRY_COPY,
   ORG_ADMIN_SETTINGS_PAGE_COPY,
   ORG_ADMIN_SETTINGS_PLACEHOLDER_BADGE,
   ORG_ADMIN_SETTINGS_PLACEHOLDERS,
@@ -118,6 +120,14 @@ export default async function OrgAdminSettingsPage() {
         subtitle={ORG_ADMIN_SETTINGS_PAGE_COPY.securityCardSubtitle}
       >
         <MFAPolicyForm currentPolicy={mfaPolicy} />
+      </SettingsCard>
+      {/* Service-account expiry — the organization's own setting, set by its
+          org_admin (OSS-SA-EXPIRY-2, owner rulings e and g). */}
+      <SettingsCard
+        title={ORG_ADMIN_SA_EXPIRY_COPY.cardTitle}
+        subtitle={ORG_ADMIN_SA_EXPIRY_COPY.cardSubtitle}
+      >
+        <ServiceAccountExpiryForm currentDays={org?.service_account_expiry_days} />
       </SettingsCard>
 
       {/* Protocol settings card — same-org org_admin can manage DCR Foundation

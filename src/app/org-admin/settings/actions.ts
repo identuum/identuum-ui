@@ -17,6 +17,7 @@ import { redirect } from "next/navigation";
 import { getOwnOrganization, updateOrganization } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
+import { parseServiceAccountExpiryDays } from "./settings-helpers";
 
 const VALID_MFA_POLICIES = ["optional", "required"] as const;
 export type MFAPolicy = (typeof VALID_MFA_POLICIES)[number];
@@ -200,4 +201,51 @@ export async function updateInvitePolicyAction(
   }
 
   return { phase: "error", error: "Failed to update invite policy. Please try again." };
+}
+
+// ── Service account expiry (OSS-SA-EXPIRY-2) ─────────────────────────────────
+
+export type UpdateServiceAccountExpiryState =
+  | { phase: "idle" }
+  | { phase: "error"; error: string }
+  | { phase: "success"; days: number };
+
+/**
+ * Saves the organization's default service-account expiry in days (0 = no
+ * expiry, 1 to 3650). Same guards as the other settings actions: session
+ * re-validated, org_admin only, organization taken from the session-scoped
+ * endpoint and never from form data. A value outside 0 to 3650 is refused here;
+ * anything the IdP refuses is shown in the IdP's own words.
+ */
+export async function updateServiceAccountExpiryAction(
+  _prev: UpdateServiceAccountExpiryState,
+  formData: FormData
+): Promise<UpdateServiceAccountExpiryState> {
+  const session = await getServerSession();
+  if (!session) redirect("/login?reason=session_expired");
+
+  const role = session.user?.role ?? session.role;
+  if (role !== "org_admin") redirect(roleToPath(role));
+
+  const org = await getOwnOrganization();
+  if (!org?.id) {
+    return {
+      phase: "error",
+      error: "Could not resolve your organization. Please sign out and sign in again.",
+    };
+  }
+
+  const parsed = parseServiceAccountExpiryDays(
+    (formData.get("service_account_expiry_days") as string | null) ?? ""
+  );
+  if (!parsed.ok) return { phase: "error", error: parsed.error };
+
+  const result = await updateOrganization(org.id, { service_account_expiry_days: parsed.value });
+  if (result.ok) {
+    revalidatePath("/org-admin/settings");
+    return { phase: "success", days: parsed.value };
+  }
+  if (result.notFound) return { phase: "error", error: "Organization not found." };
+  if (result.message) return { phase: "error", error: result.message };
+  return { phase: "error", error: "Failed to update service account expiry. Please try again." };
 }

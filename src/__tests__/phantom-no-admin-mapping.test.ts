@@ -104,6 +104,10 @@ describe("org mappers stay inside the wire contract", () => {
     "can_assign_admin",
     // OSS-FIN-1: identuum-idp-oss WIRE-CONTRACT-ORG-1 gained it (tri-state).
     "activation_pending",
+    // OSS-SA-EXPIRY-2: safeOrganization has always emitted it
+    // (identuum-idp-oss internal/handlers/organizations.go:328); the
+    // org_admin's settings page now reads it.
+    "service_account_expiry_days",
   ];
   // `deleted` is not on the OSS wire (it emits deleted_at); the mappers
   // still read it from the legacy/CE wrapped shape they tolerate.

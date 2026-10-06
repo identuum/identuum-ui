@@ -189,9 +189,12 @@ test.describe("/org-admin/settings — Organization profile and security policy"
       expect(await page.locator('input[name="invite_policy_mode"]').count()).toBe(0);
       expect(await page.getByRole("button", { name: /save invite policy/i }).count()).toBe(0);
 
-      // FOUR Saves: Save profile, Save policy, the Protocol settings panel's
-      // and the organization's Self-registration section's (D-021).
-      expect(await page.getByRole("button", { name: /^Save\b/i }).count()).toBe(4);
+      // FIVE Saves: Save profile, Save policy, Save expiry (OSS-SA-EXPIRY-2),
+      // the Protocol settings panel's and the organization's Self-registration
+      // section's (D-021).
+      expect(await page.getByLabel("Service account expiry (days)").count()).toBe(1);
+      expect(await page.getByRole("button", { name: /save expiry/i }).count()).toBe(1);
+      expect(await page.getByRole("button", { name: /^Save\b/i }).count()).toBe(5);
       expect(
         await page
           .getByTestId("org-self-registration")
@@ -242,6 +245,68 @@ test.describe("/org-admin/settings — Organization profile and security policy"
         headers: uiOriginHeader(),
       });
       expect(policy.status(), "the org_admin's own policy write must be accepted").toBe(200);
+    } finally {
+      await page.close();
+    }
+  });
+
+  // OSS-SA-EXPIRY-2 (owner ruling g): the org_admin sets its organization's
+  // service-account expiry in the form. 30 survives a reload, 0 (no expiry)
+  // too, and an out-of-range value is refused with its message and saves
+  // nothing. The IdP refuses the same value on its own. Ends at 0, the value
+  // a new organization starts with.
+  test("[dynamic mode only] an org_admin sets the service account expiry: 30, reload, 0; 3651 is refused [SA-EXPIRY-SETTING-1]", async () => {
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
+    if (process.env.IDENTUUM_E2E_USE_DYNAMIC_FIXTURE !== "true") {
+      test.skip(
+        true,
+        "Set IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true to opt in. This test issues writes against the disposable fixture org."
+      );
+    }
+
+    const page = await getSharedContext().newPage();
+    const field = page.getByLabel("Service account expiry (days)");
+    const save = async (value: string) => {
+      await field.fill(value);
+      await page.getByRole("button", { name: /save expiry/i }).click();
+    };
+    try {
+      await page.goto("/org-admin/settings");
+      await page.waitForLoadState("networkidle");
+
+      await save("30");
+      await expect(page.getByText("Service account expiry updated.")).toBeVisible();
+      await page.reload();
+      await page.waitForLoadState("networkidle");
+      await expect(field).toHaveValue("30");
+      await expect(page.getByTestId("sa-expiry-current")).toContainText("30 days");
+
+      await save("0");
+      await expect(page.getByText("Service account expiry updated.")).toBeVisible();
+      await page.reload();
+      await page.waitForLoadState("networkidle");
+      await expect(field).toHaveValue("0");
+      await expect(page.getByTestId("sa-expiry-current")).toContainText("No expiry");
+
+      await save("3651");
+      await expect(page.getByRole("alert")).toContainText(
+        "Service account expiry must be a whole number from 0 to 3650 days."
+      );
+      await page.reload();
+      await page.waitForLoadState("networkidle");
+      await expect(field).toHaveValue("0");
+
+      const orgRes = await page.request.get("/api/idp/api/v1/organizations/current");
+      const org = (await orgRes.json()) as { id?: string; service_account_expiry_days?: number };
+      expect(org.service_account_expiry_days).toBe(0);
+      const refused = await page.request.put(
+        `/api/idp/api/v1/organizations/${encodeURIComponent(org.id as string)}`,
+        { data: { service_account_expiry_days: 3651 }, headers: uiOriginHeader() }
+      );
+      expect(refused.status(), "the IdP refuses 3651 itself").toBe(400);
+      expect(((await refused.json()) as { message?: string }).message).toMatch(/3650/);
     } finally {
       await page.close();
     }

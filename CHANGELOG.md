@@ -8,6 +8,16 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
 ## Unreleased
 
+- **Service account expiry in organization settings.** An org_admin sees and
+  sets "Service account expiry (days)" on **Settings** for their own
+  organization: `0` means no expiry, `1` to `3650` days otherwise. The value
+  applies only to service accounts created after it is saved; existing
+  accounts do not change. A value outside that range is refused with its
+  message, and the IdP's own refusal is shown when it gives one. A site
+  administrator's organization edit does not offer the field. Needs
+  identuum-idp-oss with the default service-account expiry (organizations
+  start at `0`).
+
 ## `v0.9.7`
 
 The static export that identuum-idp-oss `v0.9.7` embeds. **From this release

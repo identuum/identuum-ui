@@ -370,6 +370,10 @@ export async function getOwnOrganization(): Promise<OrgDetail | null> {
       can_assign_admin: false,
       allow_public_registration: Boolean(o.allow_public_registration),
       require_registration_approval: Boolean(o.require_registration_approval),
+      service_account_expiry_days:
+        typeof o.service_account_expiry_days === "number"
+          ? o.service_account_expiry_days
+          : undefined,
       created_at: String(o.created_at ?? ""),
       updated_at: String(o.updated_at ?? ""),
     };
@@ -396,11 +400,20 @@ export interface UpdateOrgOptions {
    */
   allow_public_registration?: boolean;
   require_registration_approval?: boolean;
+  /** The org_admin's default service-account expiry in days (0 to 3650). */
+  service_account_expiry_days?: number;
 }
 
 export type UpdateOrgResult =
   | { ok: true; id: string; name: string }
-  | { ok: false; status: number; notFound: boolean; conflict: boolean };
+  | {
+      ok: false;
+      status: number;
+      notFound: boolean;
+      conflict: boolean;
+      /** The IdP's own refusal text on a 400, when it gave one. */
+      message?: string;
+    };
 
 /**
  * Updates an organization (site_admin only).
@@ -426,6 +439,8 @@ export async function updateOrganization(
     body.allow_public_registration = opts.allow_public_registration;
   if (opts.require_registration_approval !== undefined)
     body.require_registration_approval = opts.require_registration_approval;
+  if (opts.service_account_expiry_days !== undefined)
+    body.service_account_expiry_days = opts.service_account_expiry_days;
 
   try {
     const res = await idpFetch(
@@ -443,6 +458,15 @@ export async function updateOrganization(
 
     if (res.status === 404) return { ok: false, status: 404, notFound: true, conflict: false };
     if (res.status === 409) return { ok: false, status: 409, notFound: false, conflict: true };
+    if (res.status === 400) {
+      // The IdP's validation text (e.g. the service-account expiry range).
+      const refusal = await res.json().catch(() => null);
+      const message =
+        refusal && typeof refusal.message === "string" && refusal.message !== ""
+          ? refusal.message
+          : undefined;
+      return { ok: false, status: 400, notFound: false, conflict: false, message };
+    }
     if (!res.ok) return { ok: false, status: res.status, notFound: false, conflict: false };
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization

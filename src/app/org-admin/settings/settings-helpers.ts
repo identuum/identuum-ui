@@ -417,3 +417,40 @@ export const ORG_ADMIN_INVITE_POLICY_FORM_COPY = {
   invalidStateBanner:
     "The stored invite policy combination is not a valid product mode. Choose a mode below and save to repair this row.",
 } as const;
+
+// ── Service account expiry (OSS-SA-EXPIRY-2, owner ruling g) ──────────────────
+
+/**
+ * Copy for the org_admin's "Service account expiry (days)" setting: 0 means no
+ * expiry, 1 to 3650 days, and it applies only to service accounts created after
+ * it is set (existing accounts never change).
+ */
+export const ORG_ADMIN_SA_EXPIRY_COPY = {
+  cardTitle: "Service accounts",
+  cardSubtitle: "Default expiry for service accounts created in your organization.",
+  label: "Service account expiry (days)",
+  currentLabel: "Current setting",
+  help: "A service account created without an expiry date expires this many days after it is created. 0 means no expiry. The value applies only to service accounts created after you save it; existing service accounts do not change.",
+  rangeError: "Service account expiry must be a whole number from 0 to 3650 days.",
+  saveLabel: "Save expiry",
+  savingLabel: "Saving…",
+  successBanner: "Service account expiry updated.",
+} as const;
+
+export type ServiceAccountExpiryParse = { ok: true; value: number } | { ok: false; error: string };
+
+/** Parses the form value: a whole number of days from 0 to 3650, nothing else. */
+export function parseServiceAccountExpiryDays(raw: string): ServiceAccountExpiryParse {
+  const s = raw.trim();
+  if (!/^\d{1,4}$/.test(s)) return { ok: false, error: ORG_ADMIN_SA_EXPIRY_COPY.rangeError };
+  const value = Number(s);
+  if (value > 3650) return { ok: false, error: ORG_ADMIN_SA_EXPIRY_COPY.rangeError };
+  return { ok: true, value };
+}
+
+/** The stored value in words; undefined when the IdP did not report it. */
+export function describeServiceAccountExpiry(days: number | undefined): string {
+  if (days === undefined) return "Not reported";
+  if (days === 0) return "No expiry";
+  return days === 1 ? "1 day" : `${days} days`;
+}

@@ -167,6 +167,12 @@ export interface OrgDetail {
    */
   allow_public_registration: boolean;
   require_registration_approval: boolean;
+  /**
+   * Default expiry, in days, of a service account created without a date (0 =
+   * no expiry; the organization's org_admin sets it, OSS-SA-EXPIRY-2). Absent
+   * when the IdP did not report it.
+   */
+  service_account_expiry_days?: number;
   created_at: string;
   updated_at: string;
 }
