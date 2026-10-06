@@ -255,7 +255,7 @@ test.describe("/org-admin/settings — Organization profile and security policy"
   // too, and an out-of-range value is refused with its message and saves
   // nothing. The IdP refuses the same value on its own. Ends at 0, the value
   // a new organization starts with.
-  test("[dynamic mode only] an org_admin sets the service account expiry: 30, reload, 0; 3651 is refused [SA-EXPIRY-SETTING-1]", async () => {
+  test("[dynamic mode only] an org_admin sets the service account expiry: 30, reload, 0; 3651 is refused", async () => {
     if (skipOrgAdminTests) {
       test.skip(true, SKIP_MSG);
     }
