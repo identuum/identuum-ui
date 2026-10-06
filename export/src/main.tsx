@@ -1,3 +1,5 @@
+// First: zod must not probe eval under the shell's script policy.
+import "./zod-jitless";
 // The shared pages are styled by the app's own stylesheet (Tailwind through
 // the repository's PostCSS config), the same one the Next root layout loads.
 import "@/app/globals.css";
