@@ -8,6 +8,9 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
 ## Unreleased
 
+- **Dependency:** `sharp` (transitive, through `next`) moves 0.35.4 → 0.35.5
+  for CVE-2026-96889 (GHSA-wq5f-xc86-pv6w), a high-severity vulnerability in
+  its bundled librsvg; `make advisory` reports no known vulnerabilities.
 - **Sign-in and activation links check their destinations.** The sign-in
   page sends a browser to single sign-on only on this console's own
   `/api/v1/auth/idp/<id>/login` route; any other origin, path, `javascript:`
