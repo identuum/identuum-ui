@@ -17,6 +17,10 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
   administrator's organization edit does not offer the field. Needs
   identuum-idp-oss with the default service-account expiry (organizations
   start at `0`).
+- **Dependency:** `source-map-js` (transitive, through `postcss` and
+  `@tailwindcss/postcss`) moves 1.2.1 → 1.2.2 for GHSA-68fv-2mgg-jv7q, a
+  high-severity event-loop denial of service through indexed source-map
+  section offsets; `make advisory` reports no known vulnerabilities.
 
 ## `v0.9.7`
 
