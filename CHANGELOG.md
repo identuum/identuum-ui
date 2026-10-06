@@ -8,6 +8,12 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
 ## Unreleased
 
+- **Version 0.9.8; tag `v0.9.8` on `d009997`.** `package.json` is `0.9.8`
+  on main. The `v0.9.8` tag names `d009997`, the export identuum-idp-oss
+  `v0.9.8` embeds; its `package.json` says `0.9.7` and stays so, as `v0.9.6`
+  did (owner ruling p, 2026-10-06).
+- **Gate judge lictor v0.4.5** (maintainer tooling): `LICTOR_VERSION` in
+  `.github/workflows/ci.yml` moves from `v0.4.4` to `v0.4.5`.
 - **Breaking (0.x): API resources no longer have a token lifetime.** The
   "Token TTL (seconds)" field is gone from the create and edit forms, and the
   list badge and the detail row that showed it are gone too. It never had an

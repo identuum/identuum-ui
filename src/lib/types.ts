@@ -410,7 +410,8 @@ export interface OrgClientListResult {
  *   - organization_id (server-injected from the actor's session)
  *   - service_account_id (M2M provisioning surface, separate slice)
  *   - jwks (inline key material — operators publish via jwks_uri)
- *   - token_ttl_secs (operator-tuning surface, separate slice)
+ *   - token_ttl_secs (not in any API; OSS has one access-token lifetime,
+ *     owner rulings l and n, 2026-10-06)
  *
  * The IDP enforces required name + at least one redirect URI.
  */
