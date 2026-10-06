@@ -73,7 +73,6 @@ export interface FixtureEnvelope {
     audience: string;
     name: string;
     active: boolean;
-    token_ttl_secs: number;
   };
 }
 
@@ -703,7 +702,6 @@ export async function seedFixtureFromSiteAdmin(
       name: `E2E Sample API ${runId}`,
       audience: `https://api.e2e-${runId}.test`,
       active: true,
-      token_ttl_secs: 3600,
       // Both scopes, with the exact descriptions the [dynamic] specs pin.
       scopes: [
         { name: "read", description: "Read fixture API resource" },
@@ -756,7 +754,6 @@ export async function seedFixtureFromSiteAdmin(
       audience: `https://api.e2e-${runId}.test`,
       name: `E2E Sample API ${runId}`,
       active: true,
-      token_ttl_secs: 3600,
     },
   };
 }

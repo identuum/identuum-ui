@@ -588,8 +588,8 @@ export function loadOrgAdminFixtureOrgId(): string | null {
 }
 
 /**
- * Non-secret subset of a seeded API resource: id, audience, name, active,
- * token_ttl_secs. NEVER expose resource_secret, resource_secret_hash,
+ * Non-secret subset of a seeded API resource: id, audience, name, active.
+ * NEVER expose resource_secret, resource_secret_hash,
  * private_key, inline jwks, signing material, access_token, refresh_token, or
  * any other credential-shaped field.
  *
@@ -605,7 +605,6 @@ export interface OrgAdminFixtureApiResource {
   audience: string;
   name: string;
   active: boolean;
-  tokenTTLSecs: number;
 }
 
 /**
@@ -621,8 +620,8 @@ export interface OrgAdminFixtureApiResource {
  *   - Returns ONLY non-secret identifiers: id (opaque UUID used as the
  *     route path segment for /org-admin/api-resources/[id]), audience
  *     (operator-visible OAuth aud claim), name (operator-visible
- *     display name), active (always true for this seeded resource),
- *     token_ttl_secs (numeric token TTL). NO resource_secret,
+ *     display name), active (always true for this seeded resource).
+ *     NO resource_secret,
  *     resource_secret_hash, private_key, jwks, signing material, or
  *     token-shaped field crosses this function boundary.
  *   - Re-uses validateFixture so every safety invariant runs (marker,
@@ -640,8 +639,9 @@ export interface OrgAdminFixtureApiResource {
  *     future regression flipped the seeded resource to inactive, the
  *     loader returns null and the populated Playwright test self-skips
  *     loudly rather than silently exercising the wrong branch.
- *   - token_ttl_secs is validated to be a positive integer in the
- *     IDP-accepted range [60, 86400].
+ *   - No token lifetime is read: OSS has one access-token lifetime and
+ *     refuses a per-resource one (owner rulings l and m, 2026-10-06); a
+ *     legacy envelope that still carries one is read without it.
  *   - No console.* anywhere.
  */
 export function loadOrgAdminFixtureApiResource(): OrgAdminFixtureApiResource | null {
@@ -658,26 +658,17 @@ export function loadOrgAdminFixtureApiResource(): OrgAdminFixtureApiResource | n
   if (typeof runID !== "string") return null;
   const block = (parsed as { api_resource?: unknown }).api_resource;
   if (!isObject(block)) return null;
-  const { id, audience, name, active, token_ttl_secs } = block as Record<string, unknown>;
+  const { id, audience, name, active } = block as Record<string, unknown>;
   if (typeof id !== "string" || !/^[0-9a-fA-F-]{32,36}$/.test(id)) return null;
   if (typeof audience !== "string" || audience !== `https://api.e2e-${runID}.test`) {
     return null;
   }
   if (typeof name !== "string" || name !== `E2E Sample API ${runID}`) return null;
   if (active !== true) return null;
-  if (
-    typeof token_ttl_secs !== "number" ||
-    !Number.isInteger(token_ttl_secs) ||
-    token_ttl_secs < 60 ||
-    token_ttl_secs > 86400
-  ) {
-    return null;
-  }
   return {
     id,
     audience,
     name,
     active,
-    tokenTTLSecs: token_ttl_secs,
   };
 }

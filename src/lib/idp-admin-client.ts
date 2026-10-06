@@ -3873,9 +3873,11 @@ export async function removeUserRole(
 //   - All routes require an org_admin (or site_admin) session and the
 //     OAuth scope orgs:read (reads) or orgs:update (writes).
 //   - APIResourceResponse contains ONLY safe fields:
-//       id, organization_id, name, audience, active, token_ttl_secs,
+//       id, organization_id, name, audience, active,
 //       scopes[{id,name,description}], created_at, updated_at
 //     The domain object's `resource_secret_hash` is NEVER on the wire.
+//   - No token lifetime: OSS refuses token_ttl_secs with 400 and has one
+//     access-token lifetime, 1 hour (owner rulings l and m, 2026-10-06).
 //   - Create returns a one-time plaintext `secret` at the top-level
 //     envelope { resource, secret } — surface ONCE, never persist.
 //   - Update is partial-replace; audience is IMMUTABLE (no field in the
@@ -3899,14 +3901,12 @@ export interface CreateAPIResourceScopeInput {
 export interface CreateAPIResourceOptions {
   name: string;
   audience: string;
-  token_ttl_secs?: number;
   scopes?: CreateAPIResourceScopeInput[];
 }
 
 export interface UpdateAPIResourceOptions {
   name?: string;
   active?: boolean;
-  token_ttl_secs?: number;
   scopes?: CreateAPIResourceScopeInput[];
 }
 
@@ -3936,7 +3936,6 @@ function projectAPIResource(
     name: typeof r?.name === "string" ? r.name : "",
     audience: typeof r?.audience === "string" ? r.audience : "",
     active: Boolean(r?.active),
-    token_ttl_secs: typeof r?.token_ttl_secs === "number" ? r.token_ttl_secs : 0,
     scopes,
     created_at: typeof r?.created_at === "string" ? r.created_at : "",
     updated_at: typeof r?.updated_at === "string" ? r.updated_at : "",
@@ -4116,7 +4115,6 @@ export async function createApiResource(
     name: opts.name,
     audience: opts.audience,
   };
-  if (typeof opts.token_ttl_secs === "number") body.token_ttl_secs = opts.token_ttl_secs;
   if (Array.isArray(opts.scopes) && opts.scopes.length > 0)
     body.scopes = opts.scopes.map((s) => ({ name: s.name, description: s.description }));
   try {
@@ -4243,7 +4241,6 @@ export async function updateApiResource(
   const body: Record<string, any> = {};
   if (typeof opts.name === "string") body.name = opts.name;
   if (typeof opts.active === "boolean") body.active = opts.active;
-  if (typeof opts.token_ttl_secs === "number") body.token_ttl_secs = opts.token_ttl_secs;
   if (Array.isArray(opts.scopes))
     body.scopes = opts.scopes.map((s) => ({ name: s.name, description: s.description }));
   try {

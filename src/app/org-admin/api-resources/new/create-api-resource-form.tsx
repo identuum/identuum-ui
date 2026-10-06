@@ -140,28 +140,6 @@ export function CreateApiResourceForm() {
       </div>
 
       <div className="space-y-1">
-        <label htmlFor="ar-token-ttl" className="block text-sm font-medium text-sky-950">
-          Token TTL (seconds) <span className="text-stone-400 font-normal">(optional)</span>
-        </label>
-        <input
-          id="ar-token-ttl"
-          name="token_ttl_secs"
-          type="text"
-          inputMode="numeric"
-          autoComplete="off"
-          placeholder="3600"
-          className={fieldErrors.token_ttl_secs ? inputErrorClass : inputClass}
-        />
-        {fieldErrors.token_ttl_secs && (
-          <p className="text-xs text-red-600">{fieldErrors.token_ttl_secs}</p>
-        )}
-        <p className="text-xs text-stone-400">
-          Lifetime of access tokens minted for this audience. Whole number between 60 and 86400
-          seconds. Leave blank to use the IDP default.
-        </p>
-      </div>
-
-      <div className="space-y-1">
         <label htmlFor="ar-scopes" className="block text-sm font-medium text-sky-950">
           Scopes <span className="text-stone-400 font-normal">(optional)</span>
         </label>

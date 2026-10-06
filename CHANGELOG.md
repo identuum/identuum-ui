@@ -8,6 +8,14 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
 ## Unreleased
 
+- **Breaking (0.x): API resources no longer have a token lifetime.** The
+  "Token TTL (seconds)" field is gone from the create and edit forms, and the
+  list badge and the detail row that showed it are gone too. It never had an
+  effect: identuum-idp-oss gives every access token the same 1-hour lifetime
+  and never read `token_ttl_secs` when it issued one. The console no longer
+  sends `token_ttl_secs` on create or update, which identuum-idp-oss now
+  refuses with `400` (owner rulings l and m, 2026-10-06). The e2e provisioner
+  and fixtures no longer send or require it.
 - **Dependency:** `sharp` (transitive, through `next`) moves 0.35.4 → 0.35.5
   for CVE-2026-96889 (GHSA-wq5f-xc86-pv6w), a high-severity vulnerability in
   its bundled librsvg; `make advisory` reports no known vulnerabilities.

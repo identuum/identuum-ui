@@ -157,11 +157,6 @@ export default async function OrgAdminAPIResourceDetailPage({
           <DetailRow label="Status">
             <span className="text-xs text-sky-950">{r.active ? "Active" : "Inactive"}</span>
           </DetailRow>
-          <DetailRow label="Token TTL">
-            <span className="text-xs text-sky-950">
-              {r.token_ttl_secs > 0 ? `${r.token_ttl_secs} seconds` : "—"}
-            </span>
-          </DetailRow>
           <DetailRow label="Created">
             <span className="text-xs text-stone-500">
               <LocalTime value={r.created_at} />

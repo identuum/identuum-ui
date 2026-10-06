@@ -93,7 +93,8 @@ test.describe("/org-admin/api-resources/new — create form (safe-state)", () =>
       ).toBeVisible();
       await expect(page.getByLabel(/Resource name/)).toBeVisible();
       await expect(page.getByLabel(/Audience/)).toBeVisible();
-      await expect(page.getByLabel(/Token TTL/)).toBeVisible();
+      // OSS-MUST1-RETIRE-TTL: no per-resource token lifetime is offered.
+      await expect(page.getByLabel(/Token TTL/)).toHaveCount(0);
       await expect(page.getByLabel(/Scopes/)).toBeVisible();
       await expect(page.getByRole("button", { name: /^Create API resource$/ })).toBeVisible();
       await expect(page.getByRole("link", { name: /^Cancel$/ })).toBeVisible();
@@ -129,7 +130,7 @@ test.describe("/org-admin/api-resources/new — create form (safe-state)", () =>
 //
 // SECURITY:
 //   - The fixture loader returns ONLY non-secret identifiers (id, audience,
-//     name, active, token_ttl_secs). The IDP envelope never writes the
+//     name, active). The IDP envelope never writes the
 //     plaintext resource_secret — this is pinned by the IDP-side Go test
 //     TestFixtureAPIResourceBlock_NeverIncludesSecretMaterial.
 //   - The test never types into the create form (no secret-bearing submit).
@@ -181,9 +182,8 @@ test.describe("/org-admin/api-resources — populated (seeded resource)", () => 
       // for the audience (the heading also contains it, so locate the
       // definition row by its term label).
       await expect(page.getByText("Configuration", { exact: true })).toBeVisible();
-      await expect(
-        page.getByText(`${apiResource.tokenTTLSecs} seconds`, { exact: true })
-      ).toBeVisible();
+      // OSS-MUST1-RETIRE-TTL: no token lifetime is shown.
+      await expect(page.getByText(/Token TTL/)).toHaveCount(0);
       // Active badge is visible.
       await expect(page.getByText(/^Active$/, { exact: true }).first()).toBeVisible();
       // Scopes card renders both seeded scopes (read + write).
@@ -224,7 +224,7 @@ test.describe("/org-admin/api-resources — populated (seeded resource)", () => 
     }
   });
 
-  test("[dynamic mode only] edit page is pre-filled with name/TTL/scopes; audience is read-only; no rotate UI", async () => {
+  test("[dynamic mode only] edit page is pre-filled with name/scopes, offers no token lifetime; audience is read-only; no rotate UI", async () => {
     if (skipOrgAdminTests) test.skip(true, SKIP_MSG);
     if (process.env.IDENTUUM_E2E_USE_DYNAMIC_FIXTURE !== "true") {
       test.skip(true, DYNAMIC_ONLY_SKIP_MSG);
@@ -240,8 +240,8 @@ test.describe("/org-admin/api-resources — populated (seeded resource)", () => 
       await expect(page.getByRole("heading", { name: /^Edit /, level: 1 })).toBeVisible();
       // Name input is pre-filled.
       await expect(page.getByLabel(/Resource name/)).toHaveValue(apiResource.name);
-      // Token TTL is pre-filled.
-      await expect(page.getByLabel(/Token TTL/)).toHaveValue(String(apiResource.tokenTTLSecs));
+      // OSS-MUST1-RETIRE-TTL: no token lifetime control.
+      await expect(page.getByLabel(/Token TTL/)).toHaveCount(0);
       // Active checkbox is checked.
       await expect(page.getByLabel(/^Active$/)).toBeChecked();
       // Scopes textarea contains BOTH seeded scope lines.

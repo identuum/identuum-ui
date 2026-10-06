@@ -112,9 +112,6 @@ function APIResourceRow({ resource }: { resource: OrgAPIResourceItem }) {
             tone={resource.active ? "emerald" : "stone"}
             label={resource.active ? "Active" : "Inactive"}
           />
-          {resource.token_ttl_secs > 0 && (
-            <Badge tone="sky" label={`${resource.token_ttl_secs}s TTL`} />
-          )}
           <a
             href={`/org-admin/api-resources/${encodeURIComponent(resource.id)}`}
             aria-label={`View API resource ${resource.name}`}

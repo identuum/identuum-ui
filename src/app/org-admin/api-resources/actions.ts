@@ -16,6 +16,9 @@
  *   - revalidatePath fires on the success branch so the list re-renders.
  *
  * Excluded from this slice (do not add here):
+ *   - A token lifetime. OSS has one access-token lifetime, 1 hour, and
+ *     refuses a lifetime field on an API resource (owner ruling m,
+ *     2026-10-06).
  *   - Regenerate secret (POST :id/secret/regenerate exists on the backend).
  *   - Recent activity card (audit events are subject_type=organization;
  *     a backend resource-subject migration would be required first).
@@ -37,8 +40,6 @@ import { parseScopeLines } from "./scope-parser";
 
 const NAME_MAX = 255;
 const AUDIENCE_MAX = 255;
-const TTL_MIN = 60;
-const TTL_MAX = 86400;
 
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
@@ -52,7 +53,6 @@ export type CreateAPIResourceState =
       fieldErrors?: {
         name?: string;
         audience?: string;
-        token_ttl_secs?: string;
         scopes?: string;
       };
     }
@@ -108,20 +108,6 @@ export async function createApiResourceAction(
     };
   }
 
-  const ttlRaw = ((formData.get("token_ttl_secs") as string | null) ?? "").trim();
-  let token_ttl_secs: number | undefined;
-  if (ttlRaw.length > 0) {
-    const n = Number(ttlRaw);
-    if (!Number.isFinite(n) || !Number.isInteger(n) || n < TTL_MIN || n > TTL_MAX) {
-      return {
-        phase: "error",
-        error: `Token TTL must be a whole number between ${TTL_MIN} and ${TTL_MAX} seconds.`,
-        fieldErrors: { token_ttl_secs: "Invalid." },
-      };
-    }
-    token_ttl_secs = n;
-  }
-
   const scopesParsed = parseScopeLines(formData.get("scopes") as string | null);
   if (!scopesParsed.ok) {
     return {
@@ -134,7 +120,6 @@ export async function createApiResourceAction(
   const result = await createApiResource({
     name,
     audience,
-    token_ttl_secs,
     scopes: scopesParsed.scopes.length > 0 ? scopesParsed.scopes : undefined,
   });
 
@@ -184,7 +169,6 @@ export type UpdateAPIResourceState =
       error: string;
       fieldErrors?: {
         name?: string;
-        token_ttl_secs?: string;
         scopes?: string;
       };
     }
@@ -223,20 +207,6 @@ export async function updateApiResourceAction(
     };
   }
 
-  const ttlRaw = ((formData.get("token_ttl_secs") as string | null) ?? "").trim();
-  let token_ttl_secs: number | undefined;
-  if (ttlRaw.length > 0) {
-    const n = Number(ttlRaw);
-    if (!Number.isFinite(n) || !Number.isInteger(n) || n < TTL_MIN || n > TTL_MAX) {
-      return {
-        phase: "error",
-        error: `Token TTL must be a whole number between ${TTL_MIN} and ${TTL_MAX} seconds.`,
-        fieldErrors: { token_ttl_secs: "Invalid." },
-      };
-    }
-    token_ttl_secs = n;
-  }
-
   const active = formData.get("active") === "on";
 
   const scopesParsed = parseScopeLines(formData.get("scopes") as string | null);
@@ -251,7 +221,6 @@ export async function updateApiResourceAction(
   const result = await updateApiResource(resourceId, {
     name,
     active,
-    token_ttl_secs,
     scopes: scopesParsed.scopes,
   });
 

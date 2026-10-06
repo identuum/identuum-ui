@@ -293,8 +293,6 @@ export interface OrgAPIResourceItem {
   /** Logical OAuth audience identifier, immutable after create. */
   audience: string;
   active: boolean;
-  /** Access-token lifetime for tokens minted for this audience. */
-  token_ttl_secs: number;
   /** Per-resource OAuth scope catalog. Each scope is independently assignable. */
   scopes: OrgAPIResourceScope[];
   created_at: string;

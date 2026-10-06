@@ -857,7 +857,6 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
       {
         name: `billing-${runId}`,
         audience: `https://billing-${runId}.test`,
-        token_ttl_secs: 3600,
       },
       orgAdmin.bearer
     );
@@ -878,7 +877,7 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
         IDP_BASE,
         "PUT",
         `/api/v1/api-resources/${resId}`,
-        { ...c.body, token_ttl_secs: 3600 },
+        c.body,
         orgAdmin.bearer
       );
       expectStatus(res, 400, `api-resource ${c.why} must be refused`);
@@ -1118,7 +1117,6 @@ test.describe("organizations sweep (22 census rows, every one with a non-2xx)", 
         organization_id: org1,
         name: `sweep-res-${runId}`,
         audience: `https://api.${runId}.test`,
-        token_ttl_secs: 3600,
         scopes: [{ Name: "read" }],
       },
       orgAdmin.bearer

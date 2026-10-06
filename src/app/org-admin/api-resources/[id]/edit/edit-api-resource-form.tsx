@@ -42,7 +42,6 @@ interface EditApiResourceFormProps {
   initialName: string;
   initialAudience: string;
   initialActive: boolean;
-  initialTokenTTLSecs: number;
   initialScopes: OrgAPIResourceScope[];
 }
 
@@ -55,7 +54,6 @@ export function EditApiResourceForm({
   initialName,
   initialAudience,
   initialActive,
-  initialTokenTTLSecs,
   initialScopes,
 }: EditApiResourceFormProps) {
   const boundAction = updateApiResourceAction.bind(null, resourceId);
@@ -121,27 +119,6 @@ export function EditApiResourceForm({
         </label>
         <p className="text-xs text-stone-400">
           When inactive, new access tokens for this audience are rejected.
-        </p>
-      </div>
-
-      <div className="space-y-1">
-        <label htmlFor="ar-token-ttl" className="block text-sm font-medium text-sky-950">
-          Token TTL (seconds) <span className="text-stone-400 font-normal">(optional)</span>
-        </label>
-        <input
-          id="ar-token-ttl"
-          name="token_ttl_secs"
-          type="text"
-          inputMode="numeric"
-          autoComplete="off"
-          defaultValue={initialTokenTTLSecs > 0 ? String(initialTokenTTLSecs) : ""}
-          className={fieldErrors.token_ttl_secs ? inputErrorClass : inputClass}
-        />
-        {fieldErrors.token_ttl_secs && (
-          <p className="text-xs text-red-600">{fieldErrors.token_ttl_secs}</p>
-        )}
-        <p className="text-xs text-stone-400">
-          Whole number between 60 and 86400. Leave blank to clear and use the IDP default.
         </p>
       </div>
 

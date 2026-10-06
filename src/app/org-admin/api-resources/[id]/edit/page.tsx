@@ -108,7 +108,6 @@ export default async function OrgAdminAPIResourceEditPage({
         initialName={r.name}
         initialAudience={r.audience}
         initialActive={r.active}
-        initialTokenTTLSecs={r.token_ttl_secs}
         initialScopes={r.scopes}
       />
     </Shell>
@@ -135,8 +134,8 @@ function Header({ name, audience }: { name: string; audience: string }) {
       <h1 className="text-2xl font-extrabold tracking-tight text-sky-950 break-all">Edit {name}</h1>
       <p className="text-sm text-stone-500 mt-0.5 font-mono break-all">{audience}</p>
       <p className="text-xs text-stone-400 mt-1">
-        Update the name, status, TTL, and scope catalog. Audience cannot be changed. Secret rotation
-        is not available from this page.
+        Update the name, status and scope catalog. Audience cannot be changed. Secret rotation is
+        not available from this page.
       </p>
     </div>
   );

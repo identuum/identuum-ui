@@ -148,7 +148,6 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
         organization_id: A.id,
         name: `res-${runId}`,
         audience: `https://api.${runId}.test`,
-        token_ttl_secs: 3600,
         scopes: [{ Name: "read" }],
       },
       A.bearer
@@ -476,7 +475,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       IDP_BASE,
       "PUT",
       `/api/v1/api-resources/${resId}`,
-      { name: `res2-${runId}`, audience: `https://api.${runId}.test`, token_ttl_secs: 7200 },
+      { name: `res2-${runId}`, audience: `https://api.${runId}.test` },
       A.bearer
     );
     expectStatus(put, 200, "own update → 200");
@@ -484,7 +483,7 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       IDP_BASE,
       "PUT",
       `/api/v1/api-resources/${GHOST}`,
-      { name: "x", audience: "https://x.test", token_ttl_secs: 3600 },
+      { name: "x", audience: "https://x.test" },
       A.bearer
     );
     expectStatus(putGhost, 404, "update nonexistent → 404");
@@ -498,7 +497,10 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
       { why: "a blank name", body: { name: "", audience: `https://api.${runId}.test` } },
       { why: "a blank audience", body: { name: `res2-${runId}`, audience: "" } },
       {
-        why: "a non-positive token TTL",
+        // OSS-MUST1-RETIRE-TTL (owner ruling m, 2026-10-06): identuum-idp-oss
+        // refuses any token_ttl_secs with 400 (earlier it refused only a
+        // non-positive one); this request is still a refusal either way.
+        why: "a token_ttl_secs field",
         body: { name: `res2-${runId}`, audience: `https://api.${runId}.test`, token_ttl_secs: -5 },
       },
       {
@@ -506,7 +508,6 @@ test.describe("crud sweep (19 census rows, cross-tenant on every owned row)", ()
         body: {
           name: `res2-${runId}`,
           audience: `https://api.${runId}.test`,
-          token_ttl_secs: 3600,
           scopes: [{ name: "system:root" }],
         },
       },

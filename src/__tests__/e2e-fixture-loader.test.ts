@@ -907,7 +907,6 @@ describe("loadOrgAdminFixtureApiResource — present file", () => {
       audience: `https://api.e2e-${runID}.test`,
       name: `E2E Sample API ${runID}`,
       active: true,
-      token_ttl_secs: 3600,
     };
     writeFileSync(path, JSON.stringify(env), { mode: 0o600 });
     const out = loadOrgAdminFixtureApiResource();
@@ -917,10 +916,9 @@ describe("loadOrgAdminFixtureApiResource — present file", () => {
       audience: `https://api.e2e-${runID}.test`,
       name: `E2E Sample API ${runID}`,
       active: true,
-      tokenTTLSecs: 3600,
     });
     const keys = Object.keys(out as unknown as Record<string, unknown>).sort();
-    expect(keys).toEqual(["active", "audience", "id", "name", "tokenTTLSecs"]);
+    expect(keys).toEqual(["active", "audience", "id", "name"]);
   });
 
   it("returns null fail-closed when api_resource.id is not UUID-shaped", () => {
@@ -931,7 +929,6 @@ describe("loadOrgAdminFixtureApiResource — present file", () => {
       audience: `https://api.e2e-${runID}.test`,
       name: `E2E Sample API ${runID}`,
       active: true,
-      token_ttl_secs: 3600,
     };
     writeFileSync(path, JSON.stringify(env), { mode: 0o600 });
     expect(loadOrgAdminFixtureApiResource()).toBeNull();
@@ -945,7 +942,6 @@ describe("loadOrgAdminFixtureApiResource — present file", () => {
       audience: "https://api.production.example.com",
       name: `E2E Sample API ${runID}`,
       active: true,
-      token_ttl_secs: 3600,
     };
     writeFileSync(path, JSON.stringify(env), { mode: 0o600 });
     expect(loadOrgAdminFixtureApiResource()).toBeNull();
@@ -959,7 +955,6 @@ describe("loadOrgAdminFixtureApiResource — present file", () => {
       audience: `https://api.e2e-${runID}.test`,
       name: "Production API",
       active: true,
-      token_ttl_secs: 3600,
     };
     writeFileSync(path, JSON.stringify(env), { mode: 0o600 });
     expect(loadOrgAdminFixtureApiResource()).toBeNull();
@@ -973,29 +968,35 @@ describe("loadOrgAdminFixtureApiResource — present file", () => {
       audience: `https://api.e2e-${runID}.test`,
       name: `E2E Sample API ${runID}`,
       active: false,
-      token_ttl_secs: 3600,
     };
     writeFileSync(path, JSON.stringify(env), { mode: 0o600 });
     expect(loadOrgAdminFixtureApiResource()).toBeNull();
   });
 
-  it("returns null fail-closed when token_ttl_secs is outside the IDP-accepted [60, 86400] range", () => {
+  it("reads a legacy envelope that still carries token_ttl_secs without it (OSS-MUST1-RETIRE-TTL)", () => {
     const runID = "0123456789ab";
-    for (const bad of [0, 1, 59, 86401, 999999, 3.14] as const) {
+    for (const legacy of [0, 59, 3600, 86401, 3.14] as const) {
       const env = goodFixture(runID) as Record<string, unknown>;
       env.api_resource = {
         id: "33333333-3333-3333-3333-333333333333",
         audience: `https://api.e2e-${runID}.test`,
         name: `E2E Sample API ${runID}`,
         active: true,
-        token_ttl_secs: bad,
+        token_ttl_secs: legacy,
       };
       writeFileSync(path, JSON.stringify(env), { mode: 0o600 });
-      expect(loadOrgAdminFixtureApiResource(), `token_ttl_secs=${bad}`).toBeNull();
+      const out = loadOrgAdminFixtureApiResource();
+      expect(out, `token_ttl_secs=${legacy}`).not.toBeNull();
+      expect(Object.keys(out as unknown as Record<string, unknown>).sort()).toEqual([
+        "active",
+        "audience",
+        "id",
+        "name",
+      ]);
     }
   });
 
-  it("ignores any secret-shaped property on the envelope block — only the five safe fields are projected", () => {
+  it("ignores any secret-shaped property on the envelope block — only the four safe fields are projected", () => {
     const runID = "0123456789ab";
     const env = goodFixture(runID) as Record<string, unknown>;
     // Inject extra forbidden-shaped properties — the loader must NOT
@@ -1006,7 +1007,8 @@ describe("loadOrgAdminFixtureApiResource — present file", () => {
       name: `E2E Sample API ${runID}`,
       active: true,
       token_ttl_secs: 3600,
-      // forbidden fields a buggy IDP build might write — loader must drop:
+      // forbidden or retired fields a buggy or older IDP build might write —
+      // loader must drop:
       resource_secret: "attacker-supplied-plaintext-secret",
       resource_secret_hash: "deadbeef".repeat(8),
       private_key: "----BEGIN----",
@@ -1016,7 +1018,7 @@ describe("loadOrgAdminFixtureApiResource — present file", () => {
     const out = loadOrgAdminFixtureApiResource();
     expect(out).not.toBeNull();
     const keys = Object.keys(out as unknown as Record<string, unknown>).sort();
-    expect(keys).toEqual(["active", "audience", "id", "name", "tokenTTLSecs"]);
+    expect(keys).toEqual(["active", "audience", "id", "name"]);
   });
 
   it("re-throws when the envelope marker is mismatched (validateFixture is still called)", () => {
@@ -1027,7 +1029,6 @@ describe("loadOrgAdminFixtureApiResource — present file", () => {
       audience: "https://api.e2e-0123456789ab.test",
       name: "E2E Sample API 0123456789ab",
       active: true,
-      token_ttl_secs: 3600,
     };
     writeFileSync(path, JSON.stringify(env), { mode: 0o600 });
     expect(() => loadOrgAdminFixtureApiResource()).toThrow();
@@ -1043,7 +1044,7 @@ describe("OrgAdminFixtureApiResource type + loader — source-text pins", () => 
   );
   const LOADER_SRC = RAW_LOADER_SRC.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
-  it("OrgAdminFixtureApiResource type declares ONLY the five safe fields", () => {
+  it("OrgAdminFixtureApiResource type declares ONLY the four safe fields", () => {
     const ifaceStart = LOADER_SRC.indexOf("export interface OrgAdminFixtureApiResource");
     expect(ifaceStart).toBeGreaterThanOrEqual(0);
     const tail = LOADER_SRC.slice(ifaceStart);
