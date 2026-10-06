@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { orgLookup } from "@/lib/idp-client";
 import { IDP_PATHS } from "@/lib/idp-paths";
+import { ssoLoginDestination } from "@/lib/safe-destination";
 import type { OrgConfig, PublicIDPInfo, UserRole } from "@/lib/types";
 import { MFAEnrollForm } from "./mfa-enroll-form";
 import { MFAForm } from "./mfa-form";
@@ -153,16 +154,16 @@ export function LoginFlow({ onSuccess, mailCeremonies = true }: LoginFlowProps) 
   };
 
   const handleSSORedirect = (loginUrl: string) => {
-    try {
-      const callbackUrl = `${window.location.origin}/auth/callback`;
-      const full = new URL(loginUrl, window.location.origin);
-      full.searchParams.set("redirect_uri", callbackUrl);
-      const returnTo = new URLSearchParams(window.location.search).get("return_to");
-      if (returnTo) full.searchParams.set("return_to", returnTo);
-      window.location.href = full.toString();
-    } catch {
+    // L1: only the same-origin SSO initiation route is a destination.
+    const full = ssoLoginDestination(loginUrl, window.location.origin);
+    if (!full) {
       setServerError("SSO configuration error. Contact your administrator.");
+      return;
     }
+    full.searchParams.set("redirect_uri", `${window.location.origin}/auth/callback`);
+    const returnTo = new URLSearchParams(window.location.search).get("return_to");
+    if (returnTo) full.searchParams.set("return_to", returnTo);
+    window.location.href = full.toString();
   };
 
   const handleMfaRequired = (sessionId: string) => {

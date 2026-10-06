@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
+import { clickableAccountLink } from "@/lib/safe-destination";
 import { type CreateOrgActionState, createOrgAction } from "./actions";
 
 const initialState: CreateOrgActionState = {};
@@ -114,7 +115,11 @@ export function CreateOrgForm() {
   );
 }
 
-function SuccessPanel({ success }: { success: NonNullable<CreateOrgActionState["success"]> }) {
+export function SuccessPanel({
+  success,
+}: {
+  success: NonNullable<CreateOrgActionState["success"]>;
+}) {
   const { orgId, orgName, orgDomain, adminEmail, activationToken } = success;
   const activationUrl = success.activationUrl;
   const activationUrlUnavailable = success.activationUrlUnavailable;
@@ -154,12 +159,23 @@ function SuccessPanel({ success }: { success: NonNullable<CreateOrgActionState["
               <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
                 Activation link — send this
               </p>
-              <a
-                href={activationUrl}
-                className="block rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900 break-all font-mono underline underline-offset-2 hover:bg-sky-100"
-              >
-                {activationUrl}
-              </a>
+              {/* L1: a link only when https or on this console's origin;
+                  anything else stays copyable text, never clickable. */}
+              {clickableAccountLink(
+                activationUrl,
+                typeof window === "undefined" ? undefined : window.location.origin
+              ) ? (
+                <a
+                  href={activationUrl}
+                  className="block rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900 break-all font-mono underline underline-offset-2 hover:bg-sky-100"
+                >
+                  {activationUrl}
+                </a>
+              ) : (
+                <p className="block rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs text-sky-900 break-all font-mono select-all">
+                  {activationUrl}
+                </p>
+              )}
             </div>
           )}
 

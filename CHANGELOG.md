@@ -8,6 +8,18 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
 ## Unreleased
 
+- **Sign-in and activation links check their destinations.** The sign-in
+  page sends a browser to single sign-on only on this console's own
+  `/api/v1/auth/idp/<id>/login` route; any other origin, path, `javascript:`
+  or `data:` value shows "SSO configuration error" instead. A new
+  organization's activation link is a link only when it is `https` or on this
+  console's own origin; otherwise it is shown as text to copy.
+- **The export's routes are walked under the shell's script policy.** A new
+  e2e-full spec (`export/e2e/shell-policy.spec.ts`) checks the binary's shell
+  headers (the script policy and `no-referrer`), that an account-link page
+  sends no `Referer`, and that every route of the export loads with no policy
+  violation. Needs identuum-idp-oss with the shell policy.
+
 - **Service account expiry in organization settings.** An org_admin sees and
   sets "Service account expiry (days)" on **Settings** for their own
   organization: `0` means no expiry, `1` to `3650` days otherwise. The value
