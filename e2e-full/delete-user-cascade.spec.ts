@@ -35,9 +35,10 @@ import {
   expectStatus,
   firstLoginBearerAsync,
 } from "../e2e/helpers/appliance-fixture";
+import { harnessIdpBase } from "./helpers/harness";
 import { siteAdminSession } from "./helpers/session";
 
-const IDP_BASE = process.env.IDENTUUM_E2E_FULL_IDP_BASE ?? "http://127.0.0.1:7113";
+const IDP_BASE = harnessIdpBase();
 const SITE_ADMIN_EMAIL = process.env.IDENTUUM_IDP_BOOTSTRAP_EMAIL ?? "site_admin@system.local";
 
 test.describe("delete-user cascade (census row: DELETE /api/v1/users/:id)", () => {

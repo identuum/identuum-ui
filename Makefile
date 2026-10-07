@@ -559,7 +559,8 @@ tool-versions:
 
 ## e2e-full: the DISPOSABLE full-behavior suite (THE-DISPOSABLE-HARNESS).
 ## Runs as its OWN Compose project (identuum-e2e, Postgres on 127.0.0.1:15513,
-## app on 7113): destroys ITS postgres volume, rebuilds the appliance from the
+## app on 17113, dev-loop UI on 17108 — owner ruling t, 2026-10-07, declared
+## once in full-run.sh): destroys ITS postgres volume, rebuilds the appliance from the
 ## sibling working tree, bootstraps a run-local site_admin, runs the e2e-full
 ## Playwright project serially (--workers=1, TOTP physics), then tears its own
 ## project down again. The operator's dev stack (project identuum-idp-oss-dev

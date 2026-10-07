@@ -36,9 +36,10 @@ import {
   observeRaw,
 } from "../e2e/helpers/appliance-fixture";
 import { unconsumedTOTP, unconsumedTOTPAfterFreshStep } from "../e2e/helpers/totp";
+import { harnessIdpBase, harnessIdpOrigin } from "./helpers/harness";
 import { siteAdminSession } from "./helpers/session";
 
-const IDP_BASE = process.env.IDENTUUM_E2E_FULL_IDP_BASE ?? "http://127.0.0.1:7113";
+const IDP_BASE = harnessIdpBase();
 const SITE_ADMIN_EMAIL = process.env.IDENTUUM_IDP_BOOTSTRAP_EMAIL ?? "site_admin@system.local";
 const REDIRECT_URI = "https://ui.example.test/consent-cb";
 const GHOST = "00000000-0000-0000-0000-00000000dead";
@@ -1199,7 +1200,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
 
   // THE-PHISHING-RESISTANT-ACR. The third honest context. A real browser
   // (CDP virtual authenticator) on the RP origin — the issuer's own origin,
-  // http://localhost:7113 in the harness, which the WebAuthn service always
+  // http://localhost:<E2E_APP_PORT> in the harness, which the WebAuthn service always
   // lists as an allowed origin. Order: (1) password+TOTP browser session in
   // the page; (2) while the user holds NO passkey, acr_values=phishing-resistant
   // → honest refusal to the client, no code; (3) register a passkey through
@@ -1234,7 +1235,7 @@ test.describe("consent ceremony (authorize → consent → code, single-use)", (
     const PR = "urn:identuum:loa:phishing-resistant";
     const MFA = "urn:identuum:loa:mfa";
     const PASSWORD = "urn:identuum:loa:password";
-    const IDP_ORIGIN = process.env.IDENTUUM_E2E_FULL_IDP_ORIGIN ?? "http://localhost:7113";
+    const IDP_ORIGIN = harnessIdpOrigin();
     expect(userTotpSecret.length, "the TOTP secret enrolled by the previous test").toBeGreaterThan(
       0
     );

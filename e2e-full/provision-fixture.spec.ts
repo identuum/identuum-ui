@@ -32,9 +32,10 @@ import {
   resolveFixturePath,
   validateFixture,
 } from "../e2e/helpers/fixture";
+import { harnessIdpBase } from "./helpers/harness";
 import { siteAdminSession } from "./helpers/session";
 
-const IDP_BASE = process.env.IDENTUUM_E2E_FULL_IDP_BASE ?? "http://127.0.0.1:7113";
+const IDP_BASE = harnessIdpBase();
 const SITE_ADMIN_EMAIL = process.env.IDENTUUM_IDP_BOOTSTRAP_EMAIL ?? "site_admin@system.local";
 
 // 12 lowercase-hex run id, matching the fixture loader's RUN_ID_PATTERN.

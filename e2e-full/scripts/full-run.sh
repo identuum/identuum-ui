@@ -50,10 +50,20 @@ E2E_APP_CONTAINER="$E2E_PROJECT"
 # here and to oss-up only; neither compose file changes. See the overlay.
 E2E_MAIL_OVERLAY="$UI_DIR/e2e-full/compose.mail-sink.yml"
 E2E_COMPOSE=(docker compose -p "$E2E_PROJECT" -f "$IDP_DIR/deployment/docker-compose.dev.yml" -f "$E2E_MAIL_OVERLAY")
-# The dev-loop UI port (see E2E_UI_PORT below) and the appliance's app port,
-# which the dev compose publishes on 7113 for every project.
-E2E_APP_PORT=7113
-E2E_UI_PORT=7108
+# OSS-TEST-FULL-PORTS (owner ruling t, 2026-10-07): the harness's host ports,
+# each declared ONCE here, apart from the owner's dev stack (5513, the app's
+# default port and the dev UI's), so a running dev app no longer makes the run
+# refuse. E2E_APP_PORT reaches the appliance as DEV_APP_PORT — idp-oss's
+# docker-compose.dev.yml derives the published port, the listen address and
+# the issuer from it — and every spec as IDENTUUM_E2E_FULL_IDP_BASE /
+# IDENTUUM_E2E_FULL_IDP_ORIGIN (e2e-full/helpers/harness.ts) or
+# IDENTUUM_IDP_BASE_URL. E2E_UI_PORT is the dev-loop UI's port.
+E2E_APP_PORT=17113
+E2E_UI_PORT=17108
+export DEV_APP_PORT="$E2E_APP_PORT"
+E2E_IDP_BASE="http://127.0.0.1:${E2E_APP_PORT}"
+export IDENTUUM_E2E_FULL_IDP_BASE="$E2E_IDP_BASE"
+export IDENTUUM_E2E_FULL_IDP_ORIGIN="http://localhost:${E2E_APP_PORT}"
 
 # THE-SEED-THAT-OUTLIVED-ITS-APPLIANCE: the site_admin TOTP seed is written
 # under e2e-full/.auth/ during a run and is valid ONLY for the appliance that
@@ -82,8 +92,8 @@ echo "e2e-full: DESTROYING the harness stack (project $E2E_PROJECT: down --volum
 "${E2E_COMPOSE[@]}" --profile app down --volumes
 
 # PREFLIGHT, after our own leftovers are gone: every host port this run binds
-# must be free. A port held by anything else — the operator's dev app on 7113
-# included — is a refusal naming the holder, never a collision mid-run.
+# must be free. A port held by anything else is a refusal naming the holder,
+# never a collision mid-run.
 for port in "$DEV_PG_HOST_PORT" "$E2E_APP_PORT" "$E2E_UI_PORT"; do
 	# `|| true`: lsof exits 1 when nothing listens, which pipefail would turn
 	# into an abort before the free port could be reported free.
@@ -129,7 +139,7 @@ make -C "$IDP_DIR" oss-up COMPOSE_FILE="deployment/docker-compose.dev.yml -f $E2
 
 echo "e2e-full: waiting for the appliance to serve"
 for i in $(seq 1 60); do
-	if curl -fsS --max-time 2 http://127.0.0.1:7113/health >/dev/null 2>&1; then
+	if curl -fsS --max-time 2 "$E2E_IDP_BASE/health" >/dev/null 2>&1; then
 		break
 	fi
 	if [ "$i" -eq 60 ]; then
@@ -155,7 +165,7 @@ make -C "$IDP_DIR" dev-smoke
 # dev-loop suite navigates the UI, so it runs the "chromium" project WITHOUT
 # IDENTUUM_E2E_FULL=1 (that flag omits the webServer) — a fresh `next dev` on
 # the dedicated dev-loop port starts and the isolated config points it at the
-# appliance on :7113. Everything here is reached ONLY through this harness; a
+# appliance on E2E_APP_PORT. Everything here is reached ONLY through this harness; a
 # plain `pnpm e2e` never runs any of it, and the dev loop is not slowed.
 # --workers=1 throughout for TOTP replay physics.
 E2E_UI_CFG="$UI_DIR/e2e/.auth/ui-runtime.provisioner.json"
@@ -168,7 +178,7 @@ cat >"$E2E_UI_CFG" <<EOF
 {
   "configured": true,
   "ui_origin": "http://localhost:${E2E_UI_PORT}",
-  "idp": { "enabled": true, "public_base_url": "http://127.0.0.1:7113" },
+  "idp": { "enabled": true, "public_base_url": "${E2E_IDP_BASE}" },
   "ag": { "enabled": false, "public_base_url": "" }
 }
 EOF
@@ -266,7 +276,7 @@ bash "$GW" step "$RECORD" 'mail-sink=cid=$(docker ps -q --filter label=com.docke
 # to a dedicated output dir because every later Playwright invocation wipes
 # the default test-results/ — coverage needs these traces at the end.
 echo "e2e-full: fresh-appliance phase (setup_required window: / and /setup)"
-bash "$GW" step "$RECORD" 'fresh-appliance=IDENTUUM_E2E_FRESH_PHASE=1 IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh fresh-appliance e2e/.auth/pw-fresh.json -- --project=chromium --workers=1 --trace on --output=e2e/.auth/fresh-results e2e/fresh-appliance.spec.ts' || rc=1
+bash "$GW" step "$RECORD" 'fresh-appliance=IDENTUUM_E2E_FRESH_PHASE=1 IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" IDENTUUM_IDP_BASE_URL='"$E2E_IDP_BASE"' bash e2e-full/scripts/pw-phase.sh fresh-appliance e2e/.auth/pw-fresh.json -- --project=chromium --workers=1 --trace on --output=e2e/.auth/fresh-results e2e/fresh-appliance.spec.ts' || rc=1
 
 echo "e2e-full: bootstrapping site_admin (run-local password, never printed)"
 # Prefix satisfies the strict bootstrap policy (upper+lower+digit+special);
@@ -340,7 +350,7 @@ echo "e2e-full: API suite (oss-full)"
 #              STAYS AT 1.
 #
 # Raise nothing here without three consecutive green runs and identical counts.
-if planned api-suite; then bash "$GW" step "$RECORD" 'api-suite=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh api-suite e2e/.auth/pw-api-suite.json -- --project=oss-full --workers=1' || rc=1; fi
+if planned api-suite; then bash "$GW" step "$RECORD" 'api-suite=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE='"$E2E_IDP_BASE"' bash e2e-full/scripts/pw-phase.sh api-suite e2e/.auth/pw-api-suite.json -- --project=oss-full --workers=1' || rc=1; fi
 
 # MEASUREMENT baseline (opt-in via IDENTUUM_E2E_MEASURE=1): the SAME dev-loop
 # suite BEFORE provisioning — no envelope, no dynamic-fixture, no inherited
@@ -348,7 +358,7 @@ if planned api-suite; then bash "$GW" step "$RECORD" 'api-suite=IDENTUUM_E2E_FUL
 # number, measured in this run, never carried forward.
 if [ "${IDENTUUM_E2E_MEASURE:-}" = "1" ]; then
 	echo "e2e-full: MEASURE baseline — dev-loop suite PLAIN (unprovisioned)"
-	if planned plain-baseline; then bash "$GW" step "$RECORD" 'plain-baseline=rm -f "$FIXTURE_FILE" && IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh plain-baseline e2e/.auth/pw-plain.json -- --project=chromium --workers=1' || rc=1; fi
+	if planned plain-baseline; then bash "$GW" step "$RECORD" 'plain-baseline=rm -f "$FIXTURE_FILE" && IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" IDENTUUM_IDP_BASE_URL='"$E2E_IDP_BASE"' bash e2e-full/scripts/pw-phase.sh plain-baseline e2e/.auth/pw-plain.json -- --project=chromium --workers=1' || rc=1; fi
 fi
 
 # Provision the dev-loop fixture from the ALREADY-bootstrapped site_admin (the
@@ -365,11 +375,11 @@ IDENTUUM_OSS_TEST_USER_EMAIL="rotate@e2e-recovery.test"
 export IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD IDENTUUM_OSS_TEST_USER_PASSWORD IDENTUUM_OSS_TEST_USER_EMAIL
 
 echo "e2e-full: provisioning the dev-loop fixture (opt-in specs light up)"
-bash "$GW" step "$RECORD" 'provisioner=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_PROVISION=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD="$IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD" IDENTUUM_OSS_TEST_USER_PASSWORD="$IDENTUUM_OSS_TEST_USER_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh provisioner e2e/.auth/pw-provisioner.json -- --project=oss-full --workers=1 provision-fixture' || rc=1
+bash "$GW" step "$RECORD" 'provisioner=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_PROVISION=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD="$IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD" IDENTUUM_OSS_TEST_USER_PASSWORD="$IDENTUUM_OSS_TEST_USER_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE='"$E2E_IDP_BASE"' bash e2e-full/scripts/pw-phase.sh provisioner e2e/.auth/pw-provisioner.json -- --project=oss-full --workers=1 provision-fixture' || rc=1
 
 # FAIL LOUD if the provisioner did not seal the envelope: without it,
 # global-setup's rebuild path would try to stand up ITS OWN appliance
-# (docker-compose.e2e.yml) on the same :7113 the harness appliance holds —
+# (docker-compose.e2e.yml) instead of reusing the harness appliance —
 # measured 2026-08-29 as a port-bind error after a silent fall-through. The
 # record is left un-finalized: the unrun planned steps read INCOMPLETE, which
 # is the truth.
@@ -396,7 +406,7 @@ chmod 600 "$ADMIN_RESET_ENVELOPE"
 # org_admin's recovery codes — confined to this disposable appliance (torn
 # down at run end; no harness login uses recovery codes).
 echo "e2e-full: static census rows sweep (the probes that stay)"
-if planned static-rows-sweep; then bash "$GW" step "$RECORD" 'static-rows-sweep=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_STATIC_ROWS=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh static-rows-sweep e2e/.auth/pw-static-rows.json -- --project=oss-full --workers=1 static-rows-sweep' || rc=1; fi
+if planned static-rows-sweep; then bash "$GW" step "$RECORD" 'static-rows-sweep=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_STATIC_ROWS=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE='"$E2E_IDP_BASE"' bash e2e-full/scripts/pw-phase.sh static-rows-sweep e2e/.auth/pw-static-rows.json -- --project=oss-full --workers=1 static-rows-sweep' || rc=1; fi
 
 echo "e2e-full: enforcing the static-rows committed set + floor"
 if planned static-rows; then bash "$GW" step "$RECORD" 'static-rows=node e2e-full/scripts/static-rows-from-run.mjs e2e/.auth/pw-static-rows.json' || rc=1; fi
@@ -414,7 +424,7 @@ if planned role-matrix; then bash "$GW" step "$RECORD" 'role-matrix=node e2e-ful
 
 # Run the dev-loop suite PROVISIONED: the envelope is present and
 # dynamic-fixture mode is on, so global-setup's fast path REUSES this running
-# appliance (it validates the envelope's site_admin against :7113 and skips
+# appliance (it validates the envelope's site_admin against E2E_APP_PORT and skips
 # any down/up) instead of standing up a second stack. --trace on feeds the
 # coverage phase: route coverage is derived from what the run actually did.
 # THE-SKIPPED-THIRTY-TWO: the orgs-CRUD ceremony (create -> edit -> soft-delete,
@@ -443,11 +453,11 @@ bash "$GW" step "$RECORD" 'verify-record-ui=bash scripts/gate-witness.sh check .
 bash "$GW" step "$RECORD" 'verify-record-idp-oss=bash scripts/gate-witness.sh check '"$IDP_DIR"' GATE-RUN.txt' || rc=1
 
 echo "e2e-full: dev-loop suite PROVISIONED (the previously-dark specs now light)"
-if planned devloop-provisioned; then bash "$GW" step "$RECORD" 'devloop-provisioned=IDENTUUM_E2E_ORGS_CRUD=1 IDENTUUM_E2E_OSS_CHANGE_PASSWORD=1 IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true IDENTUUM_OSS_TEST_USER_EMAIL="$IDENTUUM_OSS_TEST_USER_EMAIL" IDENTUUM_OSS_TEST_USER_PASSWORD="$IDENTUUM_OSS_TEST_USER_PASSWORD" IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD="$IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD" IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-provisioned e2e/.auth/pw-devloop.json -- --project=chromium --workers=1 --trace on' || rc=1; fi
+if planned devloop-provisioned; then bash "$GW" step "$RECORD" 'devloop-provisioned=IDENTUUM_E2E_ORGS_CRUD=1 IDENTUUM_E2E_OSS_CHANGE_PASSWORD=1 IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true IDENTUUM_OSS_TEST_USER_EMAIL="$IDENTUUM_OSS_TEST_USER_EMAIL" IDENTUUM_OSS_TEST_USER_PASSWORD="$IDENTUUM_OSS_TEST_USER_PASSWORD" IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD="$IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD" IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL='"$E2E_IDP_BASE"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-provisioned e2e/.auth/pw-devloop.json -- --project=chromium --workers=1 --trace on' || rc=1; fi
 # GATE-TIERS: the quick mode's one dev-loop phase — the same dynamic fixture,
 # the same --trace on and therefore the same pw-phase.sh browser-console gate,
 # over QUICK_SPECS only.
-if planned devloop-quick; then bash "$GW" step "$RECORD" 'devloop-quick=IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL=http://127.0.0.1:7113 IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-quick e2e/.auth/pw-devloop-quick.json -- --project=chromium --workers=1 --trace on '"$QUICK_SPECS"'' || rc=1; fi
+if planned devloop-quick; then bash "$GW" step "$RECORD" 'devloop-quick=IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL='"$E2E_IDP_BASE"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-quick e2e/.auth/pw-devloop-quick.json -- --project=chromium --workers=1 --trace on '"$QUICK_SPECS"'' || rc=1; fi
 
 # THE-DISPOSABLE-IDENTITIES: the devloop skip count gets a CEILING, exactly
 # like the coverage floor — a new skip must be a deliberate commit, never
@@ -482,13 +492,13 @@ if planned closure; then bash "$GW" step "$RECORD" 'closure=node e2e-full/script
 
 # OSS-REGISTER-UI item 7: the export's own specs (export/e2e: console-clean,
 # claim-link, register) against the console THIS appliance's binary serves on
-# :7113, signed in as the run's fixture administrators
+# E2E_APP_PORT, signed in as the run's fixture administrators
 # (IDENTUUM_E2E_EXPORT_FIXTURE=1), read from the envelope copy admin-reset
 # also reads (the dev-loop phase removes the fixture file itself); an absent
 # envelope fails the phase. A failing spec fails the phase. Before
 # admin-reset, which rotates the site administrator they sign in as.
 echo "e2e-full: export specs against the binary's own console"
-if planned export-specs; then bash "$GW" step "$RECORD" 'export-specs=IDENTUUM_E2E_EXPORT_PHASE=ready IDENTUUM_E2E_EXPORT_FIXTURE=1 IDENTUUM_E2E_FIXTURE_FILE='"$ADMIN_RESET_ENVELOPE"' IDENTUUM_E2E_EXPORT_BASE_URL=http://localhost:7113 bash e2e-full/scripts/pw-phase.sh export-specs '"$UI_DIR"'/e2e/.auth/pw-export.json -- --config export/playwright.config.ts --workers=1 --output='"$UI_DIR"'/e2e/.auth/export-results console-clean.spec.ts claim-link.spec.ts register.spec.ts shell-policy.spec.ts' || rc=1; fi
+if planned export-specs; then bash "$GW" step "$RECORD" 'export-specs=IDENTUUM_E2E_EXPORT_PHASE=ready IDENTUUM_E2E_EXPORT_FIXTURE=1 IDENTUUM_E2E_FIXTURE_FILE='"$ADMIN_RESET_ENVELOPE"' IDENTUUM_E2E_EXPORT_BASE_URL='"$IDENTUUM_E2E_FULL_IDP_ORIGIN"' bash e2e-full/scripts/pw-phase.sh export-specs '"$UI_DIR"'/e2e/.auth/pw-export.json -- --config export/playwright.config.ts --workers=1 --output='"$UI_DIR"'/e2e/.auth/export-results console-clean.spec.ts claim-link.spec.ts register.spec.ts shell-policy.spec.ts' || rc=1; fi
 
 # THE-ADMIN-RESET (T-R2a): the LAST CREDENTIALED phase, because it rotates
 # site_admin's credentials — nothing after it may depend on them (only the
@@ -501,7 +511,7 @@ if planned export-specs; then bash "$GW" step "$RECORD" 'export-specs=IDENTUUM_E
 IDENTUUM_E2E_RECOVERED_ADMIN_PASSWORD="R3cover!$(openssl rand -hex 16)"
 export IDENTUUM_E2E_RECOVERED_ADMIN_PASSWORD
 echo "e2e-full: admin-reset scenario (rotates site_admin; run-local recovery password)"
-if planned admin-reset; then bash "$GW" step "$RECORD" 'admin-reset=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_ADMIN_RESET=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_IDP_DIR='"$IDP_DIR"' IDENTUUM_E2E_FIXTURE_FILE='"$ADMIN_RESET_ENVELOPE"' IDENTUUM_E2E_FULL_IDP_BASE=http://127.0.0.1:7113 bash e2e-full/scripts/pw-phase.sh admin-reset e2e/.auth/pw-admin-reset.json -- --project=oss-full --workers=1 admin-reset' || rc=1; fi
+if planned admin-reset; then bash "$GW" step "$RECORD" 'admin-reset=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_ADMIN_RESET=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_IDP_DIR='"$IDP_DIR"' IDENTUUM_E2E_FIXTURE_FILE='"$ADMIN_RESET_ENVELOPE"' IDENTUUM_E2E_FULL_IDP_BASE='"$E2E_IDP_BASE"' bash e2e-full/scripts/pw-phase.sh admin-reset e2e/.auth/pw-admin-reset.json -- --project=oss-full --workers=1 admin-reset' || rc=1; fi
 
 # THE-SESSION-REJECTION-ROOT-CAUSE (AUTH-503): read the appliance log for
 # every store error the IdP answered as 503 during this mint — the hunt's

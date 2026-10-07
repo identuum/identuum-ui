@@ -15,8 +15,9 @@
  */
 import { expect, test } from "@playwright/test";
 import { api, expectHonestAuthBody, expectStatus } from "../e2e/helpers/appliance-fixture";
+import { harnessIdpBase } from "./helpers/harness";
 
-const IDP_BASE = process.env.IDENTUUM_E2E_FULL_IDP_BASE ?? "http://127.0.0.1:7113";
+const IDP_BASE = harnessIdpBase();
 
 test.describe("auth verdicts (AUTH-503): every 401 names its reason", () => {
   test.skip(process.env.IDENTUUM_E2E_FULL !== "1", "e2e-full only");
