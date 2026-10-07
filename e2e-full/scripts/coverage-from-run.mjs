@@ -4,7 +4,7 @@
  *
  * Inputs:
  *   argv[2]  path to the provisioned dev-loop run's Playwright JSON report
- *   argv[3]  the run's UI origin (e.g. http://localhost:7108) — only frames on
+ *   argv[3]  the run's UI origin (e.g. http://localhost:17108) — only frames on
  *            this origin count toward route coverage
  *
  * Derivation, all mechanical:
