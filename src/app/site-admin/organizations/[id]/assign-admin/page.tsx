@@ -91,6 +91,31 @@ export default async function AssignAdminPage({ params }: { params: Promise<{ id
   const inviteFirst =
     !org.has_admin && org.activation_pending === false && org.can_assign_admin !== true;
 
+  // V2-022 (testbook): an administrator exists but has not activated, and the
+  // activation link is still valid, so assignment is blocked. That is not an
+  // active, verified administrator.
+  if (!canAssign && org.activation_pending === true) {
+    return (
+      <div className="max-w-lg space-y-4">
+        <Breadcrumb orgName={org.name} />
+        <div className="bg-white border border-stone-200 rounded-[1.5rem] px-5 py-4 shadow-sm">
+          <p className="text-sm font-semibold text-stone-700">Activation pending</p>
+          <p className="text-xs text-stone-400 mt-1">
+            The administrator of <span className="font-medium text-sky-950">{org.name}</span> has
+            not activated yet, and their activation link is still valid. Re-issue the activation
+            link from the organization page.
+          </p>
+        </div>
+        <a
+          href={`/site-admin/organizations/${org.id}`}
+          className="inline-block text-sm text-sky-600 hover:text-sky-700 underline"
+        >
+          Open the organization
+        </a>
+      </div>
+    );
+  }
+
   if (!canAssign) {
     return (
       <div className="max-w-lg space-y-4">

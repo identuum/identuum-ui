@@ -95,6 +95,26 @@ describe("the assign-admin page for an organization with no administrator", () =
     org = { ...base, is_claimed: false, can_assign_admin: true, activation_pending: false };
     expect(await page()).toContain("Re-issue activation token");
   });
+  // V2-022 (testbook): an administrator exists but has not activated, and the
+  // link is still valid, so assignment is blocked. The page claimed an
+  // active, verified administrator.
+  it("says activation is pending when the only administrator has not activated", async () => {
+    org = {
+      ...base,
+      active: false,
+      is_claimed: true,
+      can_assign_admin: false,
+      activation_pending: true,
+    };
+    const html = await page();
+    expect(html).not.toContain("verified administrator already manages");
+    expect(html).toContain("has not activated yet");
+    expect(html).toContain(`href="/site-admin/organizations/${ORG_ID}"`);
+  });
+  it("keeps the assigned panel when a verified administrator manages the organization", async () => {
+    org = { ...base, is_claimed: true, can_assign_admin: false, activation_pending: false };
+    expect(await page()).toContain("verified administrator already manages");
+  });
 });
 
 describe("inviting the first administrator", () => {

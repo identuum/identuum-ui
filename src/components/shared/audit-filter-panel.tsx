@@ -15,6 +15,7 @@ import {
   KNOWN_AUDIT_EVENT_TYPES,
 } from "@/lib/audit-event-types";
 import type { AuditEventTypeGroupFromAPI } from "@/lib/idp-admin-client";
+import { CustomRangeToggle } from "./custom-range-toggle";
 import { LocalDayBounds } from "./local-day-bounds";
 
 export interface AuditFilterValues {
@@ -70,7 +71,7 @@ export function hasActiveFilters(f: AuditFilterValues): boolean {
 
 function windowSelectValue(f: AuditFilterValues): string {
   if (f.window === "24h" || f.window === "7d" || f.window === "30d") return f.window;
-  if (f.startDate || f.endDate) return "custom";
+  if (f.window === "custom" || f.startDate || f.endDate) return "custom";
   return "";
 }
 
@@ -139,6 +140,7 @@ export function AuditFilterPanel({
         {subjectId ? <input type="hidden" name="subject_id" value={subjectId} /> : null}
         {/* OSS-FIN-1 (U-020): From/To are the viewer's local days, sent as UTC. */}
         <LocalDayBounds />
+        <CustomRangeToggle />
 
         {/* Event type — grouped select from known backend constants */}
         <div className="space-y-1 sm:col-span-2 lg:col-span-1">
