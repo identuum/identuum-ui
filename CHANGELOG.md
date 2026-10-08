@@ -6,25 +6,40 @@ first published image. Format roughly follows
 [Semantic Versioning](https://semver.org/). The published artifact is the
 container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
-## Unreleased
+## `v0.9.9`
 
-- **Version 0.9.8; tag `v0.9.8` on `d009997`.** `package.json` is `0.9.8`
-  on main. The `v0.9.8` tag names `d009997`, the export identuum-idp-oss
-  `v0.9.8` embeds; its `package.json` says `0.9.7` and stays so, as `v0.9.6`
-  did (owner ruling p, 2026-10-06).
-- **Gate judge lictor v0.4.5** (maintainer tooling): `LICTOR_VERSION` in
-  `.github/workflows/ci.yml` moves from `v0.4.4` to `v0.4.5`.
+The static export that identuum-idp-oss `v0.9.9` embeds. The `v0.9.9` tag
+names the commit whose `package.json` says `0.9.9`: from this release the
+console's version is set before identuum-idp-oss vendors it (owner ruling q,
+2026-10-06).
+
 - **Breaking (0.x): API resources no longer have a token lifetime.** The
   "Token TTL (seconds)" field is gone from the create and edit forms, and the
   list badge and the detail row that showed it are gone too. It never had an
-  effect: identuum-idp-oss gives every access token the same 1-hour lifetime
-  and never read `token_ttl_secs` when it issued one. The console no longer
-  sends `token_ttl_secs` on create or update, which identuum-idp-oss now
-  refuses with `400` (owner rulings l and m, 2026-10-06). The e2e provisioner
-  and fixtures no longer send or require it.
+  effect: identuum-idp-oss gives an ordinary access token the same 1-hour
+  lifetime and never read `token_ttl_secs` when it issued one. The console no
+  longer sends `token_ttl_secs` on create or update, which identuum-idp-oss
+  `v0.9.9` refuses with `400` (owner rulings l and m, 2026-10-06). The e2e
+  provisioner and fixtures no longer send or require it.
 - **Dependency:** `sharp` (transitive, through `next`) moves 0.35.4 → 0.35.5
   for CVE-2026-96889 (GHSA-wq5f-xc86-pv6w), a high-severity vulnerability in
   its bundled librsvg; `make advisory` reports no known vulnerabilities.
+
+For contributors (nothing in the export changes):
+
+- The e2e-full harness runs its appliance on 17113 and its dev-loop UI on
+  17108, beside a dev stack on 7113 and 7114 (owner ruling t, 2026-10-07);
+  the specs read the IdP base from the harness environment.
+- Gate judge lictor v0.4.4 → v0.4.6 (`LICTOR_VERSION` in
+  `.github/workflows/ci.yml`); `make witness` refuses while another slice
+  holds the checkout's claim.
+
+## `v0.9.8`
+
+The static export that identuum-idp-oss `v0.9.8` embeds. The `v0.9.8` tag
+names `d009997`, whose `package.json` says `0.9.7` and stays so, as `v0.9.6`
+did (owner ruling p, 2026-10-06); this section was written with `v0.9.9`.
+
 - **Sign-in and activation links check their destinations.** The sign-in
   page sends a browser to single sign-on only on this console's own
   `/api/v1/auth/idp/<id>/login` route; any other origin, path, `javascript:`
@@ -36,7 +51,6 @@ container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
   headers (the script policy and `no-referrer`), that an account-link page
   sends no `Referer`, and that every route of the export loads with no policy
   violation. Needs identuum-idp-oss with the shell policy.
-
 - **Service account expiry in organization settings.** An org_admin sees and
   sets "Service account expiry (days)" on **Settings** for their own
   organization: `0` means no expiry, `1` to `3650` days otherwise. The value
