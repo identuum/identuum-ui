@@ -50,7 +50,7 @@ env:
   # the ledger-tool build; the vendored install gate's digest must match
   # the shared master (the wiki-side check holds all three copies and
   # this pin identical).
-  GO_VERSION: "1.27.1"
+  GO_VERSION: "1.27.2"
   RULEFLOOR_GATE_SHA256: "db2a505d1c1f2fb55b34632a5098ef658dd6fbab1671e58de2c41788a63f37a6"
   # THE-UNWITNESSED-MIRROR: same contract for the gate witness — the vendored
   # scripts/gate-witness.sh must be the wiki master, or the record CI uploads
