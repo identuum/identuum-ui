@@ -773,15 +773,17 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
         label: "mfa-disable sa (empty proof)",
       },
       {
-        // MEASURED: the org_user variant refuses with 401 where the
-        // org_admin variant answers 403 (ROW 20) — both refusals; pinned
-        // as measured.
+        // F4 (SEC-MFA-REVIEW-2026-10-08): the self-disable reads the
+        // organization's MFA policy, so the org_user of a required-MFA
+        // organization is refused 403 mfa_required_by_policy before any
+        // proof is weighed — as the org_admin is (ROW 20). The 401 this row
+        // pinned before measured the bypass F4 closed.
         method: "POST",
         path: "/api/v1/me/mfa/disable",
         body: { code: "", password: "" },
         bearer: ou,
-        ok: [401],
-        label: "mfa-disable ou (empty proof, measured 401)",
+        ok: [403],
+        label: "mfa-disable ou (empty proof, policy refuses: F4)",
       },
       {
         // MEASURED: an EMPTY update binds all-optional fields to nil and is
