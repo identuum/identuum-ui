@@ -113,8 +113,11 @@ test("export provider create, reload, update and delete through the boundary", a
   expect((await secret.inputValue()) === "").toBe(true);
   await page.getByRole("button", { name: "Remove provider…", exact: true }).click();
   await page.getByRole("button", { name: "Remove provider", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Save provider", exact: true })).toBeVisible();
+  // The form replaces itself with the removal notice; the create form returns
+  // on reload (provider-form.tsx's "deleted" phase).
+  await expect(page.getByText("Provider removed", { exact: true })).toBeVisible();
   await page.reload();
+  await expect(page.getByRole("button", { name: "Save provider", exact: true })).toBeVisible();
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("");
   expect((await secret.inputValue()) === "").toBe(true);
   expect(writes).toEqual(["POST", "PUT", "DELETE"]);
