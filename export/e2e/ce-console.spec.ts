@@ -142,6 +142,7 @@ test.describe("the CE console on its own origin", () => {
         "/org-admin/users/new",
         "/org-admin/applications/new",
         "/org-admin/settings",
+        "/org-admin/identity-provider",
       ]);
       test.info().annotations.push({
         type: "pages",

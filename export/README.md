@@ -20,6 +20,10 @@ and the sign-in reason banner for the boundary's logout outcomes
 (export/src/login-route.tsx). It must not replace the Next deployment before
 the remaining acceptance gates named below have run.
 
+The org-admin route table includes `/org-admin/identity-provider`, reached
+from Settings. It uses the shared sign-in provider page and its load, save
+and delete actions through the same platform adapters as Settings.
+
 ## Security contract
 
 Go remains the authority for every resource request. The boundary lifts an

@@ -24,6 +24,9 @@ import ApplicationNewPage, {
 } from "@/app/org-admin/applications/new/page";
 import ApplicationsPage, { metadata as applicationsMeta } from "@/app/org-admin/applications/page";
 import AuditPage, { metadata as auditMeta } from "@/app/org-admin/audit/page";
+import IdentityProviderPage, {
+  metadata as identityProviderMeta,
+} from "@/app/org-admin/identity-provider/page";
 import OrgAdminLayout, { metadata as layoutMeta } from "@/app/org-admin/layout";
 import OrgAdminPage from "@/app/org-admin/page";
 import ServiceAccountDetailPage, {
@@ -84,6 +87,7 @@ export const ORG_ADMIN_ROUTES: readonly Route[] = [
     serviceAccountDetailMeta
   ),
   route(/^\/org-admin\/settings$/, [], SettingsPage, settingsMeta),
+  route(/^\/org-admin\/identity-provider$/, [], IdentityProviderPage, identityProviderMeta),
   route(/^\/org-admin\/audit$/, [], AuditPage, auditMeta),
 ];
 
