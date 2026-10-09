@@ -20,12 +20,11 @@
  *      bearer that exercises site_admin authority.
  *   4. POST, customer data: every item from (1) is STILL present by id and
  *      both tenant logins still work — the reset touched exactly one row.
- *   5. MEASURED, pinned as-is: whether site_admin sessions minted BEFORE
- *      the reset survive it. recoverSiteAdminCore updates the user row only
- *      — it revokes nothing — so a pre-reset bearer stays live until token
- *      expiry. Pinned at the measured value with this comment as the flag:
- *      an operator recovering a COMPROMISED admin would want those sessions
- *      dead. Reported as a product finding (wiki queue), not fixed here.
+ *   5. REVOKED: a site_admin session minted BEFORE the reset is refused
+ *      after it. recover-site-admin ends every session, refresh token and
+ *      linked access-token JTI of the recovered administrator
+ *      (OSS-RECOVER-REVOKE, 2026-10-09); until then this step pinned the
+ *      measured survival of the pre-reset bearer as a product finding.
  *
  * DESTRUCTIVE BY DESIGN: rotates the appliance's site_admin credentials.
  * Disposable-harness only (IDENTUUM_E2E_ADMIN_RESET=1, set by full-run.sh's
@@ -74,7 +73,7 @@ test.describe("admin reset without customer data loss (destructive, last phase)"
     "admin-reset runs only as full-run.sh's dedicated LAST phase (it rotates site_admin credentials)"
   );
 
-  test("recover-site-admin rotates exactly one row: site_admin resets, every tenant resource survives", async () => {
+  test("recover-site-admin resets site_admin and ends its sessions; every tenant resource survives", async () => {
     test.setTimeout(180_000);
     const oldPassword = process.env.IDENTUUM_E2E_FULL_ADMIN_PASSWORD ?? "";
     const newPassword = process.env.IDENTUUM_E2E_RECOVERED_ADMIN_PASSWORD ?? "";
@@ -215,13 +214,12 @@ test.describe("admin reset without customer data loss (destructive, last phase)"
     const ouValidate = await api(IDP_BASE, "GET", "/api/v1/validate", undefined, ouLogin);
     expectStatus(ouValidate, 200, "org_user login and session unaffected");
 
-    // ── 5. MEASURED PIN: pre-reset site_admin sessions SURVIVE the reset ──
-    // recoverSiteAdminCore updates the user row only — nothing revokes the
-    // old sessions, so a bearer minted before the reset stays live to token
-    // expiry. Pinned as measured; flagged as a product finding (an operator
-    // recovering a COMPROMISED admin needs those sessions dead). If this
-    // flips to 401, the product started revoking on recover — update this
-    // pin AND close the finding.
+    // ── 5. REVOKED: the pre-reset site_admin session is refused ──
+    // recover-site-admin ends every session of the recovered administrator
+    // (OSS-RECOVER-REVOKE), so the bearer minted in step 1 fails the
+    // liveness check. Until 2026-10-09 this step pinned the measured
+    // survival (200) as a product finding; the fix flipped it.
+    expect(out, "CLI confirms the sessions ended").toContain("sessions_revoked=true");
     const preResetValidate = await api(
       IDP_BASE,
       "GET",
@@ -229,9 +227,10 @@ test.describe("admin reset without customer data loss (destructive, last phase)"
       undefined,
       preResetSite.bearer
     );
-    expect(
-      preResetValidate.status,
-      "MEASURED: pre-reset site_admin session survives recover-site-admin (finding: no revocation on admin reset)"
-    ).toBe(200);
+    expectStatus(
+      preResetValidate,
+      401,
+      "a site_admin session minted before recover-site-admin is refused after it"
+    );
   });
 });
