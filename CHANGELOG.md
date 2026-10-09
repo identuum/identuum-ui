@@ -6,6 +6,25 @@ first published image. Format roughly follows
 [Semantic Versioning](https://semver.org/). The published artifact is the
 container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
 
+## `v0.9.10`
+
+The static export that identuum-idp-oss `v0.9.10` embeds, a security patch
+release of the server. The console itself carries two fixes.
+
+- **Audit log filter:** the From and To date inputs follow the Time range
+  select: they are enabled for "Custom range" only, and a range applied as
+  custom keeps them enabled.
+- **Assign administrator:** an administrator who has not yet activated, with
+  a valid activation link, now reads as "activation pending" with a link to
+  the organization page, not as an active verified administrator.
+
+For contributors (nothing in the export changes):
+
+- The e2e-full sweep expects `403` when an org_user of an organization that
+  requires MFA tries to disable MFA, the behaviour identuum-idp-oss
+  `v0.9.10` enforces.
+- CI's Go toolchain pin is 1.27.2.
+
 ## `v0.9.9`
 
 The static export that identuum-idp-oss `v0.9.9` embeds. The `v0.9.9` tag
