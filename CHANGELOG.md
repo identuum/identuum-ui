@@ -1,10 +1,32 @@
 # Changelog — identuum-ui
 
-All notable changes to `identuum-ui` are recorded here, starting from the
-first published image. Format roughly follows
+All notable changes to `identuum-ui` are recorded here. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [Semantic Versioning](https://semver.org/). The published artifact is the
-container image (`ghcr.io/identuum/identuum-ui`); versions are image tags.
+static export: for each tag `vX.Y.Z`, `publish-ui-export.yml` attaches
+`identuum-ui-export-vX.Y.Z.tar.gz` (the built files), `.json` (the manifest,
+`identuum-ui-vendor.v1`) and `.spdx.json` (the SBOM) to the GitHub release,
+with a build-provenance attestation over the three; identuum-idp-oss embeds
+that export. The release body is this file's section for the tag. Entries up
+to `v0.6.2` were written when the artifact was the container image
+`ghcr.io/identuum/identuum-ui`, retired by owner ruling D-019 (2026-09-30).
+
+## Unreleased
+
+For contributors (nothing in the export changes):
+
+- **README** describes the console as it ships: a static export embedded in
+  the identuum-idp-oss binary (D-019) — no UI container, no Compose stack, no
+  ancestor repositories; `make verify` is named with its measured plan of 17
+  targets.
+- **This file's header** names the static export and its three release assets
+  as the published artifact, not the retired container image.
+- **Release notes:** the GitHub release body for a tag is this file's section
+  for that tag, extracted by `publish-ui-export.yml`; a tag with no section
+  fails the publish job instead of releasing a body that points at a
+  `docs/releases/` file that does not exist (true since `v0.6.2`).
+- **CI runners** are pinned to `ubuntu-24.04` in both workflows (GitHub moves
+  `ubuntu-latest` to Ubuntu 26 on 2026-10-19); parity with identuum-idp-oss.
 
 ## `v0.9.10`
 

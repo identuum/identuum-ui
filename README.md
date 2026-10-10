@@ -18,99 +18,71 @@ evaluation only.
 
 ---
 
-Next.js control-plane shell for the Identuum stack. Talks to
-`identuum-idp` (human IdP / OIDC AS) and `identuum-ag` (Agentic
-Governor) over server-side fetches and exposes the operator-facing
-admin/dashboard surfaces.
+Next.js console for Identuum, shipped as a **static export embedded in the
+`identuum-idp-oss` binary** (owner ruling D-019, 2026-09-30; embedded since
+identuum-idp-oss `v0.6.0`). It talks to `identuum-idp-oss` (the human IdP /
+OIDC authorization server) and carries the site-admin, org-admin and
+org_user surfaces, the sign-in and account ceremonies and the `/setup`
+wizard. One export serves both editions: the OSS and CE binaries embed the
+same files and read the edition at runtime from `/api/runtime-config`.
 
-## Local quick start (Docker Compose)
+## How it ships
 
-The full local demo runs all three Identuum stacks (idp + ag + ui) as
-independent Compose projects. Each project owns its own network; this
-UI stack attaches to the IDP and AG networks as external networks so
-server-side fetches resolve their container hostnames.
+There is no UI container, no UI image and no UI Compose stack. The release
+artifact is the static export, built by `pnpm build:export`
+(`export/vite.config.mts`, output `out/`) and published by
+`.github/workflows/publish-ui-export.yml`. A tag `vX.Y.Z` produces three
+release assets plus a GitHub build-provenance attestation over them:
 
-**Prerequisite:** start IDP and AG first (they create the networks
-this stack joins):
+| Asset | What it is |
+|---|---|
+| `identuum-ui-export-vX.Y.Z.tar.gz` | the built files, a deterministic tar |
+| `identuum-ui-export-vX.Y.Z.json` | the manifest (`identuum-ui-vendor.v1`): ui commit, lockfile sha256, node and pnpm versions, every file's sha256, tree digest |
+| `identuum-ui-export-vX.Y.Z.spdx.json` | the SBOM of the production dependency closure (`make export-sbom`), the same file `make sbom-scan` judges |
 
-```sh
-# In identuum-idp/
-docker compose -f deployment/docker-compose.local.yml up -d
-docker compose -f deployment/docker-compose.local.yml --profile setup run --rm identuum-idp-setup
+The GitHub release body is this repository's `CHANGELOG.md` section for the
+tag; the workflow refuses to publish a tag whose section is missing.
 
-# In identuum-ag/
-docker compose -f deployment/docker-compose.dev.yml up -d
-docker compose -f deployment/docker-compose.dev.yml --profile setup run --rm identuum-ag-setup
-```
-
-Then bring up the UI:
-
-```sh
-# In identuum-ui/
-docker compose -f deployment/docker-compose.local.yml up -d
-curl http://localhost:7104/api/health
-# {"status":"ok","configured":true}
-```
-
-Open the UI at <http://localhost:7104>.
-
-### Operator commands (UI only)
+identuum-idp-oss vendors the export of one ui commit (`make ui-vendor`
+there) and embeds it, so running the IdP is running the UI — the binary
+serves the console at its own origin:
 
 ```sh
-# Tear down (does NOT remove volumes; no UI state to preserve)
-docker compose -f deployment/docker-compose.local.yml down
-
-# Clean rebuild from source
-docker compose -f deployment/docker-compose.local.yml down
-docker compose -f deployment/docker-compose.local.yml build --no-cache
-docker compose -f deployment/docker-compose.local.yml up -d
-
-# Verify the public runtime config the UI advertises to the browser
-curl http://localhost:7104/api/runtime-config
+curl -fsSLO https://github.com/identuum/identuum-idp-oss/releases/latest/download/docker-compose.yml
+docker compose up -d
+open http://localhost:7113
 ```
 
-### How the network wiring works
+Release order (owner ruling q, 2026-10-06): `package.json` is set to the
+release version first, that commit is pushed and tagged, and
+identuum-idp-oss vendors THAT commit.
 
-| Caller | Target | URL used | Resolves via |
-|---|---|---|---|
-| Browser → UI | UI | `http://localhost:7104` | host port-publish |
-| Browser → IdP | IdP | `http://localhost:7113` | host port-publish |
-| Browser → AG mgmt | AG | `http://localhost:7215` | host port-publish |
-| Browser → AG identity | AG | `http://localhost:7214` | host port-publish |
-| UI server → IdP | IdP | `http://identuum-idp:7113` | `identuum-idp-local` network |
-| UI server → AG mgmt | AG | `http://identuum-ag:7215` | `identuum-ag_identuum-ag-net` |
-| UI server → AG identity | AG | `http://identuum-ag:7214` | same as above |
+### The runner image (development only)
 
-Both internal URLs come from `config/ui-runtime.json`, which is
-bind-mounted read-only into the container at
-`/app/config/ui-runtime.json`. Edit that file on the host to change
-runtime configuration without rebuilding the image.
-
-### Production-shape build (development only)
-
-**The runner image is a development artifact, never a product (owner
-ruling D-019, 2026-09-30).** The UI ships only as the static export
-(`pnpm build:export`, published by `publish-ui-export.yml`) embedded in
-the identuum-idp-oss and identuum-idp-ce binaries. No workflow publishes
-this image and no release gate judges it; the security gate
-(`make sbom-scan`) judges the export's SBOM instead.
-
-The Compose file builds the existing `Dockerfile` at the repo root,
-which uses Next.js standalone output (`node server.js`, port 7104, no
-`next dev`). The dev mode `pnpm dev` path is unchanged — both the
-host-side dev workflow and the containerized demo work side by side.
+The repo-root `Dockerfile` builds the Next.js standalone runner (`node
+server.js`, port 7104). It is a development artifact, never a product: no
+workflow publishes it and no release gate judges it; the security gate
+(`make sbom-scan`) judges the export's SBOM instead. The host-side
+`pnpm dev` path and the export build work side by side.
 
 ## Development (no Docker)
 
 ```sh
 pnpm install
-pnpm dev          # http://localhost:7104 with hot reload
-make verify       # THE gate set: rulefloor + biome + typecheck + vitest
-                  # (plus wiki-fresh and the image-base gates) — run this,
-                  # not an ad-hoc subset; it is what CI mirrors
-pnpm build
+pnpm dev          # http://localhost:7104 with hot reload (the Next dev server)
+make verify       # THE gate set: 17 planned targets (the `plan:` line of
+                  # GATE-RUN.txt), rulefloor + biome + typecheck + vitest among
+                  # them — run this, not an ad-hoc subset; CI runs its own
+                  # 14-step subset of it (ci.yml) and records it the same way
+pnpm build:export # the static export, into out/
+pnpm build        # the Next standalone build (development only)
 pnpm rulefloor    # the ledger gate alone (see below); included in verify
 ```
+
+A local backend for the dev server is identuum-idp-oss's own dev stack:
+from `../identuum-idp-oss`, `make fast-up` starts PostgreSQL alone on
+127.0.0.1:5513 and `make dev-up` the full stack
+(`deployment/docker-compose.dev.yml`).
 
 ### Rule ledger (RULE-FLOOR.md)
 
