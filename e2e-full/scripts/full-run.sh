@@ -191,13 +191,13 @@ refuse_topology() {
 	} >&2
 	exit 1
 }
-if [ -n "${DOCKER_HOST:-}" ] && [[ "$DOCKER_HOST" != unix:///* ]]; then
+if [ -n "${DOCKER_HOST:-}" ] && ! [[ "$DOCKER_HOST" =~ ^unix:/// ]]; then
 	refuse_topology "DOCKER_HOST selects an endpoint that is not this host's own Docker engine (not a unix socket); no docker command was run"
 fi
 if ! E2E_DOCKER_ENDPOINT=$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null); then
 	refuse_topology "the Docker context could not be resolved, so the engine this run would use is unknown"
 fi
-if [[ "$E2E_DOCKER_ENDPOINT" != unix:///* ]]; then
+if ! [[ "$E2E_DOCKER_ENDPOINT" =~ ^unix:/// ]]; then
 	refuse_topology "the selected Docker context's endpoint is not this host's own Docker engine (not a unix socket)"
 fi
 export DOCKER_HOST="$E2E_DOCKER_ENDPOINT"
