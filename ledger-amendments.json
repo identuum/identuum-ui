@@ -1,16 +1,16 @@
 {
   "schema_version": "ledger-amendments.v1",
-  "base_commit": "3e7e5280a89d0561f8716201dd0fb37e72e679d9",
+  "base_commit": "5ff9eda9a3d3092ee53f9b8b19d0c6e8670ada8c",
   "changes": [
     {
-      "rule_id": "E2E-RESOURCE-OWNERSHIP-1",
+      "rule_id": "E2E-NAME-OWNERSHIP-1",
       "change_class": "rule_added",
-      "reason": "OSS-MINT-GUARD-2 (2026-10-10, review OSS-MINT-COVERAGE C1/C5, judge ruling Q2(b)): new rule E2E-RESOURCE-OWNERSHIP-1, armed on src/__tests__/e2e-resource-isolation.test.ts @ vitest: the e2e-full/e2e-quick runner refuses leftovers and a foreign resolved compose config before any create, pins -p identuum-e2e on every compose action, clears inherited compose selectors for itself and its nested oss-up, and tears its own project down exactly once on every exit. Red-proved on 3e7e528 (30 of 31 tests) and by two mutations of full-run.sh."
+      "reason": "OSS-MINT-GUARD-3 (2026-10-10, review OSS-MINT-GUARD-2 G2): new rule E2E-NAME-OWNERSHIP-1, armed on src/__tests__/e2e-resource-isolation.test.ts @ vitest. The e2e-full/e2e-quick runner looks for every volume and network name its resolved compose config names in an UNFILTERED listing and refuses, before any start, when one exists whatever its labels: a foreign same-name volume (seen only unfiltered) gets no startup, no compose resource action, no down and no removal command. Red-proved on 5ff9eda (the review's counterexample: exit 0, one startup, one down --volumes) and by mutation."
     },
     {
-      "rule_id": "E2E-NO-LOCAL-DB-1",
+      "rule_id": "E2E-FIXTURE-ENDPOINT-1",
       "change_class": "rule_added",
-      "reason": "OSS-MINT-GUARD-2 (2026-10-10, review OSS-MINT-COVERAGE C2): new rule E2E-NO-LOCAL-DB-1, armed on src/__tests__/e2e-expired-org-isolation.test.ts @ vitest: the expired-pending-org fixture runs only inside the outer-owned harness project identuum-e2e, refusing before any process or request otherwise; no host psql and no fixed 7104/7113/5432/5513. Red-proved on 3e7e528 (11 of 11 tests) and by one mutation."
+      "reason": "OSS-MINT-GUARD-3 (2026-10-10, review OSS-MINT-GUARD-2 G4): new rule E2E-FIXTURE-ENDPOINT-1, armed on src/__tests__/e2e-expired-org-isolation.test.ts @ vitest. The expired-org fixture refuses, before any process or HTTP request, UI and IdP bases that are not loopback http at the harness's selected ports carried by full-run.sh; the former development ports 7104/7113 are refused with zero process calls and zero requests. Red-proved on 5ff9eda (the review's counterexample: one database command and a POST to localhost:7104) and by mutation."
     }
   ]
 }
