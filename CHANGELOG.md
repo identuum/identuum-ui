@@ -13,20 +13,27 @@ to `v0.6.2` were written when the artifact was the container image
 
 ## Unreleased
 
-For contributors (nothing in the export changes):
+## `v0.9.11`
+
+The static console export for identuum-idp-oss `v0.9.11`, with a sign-in
+provider page and updated documentation and release tooling.
+
+- **Organization admins can open the sign-in provider page from Settings**
+  and create, update or remove their organization's provider in the exported
+  console. (`72a1304`)
+
+For contributors:
 
 - **README** describes the console as it ships: a static export embedded in
-  the identuum-idp-oss binary (D-019) — no UI container, no Compose stack, no
-  ancestor repositories; `make verify` is named with its measured plan of 17
-  targets.
-- **This file's header** names the static export and its three release assets
-  as the published artifact, not the retired container image.
-- **Release notes:** the GitHub release body for a tag is this file's section
-  for that tag, extracted by `publish-ui-export.yml`; a tag with no section
-  fails the publish job instead of releasing a body that points at a
-  `docs/releases/` file that does not exist (true since `v0.6.2`).
-- **CI runners** are pinned to `ubuntu-24.04` in both workflows (GitHub moves
-  `ubuntu-latest` to Ubuntu 26 on 2026-10-19); parity with identuum-idp-oss.
+  the identuum-idp-oss binary, with its release assets and development
+  commands. (`b1a3fd4`)
+- **The CHANGELOG header** identifies the export tarball, JSON manifest and
+  SPDX SBOM as the published artifacts. (`b1a3fd4`)
+- **Release notes** come from the tag's exact CHANGELOG section. The publish
+  workflow refuses a missing or empty section before publication.
+  (`c348a3e`)
+- **CI runners** are pinned to Ubuntu 24.04 in the verification and export
+  publication workflows. (`70e603d`)
 
 ## `v0.9.10`
 
