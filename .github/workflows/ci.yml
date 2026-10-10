@@ -83,7 +83,7 @@ env:
 jobs:
   build-and-test:
     name: Build & Unit Tests (node ${{ matrix.node }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       # THE-UNBOUND-STAMP (2026-08-27): CI tests the DEPLOYED runtime, not
       # an asserted one. THE-UI-NODE-26-LATEST (2026-09-06, owner ruling):
@@ -150,7 +150,7 @@ jobs:
         # workflow-env tag, its sha256 checked before it is installed, the
         # printed version asserted against the same declaration. The binary is
         # removed from the tree after install so the checkout stays exactly the
-        # commit the record ties to. ubuntu-latest is x86_64: linux_amd64. The
+        # commit the record ties to. ubuntu-24.04 is x86_64: linux_amd64. The
         # multi-line body moves into STEP_CMD so the witness records this step
         # without re-quoting it.
         env:
