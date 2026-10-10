@@ -114,7 +114,11 @@ interface RunResult {
   status: number | null;
   out: string;
   calls: Call[];
+  /** The private layout root; also the runner's TMPDIR, so its lock lives here. */
+  root: string;
 }
+
+const LOCK = "identuum-e2e.lock";
 
 const SAFE_CONFIG = {
   name: "identuum-e2e",
@@ -142,8 +146,26 @@ compose)
 ps)
   for a in "$@"; do case "$a" in publish=*) exit 0 ;; esac; done
   printf '%b' "\${STUB_CONTAINERS:-}"; exit 0 ;;
-volume) printf '%b' "\${STUB_VOLUMES:-}"; exit 0 ;;
-network) printf '%b' "\${STUB_NETWORKS:-}"; exit 0 ;;
+volume | network)
+  # The daemon's view: STUB_VOLUMES / STUB_NETWORKS carry this project's label;
+  # STUB_FOREIGN_* exist under the same names WITHOUT it (another label or
+  # none), so only an UNFILTERED listing shows them. Once the nested startup has
+  # run (STUB_CREATED), the appliance's own volume and network exist with the
+  # label, unless STUB_LATE_FOREIGN names the kind that appeared without it.
+  kind="$1"
+  if [ "$kind" = volume ]; then
+    own="\${STUB_VOLUMES:-}"; foreign="\${STUB_FOREIGN_VOLUMES:-}"; made=identuum-e2e_postgres-idp-oss-data-v18
+  else
+    own="\${STUB_NETWORKS:-}"; foreign="\${STUB_FOREIGN_NETWORKS:-}"; made=identuum-e2e_default
+  fi
+  if has label=com.docker.compose.project=identuum-e2e "$@"; then
+    printf '%b' "$own"
+    [ -f "$STUB_CREATED" ] && [ "\${STUB_LATE_FOREIGN:-}" != "$kind" ] && echo "$made"
+  else
+    printf '%b' "$own$foreign"
+    [ -f "$STUB_CREATED" ] && echo "$made"
+  fi
+  exit 0 ;;
 inspect) echo "IDENTUUM_IDP_OSS_DB=synthetic-not-a-dsn"; exit 0 ;;
 esac
 exit 0
@@ -153,9 +175,12 @@ const MAKE_STUB = `#!/bin/bash
 ${STUB_LOG_LINE}
 log make "$@"
 for a in "$@"; do
-  if [ "$a" = oss-up ] && [ "\${STUB_FAIL:-}" = oss-up ]; then
-    log partial-create oss-up
-    exit 7
+  if [ "$a" = oss-up ]; then
+    : >"$STUB_CREATED"
+    if [ "\${STUB_FAIL:-}" = oss-up ]; then
+      log partial-create oss-up
+      exit 7
+    fi
   fi
 done
 exit 0
@@ -226,8 +251,11 @@ function layout(config: unknown): { root: string; ui: string; bin: string; log: 
   return { root, ui, bin, log: join(root, "calls.log") };
 }
 
-function runRunner(opts: { config?: unknown; env?: Record<string, string> } = {}): RunResult {
+function runRunner(
+  opts: { config?: unknown; env?: Record<string, string>; arrange?: (root: string) => void } = {}
+): RunResult {
   const l = layout(opts.config ?? SAFE_CONFIG);
+  opts.arrange?.(l.root);
   const r = spawnSync(join(l.bin, "bash"), [join(l.ui, "e2e-full/scripts/full-run.sh")], {
     cwd: l.root,
     encoding: "utf8",
@@ -239,6 +267,7 @@ function runRunner(opts: { config?: unknown; env?: Record<string, string> } = {}
       TMPDIR: l.root,
       STUB_LOG: l.log,
       STUB_CONFIG: join(l.root, "config.json"),
+      STUB_CREATED: join(l.root, "created"),
       // Inherited selectors the runner must neutralise (C1).
       COMPOSE_PROJECT_NAME: "identuum-idp-oss",
       COMPOSE_REMOVE_ORPHANS: "true",
@@ -263,7 +292,7 @@ function runRunner(opts: { config?: unknown; env?: Record<string, string> } = {}
           };
         })
     : [];
-  return { status: r.status, out: `${r.stdout}\n${r.stderr}`, calls };
+  return { status: r.status, out: `${r.stdout}\n${r.stderr}`, calls, root: l.root };
 }
 
 const RESOURCE_ACTIONS = new Set([
@@ -430,6 +459,74 @@ describe("full-run.sh refuses leftovers instead of deleting them [Q2(b)]", () =>
       );
     });
   }
+});
+
+describe("full-run.sh inspects every expected name and holds one invocation claim [G2]", () => {
+  const OSS_UP = (r: RunResult) => makeCalls(r).filter((c) => c.argv.includes("oss-up"));
+  const DOWN_COMMAND = /docker compose -p identuum-e2e -f \S+ -f \S+ --profile app down --volumes/;
+
+  it("REVIEW-G2: refuses a foreign existing volume with the resolved expected name before startup or teardown [E2E-NAME-OWNERSHIP-1]", () => {
+    const r = runRunner({
+      env: { STUB_FOREIGN_VOLUMES: "identuum-e2e_postgres-idp-oss-data-v18\\n" },
+    });
+    expect(r.status, "a foreign same-name volume must prevent the run").not.toBe(0);
+    expect(OSS_UP(r)).toEqual([]);
+    expect(downs(r), "this run did not create the foreign volume").toEqual([]);
+    expect(resourceActions(r)).toEqual([]);
+    expect(r.out).toMatch(/REFUSING/);
+    expect(r.out).toMatch(/identuum-e2e_postgres-idp-oss-data-v18/);
+    expect(r.out, "down --volumes would remove it by name; it is not offered").not.toMatch(
+      DOWN_COMMAND
+    );
+  });
+
+  it("refuses a foreign existing network with the resolved expected name before startup or teardown", () => {
+    const r = runRunner({ env: { STUB_FOREIGN_NETWORKS: "identuum-e2e_default\\n" } });
+    expect(r.status, r.out).not.toBe(0);
+    expect(OSS_UP(r)).toEqual([]);
+    expect(downs(r)).toEqual([]);
+    expect(resourceActions(r)).toEqual([]);
+    expect(r.out).toMatch(/REFUSING/);
+    expect(r.out).toMatch(/identuum-e2e_default/);
+  });
+
+  it("an overlapping invocation (lock already held) refuses: no startup, no down, the lock is left alone", () => {
+    const r = runRunner({
+      arrange: (root) => {
+        mkdirSync(join(root, LOCK));
+        writeFileSync(join(root, LOCK, "pid"), "424242\n");
+      },
+    });
+    expect(r.status, r.out).toBe(1);
+    expect(makeCalls(r)).toEqual([]);
+    expect(downs(r)).toEqual([]);
+    expect(composeCalls(r), "nothing of the running invocation is touched").toEqual([]);
+    expect(r.out).toMatch(/REFUSING/);
+    expect(r.out).toContain(join(r.root, LOCK));
+    expect(existsSync(join(r.root, LOCK, "pid")), "the other invocation's lock stays").toBe(true);
+    expect(readFileSync(join(r.root, LOCK, "pid"), "utf8")).toBe("424242\n");
+  });
+
+  it("releases its lock at the end of a green run and after a refusal it made", () => {
+    const green = runRunner();
+    expect(green.status, green.out).toBe(0);
+    expect(existsSync(join(green.root, LOCK)), "green run released its lock").toBe(false);
+    const refused = runRunner({ env: { STUB_FOREIGN_NETWORKS: "identuum-e2e_default\\n" } });
+    expect(refused.status, refused.out).not.toBe(0);
+    expect(existsSync(join(refused.root, LOCK)), "refusal released its lock").toBe(false);
+  });
+
+  it("teardown ownership: an expected volume that appeared WITHOUT the project label is not removed; the run is red", () => {
+    const r = runRunner({ env: { STUB_LATE_FOREIGN: "volume" } });
+    expect(OSS_UP(r).length, "the run started its appliance").toBe(1);
+    expect(r.status, r.out).not.toBe(0);
+    expect(
+      downs(r).filter((c) => c.argv.includes("--volumes")),
+      "no down --volumes over a volume this run cannot prove it created"
+    ).toEqual([]);
+    expect(r.out).toMatch(/TEARDOWN REFUSED/);
+    expect(r.out).toMatch(/identuum-e2e_postgres-idp-oss-data-v18/);
+  });
 });
 
 describe("full-run.sh cleans up exactly once and keeps the run's status [C5]", () => {

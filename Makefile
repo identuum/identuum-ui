@@ -560,11 +560,17 @@ tool-versions:
 ## e2e-full: the DISPOSABLE full-behavior suite (THE-DISPOSABLE-HARNESS).
 ## Runs as its OWN Compose project (identuum-e2e, Postgres on 127.0.0.1:15513,
 ## app on 17113, dev-loop UI on 17108 — owner ruling t, 2026-10-07, declared
-## once in full-run.sh): refuses leftovers of that project (OSS-MINT-GUARD-2),
-## rebuilds the appliance from the
+## once in full-run.sh): holds an exclusive claim (${TMPDIR:-/tmp}/identuum-e2e.lock,
+## an atomic mkdir; a held claim is a refusal) from before its first listing
+## through its teardown, refuses leftovers of that project (OSS-MINT-GUARD-2)
+## and any volume or network name its resolved config names that already
+## exists in an unfiltered listing, whatever its labels (G2), rebuilds the
+## appliance from the
 ## sibling working tree, bootstraps a run-local site_admin, runs the e2e-full
 ## Playwright project serially (--workers=1, TOTP physics), then tears its own
-## project down, postgres volume included, once on exit. The operator's dev stack (project identuum-idp-oss-dev
+## project down, postgres volume included, once on exit — only after
+## re-checking that every inventory volume/network present carries the
+## project label (else TEARDOWN REFUSED, nothing removed, red). The operator's dev stack (project identuum-idp-oss-dev
 ## since D-024, identuum-idp-oss before; 5513) is never touched; a host port it needs that is already taken is a
 ## refusal naming the holder. OPT-IN ONLY — never wired into verify, wiki make
 ## check, or CI.

@@ -85,6 +85,20 @@ appliance and the envelope, global setup must reuse them or refuse, and global
 teardown makes no Compose call and keeps the envelope — the runner tears its
 own project down once, on exit.
 
+The runner first takes an exclusive invocation claim, an atomic `mkdir` of
+`${TMPDIR:-/tmp}/identuum-e2e.lock` (holding its pid), and keeps it through
+its teardown; if the claim already exists it refuses and changes nothing.
+Remove a left-behind claim only after confirming no harness run is active.
+Before it creates anything it refuses leftovers of project `identuum-e2e`,
+and it also lists volumes and networks UNFILTERED: any volume or network name
+the resolved Compose config names that already exists, whatever its labels,
+is a refusal (one without the project label is not the harness's, and no
+removal command is offered for it). Those names, all proven absent, are the
+run's inventory. On exit the teardown re-lists them and runs
+`down --volumes` only when every one that exists carries the
+`identuum-e2e` project label; otherwise it prints `TEARDOWN REFUSED`,
+removes nothing, and the run is red.
+
 ### Security
 
 - `e2e/.auth/` is gitignored (entry in `identuum-ui/.gitignore`). The
