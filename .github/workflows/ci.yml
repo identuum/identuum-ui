@@ -155,6 +155,7 @@ jobs:
         # without re-quoting it.
         env:
           STEP_CMD: |
+            set -euo pipefail
             curl -sSfL -o yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
             echo "${YQ_SHA256}  yq" | sha256sum -c -
             sudo install -m 0755 yq /usr/local/bin/yq
@@ -264,6 +265,7 @@ jobs:
         # `=`, so the = signs inside are safe.
         env:
           STEP_CMD: |
+            set -euo pipefail
             curl -sSfL -o rulefloor.tar.gz "https://github.com/ozgurcd/rulefloor/archive/refs/tags/${RULEFLOOR_VERSION}.tar.gz"
             echo "${RULEFLOOR_SHA256}  rulefloor.tar.gz" | sha256sum -c -
             tar -xzf rulefloor.tar.gz
