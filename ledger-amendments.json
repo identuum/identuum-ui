@@ -1,16 +1,33 @@
 {
   "schema_version": "ledger-amendments.v1",
-  "base_commit": "5ff9eda9a3d3092ee53f9b8b19d0c6e8670ada8c",
+  "base_commit": "7cbfe702c2c1a4736dd6e53d6481a8429e26ef7f",
   "changes": [
     {
-      "rule_id": "E2E-NAME-OWNERSHIP-1",
-      "change_class": "rule_added",
-      "reason": "OSS-MINT-GUARD-3 (2026-10-10, review OSS-MINT-GUARD-2 G2): new rule E2E-NAME-OWNERSHIP-1, armed on src/__tests__/e2e-resource-isolation.test.ts @ vitest. The e2e-full/e2e-quick runner looks for every volume and network name its resolved compose config names in an UNFILTERED listing and refuses, before any start, when one exists whatever its labels: a foreign same-name volume (seen only unfiltered) gets no startup, no compose resource action, no down and no removal command. Red-proved on 5ff9eda (the review's counterexample: exit 0, one startup, one down --volumes) and by mutation."
+      "rule_id": "E2E-RESOURCE-OWNERSHIP-1",
+      "change_class": "sentence_changed",
+      "after_sentence_sha256": "bfcc2a46d37286953d3d781b9e84884689e43c072a6919ceb79c3b5c30bd38b7",
+      "reason": "OSS-MINT-GUARD-4 (2026-10-10, review OSS-MINT-GUARD-3-PREREVIEW H1/H2, judge ruling Q-OWNERSHIP (a)): the runner's claim is one fixed path, /tmp/identuum-e2e.lock, whatever TMPDIR says (H1); it labels what it starts with a random invocation id, records it by ID right after the start, and on exit removes exactly that, each by ID after rechecking identity and label, with no project-level down; a foreign same-project container or a same-name replacement is refused and the run is red (H2). The test file gains a stateful daemon model and the review's counterexamples. Red-proved on 7cbfe70 (15 of 40 FAIL)."
     },
     {
-      "rule_id": "E2E-FIXTURE-ENDPOINT-1",
-      "change_class": "rule_added",
-      "reason": "OSS-MINT-GUARD-3 (2026-10-10, review OSS-MINT-GUARD-2 G4): new rule E2E-FIXTURE-ENDPOINT-1, armed on src/__tests__/e2e-expired-org-isolation.test.ts @ vitest. The expired-org fixture refuses, before any process or HTTP request, UI and IdP bases that are not loopback http at the harness's selected ports carried by full-run.sh; the former development ports 7104/7113 are refused with zero process calls and zero requests. Red-proved on 5ff9eda (the review's counterexample: one database command and a POST to localhost:7104) and by mutation."
+      "rule_id": "E2E-RESOURCE-OWNERSHIP-1",
+      "change_class": "proof_changed",
+      "reason": "OSS-MINT-GUARD-4 (2026-10-10, review OSS-MINT-GUARD-3-PREREVIEW H1/H2, judge ruling Q-OWNERSHIP (a)): the runner's claim is one fixed path, /tmp/identuum-e2e.lock, whatever TMPDIR says (H1); it labels what it starts with a random invocation id, records it by ID right after the start, and on exit removes exactly that, each by ID after rechecking identity and label, with no project-level down; a foreign same-project container or a same-name replacement is refused and the run is red (H2). The test file gains a stateful daemon model and the review's counterexamples. Red-proved on 7cbfe70 (15 of 40 FAIL)."
+    },
+    {
+      "rule_id": "E2E-RESOURCE-OWNERSHIP-1",
+      "change_class": "test_fingerprint_changed",
+      "reason": "OSS-MINT-GUARD-4 (2026-10-10, review OSS-MINT-GUARD-3-PREREVIEW H1/H2, judge ruling Q-OWNERSHIP (a)): the runner's claim is one fixed path, /tmp/identuum-e2e.lock, whatever TMPDIR says (H1); it labels what it starts with a random invocation id, records it by ID right after the start, and on exit removes exactly that, each by ID after rechecking identity and label, with no project-level down; a foreign same-project container or a same-name replacement is refused and the run is red (H2). The test file gains a stateful daemon model and the review's counterexamples. Red-proved on 7cbfe70 (15 of 40 FAIL)."
+    },
+    {
+      "rule_id": "SEED-NEVER-OUTLIVES-APPLIANCE-1",
+      "change_class": "sentence_changed",
+      "after_sentence_sha256": "53e6ba6e6f356c8beb6b6853e32cb83d8556e1f5e2f0696c5c81f49b02f645c7",
+      "reason": "OSS-MINT-GUARD-4 (2026-10-10, review OSS-MINT-GUARD-3-PREREVIEW H2): the teardown no longer runs down --volumes; the rule and its test now anchor the run-start seed deletion ahead of the teardown that removes the appliance's recorded resources by ID. The recorded mutation proof (deleting the run-start rm) is unchanged in kind."
+    },
+    {
+      "rule_id": "SEED-NEVER-OUTLIVES-APPLIANCE-1",
+      "change_class": "test_fingerprint_changed",
+      "reason": "OSS-MINT-GUARD-4 (2026-10-10, review OSS-MINT-GUARD-3-PREREVIEW H2): the teardown no longer runs down --volumes; the rule and its test now anchor the run-start seed deletion ahead of the teardown that removes the appliance's recorded resources by ID. The recorded mutation proof (deleting the run-start rm) is unchanged in kind."
     }
   ]
 }
