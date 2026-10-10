@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
 # full-run.sh — the e2e-full disposable harness (THE-DISPOSABLE-HARNESS, 2026-08-28).
 #
-# DESTROYS AND REBUILDS its own environment on every run — its OWN Compose
+# BUILDS AND DESTROYS its own environment on every run — its OWN Compose
 # project (identuum-e2e, below), never the operator's dev stack:
-#   1. fast-clean   — stops the harness stack and DELETES its postgres volume
+#   1. ownership    — REFUSES when anything of project identuum-e2e (or a
+#                     container named identuum-e2e / identuum-e2e-postgres)
+#                     already exists, and validates the resolved Compose config
+#                     (OSS-MINT-GUARD-2, judge ruling Q2(b)): leftovers are
+#                     never deleted by assumption; the refusal prints the
+#                     command an operator may run to remove them
 #   2. oss-up       — rebuilds the image from the working tree and starts it
 #   3. dev-smoke    — refuses a stale binary (build_commit must match the tree)
 #   4. oss-bootstrap— creates the site_admin with a RUN-LOCAL random password
 #   5. playwright   — runs the e2e-full project, SERIAL BY PHYSICS
 #                     (--workers=1: TOTP replay protection rejects concurrent
 #                     logins minting the same 30-second code)
-#   6. fast-clean   — teardown: stack down, volume gone, no harness residue
+#   6. teardown     — ONE EXIT trap, installed after step 1 and before the
+#                     first create: stack down, volume gone, no harness residue
 #                     — EXCEPT the evidence of a RED run (THE-RED-MINT-HAS-NO-NAME,
 #                     2026-09-06): when any phase failed, the appliance log,
 #                     the finalized record, every phase's JSON report, the
@@ -29,6 +35,12 @@
 # The run-local password is generated here, exported to the bootstrap and to
 # the spec via the environment, and never printed.
 set -euo pipefail
+
+# OSS-MINT-GUARD-2 (C1): one project authority. An inherited project name
+# outranks a compose file's `name:`, and an inherited orphan flag removes
+# services of whatever project is selected, so neither may reach any Compose
+# command or the nested make below.
+unset COMPOSE_PROJECT_NAME COMPOSE_REMOVE_ORPHANS
 
 UI_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 IDP_DIR=$(cd "$UI_DIR/../identuum-idp-oss" && pwd)
@@ -49,7 +61,8 @@ E2E_APP_CONTAINER="$E2E_PROJECT"
 # SMTP is configured). The overlay is this harness's own file and is passed
 # here and to oss-up only; neither compose file changes. See the overlay.
 E2E_MAIL_OVERLAY="$UI_DIR/e2e-full/compose.mail-sink.yml"
-E2E_COMPOSE=(docker compose -p "$E2E_PROJECT" -f "$IDP_DIR/deployment/docker-compose.dev.yml" -f "$E2E_MAIL_OVERLAY")
+E2E_DEV_COMPOSE="$IDP_DIR/deployment/docker-compose.dev.yml"
+E2E_COMPOSE=(docker compose -p "$E2E_PROJECT" -f "$E2E_DEV_COMPOSE" -f "$E2E_MAIL_OVERLAY")
 # OSS-TEST-FULL-PORTS (owner ruling t, 2026-10-07): the harness's host ports,
 # each declared ONCE here, apart from the owner's dev stack (5513, the app's
 # default port and the dev UI's), so a running dev app no longer makes the run
@@ -64,11 +77,18 @@ export DEV_APP_PORT="$E2E_APP_PORT"
 E2E_IDP_BASE="http://127.0.0.1:${E2E_APP_PORT}"
 export IDENTUUM_E2E_FULL_IDP_BASE="$E2E_IDP_BASE"
 export IDENTUUM_E2E_FULL_IDP_ORIGIN="http://localhost:${E2E_APP_PORT}"
+# The nested idp-oss make (oss-up, dev-smoke) runs with no inherited make
+# flags or Compose selectors, and is handed the project and ports on its
+# command line, so a caller's `make VAR=...` can never split the project the
+# startup uses from the one validated and torn down here (C1).
+NESTED_MAKE=(env -u MAKEFLAGS -u MAKEOVERRIDES -u MFLAGS -u COMPOSE_PROJECT_NAME -u COMPOSE_REMOVE_ORPHANS
+	make -C "$IDP_DIR")
+NESTED_VARS=(IDENTUUM_IDP_COMPOSE_PROJECT="$E2E_PROJECT" DEV_PG_HOST_PORT="$DEV_PG_HOST_PORT" DEV_APP_PORT="$E2E_APP_PORT")
 
 # THE-SEED-THAT-OUTLIVED-ITS-APPLIANCE: the site_admin TOTP seed is written
 # under e2e-full/.auth/ during a run and is valid ONLY for the appliance that
-# issued it. The appliance is destroyed with `down --volumes` on the next line,
-# so a seed can never legitimately survive into the run below — yet the file
+# issued it. Every run's appliance is destroyed with `down --volumes` at its
+# end, so a seed can never legitimately survive into the run below — yet the file
 # persisted, and siteAdminSession's fallback read it across appliances. That
 # produced codes no window could match and a message blaming a replay guard
 # that does not exist. It cost three red mints.
@@ -80,18 +100,82 @@ export IDENTUUM_E2E_FULL_IDP_ORIGIN="http://localhost:${E2E_APP_PORT}"
 # spending the current one.
 rm -f "$UI_DIR/e2e-full/.auth/full-site-admin-totp"
 
-echo "e2e-full: DESTROYING the harness stack (project $E2E_PROJECT: down --volumes, app profile included)"
-# NOT `make fast-clean`: that recipe omits `--profile app`, so it deletes
-# postgres and the volume but LEAVES the profiled app container serving
-# (measured: a 6.4s "run" where a stale app answered the health probe
-# instantly and bootstrap then hit a freshly re-created empty postgres).
-# Recorded as an idp-oss follow-up; the repo is read-only for this slice.
-# Same compose file, same flags, plus the profile — the app dies too.
-# `-p` names the harness project explicitly: this removes identuum-e2e's
-# containers, network and volume and nothing of any other project.
-"${E2E_COMPOSE[@]}" --profile app down --volumes
+# LEFTOVER REFUSAL (OSS-MINT-GUARD-2, judge ruling Q2(b)). This run owns
+# project identuum-e2e only if it creates it: anything already carrying the
+# project's label, or a container already holding one of its fixed names
+# (whatever its labels), may be another run's or another stack's. The harness
+# never deletes such leftovers by assumption — it refuses, and prints the one
+# command an operator may run to remove the identuum-e2e project's own
+# leftovers. Read-only listings only; nothing here creates or removes anything.
+leftovers=""
+if ! containers=$(docker ps -a --format '{{.Names}}	{{.Label "com.docker.compose.project"}}') ||
+	! volumes=$(docker volume ls --filter "label=com.docker.compose.project=$E2E_PROJECT" --format '{{.Name}}') ||
+	! networks=$(docker network ls --filter "label=com.docker.compose.project=$E2E_PROJECT" --format '{{.Name}}'); then
+	echo "e2e-full: REFUSING — could not list Docker resources to prove project $E2E_PROJECT is unused" >&2
+	exit 1
+fi
+while IFS=$'\t' read -r name project; do
+	[ -n "$name" ] || continue
+	if [ "$project" = "$E2E_PROJECT" ] || [ "$name" = "$E2E_APP_CONTAINER" ] || [ "$name" = "$E2E_PROJECT-postgres" ]; then
+		leftovers+="  container $name (project label: ${project:-none})"$'\n'
+	fi
+done <<<"$containers"
+while read -r name; do [ -z "$name" ] || leftovers+="  volume $name"$'\n'; done <<<"$volumes"
+while read -r name; do [ -z "$name" ] || leftovers+="  network $name"$'\n'; done <<<"$networks"
+if [ -n "$leftovers" ]; then
+	{
+		echo "e2e-full: REFUSING — resources of project $E2E_PROJECT (or its container names) already exist:"
+		printf '%s' "$leftovers"
+		echo "The harness deletes nothing it did not create in this run. If these are a previous harness run's, an operator may remove them with:"
+		echo "  docker compose -p $E2E_PROJECT -f $E2E_DEV_COMPOSE -f $E2E_MAIL_OVERLAY --profile app down --volumes"
+		echo "A container whose project label is not $E2E_PROJECT is not removed by that command; inspect it and decide by hand."
+	} >&2
+	exit 1
+fi
 
-# PREFLIGHT, after our own leftovers are gone: every host port this run binds
+# RESOLVED-CONFIG VALIDATION (C1): what Compose will actually act on, read
+# before the first resource action. `config` creates nothing. The resolved
+# config carries environment values, so it is never printed: node reads it
+# from the pipe and prints names only.
+if ! "${E2E_COMPOSE[@]}" --profile app config --format json | E2E_PROJECT="$E2E_PROJECT" node -e '
+const project = process.env.E2E_PROJECT;
+let cfg;
+try {
+	cfg = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+} catch {
+	// A parse error quotes the input; the input carries environment values.
+	console.error("e2e-full: REFUSING — the resolved Compose config is not JSON");
+	process.exit(1);
+}
+const bad = [];
+const prot = (n) => typeof n === "string" && n.startsWith("identuum-idp-oss");
+if (cfg.name !== project) bad.push(`project name ${cfg.name}`);
+const names = { networks: [], volumes: [], containers: [] };
+for (const kind of ["networks", "volumes"]) {
+	for (const [key, def] of Object.entries(cfg[kind] || {})) {
+		const name = (def && def.name) || key;
+		names[kind].push(name);
+		if (def && def.external) bad.push(`${kind} ${key} is external (${name})`);
+		if (!name.startsWith(`${project}_`) || prot(name)) bad.push(`${kind} ${key} resolves to ${name}`);
+	}
+}
+for (const [svc, def] of Object.entries(cfg.services || {})) {
+	const cn = def && def.container_name;
+	if (cn === undefined) continue;
+	names.containers.push(cn);
+	if (prot(cn) || ![project, `${project}-postgres`].includes(cn)) bad.push(`service ${svc} container_name ${cn}`);
+}
+if (bad.length) {
+	console.error(`e2e-full: REFUSING — the resolved Compose config is not this harness project alone: ${bad.join("; ")}`);
+	process.exit(1);
+}
+console.log(`e2e-full: resolved config OK — project ${project}; networks ${names.networks.join(", ") || "-"}; volumes ${names.volumes.join(", ") || "-"}; containers ${names.containers.join(", ") || "-"}`);
+'; then
+	echo "e2e-full: REFUSING — the resolved Compose config for project $E2E_PROJECT could not be validated" >&2
+	exit 1
+fi
+
+# PREFLIGHT, with no leftover of this project present: every host port this run binds
 # must be free. A port held by anything else is a refusal naming the holder,
 # never a collision mid-run.
 for port in "$DEV_PG_HOST_PORT" "$E2E_APP_PORT" "$E2E_UI_PORT"; do
@@ -107,6 +191,36 @@ for port in "$DEV_PG_HOST_PORT" "$E2E_APP_PORT" "$E2E_UI_PORT"; do
 	fi
 done
 echo "e2e-full: preflight OK — ports $DEV_PG_HOST_PORT, $E2E_APP_PORT, $E2E_UI_PORT free; project $E2E_PROJECT"
+
+# THE ONE TEARDOWN (C5). Installed only now — after the leftover refusal and
+# the config validation, before the first create — so everything it removes
+# was created by this invocation under -p identuum-e2e: its containers,
+# network and named volume (`down --volumes`, the harness's own disposable
+# appliance; AGENTS.md's one exemption). It runs once on every exit, green,
+# red or aborted; it keeps a red run's status, and a failed teardown turns a
+# green run red. It also removes the run's own credential envelopes, which
+# belong to the appliance it just destroyed. No prune, no `docker volume rm`,
+# nothing of any other project.
+FIXTURE_FILE="$UI_DIR/e2e/.auth/e2e-org-admin-fixture.json"
+ADMIN_RESET_ENVELOPE="$UI_DIR/e2e/.auth/admin-reset-envelope.json"
+teardown_done=0
+teardown() {
+	local status=$?
+	trap - EXIT
+	if [ "$teardown_done" = 0 ]; then
+		teardown_done=1
+		echo "e2e-full: teardown (project $E2E_PROJECT: down --volumes, app profile included)"
+		if ! "${E2E_COMPOSE[@]}" --profile app down --volumes; then
+			echo "e2e-full: TEARDOWN FAILED for project $E2E_PROJECT — remove it with: docker compose -p $E2E_PROJECT -f $E2E_DEV_COMPOSE -f $E2E_MAIL_OVERLAY --profile app down --volumes" >&2
+			[ "$status" -ne 0 ] || status=1
+		fi
+		rm -f "$FIXTURE_FILE" "$ADMIN_RESET_ENVELOPE"
+	fi
+	exit "$status"
+}
+trap teardown EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 echo "e2e-full: rebuilding + starting the appliance (oss-up, INSECURE_DEV_MODE)"
 # TEST-ONLY rate-limit escape hatch (idp-oss internal/runtime/insecure_dev_mode.go,
@@ -135,7 +249,7 @@ export IDENTUUM_E2E_BASE_URL="http://localhost:${E2E_UI_PORT}"
 export IDENTUUM_IDP_UI_PUBLIC_BASE_URL="http://localhost:${E2E_UI_PORT}"
 # COMPOSE_FILE is idp-oss's own `?=` variable; the base file stays first, so the
 # project directory (and the build context) is unchanged.
-make -C "$IDP_DIR" oss-up COMPOSE_FILE="deployment/docker-compose.dev.yml -f $E2E_MAIL_OVERLAY"
+"${NESTED_MAKE[@]}" oss-up COMPOSE_FILE="deployment/docker-compose.dev.yml -f $E2E_MAIL_OVERLAY" "${NESTED_VARS[@]}"
 
 echo "e2e-full: waiting for the appliance to serve"
 for i in $(seq 1 60); do
@@ -150,7 +264,7 @@ for i in $(seq 1 60); do
 done
 
 echo "e2e-full: dev-smoke (stale-binary refusal)"
-make -C "$IDP_DIR" dev-smoke
+"${NESTED_MAKE[@]}" dev-smoke "${NESTED_VARS[@]}"
 
 # ── THE-WITNESSED-COVERAGE: every suite phase runs as a gate-witness STEP, so
 # GATE-RUN.e2e-full.txt carries per-phase exits plus "check OK:" evidence lines
@@ -169,7 +283,6 @@ make -C "$IDP_DIR" dev-smoke
 # plain `pnpm e2e` never runs any of it, and the dev loop is not slowed.
 # --workers=1 throughout for TOTP replay physics.
 E2E_UI_CFG="$UI_DIR/e2e/.auth/ui-runtime.provisioner.json"
-FIXTURE_FILE="$UI_DIR/e2e/.auth/e2e-org-admin-fixture.json"
 export E2E_UI_CFG FIXTURE_FILE
 mkdir -p "$(dirname "$E2E_UI_CFG")"
 # Non-secret runtime config: point the dev-loop UI at the running appliance.
@@ -295,9 +408,9 @@ if [ -z "$OSS_DB_DSN" ]; then
 	echo "e2e-full: could not resolve the container's DB DSN" >&2
 	exit 1
 fi
-(cd "$IDP_DIR" && docker compose -p "$E2E_PROJECT" -f deployment/docker-compose.dev.yml --profile app \
+"${E2E_COMPOSE[@]}" --profile app \
 	exec -T -e IDENTUUM_IDP_BOOTSTRAP_PASSWORD app \
-	/app/identuum-idp bootstrap "$OSS_DB_DSN")
+	/app/identuum-idp bootstrap "$OSS_DB_DSN"
 
 echo "e2e-full: API suite (oss-full)"
 # THE-THIRTY-SECOND-WAIT (2026-09-04, corrected the same day): EVERY phase runs
@@ -377,23 +490,21 @@ export IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD IDENTUUM_OSS_TEST_USER_PASSWORD 
 echo "e2e-full: provisioning the dev-loop fixture (opt-in specs light up)"
 bash "$GW" step "$RECORD" 'provisioner=IDENTUUM_E2E_FULL=1 IDENTUUM_E2E_PROVISION=1 IDENTUUM_E2E_FULL_ADMIN_PASSWORD="$IDENTUUM_IDP_BOOTSTRAP_PASSWORD" IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD="$IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD" IDENTUUM_OSS_TEST_USER_PASSWORD="$IDENTUUM_OSS_TEST_USER_PASSWORD" IDENTUUM_E2E_FULL_IDP_BASE='"$E2E_IDP_BASE"' bash e2e-full/scripts/pw-phase.sh provisioner e2e/.auth/pw-provisioner.json -- --project=oss-full --workers=1 provision-fixture' || rc=1
 
-# FAIL LOUD if the provisioner did not seal the envelope: without it,
-# global-setup's rebuild path would try to stand up ITS OWN appliance
-# (docker-compose.e2e.yml) instead of reusing the harness appliance —
-# measured 2026-08-29 as a port-bind error after a silent fall-through. The
-# record is left un-finalized: the unrun planned steps read INCOMPLETE, which
-# is the truth.
+# FAIL LOUD if the provisioner did not seal the envelope: the dev-loop
+# phases run outer-owned (IDENTUUM_E2E_FIXTURE_OWNER=outer, below), so their
+# global setup would refuse anyway rather than stand up an appliance of its
+# own (measured 2026-08-29, before that refusal existed, as a port-bind error
+# after a silent fall-through). The record is left un-finalized: the unrun
+# planned steps read INCOMPLETE, which is the truth. The EXIT trap tears the
+# appliance down.
 if [ ! -f "$FIXTURE_FILE" ]; then
 	echo "e2e-full: provisioner did not write the fixture envelope — aborting the dev-loop run" >&2
-	"${E2E_COMPOSE[@]}" --profile app down --volumes
 	exit 1
 fi
 
-# THE-ADMIN-RESET needs the tenant credentials AFTER the dev-loop suite,
-# whose global teardown deletes the envelope (removeLocalFixtureFiles — "no
-# trace left"). Keep a run-local copy for the last phase; same directory,
-# same gitignore, same 0600, gone with the run like the original.
-ADMIN_RESET_ENVELOPE="$UI_DIR/e2e/.auth/admin-reset-envelope.json"
+# THE-ADMIN-RESET and the export specs read the tenant credentials from a
+# run-local copy; same directory, same gitignore, same 0600, removed by the
+# EXIT trap with the original.
 cp "$FIXTURE_FILE" "$ADMIN_RESET_ENVELOPE"
 chmod 600 "$ADMIN_RESET_ENVELOPE"
 
@@ -425,7 +536,12 @@ if planned role-matrix; then bash "$GW" step "$RECORD" 'role-matrix=node e2e-ful
 # Run the dev-loop suite PROVISIONED: the envelope is present and
 # dynamic-fixture mode is on, so global-setup's fast path REUSES this running
 # appliance (it validates the envelope's site_admin against E2E_APP_PORT and skips
-# any down/up) instead of standing up a second stack. --trace on feeds the
+# any down/up) instead of standing up a second stack. OUTER-OWNED (C4):
+# IDENTUUM_E2E_FIXTURE_OWNER=outer makes that reuse mandatory — a fixture
+# that does not validate is a refusal, never a second appliance — and makes
+# the suite's global teardown issue no Compose call and keep the envelope;
+# this runner alone owns the appliance's lifecycle. IDENTUUM_E2E_IDP_DIR names
+# the compose file the expired-org fixture execs into (this project only). --trace on feeds the
 # coverage phase: route coverage is derived from what the run actually did.
 # THE-SKIPPED-THIRTY-TWO: the orgs-CRUD ceremony (create -> edit -> soft-delete,
 # try/finally self-cleaning) is safe on THIS disposable appliance and the
@@ -453,11 +569,11 @@ bash "$GW" step "$RECORD" 'verify-record-ui=bash scripts/gate-witness.sh check .
 bash "$GW" step "$RECORD" 'verify-record-idp-oss=bash scripts/gate-witness.sh check '"$IDP_DIR"' GATE-RUN.txt' || rc=1
 
 echo "e2e-full: dev-loop suite PROVISIONED (the previously-dark specs now light)"
-if planned devloop-provisioned; then bash "$GW" step "$RECORD" 'devloop-provisioned=IDENTUUM_E2E_ORGS_CRUD=1 IDENTUUM_E2E_OSS_CHANGE_PASSWORD=1 IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true IDENTUUM_OSS_TEST_USER_EMAIL="$IDENTUUM_OSS_TEST_USER_EMAIL" IDENTUUM_OSS_TEST_USER_PASSWORD="$IDENTUUM_OSS_TEST_USER_PASSWORD" IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD="$IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD" IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL='"$E2E_IDP_BASE"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-provisioned e2e/.auth/pw-devloop.json -- --project=chromium --workers=1 --trace on' || rc=1; fi
+if planned devloop-provisioned; then bash "$GW" step "$RECORD" 'devloop-provisioned=IDENTUUM_E2E_FIXTURE_OWNER=outer IDENTUUM_E2E_IDP_DIR='"$IDP_DIR"' IDENTUUM_E2E_ORGS_CRUD=1 IDENTUUM_E2E_OSS_CHANGE_PASSWORD=1 IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true IDENTUUM_OSS_TEST_USER_EMAIL="$IDENTUUM_OSS_TEST_USER_EMAIL" IDENTUUM_OSS_TEST_USER_PASSWORD="$IDENTUUM_OSS_TEST_USER_PASSWORD" IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD="$IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD" IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL='"$E2E_IDP_BASE"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-provisioned e2e/.auth/pw-devloop.json -- --project=chromium --workers=1 --trace on' || rc=1; fi
 # GATE-TIERS: the quick mode's one dev-loop phase — the same dynamic fixture,
 # the same --trace on and therefore the same pw-phase.sh browser-console gate,
 # over QUICK_SPECS only.
-if planned devloop-quick; then bash "$GW" step "$RECORD" 'devloop-quick=IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL='"$E2E_IDP_BASE"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-quick e2e/.auth/pw-devloop-quick.json -- --project=chromium --workers=1 --trace on '"$QUICK_SPECS"'' || rc=1; fi
+if planned devloop-quick; then bash "$GW" step "$RECORD" 'devloop-quick=IDENTUUM_E2E_FIXTURE_OWNER=outer IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL='"$E2E_IDP_BASE"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-quick e2e/.auth/pw-devloop-quick.json -- --project=chromium --workers=1 --trace on '"$QUICK_SPECS"'' || rc=1; fi
 
 # THE-DISPOSABLE-IDENTITIES: the devloop skip count gets a CEILING, exactly
 # like the coverage floor — a new skip must be a deliberate commit, never
@@ -541,9 +657,6 @@ if [ "$rc" -ne 0 ]; then
 	echo "e2e-full: RED — evidence kept at ${E2E_EVIDENCE_DIR#"$UI_DIR"/} ($(find "$E2E_EVIDENCE_DIR" -type f | wc -l | tr -d ' ') file(s): appliance.log, the record, JSON reports, observations, failed phases' traces)"
 fi
 
-echo "e2e-full: teardown (down --volumes, app profile included)"
-"${E2E_COMPOSE[@]}" --profile app down --volumes
-
 # Green only when EVERY witnessed phase recorded exit=0 (finalize enforces the
-# same condition inside the record itself).
+# same condition inside the record itself). The EXIT trap tears down.
 exit "$rc"

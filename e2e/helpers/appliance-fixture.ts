@@ -848,12 +848,55 @@ export async function seedDisposableRecoveryFixture(
 }
 
 /**
+ * The Compose project the secondary released appliance (e2e/docker-compose.e2e.yml)
+ * runs as. OSS-MINT-GUARD-2 (judge ruling Q2(b)): an established identity with
+ * an exclusive-ownership contract — every Compose command names it with -p,
+ * its resolved config is validated before any lifecycle action, and leftovers
+ * are refused, never removed by assumption.
+ */
+export const SECONDARY_COMPOSE_PROJECT = "identuum-ui-e2e";
+
+/**
+ * C4: global-setup sets this, in the Playwright runner process, to that
+ * process's pid immediately before it starts its OWN secondary appliance;
+ * global-teardown (the same runner process) tears down only when it finds it.
+ * A stack this invocation merely reused carries no such mark.
+ */
+export const SECONDARY_OWNER_ENV = "IDENTUUM_E2E_SECONDARY_APPLIANCE_OWNER";
+
+/**
+ * Who owns the appliance lifecycle of this Playwright invocation (C4).
+ * "outer": an outer runner (e2e-full/scripts/full-run.sh) provisioned the
+ * appliance and the fixture and alone tears them down. "standalone": this
+ * invocation may create its own secondary appliance. Any other value refuses.
+ */
+export function fixtureLifecycleOwner(): "outer" | "standalone" {
+  const owner = process.env.IDENTUUM_E2E_FIXTURE_OWNER;
+  if (owner === undefined || owner === "") return "standalone";
+  if (owner === "outer") return "outer";
+  throw new Error('[e2e] IDENTUUM_E2E_FIXTURE_OWNER must be "outer" or unset; refusing.');
+}
+
+/** The process env minus the inherited Compose selectors (C1). */
+export function composeLifecycleEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.COMPOSE_PROJECT_NAME;
+  delete env.COMPOSE_REMOVE_ORPHANS;
+  return env;
+}
+
+/**
  * Resolves the available Compose invocation as an argv prefix: prefers Docker
  * Compose v2 (`docker compose`), falls back to the legacy v1 binary
- * (`docker-compose`). Returns null when neither is callable. `composeFile` is
- * appended as `-f <file>` so callers pass only the subcommand.
+ * (`docker-compose`). Returns null when neither is callable. The prefix names
+ * the project explicitly (`-p`, which outranks COMPOSE_PROJECT_NAME and the
+ * file's `name:`) and appends `-f <file>`, so callers pass only the subcommand.
+ * The version probes are the only calls made here.
  */
-export function composeCommand(composeFile: string): string[] | null {
+export function composeCommand(
+  composeFile: string,
+  project: string = SECONDARY_COMPOSE_PROJECT
+): string[] | null {
   for (const probe of [
     ["docker", ["compose", "version"]],
     ["docker-compose", ["version"]],
@@ -861,13 +904,93 @@ export function composeCommand(composeFile: string): string[] | null {
     try {
       execFileSync(probe[0], probe[1], { stdio: "ignore" });
       return probe[0] === "docker"
-        ? ["docker", "compose", "-f", composeFile]
-        : ["docker-compose", "-f", composeFile];
+        ? ["docker", "compose", "-p", project, "-f", composeFile]
+        : ["docker-compose", "-p", project, "-f", composeFile];
     } catch {
       /* try next */
     }
   }
   return null;
+}
+
+/**
+ * Validates what Compose would act on for `compose` (C1), before any lifecycle
+ * action: the resolved project name is `project`, every network and volume is
+ * non-external and named `<project>_…`, and no network, volume or container
+ * name starts with identuum-idp-oss. `config` creates nothing. The resolved
+ * config carries environment values, so only names ever reach a message.
+ */
+export function assertOwnedComposeConfig(compose: string[], project: string): void {
+  const [prog, ...pre] = compose;
+  let cfg: {
+    name?: unknown;
+    networks?: Record<string, { name?: string; external?: unknown } | null>;
+    volumes?: Record<string, { name?: string; external?: unknown } | null>;
+    services?: Record<string, { container_name?: string } | null>;
+  };
+  try {
+    cfg = JSON.parse(
+      execFileSync(prog, [...pre, "config", "--format", "json"], {
+        env: composeLifecycleEnv(),
+        stdio: ["ignore", "pipe", "ignore"],
+      }).toString("utf-8")
+    );
+  } catch {
+    throw new Error(
+      `[e2e compose] refusing: the resolved config of project ${project} could not be read`
+    );
+  }
+  const bad: string[] = [];
+  const isProtected = (n: string) => n.startsWith("identuum-idp-oss");
+  if (cfg.name !== project) bad.push(`project name ${String(cfg.name)}`);
+  for (const kind of ["networks", "volumes"] as const) {
+    for (const [key, def] of Object.entries(cfg[kind] ?? {})) {
+      const name = def?.name ?? key;
+      if (def?.external) bad.push(`${kind} ${key} is external`);
+      if (!name.startsWith(`${project}_`) || isProtected(name))
+        bad.push(`${kind} ${key} resolves to ${name}`);
+    }
+  }
+  for (const [svc, def] of Object.entries(cfg.services ?? {})) {
+    const cn = def?.container_name;
+    if (cn !== undefined && (isProtected(cn) || !cn.startsWith(project)))
+      bad.push(`service ${svc} container_name ${cn}`);
+  }
+  if (bad.length > 0) {
+    throw new Error(
+      `[e2e compose] refusing: the resolved config is not project ${project} alone: ${bad.join("; ")}`
+    );
+  }
+}
+
+/**
+ * Refuses when containers or networks labelled with `project` already exist
+ * (ruling Q2(b)): this invocation did not create them, so it neither reuses
+ * nor removes them. Read-only listings only. Volumes are not listed: the
+ * secondary project declares none, and the anonymous volume its postgres image
+ * gets is retained by a plain `down` by design (see docker-compose.e2e.yml).
+ */
+export function assertNoComposeLeftovers(composeFile: string, project: string): void {
+  const label = `label=com.docker.compose.project=${project}`;
+  let found: string[];
+  try {
+    found = [
+      ...execFileSync("docker", ["ps", "-a", "--filter", label, "--format", "{{.Names}}"])
+        .toString("utf-8")
+        .split("\n"),
+      ...execFileSync("docker", ["network", "ls", "--filter", label, "--format", "{{.Name}}"])
+        .toString("utf-8")
+        .split("\n"),
+    ].filter((n) => n.trim() !== "");
+  } catch {
+    throw new Error(`[e2e compose] refusing: could not list the resources of project ${project}`);
+  }
+  if (found.length > 0) {
+    throw new Error(
+      `[e2e compose] refusing: project ${project} already has ${found.join(", ")}, which this run did not create. ` +
+        `If they are a previous run's, an operator may remove them with: docker compose -p ${project} -f ${composeFile} down`
+    );
+  }
 }
 
 /** Reads the appliance's current setup code from inside the container. */
@@ -877,7 +1000,7 @@ export function readSetupCode(compose: string[], service: string): string {
     const out = execFileSync(
       prog,
       [...pre, "exec", "-T", service, "/app/identuum-idp", "show-setup-code", "/app/data"],
-      { stdio: ["ignore", "pipe", "ignore"] }
+      { stdio: ["ignore", "pipe", "ignore"], env: composeLifecycleEnv() }
     ).toString("utf-8");
     const m = out.match(/[A-Z0-9]{40,}/);
     return m ? m[0] : "";

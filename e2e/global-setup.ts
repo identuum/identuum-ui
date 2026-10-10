@@ -2,9 +2,15 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  assertNoComposeLeftovers,
+  assertOwnedComposeConfig,
   buildFixtureEnvelope,
   composeCommand,
+  composeLifecycleEnv,
+  fixtureLifecycleOwner,
   readSetupCode,
+  SECONDARY_COMPOSE_PROJECT,
+  SECONDARY_OWNER_ENV,
   totpLoginWorks,
 } from "./helpers/appliance-fixture";
 import {
@@ -33,6 +39,13 @@ import {
  * (e2e/docker-compose.e2e.yml), and every credential is minted by this setup
  * against the released API and written to the fixture envelope the specs
  * already consume.
+ *
+ * LIFECYCLE OWNERSHIP (OSS-MINT-GUARD-2, C4). Under the e2e-full harness
+ * (IDENTUUM_E2E_FIXTURE_OWNER=outer) the outer runner owns the appliance:
+ * reuse of its fixture is mandatory and anything else is a refusal, before any
+ * Compose call. Standalone, this setup creates its own project
+ * identuum-ui-e2e (-p on every call, resolved config validated, leftovers
+ * refused) and marks it as its own for global-teardown.
  */
 
 const MINIMAL_E2E_CONFIG = {
@@ -95,7 +108,9 @@ export default async function globalSetup() {
  * still log in against the running appliance, reuse both — the envelope file is
  * left untouched (mtime unchanged) and no `down`/`up` runs. Only when the
  * envelope is absent OR its credentials no longer authenticate does this
- * recreate a fresh appliance and build a new envelope. This is why reuse must
+ * (standalone only) create a fresh appliance of its own and build a new
+ * envelope — refusing, never removing, an existing identuum-ui-e2e stack;
+ * outer-owned, it refuses instead. This is why reuse must
  * NOT `down` a healthy appliance: the saved credentials exist only inside the
  * appliance that minted them.
  *
@@ -105,9 +120,29 @@ export default async function globalSetup() {
  * globalSetup runs, so a config chosen here would arrive too late.
  */
 async function orchestrateReleasedApplianceFixture(): Promise<void> {
+  const owner = fixtureLifecycleOwner();
   const hostFixtureDir = fixtureDirectory();
   fs.mkdirSync(hostFixtureDir, { recursive: true, mode: 0o700 });
   const fixturePath = resolveFixturePath();
+
+  // OUTER-OWNED (C4): the outer runner provisioned this appliance and its
+  // fixture and alone owns their lifecycle. Reuse is mandatory: anything that
+  // does not validate is a refusal here, before any Compose discovery or
+  // startup — never a second appliance of this invocation's own.
+  if (owner === "outer") {
+    const refuse = (why: string) =>
+      new Error(`[e2e setup] outer-owned harness: ${why}; refusing (no appliance of its own).`);
+    if (!process.env.IDENTUUM_IDP_BASE_URL) throw refuse("IDENTUUM_IDP_BASE_URL is not set");
+    if (!fs.existsSync(fixturePath)) throw refuse("the provisioned fixture is missing");
+    if (!(await idpHealthy())) throw refuse(`the IdP at ${IDP_BASE_URL} is not healthy`);
+    const sa = safeLoadSiteAdmin();
+    if (!sa) throw refuse("the provisioned fixture is malformed");
+    if (!(await totpLoginWorks(IDP_BASE_URL, sa.email, sa.password, sa.totpSecret))) {
+      throw refuse("the fixture's site_admin cannot sign in");
+    }
+    process.stdout.write("[e2e setup] outer-owned harness: reusing its provisioned fixture.\n");
+    return;
+  }
 
   // Fast path: a saved envelope whose site_admin still authenticates against a
   // healthy appliance. No appliance churn, no credential regeneration.
@@ -131,15 +166,24 @@ async function orchestrateReleasedApplianceFixture(): Promise<void> {
   }
   const [prog, ...pre] = compose;
 
-  // Fresh appliance when we must rebuild. The appliance is STATEFUL, so `down`
-  // (no -v) then `up` gives a guaranteed setup_required appliance; the
-  // volume-less Postgres means a fresh DB WITHOUT `down -v`.
+  // STANDALONE (C4): create this invocation's OWN appliance. The resolved
+  // config must be project identuum-ui-e2e alone (C1), and nothing of that
+  // project may exist yet: a leftover stack is refused, never removed by
+  // assumption (ruling Q2(b)). `up` on an empty project gives a guaranteed
+  // setup_required appliance on fresh storage — no named volume, and the
+  // postgres image's anonymous volume is created new by this `up`.
+  assertOwnedComposeConfig(compose, SECONDARY_COMPOSE_PROJECT);
+  assertNoComposeLeftovers(E2E_COMPOSE_FILE, SECONDARY_COMPOSE_PROJECT);
   process.stdout.write(
-    "[e2e setup] (re)creating a fresh released appliance (compose-default image)...\n"
+    "[e2e setup] creating a fresh released appliance (compose-default image)...\n"
   );
+  // Recorded BEFORE `up`: a partial start is still this invocation's to remove.
+  process.env[SECONDARY_OWNER_ENV] = String(process.pid);
   try {
-    execFileSync(prog, [...pre, "down"], { stdio: ["ignore", "inherit", "inherit"] });
-    execFileSync(prog, [...pre, "up", "-d"], { stdio: ["ignore", "inherit", "inherit"] });
+    execFileSync(prog, [...pre, "up", "-d"], {
+      stdio: ["ignore", "inherit", "inherit"],
+      env: composeLifecycleEnv(),
+    });
   } catch (err) {
     throw new Error(
       `[e2e setup] could not start the e2e appliance stack via ${E2E_COMPOSE_FILE}. ` +

@@ -28,10 +28,15 @@ pnpm e2e:install
 ```
 
 Everything else is automatic — `e2e/global-setup.ts` brings up
-`e2e/docker-compose.e2e.yml` (the published v0.3.0 image + a volume-less
-Postgres) and builds the fixtures. Credentials are stable across runs: a saved
-envelope whose site_admin still authenticates is reused; only an absent or
-invalid one triggers a rebuild.
+`e2e/docker-compose.e2e.yml` as Compose project `identuum-ui-e2e` (the
+published image + a Postgres with no declared volume) and builds the
+fixtures. Credentials are stable across runs: a saved envelope whose
+site_admin still authenticates is reused; only an absent or invalid one
+triggers a new appliance. Every Compose command names the project with `-p`,
+the resolved config is checked first (project `identuum-ui-e2e` alone, no
+external or `identuum-idp-oss*` network or volume), and an existing
+`identuum-ui-e2e` stack that would have to be removed is a refusal naming the
+command an operator may run — the harness never removes it by assumption.
 
 ### Run (from this repository root)
 
@@ -60,9 +65,25 @@ logins with the same 30-second code).
 2. `e2e/helpers/login.ts` reads the envelope via `loadSiteAdminFixture()`
    / `loadOrgAdminFixture()` and uses the generated credentials for every
    authenticated spec.
-3. `e2e/global-teardown.ts` PRESERVES the envelope (credentials are stable
-   across runs) and records the run-end timestamp. The volume-less
-   appliance is reset by the next rebuild's `down`+`up`, never `down -v`.
+3. `e2e/global-teardown.ts` tears down ONLY an appliance this run started
+   (plain `docker compose -p identuum-ui-e2e down`, never `down -v`) and then
+   removes its envelope; a reused appliance and its envelope are kept, and
+   `IDENTUUM_E2E_KEEP_APPLIANCE=true` keeps even an owned one. It records the
+   run-end timestamp either way.
+
+   **Storage truth:** the postgres image declares `VOLUME /var/lib/postgresql`
+   and the compose file mounts nothing there, so its data sits in an
+   anonymous volume. Plain `down` removes the containers and the network but
+   leaves that anonymous volume: the next `up` starts on fresh storage, and
+   the old data stays orphaned until an operator removes it. The harness adds
+   no volume deletion.
+
+Under `make e2e-full` / `make e2e-quick` the dev-loop phases run
+OUTER-OWNED (`IDENTUUM_E2E_FIXTURE_OWNER=outer`): the outer runner
+(`e2e-full/scripts/full-run.sh`, project `identuum-e2e`) provisions the
+appliance and the envelope, global setup must reuse them or refuse, and global
+teardown makes no Compose call and keeps the envelope — the runner tears its
+own project down once, on exit.
 
 ### Security
 
@@ -153,7 +174,9 @@ npx playwright test e2e/site-admin-organizations.spec.ts \
 **`--workers=1` is required.** TOTP replay protection rejects concurrent logins that use
 the same 30-second code. Running with multiple workers causes intermittent auth failures.
 
-Expected baseline: **28 passed, 0 skipped**.
+Expected baseline (last stated before OSS-MINT-GUARD-2, not re-measured):
+**28 passed, 0 skipped**. Since then the two `can_assign_admin` conditional
+tests self-skip outside the e2e-full harness (see the fixture section below).
 
 ---
 
@@ -179,53 +202,45 @@ an invitation, which was then claimed to establish the account.
 Two site-admin org tests require at least one organization in the
 `has_admin=true / can_assign_admin=true` state (expired pending invitation).
 
-`e2e/helpers/fixture-expired-org.ts` maintains this state automatically before those
-tests run. It is called from the `beforeAll` in `site-admin-organizations.spec.ts`.
+`e2e/helpers/fixture-expired-org.ts` builds this state from the `beforeAll` in
+`site-admin-organizations.spec.ts`, and ONLY inside the e2e-full harness's own
+scratch appliance (OSS-MINT-GUARD-2):
+
+- It runs only when the dev-loop phase is outer-owned
+  (`IDENTUUM_E2E_FIXTURE_OWNER=outer`, set by `e2e-full/scripts/full-run.sh`
+  for `make e2e-full`) and the harness project is `identuum-e2e`. Anywhere
+  else the spec does not attempt it and the two conditional tests self-skip;
+  called directly without that context, the helper refuses before any
+  process, query or HTTP request.
+- Its one SQL time-warp runs inside that project's postgres container:
+  `docker compose -p identuum-e2e -f ../identuum-idp-oss/deployment/docker-compose.dev.yml
+  -f e2e-full/compose.mail-sink.yml --profile app exec -T postgres-idp-oss psql ...`
+  (argv, no shell, the container's own socket — no host psql, no host port,
+  no password). Its HTTP calls use the harness's own bases
+  (`IDENTUUM_E2E_BASE_URL`, `IDENTUUM_E2E_FULL_IDP_BASE`).
+- Under the harness a refusal or provisioning failure fails the spec's
+  `beforeAll`; it is not treated as an unavailable fixture.
 
 ### How it works
 
-1. `ensureExpiredPendingOrgFixture(siteAdminCtx)` is called in `beforeAll`.
-2. A `psql` query checks the state of `expired-admin@playwright-expired.local`.
-3. If the user doesn't exist, it creates the org+user via the IdP API and then
-   immediately expires the `activation_token_expires_at` via `psql`.
+1. `ensureExpiredPendingOrgFixture(siteAdminCtx)` checks the harness context.
+2. A scratch SQL query reads the state of `expired-admin@playwright-expired.local`.
+3. If the user doesn't exist, it creates the org+user via the IdP API (through
+   the harness UI's `/api/idp` proxy) and then expires the
+   `activation_token_expires_at` with scratch SQL.
 4. If the user is already in the `expired-pending` state, nothing is done.
-5. If the user is in an `active` or `valid-pending` state, `psql` resets it.
-
-### After a backend rebuild
-
-A backend rebuild does not affect PostgreSQL data. The fixture org persists across
-rebuilds. After any rebuild, the test suite should run with **28 passed, 0 skipped**.
+5. If the user is in an `active` or `valid-pending` state, scratch SQL resets it.
 
 **Important limitations:**
 
-- **Local-only.** The fixture uses `psql` to expire `activation_token_expires_at` directly
-  in the local PostgreSQL instance. No production-safe API endpoint exists for this.
-- **Credentials**: `idp_user` / `idp_local_password` from `docker-compose.local.yml` —
-  public dev-only values, not secrets.
-- **Do not copy the psql mutation pattern** into broader tests or production code.
-- Idempotent: the fixture is safe to run repeatedly. It skips if state is already correct.
-
-### Fixture repair
-
-If the fixture tests skip after a rebuild, the likely cause is the backend returning
-`can_assign_admin=false` (e.g., after a backend regression). The DB state can be
-verified with:
-
-```sh
-PGPASSWORD=idp_local_password psql -h localhost -p 5432 -U idp_user -d identuum_idp \
-  -t -A -c "SELECT email_verified, activation_token_expires_at < NOW() FROM users \
-  WHERE email = 'expired-admin@playwright-expired.local';"
-```
-
-Expected output: `f|t` (email_verified=false, token expired).
-
-If the output is correct but tests still skip, the backend may not be returning
-`can_assign_admin` in the API response. Check `types/organization_types.go` for the
-`CanAssignAdmin` field and `HandleListOrganizations` for the
-`CountVerifiedOrgAdminsByOrganizations` call.
-
-If the user row is gone (e.g., after `DROP TABLE` or volume reset), simply re-run
-the combined test suite — `ensureExpiredPendingOrgFixture` will recreate it.
+- **Scratch-only.** No production-safe API endpoint exists for the expiry, so
+  the fixture mutates only the disposable `identuum-e2e` appliance, which the
+  harness destroys at the end of the run.
+- **No local or development database.** There is no repair or setup procedure
+  against a local stack: never point `psql` at a development database
+  (5432, 5513 or any other) for this fixture.
+- **Do not copy the SQL mutation pattern** into broader tests or production code.
+- Idempotent within a run: it skips if the state is already correct.
 
 ---
 

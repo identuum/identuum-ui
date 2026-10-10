@@ -77,9 +77,20 @@ describe("global-setup.ts source — released-appliance orchestration", () => {
     expect(SETUP_SRC).toMatch(/totpLoginWorks\s*\(/);
   });
 
-  it("rebuild path recreates a FRESH appliance with down THEN up -d (volume-less DB, never -v)", () => {
-    expect(SETUP_SRC).toMatch(/\[\s*\.\.\.pre,\s*["']down["']\s*\]/);
+  it("standalone rebuild validates the config, refuses leftovers, marks ownership, then up -d (no down of a stack it did not create, never -v)", () => {
+    // OSS-MINT-GUARD-2 (C1/C4, ruling Q2(b)): the rebuild no longer `down`s
+    // whatever identuum-ui-e2e stack it finds; it refuses leftovers and creates
+    // its own. Behaviour is proven in e2e-resource-isolation.test.ts.
+    expect(SETUP_SRC).toMatch(/assertOwnedComposeConfig\(compose, SECONDARY_COMPOSE_PROJECT\)/);
+    expect(SETUP_SRC).toMatch(/assertNoComposeLeftovers\(/);
+    expect(SETUP_SRC).toMatch(/process\.env\[SECONDARY_OWNER_ENV\]\s*=\s*String\(process\.pid\)/);
     expect(SETUP_SRC).toMatch(/\[\s*\.\.\.pre,\s*["']up["'],\s*["']-d["']\s*\]/);
+    expect(SETUP_SRC).not.toMatch(/\[\s*\.\.\.pre,\s*["']down["']\s*\]/);
+  });
+
+  it("outer-owned harness mode refuses instead of building an appliance of its own", () => {
+    expect(SETUP_SRC).toMatch(/fixtureLifecycleOwner\(\)/);
+    expect(SETUP_SRC).toMatch(/owner === "outer"/);
   });
 
   it("writes the envelope with restrictive mode 0600", () => {
@@ -145,10 +156,12 @@ describe("appliance-fixture.ts source — released-API producer", () => {
   });
 });
 
-describe("global-teardown.ts source — no-trace default", () => {
-  it("default path tears the appliance down (down, NEVER -v) and removes the envelope", () => {
+describe("global-teardown.ts source — ownership-scoped teardown", () => {
+  it("tears down (down, NEVER -v) and removes the envelope only for a standalone appliance this run started", () => {
     expect(TEARDOWN_SRC).toMatch(/\[\s*\.\.\.pre,\s*["']down["']\s*\]/);
     expect(TEARDOWN_SRC).toMatch(/removeLocalFixtureFiles/);
+    expect(TEARDOWN_SRC).toMatch(/process\.env\[SECONDARY_OWNER_ENV\] === String\(process\.pid\)/);
+    expect(TEARDOWN_SRC).toMatch(/fixtureLifecycleOwner\(\) === "standalone"/);
   });
 
   it("keep-appliance reuse is an explicit opt-in env flag", () => {
@@ -176,7 +189,7 @@ describe("docker-compose.e2e.yml — released appliance stack", () => {
     );
   });
 
-  it("the Postgres service is volume-less by design (fresh DB via plain down)", () => {
+  it("declares no Compose volume (the image's anonymous volume is retained by plain down, fresh storage on the next up)", () => {
     expect(COMPOSE_SRC).not.toMatch(/^\s*volumes:/m);
   });
 

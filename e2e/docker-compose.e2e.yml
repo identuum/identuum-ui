@@ -7,14 +7,20 @@
 # sibling monolith checkout, no /app/identuum probe, no /e2e-auth bind mount,
 # no `make local-restart`.
 #
-# THE POSTGRES HAS NO NAMED VOLUME BY DESIGN. Data lives only in the container's
-# writable layer, so `docker compose ... down` (no -v) yields a FRESH database
-# on the next `up`. This keeps every run fresh WITHOUT `docker compose down -v`
-# or `docker volume rm`, both of which the repo's CLAUDE.md forbids.
+# THE POSTGRES HAS NO NAMED VOLUME. The postgres image itself declares
+# VOLUME /var/lib/postgresql and this file mounts nothing there, so the data
+# lives in an ANONYMOUS volume. `docker compose -p identuum-ui-e2e ... down`
+# (no -v) removes the containers and the network but LEAVES that anonymous
+# volume: the next `up` creates a new one and starts on a FRESH database, while
+# the old data stays orphaned on the host until an operator removes it. The
+# harness adds no deletion (`down -v` and `docker volume rm` stay forbidden by
+# AGENTS.md); fresh storage per run is the guarantee, not "no trace".
 #
-# Distinct project name (identuum-ui-e2e) and the canonical :7113 IDP port. If a
+# Distinct project name (identuum-ui-e2e), selected explicitly with -p on every
+# Compose command (OSS-MINT-GUARD-2), and the canonical :7113 IDP port. If a
 # dev appliance already holds :7113, stop it first; the harness reuses a healthy
-# appliance already on IDP_BASE_URL rather than double-binding the port.
+# appliance already on IDP_BASE_URL rather than double-binding the port, and
+# refuses an existing identuum-ui-e2e stack it would otherwise have to remove.
 
 name: identuum-ui-e2e
 
@@ -31,7 +37,8 @@ services:
       timeout: 5s
       retries: 20
       start_period: 10s
-    # No `volumes:` — ephemeral by design (see header).
+    # No `volumes:` — the image's anonymous volume holds the data; plain
+    # `down` keeps it, the next `up` starts fresh (see header).
 
   identuum-idp-oss:
     # Default: the PUBLISHED v0.3.6 image, pinned by the SAME digest the

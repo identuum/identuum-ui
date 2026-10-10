@@ -85,19 +85,20 @@ test.beforeAll(async ({ browser }) => {
   const p = await siteAdminCtx.newPage();
   await loginAsSiteAdmin(p);
   await p.close();
-  // BEST-EFFORT: ensure the can_assign_admin=true fixture org exists for the
-  // conditional assign-admin tests. The expired-pending state needs a DB
-  // time-warp (psql against the local dev stack) that the released e2e
-  // appliance does not expose — when that stack is absent this throws, and
-  // the failure must NOT sink the whole file: the conditional tests already
-  // self-skip when no can_assign_admin=true org exists, and every other test
-  // in this file runs against the released appliance without this fixture.
-  try {
+  // The can_assign_admin=true fixture org for the conditional assign-admin
+  // tests. Its expired-pending state needs a DB time-warp, which runs ONLY
+  // inside the e2e-full harness's own scratch appliance (OSS-MINT-GUARD-2,
+  // C2; see e2e/helpers/fixture-expired-org.ts). Under that outer-owned
+  // harness the fixture is required: a refusal or provisioning failure fails
+  // this hook, never a silent skip. Anywhere else it is not attempted — no
+  // database or other stack is touched — and the conditional tests self-skip
+  // when no can_assign_admin=true org exists, as before.
+  if (process.env.IDENTUUM_E2E_FIXTURE_OWNER === "outer") {
     await ensureExpiredPendingOrgFixture(siteAdminCtx);
-  } catch {
+  } else {
     process.stdout.write(
-      "[site-admin-organizations] expired-pending org fixture unavailable " +
-        "(needs the local dev stack's DB access); assign-admin conditional tests will self-skip.\n"
+      "[site-admin-organizations] expired-pending org fixture runs only under the e2e-full " +
+        "harness; assign-admin conditional tests will self-skip.\n"
     );
   }
 });
