@@ -819,7 +819,7 @@ if planned devloop-provisioned; then bash "$GW" step "$RECORD" 'devloop-provisio
 # GATE-TIERS: the quick mode's one dev-loop phase — the same dynamic fixture,
 # the same --trace on and therefore the same pw-phase.sh browser-console gate,
 # over QUICK_SPECS only.
-if planned devloop-quick; then bash "$GW" step "$RECORD" 'devloop-quick=IDENTUUM_E2E_FIXTURE_OWNER=outer IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL='"$E2E_IDP_BASE"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-quick e2e/.auth/pw-devloop-quick.json -- --project=chromium --workers=1 --trace on '"$QUICK_SPECS"'' || rc=1; fi
+if planned devloop-quick; then bash "$GW" step "$RECORD" 'devloop-quick=IDENTUUM_E2E_FIXTURE_OWNER=outer IDENTUUM_E2E_IDP_DIR='"$IDP_DIR"' IDENTUUM_E2E_FULL_UI_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_FULL_APP_PORT='"$E2E_APP_PORT"' IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL='"$E2E_IDP_BASE"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-quick e2e/.auth/pw-devloop-quick.json -- --project=chromium --workers=1 --trace on '"$QUICK_SPECS"'' || rc=1; fi
 
 # THE-DISPOSABLE-IDENTITIES: the devloop skip count gets a CEILING, exactly
 # like the coverage floor — a new skip must be a deliberate commit, never

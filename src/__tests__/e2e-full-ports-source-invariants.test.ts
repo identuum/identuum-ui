@@ -70,6 +70,24 @@ describe("the e2e-full harness keeps off the dev stack's ports [OSS-TEST-FULL-PO
     );
   });
 
+  // OSS-MINT-GUARD-4 (GUARD-3B OPEN): the quick mode's dev-loop phase runs the
+  // same expired-org fixture as the full mode's, which needs the IdP's compose
+  // directory and requires its bases to match the selected ports (review G4).
+  it("both dev-loop phases hand the fixture the IdP directory and the selected ports", () => {
+    const src = read("e2e-full/scripts/full-run.sh");
+    for (const phase of ["devloop-provisioned", "devloop-quick"]) {
+      const step = src.split("\n").find((l) => l.includes(`'${phase}=`));
+      expect(step, `${phase} is a witnessed step`).toBeDefined();
+      for (const pass of [
+        `IDENTUUM_E2E_IDP_DIR='"$IDP_DIR"'`,
+        `IDENTUUM_E2E_FULL_UI_PORT='"$E2E_UI_PORT"'`,
+        `IDENTUUM_E2E_FULL_APP_PORT='"$E2E_APP_PORT"'`,
+      ]) {
+        expect(step, `${phase} passes ${pass.split("=")[0]}`).toContain(pass);
+      }
+    }
+  });
+
   it("every spec takes the appliance base from the harness helper, which has no default", () => {
     const helper = read("e2e-full/helpers/harness.ts");
     expect(helper).not.toMatch(/\?\?/);
