@@ -19,7 +19,8 @@
 #
 # Two modes:
 #   - a tag push (v*), or a dispatch naming version_tag: builds THAT tag and
-#     uploads the three files as assets of its GitHub release;
+#     uploads the three files as assets of its GitHub release, whose body is
+#     CHANGELOG.md's section for the tag (no section: the job fails);
 #   - a dispatch with version_tag empty: builds the dispatched ref, attests,
 #     and uploads a workflow artifact ONLY — no tag, no release. This is how
 #     the pipeline is proven without publishing anything.
@@ -206,6 +207,33 @@ jobs:
             identuum-ui-export-${{ steps.target.outputs.name }}.spdx.json
           if-no-files-found: error
 
+      - name: Release notes (the tag's CHANGELOG.md section; a tag only)
+        # The release body is CHANGELOG.md's own section for the tag, the
+        # heading "## `vX.Y.Z`" through the line before the next "## ". Until
+        # UI-DOCS-1 (2026-10-10) the body was a fixed sentence pointing at
+        # docs/releases/<tag>.md, a file no release after v0.6.2 has. A tag
+        # with no section FAILS here, before anything is published: an empty
+        # body is a defect, never a release. Proven locally by running this
+        # step's text (yq '.jobs.export.steps[] | select(.id == "notes") |
+        # .run') with TAG=v0.9.10 (the section) and a tag with none (exit 1).
+        if: steps.target.outputs.release == 'true'
+        id: notes
+        env:
+          TAG: ${{ steps.target.outputs.name }}
+        run: |
+          set -euo pipefail
+          notes="$RUNNER_TEMP/release-notes-$TAG.md"
+          awk -v tag="$TAG" '
+            /^## / { if (on) exit; on = ($0 == "## `" tag "`"); next }
+            on { print }
+          ' CHANGELOG.md | awk 'NF { p = 1 } p' | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$notes"
+          if ! grep -q '[^[:space:]]' "$notes"; then
+            echo "release notes: CHANGELOG.md has no section '## \`$TAG\`' — write it before tagging; refusing to publish an empty release body" >&2
+            exit 1
+          fi
+          echo "release notes for $TAG: $(wc -l < "$notes" | tr -d " ") line(s) from CHANGELOG.md"
+          cat "$notes"
+
       - name: Upload the release assets (a tag only)
         if: steps.target.outputs.release == 'true'
         env:
@@ -214,6 +242,6 @@ jobs:
         run: |
           set -euo pipefail
           gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
-            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag --title "identuum-ui $TAG" --notes "identuum-ui $TAG static export; see docs/releases/$TAG.md."
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag --title "identuum-ui $TAG" --notes-file "$RUNNER_TEMP/release-notes-$TAG.md"
           gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber \
             "identuum-ui-export-${TAG}.tar.gz" "identuum-ui-export-${TAG}.json" "identuum-ui-export-${TAG}.spdx.json"
