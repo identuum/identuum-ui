@@ -231,7 +231,11 @@ scratch appliance (OSS-MINT-GUARD-2):
   -f e2e-full/compose.mail-sink.yml --profile app exec -T postgres-idp-oss psql ...`
   (argv, no shell, the container's own socket — no host psql, no host port,
   no password). Its HTTP calls use the harness's own bases
-  (`IDENTUUM_E2E_BASE_URL`, `IDENTUUM_E2E_FULL_IDP_BASE`).
+  (`IDENTUUM_E2E_BASE_URL`, `IDENTUUM_E2E_FULL_IDP_BASE`), and only when each
+  is `http://localhost` or `http://127.0.0.1` on the port the runner selected
+  and carried (`IDENTUUM_E2E_FULL_UI_PORT`, `IDENTUUM_E2E_FULL_APP_PORT`;
+  never 5513, 7104, 7113 or 7114). Any other host, scheme, userinfo or port is
+  a refusal before any process or request.
 - Under the harness a refusal or provisioning failure fails the spec's
   `beforeAll`; it is not treated as an unavailable fixture.
 

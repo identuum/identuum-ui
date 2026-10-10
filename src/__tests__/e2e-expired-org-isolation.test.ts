@@ -104,6 +104,8 @@ const HARNESS_KEYS = [
   "IDENTUUM_E2E_IDP_DIR",
   "IDENTUUM_E2E_BASE_URL",
   "IDENTUUM_E2E_FULL_IDP_BASE",
+  "IDENTUUM_E2E_FULL_UI_PORT",
+  "IDENTUUM_E2E_FULL_APP_PORT",
 ];
 const saved: Record<string, string | undefined> = {};
 let idpDir: string;
@@ -136,6 +138,9 @@ function harness(): void {
   process.env.IDENTUUM_E2E_IDP_DIR = idpDir;
   process.env.IDENTUUM_E2E_BASE_URL = "http://localhost:17108";
   process.env.IDENTUUM_E2E_FULL_IDP_BASE = "http://127.0.0.1:17113";
+  // The selected owned harness endpoints full-run.sh carries (G4).
+  process.env.IDENTUUM_E2E_FULL_UI_PORT = "17108";
+  process.env.IDENTUUM_E2E_FULL_APP_PORT = "17113";
 }
 
 async function helper() {
@@ -206,6 +211,67 @@ describe("no harness context, no external call [C2]", () => {
       await expect(ensure(fakeContext() as never)).rejects.toThrow(/refus/i);
       expect(world.procs).toEqual([]);
       expect(requests).toEqual([]);
+    });
+  }
+});
+
+describe("the bases must be the selected owned harness endpoints [G4]", () => {
+  async function expectRefusedWithZeroCalls(): Promise<void> {
+    const ensure = await helper();
+    await expect(ensure(fakeContext() as never)).rejects.toThrow(/refus/i);
+    expect(world.procs, "refused before the database command").toEqual([]);
+    expect(requests, "refused before HTTP").toEqual([]);
+  }
+
+  it("REVIEW-G4: refuses off-harness HTTP origins before any process or request [E2E-FIXTURE-ENDPOINT-1]", async () => {
+    harness();
+    process.env.IDENTUUM_E2E_BASE_URL = "http://localhost:7104";
+    process.env.IDENTUUM_E2E_FULL_IDP_BASE = "http://127.0.0.1:7113";
+    await expectRefusedWithZeroCalls();
+  });
+
+  const spoiled: Record<string, () => void> = {
+    "a non-loopback UI base": () => {
+      process.env.IDENTUUM_E2E_BASE_URL = "http://ui.example.test:17108";
+    },
+    "a non-loopback IdP base": () => {
+      process.env.IDENTUUM_E2E_FULL_IDP_BASE = "http://10.0.0.5:17113";
+    },
+    "an IdP base whose port disagrees with the selected app port": () => {
+      process.env.IDENTUUM_E2E_FULL_IDP_BASE = "http://127.0.0.1:17114";
+    },
+    "a UI base whose port disagrees with the selected UI port": () => {
+      process.env.IDENTUUM_E2E_BASE_URL = "http://localhost:17109";
+    },
+    "the selected UI port missing": () => {
+      delete process.env.IDENTUUM_E2E_FULL_UI_PORT;
+    },
+    "the selected app port missing": () => {
+      delete process.env.IDENTUUM_E2E_FULL_APP_PORT;
+    },
+    "a selected app port of 7113 (the owner's dev app), even with an agreeing base": () => {
+      process.env.IDENTUUM_E2E_FULL_APP_PORT = "7113";
+      process.env.IDENTUUM_E2E_FULL_IDP_BASE = "http://127.0.0.1:7113";
+    },
+    "a selected UI port of 7104 (the owner's dev UI), even with an agreeing base": () => {
+      process.env.IDENTUUM_E2E_FULL_UI_PORT = "7104";
+      process.env.IDENTUUM_E2E_BASE_URL = "http://localhost:7104";
+    },
+    "a selected port that is not plain decimal": () => {
+      process.env.IDENTUUM_E2E_FULL_APP_PORT = "0x4469";
+    },
+    "a base carrying userinfo": () => {
+      process.env.IDENTUUM_E2E_FULL_IDP_BASE = "http://user@127.0.0.1:17113";
+    },
+    "an https base": () => {
+      process.env.IDENTUUM_E2E_BASE_URL = "https://localhost:17108";
+    },
+  };
+  for (const [label, spoil] of Object.entries(spoiled)) {
+    it(`${label}: refuses with zero calls`, async () => {
+      harness();
+      spoil();
+      await expectRefusedWithZeroCalls();
     });
   }
 });

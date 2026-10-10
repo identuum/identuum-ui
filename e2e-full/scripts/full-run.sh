@@ -671,7 +671,10 @@ if planned role-matrix; then bash "$GW" step "$RECORD" 'role-matrix=node e2e-ful
 # that does not validate is a refusal, never a second appliance — and makes
 # the suite's global teardown issue no Compose call and keep the envelope;
 # this runner alone owns the appliance's lifecycle. IDENTUUM_E2E_IDP_DIR names
-# the compose file the expired-org fixture execs into (this project only). --trace on feeds the
+# the compose file the expired-org fixture execs into (this project only), and
+# IDENTUUM_E2E_FULL_UI_PORT / IDENTUUM_E2E_FULL_APP_PORT carry this run's
+# selected ports, which that fixture requires its UI and IdP bases to match on
+# loopback before any SQL or HTTP (review G4). --trace on feeds the
 # coverage phase: route coverage is derived from what the run actually did.
 # THE-SKIPPED-THIRTY-TWO: the orgs-CRUD ceremony (create -> edit -> soft-delete,
 # try/finally self-cleaning) is safe on THIS disposable appliance and the
@@ -699,7 +702,7 @@ bash "$GW" step "$RECORD" 'verify-record-ui=bash scripts/gate-witness.sh check .
 bash "$GW" step "$RECORD" 'verify-record-idp-oss=bash scripts/gate-witness.sh check '"$IDP_DIR"' GATE-RUN.txt' || rc=1
 
 echo "e2e-full: dev-loop suite PROVISIONED (the previously-dark specs now light)"
-if planned devloop-provisioned; then bash "$GW" step "$RECORD" 'devloop-provisioned=IDENTUUM_E2E_FIXTURE_OWNER=outer IDENTUUM_E2E_IDP_DIR='"$IDP_DIR"' IDENTUUM_E2E_ORGS_CRUD=1 IDENTUUM_E2E_OSS_CHANGE_PASSWORD=1 IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true IDENTUUM_OSS_TEST_USER_EMAIL="$IDENTUUM_OSS_TEST_USER_EMAIL" IDENTUUM_OSS_TEST_USER_PASSWORD="$IDENTUUM_OSS_TEST_USER_PASSWORD" IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD="$IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD" IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL='"$E2E_IDP_BASE"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-provisioned e2e/.auth/pw-devloop.json -- --project=chromium --workers=1 --trace on' || rc=1; fi
+if planned devloop-provisioned; then bash "$GW" step "$RECORD" 'devloop-provisioned=IDENTUUM_E2E_FIXTURE_OWNER=outer IDENTUUM_E2E_IDP_DIR='"$IDP_DIR"' IDENTUUM_E2E_FULL_UI_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_FULL_APP_PORT='"$E2E_APP_PORT"' IDENTUUM_E2E_ORGS_CRUD=1 IDENTUUM_E2E_OSS_CHANGE_PASSWORD=1 IDENTUUM_E2E_ALLOW_DESTRUCTIVE_MFA_RESET=true IDENTUUM_OSS_TEST_USER_EMAIL="$IDENTUUM_OSS_TEST_USER_EMAIL" IDENTUUM_OSS_TEST_USER_PASSWORD="$IDENTUUM_OSS_TEST_USER_PASSWORD" IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD="$IDENTUUM_E2E_RECOVERY_ORG_ADMIN_PASSWORD" IDENTUUM_E2E_PORT='"$E2E_UI_PORT"' IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true IDENTUUM_IDP_BASE_URL='"$E2E_IDP_BASE"' IDENTUUM_UI_CONFIG_FILE="$E2E_UI_CFG" bash e2e-full/scripts/pw-phase.sh devloop-provisioned e2e/.auth/pw-devloop.json -- --project=chromium --workers=1 --trace on' || rc=1; fi
 # GATE-TIERS: the quick mode's one dev-loop phase — the same dynamic fixture,
 # the same --trace on and therefore the same pw-phase.sh browser-console gate,
 # over QUICK_SPECS only.

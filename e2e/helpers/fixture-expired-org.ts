@@ -20,7 +20,10 @@
  *     --profile app exec -T postgres-idp-oss psql ...
  * (argv, no shell), over the container's own socket; HTTP goes to the
  * harness's UI base (IDENTUUM_E2E_BASE_URL) and IdP base
- * (IDENTUUM_E2E_FULL_IDP_BASE).
+ * (IDENTUUM_E2E_FULL_IDP_BASE), and only when each is exactly
+ * http://localhost or http://127.0.0.1 on the port full-run.sh selected and
+ * carried (IDENTUUM_E2E_FULL_UI_PORT, IDENTUUM_E2E_FULL_APP_PORT; never 5513,
+ * 7104, 7113 or 7114). Any other value is a refusal before any call (review G4).
  *
  * Setup strategy (idempotent):
  *   1. Find or create the fixture org (no admin_email → shell org).
@@ -62,6 +65,11 @@ const SCRATCH_DB_SERVICE = "postgres-idp-oss";
 const SCRATCH_DB_USER = "idp_oss_user";
 const SCRATCH_DB_NAME = "identuum_idp_oss";
 
+// Ports of the owner's development stack (Postgres 5513, dev UI 7104, dev
+// app 7113, compose UI 7114): never a harness endpoint, whatever a variable says.
+const OWNER_DEV_PORTS = new Set([5513, 7104, 7113, 7114]);
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1"]);
+
 type AdminState = "active" | "valid-pending" | "expired-pending" | "none";
 
 interface ScratchContext {
@@ -92,19 +100,38 @@ function scratchContext(): ScratchContext {
   if (!existsSync(devCompose) || !existsSync(overlay)) {
     throw refuse("the harness compose files are missing");
   }
-  const base = (name: string): string => {
-    const raw = process.env[name];
+  // The selected owned harness endpoints (review G4): full-run.sh carries its
+  // own UI and app ports, and each base must be exactly that port on loopback.
+  // Messages name the variable and the rule, never a value.
+  const selectedPort = (name: string): string => {
+    const raw = process.env[name] ?? "";
+    if (!/^[1-9][0-9]{0,4}$/.test(raw) || Number(raw) > 65535) {
+      throw refuse(`${name} is not a plain decimal port 1-65535`);
+    }
+    if (OWNER_DEV_PORTS.has(Number(raw))) {
+      throw refuse(`${name} names a port of the owner's development stack`);
+    }
+    return raw;
+  };
+  const uiPort = selectedPort("IDENTUUM_E2E_FULL_UI_PORT");
+  const appPort = selectedPort("IDENTUUM_E2E_FULL_APP_PORT");
+  const base = (name: string, port: string, portName: string): string => {
     let url: URL;
     try {
-      url = new URL(raw ?? "");
+      url = new URL(process.env[name] ?? "");
     } catch {
-      throw refuse(`${name} is not set to an http(s) URL`);
+      throw refuse(`${name} is not set to a URL`);
     }
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-      throw refuse(`${name} is not set to an http(s) URL`);
+    if (url.protocol !== "http:") throw refuse(`${name} is not an http URL`);
+    if (url.username || url.password) throw refuse(`${name} carries userinfo`);
+    if (!LOOPBACK_HOSTS.has(url.hostname)) {
+      throw refuse(`${name} is not on localhost or 127.0.0.1`);
     }
+    if (url.port !== port) throw refuse(`${name} does not use the port in ${portName}`);
     return url.origin;
   };
+  const uiBase = base("IDENTUUM_E2E_BASE_URL", uiPort, "IDENTUUM_E2E_FULL_UI_PORT");
+  const idpBase = base("IDENTUUM_E2E_FULL_IDP_BASE", appPort, "IDENTUUM_E2E_FULL_APP_PORT");
   return {
     compose: [
       "compose",
@@ -120,15 +147,17 @@ function scratchContext(): ScratchContext {
       "-T",
       SCRATCH_DB_SERVICE,
     ],
-    idpProxy: `${base("IDENTUUM_E2E_BASE_URL")}/api/idp`,
-    idpBase: base("IDENTUUM_E2E_FULL_IDP_BASE"),
+    idpProxy: `${uiBase}/api/idp`,
+    idpBase,
   };
 }
 
 /**
  * Ensures the fixture org is in the has_admin=true / can_assign_admin=true state.
  * Uses the already-authenticated siteAdminCtx — no second TOTP needed.
- * Refuses (throws) before any external call outside the scratch harness.
+ * Refuses (throws) before any process or HTTP request unless the outer-owned
+ * harness context is complete: project identuum-e2e, its compose files present,
+ * and both bases on loopback http at the harness's selected ports.
  * @returns the fixture organization UUID
  */
 export async function ensureExpiredPendingOrgFixture(
