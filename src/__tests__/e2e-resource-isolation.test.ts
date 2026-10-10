@@ -27,6 +27,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -114,11 +115,15 @@ interface RunResult {
   status: number | null;
   out: string;
   calls: Call[];
-  /** The private layout root; also the runner's TMPDIR, so its lock lives here. */
+  /** The private layout root (also the default TMPDIR); the claim is lockOf(root). */
   root: string;
 }
 
 const LOCK = "identuum-e2e.lock";
+/** The runner's one claim line: a fixed path, never derived from TMPDIR (H1). */
+const LOCK_LINE = "E2E_LOCK=/tmp/identuum-e2e.lock";
+/** Where the layout's copy keeps the claim (see layout()). */
+const lockOf = (root: string) => join(root, "fixed", LOCK);
 
 const SAFE_CONFIG = {
   name: "identuum-e2e",
@@ -133,40 +138,80 @@ const SAFE_CONFIG = {
 
 const STUB_LOG_LINE = `log() { printf '%s\\t%s\\t%s\\t%s\\t%s\\t' "$1" "\${COMPOSE_PROJECT_NAME-<unset>}" "\${COMPOSE_REMOVE_ORPHANS-<unset>}" "\${MAKEFLAGS-<unset>}" "\${MAKEOVERRIDES-<unset>}" >>"$STUB_LOG"; shift; printf '%s\\037' "$@" >>"$STUB_LOG"; printf '\\n' >>"$STUB_LOG"; }`;
 
+// A stateful daemon model (OSS-MINT-GUARD-4, review OSS-MINT-GUARD-3-PREREVIEW
+// H2). $STUB_STATE holds one file per resource: c/<id> "name project
+// invocation", n/<id> "name project invocation", v/<name> "createdAt project
+// invocation" ("-" for an absent label). The nested startup (MAKE_STUB oss-up)
+// creates the appliance's three containers, its network and its volume with
+// the invocation label it reads from the overlay the runner passed; listings,
+// inspections and removals answer from and act on that state. STUB_VOLUMES /
+// STUB_NETWORKS / STUB_CONTAINERS are leftovers carrying this project's label;
+// STUB_FOREIGN_* exist under the same names WITHOUT it, so only an UNFILTERED
+// listing shows them.
 const DOCKER_STUB = `#!/bin/bash
 ${STUB_LOG_LINE}
 log docker "$@"
 has() { local want="$1"; shift; for a in "$@"; do [ "$a" = "$want" ] && return 0; done; return 1; }
-case "$1" in
-compose)
+S="$STUB_STATE"; mkdir -p "$S/c" "$S/n" "$S/v"
+if [ "$1" = compose ]; then
   if has config "$@"; then cat "$STUB_CONFIG"; exit 0; fi
   if has down "$@"; then exit "\${STUB_DOWN_STATUS:-0}"; fi
   if has exec "$@" && [ "\${STUB_FAIL:-}" = bootstrap ]; then exit 5; fi
+  exit 0
+fi
+q=; fmt=; filt=; prev=; last=
+for a in "$@"; do
+  case "$prev" in --filter) filt="$filt $a" ;; --format) fmt="$a" ;; esac
+  case "$a" in -q | -aq) q=1 ;; esac
+  prev="$a"; last="$a"
+done
+match() {
+  local g
+  for g in $filt; do
+    case "$g" in
+    label=com.docker.compose.project=*) [ "$2" = "\${g#*project=}" ] || return 1 ;;
+    label=io.identuum.harness.invocation=*) [ "$3" = "\${g#*invocation=}" ] || return 1 ;;
+    *) return 1 ;;
+    esac
+  done
+}
+own=; case "$filt" in *project=identuum-e2e*) own=1 ;; esac
+case "$1 $2" in
+"network ls")
+  for f in "$S"/n/*; do
+    [ -e "$f" ] || continue; read -r nm pj iv <"$f"; match "$nm" "$pj" "$iv" || continue
+    if [ -n "$q" ]; then echo "\${f##*/}"; else case "$fmt" in *.ID*) echo "\${f##*/} $nm" ;; *) echo "$nm" ;; esac; fi
+  done
+  [ -z "$q" ] && case "$fmt" in *.ID*) ;; *) { [ -n "$own" ] || [ -z "$filt" ]; } && printf '%b' "\${STUB_NETWORKS:-}"; [ -z "$filt" ] && printf '%b' "\${STUB_FOREIGN_NETWORKS:-}" ;; esac
   exit 0 ;;
+"volume ls")
+  for f in "$S"/v/*; do
+    [ -e "$f" ] || continue; read -r ct pj iv <"$f"; match "\${f##*/}" "$pj" "$iv" || continue; echo "\${f##*/}"
+  done
+  [ -z "$q" ] && { [ -n "$own" ] || [ -z "$filt" ]; } && printf '%b' "\${STUB_VOLUMES:-}"
+  [ -z "$q" ] && [ -z "$filt" ] && printf '%b' "\${STUB_FOREIGN_VOLUMES:-}"
+  exit 0 ;;
+"network inspect") [ -e "$S/n/$last" ] || exit 1; read -r nm pj iv <"$S/n/$last"; echo "$last $iv"; exit 0 ;;
+"volume inspect")
+  [ -e "$S/v/$last" ] || exit 1; read -r ct pj iv <"$S/v/$last"
+  case "$fmt" in *index*) echo "$ct $iv" ;; *) echo "$ct" ;; esac; exit 0 ;;
+"network rm") [ "\${STUB_RM_STATUS:-0}" = 0 ] || exit "$STUB_RM_STATUS"; rm -f "$S/n/$last"; exit 0 ;;
+"volume rm") [ "\${STUB_RM_STATUS:-0}" = 0 ] || exit "$STUB_RM_STATUS"; rm -f "$S/v/$last"; exit 0 ;;
+esac
+case "$1" in
 ps)
-  for a in "$@"; do case "$a" in publish=*) exit 0 ;; esac; done
-  printf '%b' "\${STUB_CONTAINERS:-}"; exit 0 ;;
-volume | network)
-  # The daemon's view: STUB_VOLUMES / STUB_NETWORKS carry this project's label;
-  # STUB_FOREIGN_* exist under the same names WITHOUT it (another label or
-  # none), so only an UNFILTERED listing shows them. Once the nested startup has
-  # run (STUB_CREATED), the appliance's own volume and network exist with the
-  # label, unless STUB_LATE_FOREIGN names the kind that appeared without it.
-  kind="$1"
-  if [ "$kind" = volume ]; then
-    own="\${STUB_VOLUMES:-}"; foreign="\${STUB_FOREIGN_VOLUMES:-}"; made=identuum-e2e_postgres-idp-oss-data-v18
-  else
-    own="\${STUB_NETWORKS:-}"; foreign="\${STUB_FOREIGN_NETWORKS:-}"; made=identuum-e2e_default
-  fi
-  if has label=com.docker.compose.project=identuum-e2e "$@"; then
-    printf '%b' "$own"
-    [ -f "$STUB_CREATED" ] && [ "\${STUB_LATE_FOREIGN:-}" != "$kind" ] && echo "$made"
-  else
-    printf '%b' "$own$foreign"
-    [ -f "$STUB_CREATED" ] && echo "$made"
-  fi
+  for g in $filt; do case "$g" in publish=*) exit 0 ;; esac; done
+  for f in "$S"/c/*; do
+    [ -e "$f" ] || continue; read -r nm pj iv <"$f"; match "$nm" "$pj" "$iv" || continue
+    if [ -n "$q" ]; then echo "\${f##*/}"
+    else case "$fmt" in *.ID*) echo "\${f##*/} $nm" ;; *) printf '%s\\t%s\\n' "$nm" "$pj" ;; esac; fi
+  done
+  [ -z "$q" ] && [ -z "$filt" ] && case "$fmt" in *.ID*) ;; *) printf '%b' "\${STUB_CONTAINERS:-}" ;; esac
   exit 0 ;;
-inspect) echo "IDENTUUM_IDP_OSS_DB=synthetic-not-a-dsn"; exit 0 ;;
+inspect)
+  case "$fmt" in *Config.Env*) echo "IDENTUUM_IDP_OSS_DB=synthetic-not-a-dsn"; exit 0 ;; esac
+  [ -e "$S/c/$last" ] || exit 1; read -r nm pj iv <"$S/c/$last"; echo "$last $iv"; exit 0 ;;
+rm) [ "\${STUB_RM_STATUS:-0}" = 0 ] || exit "$STUB_RM_STATUS"; rm -f "$S/c/$last"; exit 0 ;;
 esac
 exit 0
 `;
@@ -174,9 +219,21 @@ exit 0
 const MAKE_STUB = `#!/bin/bash
 ${STUB_LOG_LINE}
 log make "$@"
+S="$STUB_STATE"; mkdir -p "$S/c" "$S/n" "$S/v"
+for a in "$@"; do
+  case "$a" in COMPOSE_FILE=*) ovl="\${a##* -f }" ;; esac
+done
 for a in "$@"; do
   if [ "$a" = oss-up ]; then
-    : >"$STUB_CREATED"
+    inv=$(sed -n 's/.*"io.identuum.harness.invocation":"\\([0-9a-f]*\\)".*/\\1/p' "$ovl" 2>/dev/null)
+    inv="\${inv:--}"
+    for c in "c1 identuum-e2e-postgres" "c2 identuum-e2e" "c3 identuum-e2e-mail-sink-1"; do
+      echo "\${c#* } identuum-e2e $inv" >"$S/c/\${c%% *}"
+    done
+    if [ "\${STUB_LATE_FOREIGN:-}" = network ]; then echo "identuum-e2e_default - -" >"$S/n/n1"
+    else echo "identuum-e2e_default identuum-e2e $inv" >"$S/n/n1"; fi
+    if [ "\${STUB_LATE_FOREIGN:-}" = volume ]; then echo "2026-10-10T00:00:09Z - -" >"$S/v/identuum-e2e_postgres-idp-oss-data-v18"
+    else echo "2026-10-10T00:00:01Z identuum-e2e $inv" >"$S/v/identuum-e2e_postgres-idp-oss-data-v18"; fi
     if [ "\${STUB_FAIL:-}" = oss-up ]; then
       log partial-create oss-up
       exit 7
@@ -194,6 +251,18 @@ if [ "$1" = step ]; then
   [ "$name" = "\${STUB_FAIL_STEP:-}" ] && exit 1
   if [ "$name" = provisioner ] && [ "\${STUB_NO_FIXTURE:-}" != 1 ]; then
     mkdir -p "$(dirname "$FIXTURE_FILE")"; printf '{}' >"$FIXTURE_FILE"
+  fi
+  # After the record, another invocation replaces the appliance's volume under
+  # the same name and labels (a new creation time), or starts a container of
+  # the same project.
+  v="$STUB_STATE/v/identuum-e2e_postgres-idp-oss-data-v18"
+  if [ "$name" = provisioner ] && [ "\${STUB_SAME_LABEL_REPLACEMENT:-}" = 1 ] && [ -e "$v" ]; then
+    read -r ct pj iv <"$v"; echo "2026-10-10T00:00:05Z $pj $iv" >"$v"
+    log replaced-by-other-invocation volume
+  fi
+  if [ "$name" = provisioner ] && [ "\${STUB_FOREIGN_CONTAINER:-}" = 1 ]; then
+    echo "identuum-e2e-intruder-1 identuum-e2e someone-else" >"$STUB_STATE/c/f1"
+    log foreign-container-started
   fi
   exit 0
 fi
@@ -229,9 +298,15 @@ function layout(config: unknown): { root: string; ui: string; bin: string; log: 
     bin,
   ])
     mkdirSync(d, { recursive: true });
-  copyFileSync(
-    resolve(REPO, "e2e-full/scripts/full-run.sh"),
-    join(ui, "e2e-full/scripts/full-run.sh")
+  // The runner's claim is ONE fixed path (H1). The copy points that one line at
+  // this layout's own fixed directory, so a test never touches /tmp; TMPDIR is
+  // left free to vary.
+  const source = readFileSync(resolve(REPO, "e2e-full/scripts/full-run.sh"), "utf8");
+  expect(source.split("\n").filter((l) => l === LOCK_LINE)).toHaveLength(1);
+  mkdirSync(join(root, "fixed"));
+  writeFileSync(
+    join(ui, "e2e-full/scripts/full-run.sh"),
+    source.replace(LOCK_LINE, `E2E_LOCK=${join(root, "fixed", LOCK)}`)
   );
   copyFileSync(
     resolve(REPO, "e2e-full/compose.mail-sink.yml"),
@@ -267,7 +342,7 @@ function runRunner(
       TMPDIR: l.root,
       STUB_LOG: l.log,
       STUB_CONFIG: join(l.root, "config.json"),
-      STUB_CREATED: join(l.root, "created"),
+      STUB_STATE: join(l.root, "state"),
       // Inherited selectors the runner must neutralise (C1).
       COMPOSE_PROJECT_NAME: "identuum-idp-oss",
       COMPOSE_REMOVE_ORPHANS: "true",
@@ -293,6 +368,16 @@ function runRunner(
         })
     : [];
   return { status: r.status, out: `${r.stdout}\n${r.stderr}`, calls, root: l.root };
+}
+
+/** The daemon model's resources left after the run, as kind/id paths. */
+function remaining(r: RunResult): string[] {
+  const out: string[] = [];
+  for (const kind of ["c", "n", "v"]) {
+    const dir = join(r.root, "state", kind);
+    if (existsSync(dir)) for (const f of readdirSync(dir)) out.push(`${kind}/${f}`);
+  }
+  return out.sort();
 }
 
 const RESOURCE_ACTIONS = new Set([
@@ -372,34 +457,66 @@ function expectPinnedOwnership(r: RunResult): void {
   expect(leftover).toBeLessThan(cfg);
 }
 
-function expectOneOwnedCleanupAfterCreate(r: RunResult): void {
-  const d = downs(r);
-  expect(d.length, "exactly one owned teardown").toBe(1);
-  expect(d[0].argv).toEqual(expect.arrayContaining(["--profile", "app", "down", "--volumes"]));
-  expect(d[0].argv.slice(1, 3)).toEqual(["-p", "identuum-e2e"]);
+/** Every docker call that removes a container, network or volume. */
+const removals = (r: RunResult) =>
+  r.calls.filter(
+    (c) =>
+      c.tool === "docker" &&
+      (c.argv[0] === "rm" || (["network", "volume"].includes(c.argv[0]) && c.argv[1] === "rm"))
+  );
+/** What the run created in the daemon model: three containers, a network, a volume. */
+const CREATED_REMOVALS = [
+  "network rm n1",
+  "rm -f -v c1",
+  "rm -f -v c2",
+  "rm -f -v c3",
+  "volume rm identuum-e2e_postgres-idp-oss-data-v18",
+];
+
+/**
+ * The teardown removes exactly what the run recorded creating, each by ID, after
+ * the startup it cleans, with no project-level `down` (H2), and leaves nothing.
+ */
+function expectRecordedRemovalAfterCreate(r: RunResult): void {
+  expect(downs(r), "no project-level down, with or without --volumes").toEqual([]);
   const create = indexOf(r, (c) => c.tool === "make" && c.argv.includes("oss-up"));
-  const down = indexOf(r, (c) => c.tool === "docker" && composeSub(c.argv) === "down");
   expect(create, "the run attempted its startup").toBeGreaterThanOrEqual(0);
-  expect(down, "the teardown follows the startup it cleans").toBeGreaterThan(create);
+  const removed = removals(r);
+  expect(removed.map((c) => c.argv.join(" ")).sort(), "each recorded resource once, by ID").toEqual(
+    CREATED_REMOVALS
+  );
+  for (const c of removed) {
+    expect(r.calls.indexOf(c), "the teardown follows the startup it cleans").toBeGreaterThan(create);
+  }
+  expect(remaining(r), "nothing the run created is left").toEqual([]);
 }
 
 describe("full-run.sh owns exactly one Compose project [C1/C5]", () => {
-  it("pins every compose action to identuum-e2e, starts nested make under the same project with no inherited selector, and tears its own project down exactly once [E2E-RESOURCE-OWNERSHIP-1]", () => {
+  it("pins every compose action to identuum-e2e, starts nested make under the same project with no inherited selector, labels what it starts with its invocation id, and removes exactly what it recorded creating [E2E-RESOURCE-OWNERSHIP-1]", () => {
     const r = runRunner();
     expect(r.status, r.out).toBe(0);
     expectPinnedOwnership(r);
-    expectOneOwnedCleanupAfterCreate(r);
-    const down = indexOf(r, (c) => c.tool === "docker" && composeSub(c.argv) === "down");
-    expect(down, "the teardown is the last Compose action").toBe(
-      r.calls.map((c) => c.tool === "docker" && c.argv[0] === "compose").lastIndexOf(true)
-    );
+    expectRecordedRemovalAfterCreate(r);
+    const startup = makeCalls(r).find((c) => c.argv.includes("oss-up"));
+    expect(
+      startup?.argv.find((a) => a.startsWith("COMPOSE_FILE=")),
+      "the start carries the invocation overlay"
+    ).toMatch(/ -f \S+\/invocation\.json$/);
+    expect(r.out).toMatch(/recorded 5 resource\(s\) this run created, by ID/);
+    const lastCompose = r.calls
+      .map((c) => c.tool === "docker" && c.argv[0] === "compose")
+      .lastIndexOf(true);
+    expect(
+      r.calls.indexOf(removals(r)[0]),
+      "the removals follow the last Compose action"
+    ).toBeGreaterThan(lastCompose);
   });
 
   it("quick mode keeps the same ownership contract", () => {
     const r = runRunner({ env: { E2E_MODE: "quick" } });
     expect(r.status, r.out).toBe(0);
     expectPinnedOwnership(r);
-    expectOneOwnedCleanupAfterCreate(r);
+    expectRecordedRemovalAfterCreate(r);
   });
 });
 
@@ -493,8 +610,8 @@ describe("full-run.sh inspects every expected name and holds one invocation clai
   it("an overlapping invocation (lock already held) refuses: no startup, no down, the lock is left alone", () => {
     const r = runRunner({
       arrange: (root) => {
-        mkdirSync(join(root, LOCK));
-        writeFileSync(join(root, LOCK, "pid"), "424242\n");
+        mkdirSync(lockOf(root));
+        writeFileSync(join(lockOf(root), "pid"), "424242\n");
       },
     });
     expect(r.status, r.out).toBe(1);
@@ -502,81 +619,161 @@ describe("full-run.sh inspects every expected name and holds one invocation clai
     expect(downs(r)).toEqual([]);
     expect(composeCalls(r), "nothing of the running invocation is touched").toEqual([]);
     expect(r.out).toMatch(/REFUSING/);
-    expect(r.out).toContain(join(r.root, LOCK));
-    expect(existsSync(join(r.root, LOCK, "pid")), "the other invocation's lock stays").toBe(true);
-    expect(readFileSync(join(r.root, LOCK, "pid"), "utf8")).toBe("424242\n");
+    expect(r.out).toContain(lockOf(r.root));
+    expect(existsSync(join(lockOf(r.root), "pid")), "the other invocation's lock stays").toBe(true);
+    expect(readFileSync(join(lockOf(r.root), "pid"), "utf8")).toBe("424242\n");
+  });
+
+  it("REVIEW-H1: a caller with another TMPDIR meets the same claim, so it refuses before any startup, docker call or teardown", () => {
+    for (const tmp of ["another-invocation-tmp", "a-third-tmp"]) {
+      const env: Record<string, string> = {};
+      const r = runRunner({
+        env,
+        arrange: (root) => {
+          mkdirSync(lockOf(root));
+          writeFileSync(join(lockOf(root), "pid"), "424242\n");
+          const alternate = join(root, tmp);
+          mkdirSync(alternate);
+          env.TMPDIR = alternate;
+        },
+      });
+      expect(r.status, "the same Docker project already has an invocation claim").toBe(1);
+      expect(makeCalls(r).filter((c) => c.argv.includes("oss-up"))).toEqual([]);
+      expect(downs(r), "the second invocation owns no appliance").toEqual([]);
+      expect(removals(r)).toEqual([]);
+      expect(r.calls.filter((c) => c.tool === "docker"), "no docker call at all").toEqual([]);
+      expect(r.out).toContain(lockOf(r.root));
+      expect(existsSync(join(r.root, tmp, LOCK)), "no claim is taken under TMPDIR").toBe(false);
+      expect(readFileSync(join(lockOf(r.root), "pid"), "utf8")).toBe("424242\n");
+    }
   });
 
   it("releases its lock at the end of a green run and after a refusal it made", () => {
     const green = runRunner();
     expect(green.status, green.out).toBe(0);
-    expect(existsSync(join(green.root, LOCK)), "green run released its lock").toBe(false);
+    expect(existsSync(lockOf(green.root)), "green run released its lock").toBe(false);
     const refused = runRunner({ env: { STUB_FOREIGN_NETWORKS: "identuum-e2e_default\\n" } });
     expect(refused.status, refused.out).not.toBe(0);
-    expect(existsSync(join(refused.root, LOCK)), "refusal released its lock").toBe(false);
+    expect(existsSync(lockOf(refused.root)), "refusal released its lock").toBe(false);
   });
 
   it("teardown ownership: an expected volume that appeared WITHOUT the project label is not removed; the run is red", () => {
     const r = runRunner({ env: { STUB_LATE_FOREIGN: "volume" } });
     expect(OSS_UP(r).length, "the run started its appliance").toBe(1);
     expect(r.status, r.out).not.toBe(0);
+    expect(downs(r), "no project-level down").toEqual([]);
     expect(
-      downs(r).filter((c) => c.argv.includes("--volumes")),
-      "no down --volumes over a volume this run cannot prove it created"
+      removals(r).filter((c) => c.argv[0] === "volume"),
+      "no removal of a volume this run did not record creating"
     ).toEqual([]);
+    expect(remaining(r)).toContain("v/identuum-e2e_postgres-idp-oss-data-v18");
     expect(r.out).toMatch(/TEARDOWN REFUSED/);
     expect(r.out).toMatch(/identuum-e2e_postgres-idp-oss-data-v18/);
   });
 });
 
+describe("full-run.sh removes only what this invocation recorded creating [H2]", () => {
+  it("REVIEW-H2: a same-name replacement of the appliance's volume, same project label and same invocation label, is not removed; the run is red", () => {
+    const r = runRunner({ env: { STUB_SAME_LABEL_REPLACEMENT: "1" } });
+    expect(
+      r.calls.some((c) => c.tool === "replaced-by-other-invocation"),
+      "control: the daemon model replaced the created volume"
+    ).toBe(true);
+    expect(downs(r), "a project label is shared; this replacement was not created by the run").toEqual([]);
+    expect(removals(r).filter((c) => c.argv[0] === "volume")).toEqual([]);
+    expect(remaining(r), "the replacement survives; the run's own containers and network do not").toEqual([
+      "v/identuum-e2e_postgres-idp-oss-data-v18",
+    ]);
+    expect(r.status).not.toBe(0);
+    expect(r.out).toMatch(/TEARDOWN REFUSED/);
+    expect(r.out).toMatch(/identuum-e2e_postgres-idp-oss-data-v18 \(replaced since it was recorded/);
+  });
+
+  it("REVIEW-H2: a foreign container of the same project is not removed; the run's own resources are; the run is red", () => {
+    const r = runRunner({ env: { STUB_FOREIGN_CONTAINER: "1" } });
+    expect(
+      r.calls.some((c) => c.tool === "foreign-container-started"),
+      "control: a same-project container appeared during the run"
+    ).toBe(true);
+    expect(downs(r), "a project-level down would remove it").toEqual([]);
+    expect(removals(r).map((c) => c.argv.join(" ")).sort()).toEqual(CREATED_REMOVALS);
+    expect(remaining(r), "only the foreign container is left").toEqual(["c/f1"]);
+    expect(r.status).not.toBe(0);
+    expect(r.out).toMatch(/TEARDOWN REFUSED/);
+    expect(r.out).toMatch(/container f1 \(not recorded as created by this run\)/);
+  });
+
+  it("the recorded identities are the ones removed: a container whose invocation label changed is left", () => {
+    const r = runRunner({
+      env: { STUB_FAIL_STEP: "admin-reset" },
+      arrange: (root) => {
+        // The record is written after the start; this rewrite happens later,
+        // through the gate driver, so the model mutates app container c2 then.
+        writeFileSync(
+          join(root, "identuum-ui/scripts/gate-witness.sh"),
+          GW_STUB.replace(
+            'log gw "$1"',
+            '[ "$1" = finalize ] && echo "identuum-e2e identuum-e2e another-invocation" >"$STUB_STATE/c/c2"\nlog gw "$1"'
+          )
+        );
+      },
+    });
+    expect(r.status).not.toBe(0);
+    expect(removals(r).map((c) => c.argv.join(" "))).not.toContain("rm -f -v c2");
+    expect(remaining(r)).toEqual(["c/c2"]);
+    expect(r.out).toMatch(/container c2 \(its identity changed since it was recorded\)/);
+  });
+});
+
 describe("full-run.sh cleans up exactly once and keeps the run's status [C5]", () => {
-  it("nested startup fails after a partial create: one owned down, status 7 kept", () => {
+  it("nested startup fails after a partial create: what it created is recorded and removed by ID, status 7 kept", () => {
     const r = runRunner({ env: { STUB_FAIL: "oss-up" } });
     expect(r.status, r.out).toBe(7);
     expect(r.calls.some((c) => c.tool === "partial-create")).toBe(true);
-    expectOneOwnedCleanupAfterCreate(r);
+    expectRecordedRemovalAfterCreate(r);
   });
 
-  it("the appliance never turns healthy: one owned down, red", () => {
+  it("the appliance never turns healthy: what it recorded removed by ID, red", () => {
     const r = runRunner({ env: { STUB_CURL_STATUS: "7" } });
     expect(r.status, r.out).toBe(1);
-    expectOneOwnedCleanupAfterCreate(r);
+    expectRecordedRemovalAfterCreate(r);
   });
 
-  it("bootstrap exec fails: one owned down, status 5 kept", () => {
+  it("bootstrap exec fails: what it recorded removed by ID, status 5 kept", () => {
     const r = runRunner({ env: { STUB_FAIL: "bootstrap" } });
     expect(r.status, r.out).toBe(5);
-    expectOneOwnedCleanupAfterCreate(r);
+    expectRecordedRemovalAfterCreate(r);
   });
 
-  it("the provisioner writes no envelope: one owned down, red", () => {
+  it("the provisioner writes no envelope: what it recorded removed by ID, red", () => {
     const r = runRunner({ env: { STUB_NO_FIXTURE: "1" } });
     expect(r.status, r.out).toBe(1);
-    expectOneOwnedCleanupAfterCreate(r);
+    expectRecordedRemovalAfterCreate(r);
   });
 
   for (const [mode, step] of [
     ["full", "admin-reset"],
     ["quick", "devloop-quick"],
   ] as const) {
-    it(`${mode}: a later phase (${step}) fails: one owned down, red`, () => {
+    it(`${mode}: a later phase (${step}) fails: what it recorded removed by ID, red`, () => {
       const r = runRunner({ env: { E2E_MODE: mode, STUB_FAIL_STEP: step } });
       expect(r.status, r.out).toBe(1);
       expectPinnedOwnership(r);
-      expectOneOwnedCleanupAfterCreate(r);
+      expectRecordedRemovalAfterCreate(r);
     });
   }
 
   it("a failed teardown turns an otherwise green run red", () => {
-    const r = runRunner({ env: { STUB_DOWN_STATUS: "3" } });
+    const r = runRunner({ env: { STUB_RM_STATUS: "3" } });
     expect(r.status, r.out).not.toBe(0);
-    expect(downs(r).length).toBe(1);
+    expect(removals(r).map((c) => c.argv.join(" ")).sort()).toEqual(CREATED_REMOVALS);
+    expect(r.out).toMatch(/TEARDOWN REFUSED/);
   });
 
   it("a failed teardown never masks the original red status", () => {
-    const r = runRunner({ env: { STUB_FAIL: "bootstrap", STUB_DOWN_STATUS: "3" } });
+    const r = runRunner({ env: { STUB_FAIL: "bootstrap", STUB_RM_STATUS: "3" } });
     expect(r.status, r.out).toBe(5);
-    expect(downs(r).length).toBe(1);
+    expect(removals(r).map((c) => c.argv.join(" ")).sort()).toEqual(CREATED_REMOVALS);
   });
 });
 

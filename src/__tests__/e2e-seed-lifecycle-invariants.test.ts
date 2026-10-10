@@ -6,8 +6,9 @@ import { describe, expect, it } from "vitest";
  * RULE: SEED-NEVER-OUTLIVES-APPLIANCE-1
  *
  * The site_admin TOTP seed under e2e-full/.auth/ is valid ONLY for the
- * appliance that issued it, and the harness destroys that appliance with
- * `down --volumes` at the start of every run. A seed therefore can never
+ * appliance that issued it, and the harness destroys that appliance (its
+ * recorded containers, network and volume, removed by ID: OSS-MINT-GUARD-4)
+ * at the end of every run. A seed therefore can never
  * legitimately survive into the next run — but the file persisted, the
  * fallback in siteAdminSession read it across appliances, and the resulting
  * codes matched no window. It cost THREE red mints and two prompts chasing a
@@ -50,8 +51,8 @@ describe("the e2e site_admin seed never outlives its appliance [SEED-NEVER-OUTLI
 
     // It must come BEFORE the teardown that destroys the appliance, so the
     // ordering reads as "this seed belongs to a stack that is about to die".
-    const downIdx = sh.indexOf("--profile app down --volumes");
-    expect(downIdx, "the harness must still destroy the stack").toBeGreaterThan(-1);
+    const downIdx = sh.indexOf('docker volume rm "$id"');
+    expect(downIdx, "the harness must still destroy the stack, its volume included").toBeGreaterThan(-1);
     expect(rmIdx, "the seed is deleted at run start, ahead of the teardown").toBeLessThan(downIdx);
   });
 

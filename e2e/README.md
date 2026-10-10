@@ -82,22 +82,28 @@ Under `make e2e-full` / `make e2e-quick` the dev-loop phases run
 OUTER-OWNED (`IDENTUUM_E2E_FIXTURE_OWNER=outer`): the outer runner
 (`e2e-full/scripts/full-run.sh`, project `identuum-e2e`) provisions the
 appliance and the envelope, global setup must reuse them or refuse, and global
-teardown makes no Compose call and keeps the envelope — the runner tears its
-own project down once, on exit.
+teardown makes no Compose call and keeps the envelope — the runner removes
+what it created once, on exit.
 
 The runner first takes an exclusive invocation claim, an atomic `mkdir` of
-`${TMPDIR:-/tmp}/identuum-e2e.lock` (holding its pid), and keeps it through
-its teardown; if the claim already exists it refuses and changes nothing.
-Remove a left-behind claim only after confirming no harness run is active.
+`/tmp/identuum-e2e.lock` (holding its pid; one fixed path per machine,
+whatever `TMPDIR` says), and keeps it through its teardown; if the claim
+already exists it refuses and changes nothing. Remove a left-behind claim only
+after confirming no harness run is active.
 Before it creates anything it refuses leftovers of project `identuum-e2e`,
 and it also lists volumes and networks UNFILTERED: any volume or network name
 the resolved Compose config names that already exists, whatever its labels,
 is a refusal (one without the project label is not the harness's, and no
 removal command is offered for it). Those names, all proven absent, are the
-run's inventory. On exit the teardown re-lists them and runs
-`down --volumes` only when every one that exists carries the
-`identuum-e2e` project label; otherwise it prints `TEARDOWN REFUSED`,
-removes nothing, and the run is red.
+run's inventory. Every service, volume and network it starts carries a label
+with a random id of this invocation (`io.identuum.harness.invocation`, from a
+generated overlay), and right after the start the runner records what carries
+that label: containers and networks by ID, volumes by name and creation time.
+On exit the teardown removes exactly those, each by ID after rechecking its
+identity and label, and runs no project-level `down`. Anything of the project,
+or holding one of its names, that is not in that record (a foreign container
+of the same project, a volume replaced under the same name) is not removed:
+the teardown prints `TEARDOWN REFUSED` naming it, and the run is red.
 
 ### Security
 

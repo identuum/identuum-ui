@@ -4,9 +4,14 @@
 # BUILDS AND DESTROYS its own environment on every run — its OWN Compose
 # project (identuum-e2e, below), never the operator's dev stack:
 #   0. claim        — takes an EXCLUSIVE invocation claim, an atomic mkdir of
-#                     ${TMPDIR:-/tmp}/identuum-e2e.lock, before anything else
+#                     /tmp/identuum-e2e.lock (one fixed path per machine,
+#                     whatever TMPDIR says: OSS-MINT-GUARD-4, review
+#                     OSS-MINT-GUARD-3-PREREVIEW H1), before anything else
 #                     and holds it through the teardown; a claim that already
-#                     exists is a refusal (OSS-MINT-GUARD-3, review G2)
+#                     exists is a refusal (OSS-MINT-GUARD-3, review G2). With
+#                     it a random invocation id is drawn: the label
+#                     io.identuum.harness.invocation this run puts on every
+#                     container, network and volume it starts
 #   1. ownership    — REFUSES when anything of project identuum-e2e (or a
 #                     container named identuum-e2e / identuum-e2e-postgres)
 #                     already exists, validates the resolved Compose config
@@ -17,17 +22,27 @@
 #                     the refusal prints the command an operator may run to
 #                     remove a labelled leftover, and none for a foreign name.
 #                     The names, all proven absent, are this run's inventory
-#   2. oss-up       — rebuilds the image from the working tree and starts it
+#   2. oss-up       — rebuilds the image from the working tree and starts it,
+#                     with a generated compose overlay that labels every
+#                     service, volume and network with the invocation id; right
+#                     after, what carries that label is RECORDED: containers
+#                     and networks by full ID, volumes by name and creation
+#                     time (OSS-MINT-GUARD-4, review OSS-MINT-GUARD-3-PREREVIEW H2)
 #   3. dev-smoke    — refuses a stale binary (build_commit must match the tree)
 #   4. oss-bootstrap— creates the site_admin with a RUN-LOCAL random password
 #   5. playwright   — runs the e2e-full project, SERIAL BY PHYSICS
 #                     (--workers=1: TOTP replay protection rejects concurrent
 #                     logins minting the same 30-second code)
 #   6. teardown     — ONE EXIT trap, armed after step 1 and before the
-#                     first create: it first re-lists, and runs down --volumes
-#                     only when every inventory volume/network that exists
-#                     carries the project label (else TEARDOWN REFUSED, red);
-#                     stack down, volume gone, claim released, no harness residue
+#                     first create: it removes the RECORDED resources and
+#                     nothing else, never a project-level `down`: each recorded
+#                     container and network by ID, each recorded volume by name,
+#                     only after re-inspecting that its identity (ID or creation
+#                     time) and invocation label still match. Anything of the
+#                     project, or carrying a name this run would create, that is
+#                     not in the record — a foreign same-project container, a
+#                     same-name replacement — is TEARDOWN REFUSED: not removed,
+#                     red. Claim released last, no harness residue
 #                     — EXCEPT the evidence of a RED run (THE-RED-MINT-HAS-NO-NAME,
 #                     2026-09-06): when any phase failed, the appliance log,
 #                     the finalized record, every phase's JSON report, the
@@ -105,22 +120,32 @@ NESTED_VARS=(IDENTUUM_IDP_COMPOSE_PROJECT="$E2E_PROJECT" DEV_PG_HOST_PORT="$DEV_
 # that already exists is a refusal: nothing is started and nothing removed. A
 # run killed without its EXIT trap (SIGKILL) leaves the claim behind, on
 # purpose: only an operator can know that no run is active.
-E2E_LOCK="${TMPDIR:-/tmp}"
-E2E_LOCK="${E2E_LOCK%/}/identuum-e2e.lock"
+# OSS-MINT-GUARD-4 (review OSS-MINT-GUARD-3-PREREVIEW H1): ONE fixed path for
+# project identuum-e2e on this machine, never derived from TMPDIR or any other
+# variable — two callers with different TMPDIR values used to take different
+# claims for the same daemon and project, so neither serialized the other.
+E2E_LOCK=/tmp/identuum-e2e.lock
 if ! mkdir "$E2E_LOCK" 2>/dev/null; then
 	{
-		echo "e2e-full: REFUSING — could not take the harness claim $E2E_LOCK (it already exists: another e2e-full/e2e-quick invocation may hold it)"
+		echo "e2e-full: REFUSING — could not take the harness claim $E2E_LOCK (it already exists: another e2e-full/e2e-quick invocation on this machine may hold it, whatever its TMPDIR)"
 		echo "Remove that directory only after confirming no harness run is active (no full-run.sh process, no running identuum-e2e containers)."
 	} >&2
 	exit 1
 fi
 echo "$$" >"$E2E_LOCK/pid"
 # Names only: what the resolved config expects (written by its validation
-# below) and, once proven absent, the inventory the teardown may remove.
+# below) and, once proven absent, the names this run will create.
 E2E_EXPECTED="$E2E_LOCK/expected"
 E2E_INVENTORY="$E2E_LOCK/inventory"
+# H2: the invocation's own identity. Every resource this run starts carries
+# the label E2E_LABEL=E2E_INVOCATION (the generated overlay below), and
+# E2E_CREATED records what actually carries it, by ID, right after the start.
+E2E_LABEL=io.identuum.harness.invocation
+E2E_INVOCATION=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+E2E_INVOCATION_OVERLAY="$E2E_LOCK/invocation.json"
+E2E_CREATED="$E2E_LOCK/created"
 release_claim() {
-	rm -f "$E2E_LOCK/pid" "$E2E_EXPECTED" "$E2E_INVENTORY"
+	rm -f "$E2E_LOCK/pid" "$E2E_EXPECTED" "$E2E_INVENTORY" "$E2E_INVOCATION_OVERLAY" "$E2E_CREATED" "$E2E_CREATED.part"
 	rmdir "$E2E_LOCK" 2>/dev/null ||
 		echo "e2e-full: could not release the harness claim $E2E_LOCK — remove it once no harness run is active" >&2
 }
@@ -135,6 +160,10 @@ release_claim_on_exit() {
 trap release_claim_on_exit EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+if ! [[ "$E2E_INVOCATION" =~ ^[0-9a-f]{32}$ ]]; then
+	echo "e2e-full: REFUSING — no invocation id could be drawn from /dev/urandom" >&2
+	exit 1
+fi
 # listed NAME LIST: NAME is a whole line of LIST (an exact name match).
 listed() { grep -Fxq -- "$1" <<<"$2"; }
 
@@ -188,7 +217,7 @@ while read -r name; do [ -z "$name" ] || leftovers+="  network $name"$'\n'; done
 # config carries environment values, so it is never printed: node reads it
 # from the pipe and prints names only, and writes them (kind<TAB>name, names
 # only) to $E2E_EXPECTED for the inspection and the inventory below.
-if ! "${E2E_COMPOSE[@]}" --profile app config --format json | E2E_PROJECT="$E2E_PROJECT" E2E_EXPECTED="$E2E_EXPECTED" node -e '
+if ! "${E2E_COMPOSE[@]}" --profile app config --format json | E2E_PROJECT="$E2E_PROJECT" E2E_EXPECTED="$E2E_EXPECTED" E2E_LABEL="$E2E_LABEL" E2E_INVOCATION="$E2E_INVOCATION" E2E_INVOCATION_OVERLAY="$E2E_INVOCATION_OVERLAY" node -e '
 const project = process.env.E2E_PROJECT;
 let cfg;
 try {
@@ -225,6 +254,13 @@ for (const [kind, list] of [["network", names.networks], ["volume", names.volume
 	for (const n of list) lines.push(`${kind}\t${n}\n`);
 }
 require("node:fs").writeFileSync(process.env.E2E_EXPECTED, lines.join(""));
+// H2: the overlay that labels every service, volume and network of the
+// resolved config with the invocation id (labels only; names unchanged).
+const label = { labels: { [process.env.E2E_LABEL]: process.env.E2E_INVOCATION } };
+const overlay = { services: {}, volumes: {}, networks: {} };
+for (const svc of Object.keys(cfg.services || {})) overlay.services[svc] = label;
+for (const kind of ["volumes", "networks"]) for (const key of Object.keys(cfg[kind] || {})) overlay[kind][key] = label;
+require("node:fs").writeFileSync(process.env.E2E_INVOCATION_OVERLAY, JSON.stringify(overlay));
 console.log(`e2e-full: resolved config OK — project ${project}; networks ${names.networks.join(", ") || "-"}; volumes ${names.volumes.join(", ") || "-"}; containers ${names.containers.join(", ") || "-"}`);
 '; then
 	echo "e2e-full: REFUSING — the resolved Compose config for project $E2E_PROJECT could not be validated" >&2
@@ -281,67 +317,139 @@ for port in "$DEV_PG_HOST_PORT" "$E2E_APP_PORT" "$E2E_UI_PORT"; do
 done
 echo "e2e-full: preflight OK — ports $DEV_PG_HOST_PORT, $E2E_APP_PORT, $E2E_UI_PORT free; project $E2E_PROJECT"
 
-# INVENTORY (G2): the names this invocation owns are exactly the resolved
-# config's names, every one proven absent above while this run held the claim.
+# INVENTORY (G2): the names this invocation will create are exactly the
+# resolved config's names, every one proven absent above while this run held
+# the claim. From here on every compose command carries the invocation overlay.
 mv "$E2E_EXPECTED" "$E2E_INVENTORY"
+E2E_COMPOSE+=(-f "$E2E_INVOCATION_OVERLAY")
 
-# unowned_inventory prints each inventory volume/network that now exists
-# WITHOUT this project's label, or a listing failure, and fails; it is silent
-# and succeeds when every one that exists carries the label — created by this
-# invocation, which has held the claim since it proved the name absent.
-unowned_inventory() {
-	local all_v all_n own_v own_n kind name all own bad=""
-	if ! all_v=$(docker volume ls --format '{{.Name}}') ||
-		! all_n=$(docker network ls --format '{{.Name}}') ||
-		! own_v=$(docker volume ls --filter "label=com.docker.compose.project=$E2E_PROJECT" --format '{{.Name}}') ||
-		! own_n=$(docker network ls --filter "label=com.docker.compose.project=$E2E_PROJECT" --format '{{.Name}}'); then
-		echo "  (the volumes and networks could not be listed)"
+# record_created writes E2E_CREATED: the containers and networks carrying this
+# invocation's label, by full ID, and its volumes, by name and creation time —
+# what this run actually created (H2). A failed listing writes nothing and fails.
+record_created() {
+	local rc rn rv c n v t
+	if ! rc=$(docker ps -aq --no-trunc --filter "label=$E2E_LABEL=$E2E_INVOCATION") ||
+		! rn=$(docker network ls -q --no-trunc --filter "label=$E2E_LABEL=$E2E_INVOCATION") ||
+		! rv=$(docker volume ls -q --filter "label=$E2E_LABEL=$E2E_INVOCATION"); then
 		return 1
 	fi
-	while IFS=$'\t' read -r kind name; do
-		case "$kind" in
-		volume) all=$all_v own=$own_v ;;
-		network) all=$all_n own=$own_n ;;
-		*) continue ;;
-		esac
-		if listed "$name" "$all" && ! listed "$name" "$own"; then bad+="  $kind $name"$'\n'; fi
-	done <"$E2E_INVENTORY"
-	printf '%s' "$bad"
-	[ -z "$bad" ]
+	{
+		for c in $rc; do echo "container $c"; done
+		for n in $rn; do echo "network $n"; done
+		for v in $rv; do
+			t=$(docker volume inspect --format '{{.CreatedAt}}' "$v") && [ -n "$t" ] || return 1
+			echo "volume $v $t"
+		done
+	} >"$E2E_CREATED.part" || return 1
+	mv "$E2E_CREATED.part" "$E2E_CREATED"
 }
 
-# THE ONE TEARDOWN (C5). Armed only now — after the leftover refusal, the
-# config validation, the expected-name inspection and the inventory, before
-# the first create — so what it removes was created by this invocation under
-# -p identuum-e2e: its containers, network and named volume (`down --volumes`,
-# the harness's own disposable appliance; AGENTS.md's one exemption). Because
-# `down --volumes` removes configured volumes BY NAME, it first re-lists: if
-# an inventory volume or network exists WITHOUT the project label, it runs no
-# down at all, prints TEARDOWN REFUSED naming it, and the run is red. It runs
-# once on every exit, green, red or aborted; it keeps a red run's status, and
-# a failed or refused teardown turns a green run red. It also removes the
-# run's own credential envelopes, which belong to the appliance it just
-# destroyed, and releases the claim last. No prune, no `docker volume rm`,
-# nothing of any other project.
+# THE ONE TEARDOWN (C5; OSS-MINT-GUARD-4, review OSS-MINT-GUARD-3-PREREVIEW
+# H2). Armed only now — after the leftover refusal, the config validation, the
+# expected-name inspection and the inventory, before the first create. A project
+# label and an expected name are shared by anything of the project, so neither
+# proves this run created a resource, and `down --volumes` removes configured
+# volumes by name: the teardown runs NO project-level down. It removes the
+# RECORDED resources (record_created; recorded here if the start was cut short)
+# and nothing else: each container and network by ID, each volume by name, only
+# after re-inspecting that its ID (or creation time) and invocation label still
+# match (the harness's own disposable appliance; AGENTS.md's one exemption).
+# Anything of the project, or holding one of its container, volume or network
+# names, that is not in the record — a foreign same-project container, a
+# same-name replacement, whatever its labels — is TEARDOWN REFUSED: not removed,
+# and the run is red. A failed listing removes nothing. It runs once on every
+# exit, green, red or aborted; it keeps a red run's status, and a failed or
+# refused teardown turns a green run red. It also removes the run's own
+# credential envelopes, which belong to the appliance it just destroyed, and
+# releases the claim last. No prune, nothing of any other project.
 FIXTURE_FILE="$UI_DIR/e2e/.auth/e2e-org-admin-fixture.json"
 ADMIN_RESET_ENVELOPE="$UI_DIR/e2e/.auth/admin-reset-envelope.json"
 teardown_done=0
+# recorded KIND ID: is ID in this run's record (a volume by its name)?
+recorded() { grep -qxF "$1 $2" "$E2E_CREATED" || grep -qF "$1 $2 " "$E2E_CREATED"; }
+# remove_recorded prints one line per resource it left and fails if there was
+# one; it is the only code in this runner that removes a container, network or
+# volume.
+remove_recorded() {
+	local all_c proj_c name_c all_n proj_n all_v proj_v strange="" failed="" kind id t name got c n v
+	if ! all_c=$(docker ps -aq --no-trunc) ||
+		! proj_c=$(docker ps -aq --no-trunc --filter "label=com.docker.compose.project=$E2E_PROJECT") ||
+		! name_c=$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}') ||
+		! all_n=$(docker network ls --no-trunc --format '{{.ID}} {{.Name}}') ||
+		! proj_n=$(docker network ls -q --no-trunc --filter "label=com.docker.compose.project=$E2E_PROJECT") ||
+		! all_v=$(docker volume ls --format '{{.Name}}') ||
+		! proj_v=$(docker volume ls -q --filter "label=com.docker.compose.project=$E2E_PROJECT"); then
+		echo "  (the containers, networks and volumes could not be listed; nothing was removed)"
+		return 1
+	fi
+	for c in $proj_c $(awk -v a="$E2E_APP_CONTAINER" -v b="$E2E_PROJECT-postgres" '$2==a||$2==b{print $1}' <<<"$name_c"); do
+		recorded container "$c" || strange+="  container $c (not recorded as created by this run)"$'\n'
+	done
+	for n in $proj_n; do recorded network "$n" || strange+="  network $n (not recorded as created by this run)"$'\n'; done
+	for v in $proj_v; do recorded volume "$v" || strange+="  volume $v (not recorded as created by this run)"$'\n'; done
+	while IFS=$'\t' read -r kind name; do
+		case "$kind" in
+		network)
+			for n in $(awk -v w="$name" '$2==w{print $1}' <<<"$all_n"); do
+				recorded network "$n" || strange+="  network $name ($n: not recorded as created by this run)"$'\n'
+			done
+			;;
+		volume)
+			if listed "$name" "$all_v"; then
+				recorded volume "$name" || strange+="  volume $name (not recorded as created by this run)"$'\n'
+			fi
+			;;
+		esac
+	done <"$E2E_INVENTORY"
+	while read -r kind id t; do
+		case "$kind" in
+		container)
+			listed "$id" "$all_c" || continue
+			got=$(docker inspect --format "{{.Id}} {{index .Config.Labels \"$E2E_LABEL\"}}" "$id") || got=""
+			if [ "$got" != "$id $E2E_INVOCATION" ]; then
+				strange+="  container $id (its identity changed since it was recorded)"$'\n'
+				continue
+			fi
+			docker rm -f -v "$id" >/dev/null || failed+="  container $id (docker rm failed)"$'\n'
+			;;
+		network)
+			awk '{print $1}' <<<"$all_n" | grep -qxF -- "$id" || continue
+			got=$(docker network inspect --format "{{.Id}} {{index .Labels \"$E2E_LABEL\"}}" "$id") || got=""
+			if [ "$got" != "$id $E2E_INVOCATION" ]; then
+				strange+="  network $id (its identity changed since it was recorded)"$'\n'
+				continue
+			fi
+			docker network rm "$id" >/dev/null || failed+="  network $id (docker network rm failed)"$'\n'
+			;;
+		volume)
+			listed "$id" "$all_v" || continue
+			got=$(docker volume inspect --format "{{.CreatedAt}} {{index .Labels \"$E2E_LABEL\"}}" "$id") || got=""
+			if [ "$got" != "$t $E2E_INVOCATION" ]; then
+				strange+="  volume $id (replaced since it was recorded: its creation time or invocation label changed)"$'\n'
+				continue
+			fi
+			docker volume rm "$id" >/dev/null || failed+="  volume $id (docker volume rm failed)"$'\n'
+			;;
+		esac
+	done <"$E2E_CREATED"
+	printf '%s' "$strange$failed"
+	[ -z "$strange$failed" ]
+}
 teardown() {
-	local status=$? unowned
+	local status=$? refused
 	trap - EXIT
 	if [ "$teardown_done" = 0 ]; then
 		teardown_done=1
-		if unowned=$(unowned_inventory); then
-			echo "e2e-full: teardown (project $E2E_PROJECT: down --volumes, app profile included; every inventory name present carries the project label)"
-			if ! "${E2E_COMPOSE[@]}" --profile app down --volumes; then
-				echo "e2e-full: TEARDOWN FAILED for project $E2E_PROJECT — remove it with: docker compose -p $E2E_PROJECT -f $E2E_DEV_COMPOSE -f $E2E_MAIL_OVERLAY --profile app down --volumes" >&2
-				[ "$status" -ne 0 ] || status=1
-			fi
+		if [ ! -e "$E2E_CREATED" ] && ! record_created; then
+			echo "e2e-full: TEARDOWN REFUSED for project $E2E_PROJECT — what this run created could not be listed, so nothing was removed; inspect the project's containers, networks and volumes and remove them by hand" >&2
+			[ "$status" -ne 0 ] || status=1
+		elif refused=$(remove_recorded); then
+			echo "e2e-full: teardown (project $E2E_PROJECT: removed only what this run recorded creating, each by ID after rechecking its identity; no project-level down)"
 		else
 			{
-				echo "e2e-full: TEARDOWN REFUSED for project $E2E_PROJECT — these names from this run's inventory exist without the project label $E2E_PROJECT, so this run cannot prove it created them, and down --volumes would remove a volume by name:"
-				printf '%s' "$unowned"
-				echo "Nothing was removed; this run's appliance is left in place. Inspect those names (docker volume inspect / docker network inspect) and resolve them by hand; then an operator may remove the appliance with: docker compose -p $E2E_PROJECT -f $E2E_DEV_COMPOSE -f $E2E_MAIL_OVERLAY --profile app down --volumes"
+				echo "e2e-full: TEARDOWN REFUSED for project $E2E_PROJECT — this run removed what it recorded creating and left these, which it did not create, whose identity changed, or whose removal failed:"
+				printf '%s' "$refused"
+				echo "Nothing else was removed. Inspect them (docker inspect / docker network inspect / docker volume inspect) and resolve them by hand."
 			} >&2
 			[ "$status" -ne 0 ] || status=1
 		fi
@@ -379,7 +487,12 @@ export IDENTUUM_E2E_BASE_URL="http://localhost:${E2E_UI_PORT}"
 export IDENTUUM_IDP_UI_PUBLIC_BASE_URL="http://localhost:${E2E_UI_PORT}"
 # COMPOSE_FILE is idp-oss's own `?=` variable; the base file stays first, so the
 # project directory (and the build context) is unchanged.
-"${NESTED_MAKE[@]}" oss-up COMPOSE_FILE="deployment/docker-compose.dev.yml -f $E2E_MAIL_OVERLAY" "${NESTED_VARS[@]}"
+"${NESTED_MAKE[@]}" oss-up COMPOSE_FILE="deployment/docker-compose.dev.yml -f $E2E_MAIL_OVERLAY -f $E2E_INVOCATION_OVERLAY" "${NESTED_VARS[@]}"
+if ! record_created; then
+	echo "e2e-full: could not record what this run created" >&2
+	exit 1
+fi
+echo "e2e-full: recorded $(grep -c . "$E2E_CREATED") resource(s) this run created, by ID"
 
 echo "e2e-full: waiting for the appliance to serve"
 for i in $(seq 1 60); do
