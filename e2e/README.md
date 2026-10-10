@@ -90,20 +90,41 @@ The runner first takes an exclusive invocation claim, an atomic `mkdir` of
 whatever `TMPDIR` says), and keeps it through its teardown; if the claim
 already exists it refuses and changes nothing. Remove a left-behind claim only
 after confirming no harness run is active.
-Before it creates anything it refuses leftovers of project `identuum-e2e`,
-and it also lists volumes and networks UNFILTERED: any volume or network name
-the resolved Compose config names that already exists, whatever its labels,
-is a refusal (one without the project label is not the harness's, and no
-removal command is offered for it). Those names, all proven absent, are the
-run's inventory. Every service, volume and network it starts carries a label
-with a random id of this invocation (`io.identuum.harness.invocation`, from a
-generated overlay), and right after the start the runner records what carries
-that label: containers and networks by ID, volumes by name and creation time.
+
+The harness supports exactly one setup: the Docker engine of this computer,
+reached through a unix socket on this computer. Right after taking the claim
+it refuses, before any other Docker command, a `DOCKER_HOST` that is not a
+`unix:///` socket, and a Docker context (`DOCKER_CONTEXT` or the current one)
+whose endpoint is not one, such as `tcp://` or `ssh://`; every later Docker
+command of the run, the nested `oss-up` included, is pinned to the checked
+endpoint. The reason: the claim is a directory on this computer, so it cannot
+keep out a client on another computer that uses the same engine. A unix
+socket forwarded from another computer, or shared into a container with its
+own `/tmp`, looks local and is not detected; do not run the harness that way.
+
+Before it creates anything it refuses leftovers of project `identuum-e2e`
+(and prints, for each labelled one, the command that removes it by its own
+name; never a project-level `down --volumes`). Every volume and network it
+creates is named with a random id of this invocation appended to the name
+the resolved Compose config gives it
+(`identuum-e2e_postgres-idp-oss-data-v18_<id>`, `identuum-e2e_default_<id>`),
+so no other stack or run creates the same name; those names are listed
+UNFILTERED, and one that already exists, whatever its labels, is a refusal
+(no removal command is offered for it). Those names, all proven absent, are
+the run's inventory. Every service, volume and network it starts carries a
+label with the same id (`io.identuum.harness.invocation`, from a generated
+overlay), and right after the start the runner records what carries that
+label: containers and networks by ID, volumes by name and creation time.
 On exit the teardown removes exactly those, each by ID after rechecking its
-identity and label, and runs no project-level `down`. Anything of the project,
-or holding one of its names, that is not in that record (a foreign container
-of the same project, a volume replaced under the same name) is not removed:
-the teardown prints `TEARDOWN REFUSED` naming it, and the run is red.
+identity and label, a volume only under a name carrying the invocation id,
+and runs no project-level `down`. Docker removes a volume by name with no
+check of its identity, so a volume replaced under a shared name between the
+last check and the removal would be removed; under the run's own name no
+other writer creates one. Anything of the project, or holding one of its
+names, that is not in that record (a foreign container of the same project,
+a volume replaced under the same name, a recorded volume without the id in
+its name) is not removed: the teardown prints `TEARDOWN REFUSED` naming it,
+and the run is red.
 
 ### Security
 

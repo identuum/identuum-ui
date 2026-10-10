@@ -11,7 +11,12 @@
 #                     exists is a refusal (OSS-MINT-GUARD-3, review G2). With
 #                     it a random invocation id is drawn: the label
 #                     io.identuum.harness.invocation this run puts on every
-#                     container, network and volume it starts
+#                     container, network and volume it starts. Then it
+#                     REFUSES any Docker endpoint but this host's own engine
+#                     through a unix socket, and pins every later docker call
+#                     to that endpoint (OSS-MINT-GUARD-5, review
+#                     OSS-MINT-GUARD-4 R2, owner ruling Q-TOPOLOGY (b)): the
+#                     claim serializes only callers on this host
 #   1. ownership    — REFUSES when anything of project identuum-e2e (or a
 #                     container named identuum-e2e / identuum-e2e-postgres)
 #                     already exists, validates the resolved Compose config
@@ -19,9 +24,11 @@
 #                     any volume or network name that config resolves to
 #                     already exists in an UNFILTERED listing, whatever its
 #                     labels (G2): leftovers are never deleted by assumption;
-#                     the refusal prints the command an operator may run to
-#                     remove a labelled leftover, and none for a foreign name.
-#                     The names, all proven absent, are this run's inventory
+#                     the refusal prints the commands an operator may run to
+#                     remove each labelled leftover by name, and none for a
+#                     foreign name. Each volume and network name is the
+#                     config's name with the invocation id appended (R1);
+#                     those names, all proven absent, are this run's inventory
 #   2. oss-up       — rebuilds the image from the working tree and starts it,
 #                     with a generated compose overlay that labels every
 #                     service, volume and network with the invocation id; right
@@ -38,7 +45,8 @@
 #                     nothing else, never a project-level `down`: each recorded
 #                     container and network by ID, each recorded volume by name,
 #                     only after re-inspecting that its identity (ID or creation
-#                     time) and invocation label still match. Anything of the
+#                     time) and invocation label still match, and a volume only
+#                     under a name carrying the invocation id. Anything of the
 #                     project, or carrying a name this run would create, that is
 #                     not in the record — a foreign same-project container, a
 #                     same-name replacement — is TEARDOWN REFUSED: not removed,
@@ -164,6 +172,36 @@ if ! [[ "$E2E_INVOCATION" =~ ^[0-9a-f]{32}$ ]]; then
 	echo "e2e-full: REFUSING — no invocation id could be drawn from /dev/urandom" >&2
 	exit 1
 fi
+
+# ONE SUPPORTED TOPOLOGY (OSS-MINT-GUARD-5, review OSS-MINT-GUARD-4 R2, owner
+# ruling Q-TOPOLOGY (b)): this host's own Docker engine, through a unix socket
+# on this host. The claim above is a directory on this host, so it serializes
+# only callers that share this host's filesystem; a client on another host or
+# in another filesystem namespace reaches the daemon through a remote endpoint
+# (tcp://, ssh://, another context), takes a different claim, and is refused
+# here, before any other docker call. The endpoint is resolved once, as the
+# docker CLI resolves it (DOCKER_HOST, else DOCKER_CONTEXT, else the current
+# context), and every later docker call, the nested make's included, is pinned
+# to it, so a context switched during the run cannot move it. No endpoint
+# value is printed.
+refuse_topology() {
+	{
+		echo "e2e-full: REFUSING — $1"
+		echo "The harness supports exactly one topology: this host's own Docker engine, through a unix socket on this host (unix:///...), because its claim $E2E_LOCK serializes only callers on this host. Unset DOCKER_HOST and DOCKER_CONTEXT, or select the local context (docker context use <name>)."
+	} >&2
+	exit 1
+}
+if [ -n "${DOCKER_HOST:-}" ] && [[ "$DOCKER_HOST" != unix:///* ]]; then
+	refuse_topology "DOCKER_HOST selects an endpoint that is not this host's own Docker engine (not a unix socket); no docker command was run"
+fi
+if ! E2E_DOCKER_ENDPOINT=$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null); then
+	refuse_topology "the Docker context could not be resolved, so the engine this run would use is unknown"
+fi
+if [[ "$E2E_DOCKER_ENDPOINT" != unix:///* ]]; then
+	refuse_topology "the selected Docker context's endpoint is not this host's own Docker engine (not a unix socket)"
+fi
+export DOCKER_HOST="$E2E_DOCKER_ENDPOINT"
+unset DOCKER_CONTEXT
 # listed NAME LIST: NAME is a whole line of LIST (an exact name match).
 listed() { grep -Fxq -- "$1" <<<"$2"; }
 
@@ -187,19 +225,16 @@ rm -f "$UI_DIR/e2e-full/.auth/full-site-admin-totp"
 # project's label, or a container already holding one of its fixed names
 # (whatever its labels), may be another run's or another stack's. The harness
 # never deletes such leftovers by assumption — it refuses, and prints the one
-# command an operator may run to remove the identuum-e2e project's own
-# leftovers. Read-only listings only; nothing here creates or removes anything.
-# The volume and network names are ALSO listed UNFILTERED (G2): a label filter
-# cannot see a foreign or unlabelled volume that holds one of this project's
-# names, and `down --volumes` removes configured volumes BY NAME, whatever
-# their labels. The names are judged after the config validation below, which
-# resolves them. A failed listing is a refusal.
+# commands an operator may run to remove the identuum-e2e project's own
+# leftovers, each by its own name (OSS-MINT-GUARD-5, R1: never a project-level
+# `down --volumes`, which removes the config's volume and network names, and
+# this harness no longer creates those). Read-only listings only; nothing here
+# creates or removes anything. A failed listing is a refusal.
 leftovers=""
+remove_commands=""
 if ! containers=$(docker ps -a --format '{{.Names}}	{{.Label "com.docker.compose.project"}}') ||
 	! volumes=$(docker volume ls --filter "label=com.docker.compose.project=$E2E_PROJECT" --format '{{.Name}}') ||
-	! networks=$(docker network ls --filter "label=com.docker.compose.project=$E2E_PROJECT" --format '{{.Name}}') ||
-	! all_volumes=$(docker volume ls --format '{{.Name}}') ||
-	! all_networks=$(docker network ls --format '{{.Name}}'); then
+	! networks=$(docker network ls --filter "label=com.docker.compose.project=$E2E_PROJECT" --format '{{.Name}}'); then
 	echo "e2e-full: REFUSING — could not list Docker resources to prove project $E2E_PROJECT is unused" >&2
 	exit 1
 fi
@@ -207,16 +242,22 @@ while IFS=$'\t' read -r name project; do
 	[ -n "$name" ] || continue
 	if [ "$project" = "$E2E_PROJECT" ] || [ "$name" = "$E2E_APP_CONTAINER" ] || [ "$name" = "$E2E_PROJECT-postgres" ]; then
 		leftovers+="  container $name (project label: ${project:-none})"$'\n'
+		[ "$project" != "$E2E_PROJECT" ] || remove_commands+="  docker rm -f -v $name"$'\n'
 	fi
 done <<<"$containers"
-while read -r name; do [ -z "$name" ] || leftovers+="  volume $name"$'\n'; done <<<"$volumes"
-while read -r name; do [ -z "$name" ] || leftovers+="  network $name"$'\n'; done <<<"$networks"
+while read -r name; do [ -z "$name" ] || { leftovers+="  volume $name"$'\n'; remove_commands+="  docker volume rm $name"$'\n'; }; done <<<"$volumes"
+while read -r name; do [ -z "$name" ] || { leftovers+="  network $name"$'\n'; remove_commands+="  docker network rm $name"$'\n'; }; done <<<"$networks"
 
 # RESOLVED-CONFIG VALIDATION (C1): what Compose will actually act on, read
 # before the first resource action. `config` creates nothing. The resolved
 # config carries environment values, so it is never printed: node reads it
 # from the pipe and prints names only, and writes them (kind<TAB>name, names
-# only) to $E2E_EXPECTED for the inspection and the inventory below.
+# only) to $E2E_EXPECTED for the inspection and the inventory below. Those are
+# the names this run creates: each volume and network name the config
+# resolves to, with this invocation's id appended (OSS-MINT-GUARD-5, review
+# OSS-MINT-GUARD-4 R1), which the overlay gives Compose. No other writer
+# produces such a name, so the teardown's removal of a volume by name cannot
+# reach a volume another writer (re)created under the config's name.
 if ! "${E2E_COMPOSE[@]}" --profile app config --format json | E2E_PROJECT="$E2E_PROJECT" E2E_EXPECTED="$E2E_EXPECTED" E2E_LABEL="$E2E_LABEL" E2E_INVOCATION="$E2E_INVOCATION" E2E_INVOCATION_OVERLAY="$E2E_INVOCATION_OVERLAY" node -e '
 const project = process.env.E2E_PROJECT;
 let cfg;
@@ -230,11 +271,14 @@ try {
 const bad = [];
 const prot = (n) => typeof n === "string" && n.startsWith("identuum-idp-oss");
 if (cfg.name !== project) bad.push(`project name ${cfg.name}`);
+const invocation = process.env.E2E_INVOCATION;
 const names = { networks: [], volumes: [], containers: [] };
+const unique = { networks: {}, volumes: {} };
 for (const kind of ["networks", "volumes"]) {
 	for (const [key, def] of Object.entries(cfg[kind] || {})) {
 		const name = (def && def.name) || key;
-		names[kind].push(name);
+		unique[kind][key] = `${name}_${invocation}`;
+		names[kind].push(unique[kind][key]);
 		if (def && def.external) bad.push(`${kind} ${key} is external (${name})`);
 		if (!name.startsWith(`${project}_`) || prot(name)) bad.push(`${kind} ${key} resolves to ${name}`);
 	}
@@ -255,11 +299,12 @@ for (const [kind, list] of [["network", names.networks], ["volume", names.volume
 }
 require("node:fs").writeFileSync(process.env.E2E_EXPECTED, lines.join(""));
 // H2: the overlay that labels every service, volume and network of the
-// resolved config with the invocation id (labels only; names unchanged).
-const label = { labels: { [process.env.E2E_LABEL]: process.env.E2E_INVOCATION } };
+// resolved config with the invocation id; R1: and names every volume and
+// network with the invocation-unique name above.
+const label = { labels: { [process.env.E2E_LABEL]: invocation } };
 const overlay = { services: {}, volumes: {}, networks: {} };
 for (const svc of Object.keys(cfg.services || {})) overlay.services[svc] = label;
-for (const kind of ["volumes", "networks"]) for (const key of Object.keys(cfg[kind] || {})) overlay[kind][key] = label;
+for (const kind of ["volumes", "networks"]) for (const key of Object.keys(cfg[kind] || {})) overlay[kind][key] = { name: unique[kind][key], ...label };
 require("node:fs").writeFileSync(process.env.E2E_INVOCATION_OVERLAY, JSON.stringify(overlay));
 console.log(`e2e-full: resolved config OK — project ${project}; networks ${names.networks.join(", ") || "-"}; volumes ${names.volumes.join(", ") || "-"}; containers ${names.containers.join(", ") || "-"}`);
 '; then
@@ -267,12 +312,20 @@ console.log(`e2e-full: resolved config OK — project ${project}; networks ${nam
 	exit 1
 fi
 
-# EXPECTED-NAME INSPECTION (G2): every volume and network name the resolved
-# config names must be ABSENT, whatever its labels. A labelled one is a
-# leftover (listed above); one without this project's label is not this
-# harness's at all, and no removal command is offered for it, because
-# `down --volumes` would remove a same-named volume regardless of its label.
-# (The config's container names are fixed to the two checked above.)
+# EXPECTED-NAME INSPECTION (G2): every volume and network name this run will
+# create — the resolved config's names with this invocation's id appended
+# (R1) — must be ABSENT, whatever its labels, so they are listed UNFILTERED
+# here, once the names are known: a label filter cannot see a foreign or
+# unlabelled volume holding one, and Compose would reuse an existing volume of
+# that name. A labelled one is a leftover (listed above); one without this
+# project's label is not this harness's at all, and no removal command is
+# offered for it. (The config's container names are fixed to the two checked
+# above.) A failed listing is a refusal.
+if ! all_volumes=$(docker volume ls --format '{{.Name}}') ||
+	! all_networks=$(docker network ls --format '{{.Name}}'); then
+	echo "e2e-full: REFUSING — could not list Docker volumes and networks to prove the names this run creates are absent" >&2
+	exit 1
+fi
 foreign=""
 while IFS=$'\t' read -r kind name; do
 	case "$kind" in
@@ -290,11 +343,13 @@ if [ -n "$leftovers$foreign" ]; then
 		printf '%s' "$leftovers$foreign"
 		echo "The harness deletes nothing it did not create in this run."
 		if [ -n "$foreign" ]; then
-			echo "A volume or network holding one of this project's names without its label belongs to something else, and a project down with --volumes would remove such a volume by name. Inspect it (docker volume inspect / docker network inspect) and resolve it by hand; no removal command is offered while one exists."
+			echo "A volume or network holding one of the names this run creates without the project's label belongs to something else. Inspect it (docker volume inspect / docker network inspect) and resolve it by hand; no removal command is offered while one exists."
 		else
-			echo "If these are a previous harness run's, an operator may remove them with:"
-			echo "  docker compose -p $E2E_PROJECT -f $E2E_DEV_COMPOSE -f $E2E_MAIL_OVERLAY --profile app down --volumes"
-			echo "A container whose project label is not $E2E_PROJECT is not removed by that command; inspect it and decide by hand."
+			if [ -n "$remove_commands" ]; then
+				echo "If these are a previous harness run's (no harness run is active), an operator may remove each by its own name:"
+				printf '%s' "$remove_commands"
+			fi
+			echo "A container whose project label is not $E2E_PROJECT is not this harness's; inspect it and decide by hand."
 		fi
 	} >&2
 	exit 1
@@ -354,6 +409,11 @@ record_created() {
 # and nothing else: each container and network by ID, each volume by name, only
 # after re-inspecting that its ID (or creation time) and invocation label still
 # match (the harness's own disposable appliance; AGENTS.md's one exemption).
+# A volume is removed by name only when that name carries this invocation's id
+# (R1): Docker has no conditional removal, so between the last inspection and
+# the removal another writer could replace a volume under a shared name; under
+# an invocation-unique name no other writer creates one. A recorded volume
+# without the id in its name is refused, not removed.
 # Anything of the project, or holding one of its container, volume or network
 # names, that is not in the record — a foreign same-project container, a
 # same-name replacement, whatever its labels — is TEARDOWN REFUSED: not removed,
@@ -423,6 +483,16 @@ remove_recorded() {
 			;;
 		volume)
 			listed "$id" "$all_v" || continue
+			# R1: Docker removes a volume by name, with no identity
+			# precondition, so a name is removed only when it is one no other
+			# writer produces: this invocation's own (it ends with the id).
+			case "$id" in
+			*"_$E2E_INVOCATION") ;;
+			*)
+				strange+="  volume $id (its name does not carry this invocation's id, so a removal by name could reach another writer's volume)"$'\n'
+				continue
+				;;
+			esac
 			got=$(docker volume inspect --format "{{.CreatedAt}} {{index .Labels \"$E2E_LABEL\"}}" "$id") || got=""
 			if [ "$got" != "$t $E2E_INVOCATION" ]; then
 				strange+="  volume $id (replaced since it was recorded: its creation time or invocation label changed)"$'\n'
