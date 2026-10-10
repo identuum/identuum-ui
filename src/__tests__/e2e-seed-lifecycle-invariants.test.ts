@@ -52,7 +52,10 @@ describe("the e2e site_admin seed never outlives its appliance [SEED-NEVER-OUTLI
     // It must come BEFORE the teardown that destroys the appliance, so the
     // ordering reads as "this seed belongs to a stack that is about to die".
     const downIdx = sh.indexOf('docker volume rm "$id"');
-    expect(downIdx, "the harness must still destroy the stack, its volume included").toBeGreaterThan(-1);
+    expect(
+      downIdx,
+      "the harness must still destroy the stack, its volume included"
+    ).toBeGreaterThan(-1);
     expect(rmIdx, "the seed is deleted at run start, ahead of the teardown").toBeLessThan(downIdx);
   });
 

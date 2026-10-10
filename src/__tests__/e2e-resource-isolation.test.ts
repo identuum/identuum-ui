@@ -486,7 +486,9 @@ function expectRecordedRemovalAfterCreate(r: RunResult): void {
     CREATED_REMOVALS
   );
   for (const c of removed) {
-    expect(r.calls.indexOf(c), "the teardown follows the startup it cleans").toBeGreaterThan(create);
+    expect(r.calls.indexOf(c), "the teardown follows the startup it cleans").toBeGreaterThan(
+      create
+    );
   }
   expect(remaining(r), "nothing the run created is left").toEqual([]);
 }
@@ -641,7 +643,10 @@ describe("full-run.sh inspects every expected name and holds one invocation clai
       expect(makeCalls(r).filter((c) => c.argv.includes("oss-up"))).toEqual([]);
       expect(downs(r), "the second invocation owns no appliance").toEqual([]);
       expect(removals(r)).toEqual([]);
-      expect(r.calls.filter((c) => c.tool === "docker"), "no docker call at all").toEqual([]);
+      expect(
+        r.calls.filter((c) => c.tool === "docker"),
+        "no docker call at all"
+      ).toEqual([]);
       expect(r.out).toContain(lockOf(r.root));
       expect(existsSync(join(r.root, tmp, LOCK)), "no claim is taken under TMPDIR").toBe(false);
       expect(readFileSync(join(lockOf(r.root), "pid"), "utf8")).toBe("424242\n");
@@ -679,14 +684,20 @@ describe("full-run.sh removes only what this invocation recorded creating [H2]",
       r.calls.some((c) => c.tool === "replaced-by-other-invocation"),
       "control: the daemon model replaced the created volume"
     ).toBe(true);
-    expect(downs(r), "a project label is shared; this replacement was not created by the run").toEqual([]);
+    expect(
+      downs(r),
+      "a project label is shared; this replacement was not created by the run"
+    ).toEqual([]);
     expect(removals(r).filter((c) => c.argv[0] === "volume")).toEqual([]);
-    expect(remaining(r), "the replacement survives; the run's own containers and network do not").toEqual([
-      "v/identuum-e2e_postgres-idp-oss-data-v18",
-    ]);
+    expect(
+      remaining(r),
+      "the replacement survives; the run's own containers and network do not"
+    ).toEqual(["v/identuum-e2e_postgres-idp-oss-data-v18"]);
     expect(r.status).not.toBe(0);
     expect(r.out).toMatch(/TEARDOWN REFUSED/);
-    expect(r.out).toMatch(/identuum-e2e_postgres-idp-oss-data-v18 \(replaced since it was recorded/);
+    expect(r.out).toMatch(
+      /identuum-e2e_postgres-idp-oss-data-v18 \(replaced since it was recorded/
+    );
   });
 
   it("REVIEW-H2: a foreign container of the same project is not removed; the run's own resources are; the run is red", () => {
@@ -696,7 +707,11 @@ describe("full-run.sh removes only what this invocation recorded creating [H2]",
       "control: a same-project container appeared during the run"
     ).toBe(true);
     expect(downs(r), "a project-level down would remove it").toEqual([]);
-    expect(removals(r).map((c) => c.argv.join(" ")).sort()).toEqual(CREATED_REMOVALS);
+    expect(
+      removals(r)
+        .map((c) => c.argv.join(" "))
+        .sort()
+    ).toEqual(CREATED_REMOVALS);
     expect(remaining(r), "only the foreign container is left").toEqual(["c/f1"]);
     expect(r.status).not.toBe(0);
     expect(r.out).toMatch(/TEARDOWN REFUSED/);
@@ -766,14 +781,22 @@ describe("full-run.sh cleans up exactly once and keeps the run's status [C5]", (
   it("a failed teardown turns an otherwise green run red", () => {
     const r = runRunner({ env: { STUB_RM_STATUS: "3" } });
     expect(r.status, r.out).not.toBe(0);
-    expect(removals(r).map((c) => c.argv.join(" ")).sort()).toEqual(CREATED_REMOVALS);
+    expect(
+      removals(r)
+        .map((c) => c.argv.join(" "))
+        .sort()
+    ).toEqual(CREATED_REMOVALS);
     expect(r.out).toMatch(/TEARDOWN REFUSED/);
   });
 
   it("a failed teardown never masks the original red status", () => {
     const r = runRunner({ env: { STUB_FAIL: "bootstrap", STUB_RM_STATUS: "3" } });
     expect(r.status, r.out).toBe(5);
-    expect(removals(r).map((c) => c.argv.join(" ")).sort()).toEqual(CREATED_REMOVALS);
+    expect(
+      removals(r)
+        .map((c) => c.argv.join(" "))
+        .sort()
+    ).toEqual(CREATED_REMOVALS);
   });
 });
 
