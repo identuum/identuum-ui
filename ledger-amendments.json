@@ -1,33 +1,5 @@
 {
   "schema_version": "ledger-amendments.v1",
-  "base_commit": "e41634e47997b267ae088688da13bfe302b1a5cc",
-  "changes": [
-    {
-      "rule_id": "E2E-RESOURCE-OWNERSHIP-1",
-      "change_class": "sentence_changed",
-      "after_sentence_sha256": "9b5de3140bb9bc05b2c028e69a89fed53f8ad1dd7c0cd9a3deb763f795e9de8a",
-      "reason": "OSS-MINT-GUARD-5 (2026-10-10, review OSS-MINT-GUARD-4 R1/R2, judge ruling Q-REPAIR (a), owner ruling Q-TOPOLOGY (b)): the runner refuses, right after its claim and before any other docker call, a DOCKER_HOST or Docker context endpoint that is not a unix socket on this host, and pins every later docker call to the checked endpoint; it names each volume and network it creates with its invocation id appended and removes a volume only under such a name, so a volume another writer puts under the config's name after the last inspection survives. Red on e41634e (29 of 49, REVIEW-R1 E-RACE and six REVIEW-R2 cases) and by mutation (ui-mutations.txt M1-M4)."
-    },
-    {
-      "rule_id": "E2E-RESOURCE-OWNERSHIP-1",
-      "change_class": "proof_changed",
-      "reason": "OSS-MINT-GUARD-5 (2026-10-10, review OSS-MINT-GUARD-4 R1/R2, judge ruling Q-REPAIR (a), owner ruling Q-TOPOLOGY (b)): the runner refuses, right after its claim and before any other docker call, a DOCKER_HOST or Docker context endpoint that is not a unix socket on this host, and pins every later docker call to the checked endpoint; it names each volume and network it creates with its invocation id appended and removes a volume only under such a name, so a volume another writer puts under the config's name after the last inspection survives. Red on e41634e (29 of 49, REVIEW-R1 E-RACE and six REVIEW-R2 cases) and by mutation (ui-mutations.txt M1-M4)."
-    },
-    {
-      "rule_id": "E2E-NAME-OWNERSHIP-1",
-      "change_class": "sentence_changed",
-      "after_sentence_sha256": "4494f9f2a54733a06d80ead77ab617a7d87e27e05b36de5728565031486af846",
-      "reason": "OSS-MINT-GUARD-5 (2026-10-10, review OSS-MINT-GUARD-4 R1): the names the runner looks for unfiltered are the names it will create, the config's names with the invocation id appended, listed once those names are known; the test's foreign volume and network take the run's own names. Red on e41634e (the foreign names were not seen) and by mutation (ui-mutations.txt M5)."
-    },
-    {
-      "rule_id": "E2E-NAME-OWNERSHIP-1",
-      "change_class": "proof_changed",
-      "reason": "OSS-MINT-GUARD-5 (2026-10-10, review OSS-MINT-GUARD-4 R1): the names the runner looks for unfiltered are the names it will create, the config's names with the invocation id appended, listed once those names are known; the test's foreign volume and network take the run's own names. Red on e41634e (the foreign names were not seen) and by mutation (ui-mutations.txt M5)."
-    },
-    {
-      "rule_id": "E2E-NAME-OWNERSHIP-1",
-      "change_class": "test_fingerprint_changed",
-      "reason": "OSS-MINT-GUARD-5 (2026-10-10, review OSS-MINT-GUARD-4 R1): the names the runner looks for unfiltered are the names it will create, the config's names with the invocation id appended, listed once those names are known; the test's foreign volume and network take the run's own names. Red on e41634e (the foreign names were not seen) and by mutation (ui-mutations.txt M5)."
-    }
-  ]
+  "base_commit": "d57b596eea00a33adbee64aa0e99147f43133616",
+  "changes": []
 }
