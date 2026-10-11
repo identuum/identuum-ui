@@ -140,12 +140,18 @@ function expectInspectionOnly(out: string): void {
   expect(out).toContain("Removal is a manual owner decision.");
 }
 
+// OSS-ALLOWLIST-NULL-FIX: Docker Compose 5.6.0 `config --format json` writes
+// command and entrypoint as null on every service that sets neither.
 const SAFE_CONFIG = {
   name: "scratch-e2e",
   services: {
-    "postgres-idp-oss": { container_name: "scratch-e2e-postgres" },
-    app: { container_name: "scratch-e2e" },
-    "mail-sink": {},
+    "postgres-idp-oss": {
+      container_name: "scratch-e2e-postgres",
+      command: null,
+      entrypoint: null,
+    },
+    app: { container_name: "scratch-e2e", command: null, entrypoint: null },
+    "mail-sink": { command: null, entrypoint: null },
   },
   networks: { default: { name: "scratch-e2e_default" } },
   volumes: { "postgres-idp-oss-data-v18": { name: "scratch-e2e_postgres-idp-oss-data-v18" } },
@@ -868,6 +874,10 @@ describe("full-run.sh refuses a resolved config it does not own [C1]", () => {
     },
     "build ssh": { image: "scratch-e2e:x", build: { context: ".", ssh: ["default"] } },
     "build privileged": { image: "scratch-e2e:x", build: { context: ".", privileged: true } },
+    "a command": { command: ["sh", "-c", "id"] },
+    "a command string": { command: "sh -c id" },
+    "an entrypoint": { entrypoint: ["/bin/sh"] },
+    "an empty entrypoint": { entrypoint: [] },
   })) {
     variants[`N1 ${label}`] = {
       ...SAFE_CONFIG,
@@ -980,6 +990,11 @@ describe("N1/N2: the reviewed allowlist accepts the harness's own shape (OSS-TEA
     };
     const r = runRunner({ config });
     expect(r.out).toMatch(/resolved config OK/);
+  });
+  it("the Compose 5.6.0 shape, command and entrypoint null on every service, is accepted", () => {
+    const r = runRunner({ config: SAFE_CONFIG });
+    expect(r.out).toMatch(/resolved config OK/);
+    expect(r.out).not.toMatch(/unreviewed key/);
   });
   it("the validator body carries no single quote, so the shell quoting around it holds", () => {
     const text = readFileSync(resolve(REPO, "e2e-full/scripts/full-run.sh"), "utf8");

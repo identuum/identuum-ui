@@ -528,10 +528,13 @@ if (svcs.slice().sort().join(" ") !== allowed.slice().sort().join(" ")) bad.push
 // invocation label; logging only json-file with size options; a mount
 // is a named volume of this project or a tmpfs; a network belongs to this project,
 // with aliases only, none protected; a port is a reserved one on 127.0.0.1.
+// OSS-ALLOWLIST-NULL-FIX: command and entrypoint are accepted only as null,
+// which Compose 5.6.0 writes for every service that sets neither.
 const KEYS = ["build", "container_name", "depends_on", "environment", "healthcheck", "image", "labels", "logging", "networks", "ports", "profiles", "restart", "volumes"];
+const NULL_ONLY = ["command", "entrypoint"];
 for (const [svc, def] of Object.entries(cfg.services || {})) {
 	if (!def) continue;
-	for (const key of Object.keys(def)) if (!KEYS.includes(key)) bad.push(`service ${svc} sets unreviewed key ${key}`);
+	for (const key of Object.keys(def)) if (!KEYS.includes(key) && !(NULL_ONLY.includes(key) && def[key] === null)) bad.push(`service ${svc} sets unreviewed key ${key}`);
 	for (const key of Object.keys(def.build || {})) if (key !== "context" && key !== "dockerfile") bad.push(`service ${svc} sets unreviewed build key ${key}`);
 	for (const [k, v] of Object.entries(def.labels || {})) if (k !== process.env.E2E_LABEL || v !== invocation) bad.push(`service ${svc} sets label ${k}`);
 	const log = def.logging;
