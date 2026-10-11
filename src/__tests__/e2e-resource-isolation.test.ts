@@ -30,6 +30,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -131,6 +132,13 @@ const LOCK = "identuum-harness.lock";
 const LOCK_LINE = "E2E_LOCK=/tmp/identuum-harness.lock";
 /** Where the layout's copy keeps the claim (see layout()). */
 const lockOf = (root: string) => join(root, "fixed", LOCK);
+const DELETING_ADVICE =
+  /docker\s+(?:(?:container\s+)?rm\b|(?:volume|network)\s+rm\b|[^\n]*\bprune\b|compose[^\n]*\bdown\s+[^\n]*(?:-v\b|--volumes\b))/;
+
+function expectInspectionOnly(out: string): void {
+  expect(out, "refusal must offer no deleting command").not.toMatch(DELETING_ADVICE);
+  expect(out).toContain("Removal is a manual owner decision.");
+}
 
 const SAFE_CONFIG = {
   name: "scratch-e2e",
@@ -326,6 +334,10 @@ for a in "$@"; do
 done
 for a in "$@"; do
   if [ "$a" = oss-up ]; then
+    if [ "\${STUB_FAIL:-}" = oss-up-before-create ]; then
+      log failed-before-create oss-up
+      exit 7
+    fi
     if [ "\${STUB_G6_NESTED:-}" = 1 ]; then
       "$STUB_REAL_MAKE" --no-print-directory -f "$STUB_NATIVE_COMPOSE" oss-up "\${@:3}" || exit "$?"
     fi
@@ -671,7 +683,11 @@ const createdPaths = (r: RunResult) => ["c/c1", "c/c2", "c/c3", "n/n1", `v/${vol
  * the record, whose public manifest.json says refused (SPEC K2, K5).
  */
 function expectRetained(r: RunResult): void {
+  expectInspectionOnly(r.out);
   expect(existsSync(lockOf(r.root)), "the claim is kept").toBe(true);
+  // N5 (OSS-TEARDOWN-MESSAGES): the record names the invocation id; only this
+  // user reads it.
+  expect(statSync(lockOf(r.root)).mode & 0o777, "the kept claim is mode 700").toBe(0o700);
   expect(existsSync(join(r.root, "state/mutex")), "the daemon mutex is kept").toBe(true);
   const manifest = JSON.parse(readFileSync(join(lockOf(r.root), "manifest.json"), "utf8"));
   expect(manifest.state, "the kept record says refused").toBe("refused");
@@ -824,6 +840,40 @@ describe("full-run.sh refuses a resolved config it does not own [C1]", () => {
       },
     },
   };
+  // N1/N2 (OSS-TEARDOWN-MESSAGES): one reviewed allowlist of service keys and
+  // values; anything else is refused.
+  for (const [label, svc] of Object.entries({
+    "cap_add DAC_READ_SEARCH": { cap_add: ["DAC_READ_SEARCH"] },
+    "security_opt unconfined": { security_opt: ["seccomp=unconfined"] },
+    "userns_mode host": { userns_mode: "host" },
+    "a volume_driver plugin": { volume_driver: "some-plugin" },
+    "deploy devices": {
+      deploy: { resources: { reservations: { devices: [{ capabilities: ["gpu"] }] } } },
+    },
+    "an env_file host path": { env_file: [{ path: "/Users/someone/.pgpass", required: true }] },
+    tmpfs: { tmpfs: ["/run"] },
+    "a remote logging driver": {
+      logging: { driver: "syslog", options: { "syslog-address": "udp://203.0.113.1:514" } },
+    },
+    "an impersonating label": { labels: { "com.docker.compose.project": "identuum-idp-oss" } },
+    "a fixed network address": { networks: { default: { ipv4_address: "10.0.0.2" } } },
+    "build network host": { image: "scratch-e2e:x", build: { context: ".", network: "host" } },
+    "build additional_contexts": {
+      image: "scratch-e2e:x",
+      build: { context: ".", additional_contexts: { h: "/" } },
+    },
+    "build secrets": {
+      image: "scratch-e2e:x",
+      build: { context: ".", secrets: [{ source: "s", target: "s" }] },
+    },
+    "build ssh": { image: "scratch-e2e:x", build: { context: ".", ssh: ["default"] } },
+    "build privileged": { image: "scratch-e2e:x", build: { context: ".", privileged: true } },
+  })) {
+    variants[`N1 ${label}`] = {
+      ...SAFE_CONFIG,
+      services: { ...SAFE_CONFIG.services, "mail-sink": svc },
+    };
+  }
   for (const key of [
     "volumes_from",
     "external_links",
@@ -867,6 +917,7 @@ describe("R-ADV creation evidence and anonymous mounts", () => {
       ).toEqual([]);
       expect(existsSync(lockOf(r.root))).toBe(true);
       expect(r.out).toMatch(/TEARDOWN REFUSED/);
+      expectInspectionOnly(r.out);
     });
   }
   for (const label of ["scratch-e2e", "-"]) {
@@ -881,40 +932,100 @@ describe("R-ADV creation evidence and anonymous mounts", () => {
   }
 });
 
+describe("N3: a run that fails before it created anything releases the claim (OSS-TEARDOWN-MESSAGES)", () => {
+  it("an oss-up that fails before creating anything removes nothing and releases the claim and the mutex", () => {
+    const r = runRunner({ env: { STUB_FAIL: "oss-up-before-create" } });
+    expect(r.status, r.out).not.toBe(0);
+    expect(removals(r)).toEqual([]);
+    expect(r.out).toMatch(/e2e-full: teardown \(project scratch-e2e/);
+    expect(existsSync(lockOf(r.root)), "the claim is released").toBe(false);
+    expect(existsSync(join(r.root, "state/mutex")), "the daemon mutex is released").toBe(false);
+  });
+  it("an oss-up that fails after creating part of the project refuses the whole teardown and keeps the claim", () => {
+    const r = runRunner({ env: { STUB_FAIL: "oss-up" } });
+    expect(r.status, r.out).not.toBe(0);
+    expect(removals(r)).toEqual([]);
+    expect(r.out).toMatch(/TEARDOWN REFUSED/);
+    expectRetained(r);
+  });
+});
+
+describe("N1/N2: the reviewed allowlist accepts the harness's own shape (OSS-TEARDOWN-MESSAGES)", () => {
+  it("a config using every reviewed key with reviewed values is accepted", () => {
+    const config = {
+      ...SAFE_CONFIG,
+      services: {
+        "postgres-idp-oss": {
+          container_name: "scratch-e2e-postgres",
+          image: "postgres:18-bookworm",
+          environment: { A: "b" },
+          healthcheck: { test: ["CMD", "pg_isready"] },
+          volumes: [
+            { type: "volume", source: "postgres-idp-oss-data-v18", target: "/var/lib/postgresql" },
+          ],
+          networks: { default: null },
+        },
+        app: {
+          container_name: "scratch-e2e",
+          build: { context: "/r", dockerfile: "deployment/Dockerfile.local" },
+          image: "scratch-e2e:local",
+          depends_on: { "postgres-idp-oss": { condition: "service_healthy", required: true } },
+          restart: "unless-stopped",
+          profiles: ["app"],
+          logging: { driver: "json-file", options: { "max-size": "1m" } },
+          networks: { default: { aliases: ["app"] } },
+        },
+        "mail-sink": { image: "mail", profiles: ["app"] },
+      },
+    };
+    const r = runRunner({ config });
+    expect(r.out).toMatch(/resolved config OK/);
+  });
+  it("the validator body carries no single quote, so the shell quoting around it holds", () => {
+    const text = readFileSync(resolve(REPO, "e2e-full/scripts/full-run.sh"), "utf8");
+    const a = text.indexOf(" node -e '\n") + " node -e '\n".length;
+    expect(text.slice(a, text.indexOf("\n'; then", a))).not.toContain("'");
+  });
+});
+
 describe("full-run.sh refuses leftovers instead of deleting them [Q2(b)]", () => {
-  // OSS-MINT-GUARD-5 (R1): the operator's command removes each labelled
-  // leftover by its own name. A project-level `down --volumes` is never
-  // offered: it removes the config's volume and network names, which this
-  // harness no longer creates, so a volume holding one is not the harness's.
+  // Labels are findings, never authority for manual deletion advice.
   const cases: Record<string, { env: Record<string, string>; command: string | null }> = {
     "a labelled container": {
       env: { STUB_CONTAINERS: "scratch-e2e-mail-sink-1\\tscratch-e2e\\n" },
-      command: "docker rm -f -v scratch-e2e-mail-sink-1",
+      command: "scratch-e2e-mail-sink-1",
     },
     "a labelled volume": {
       env: { STUB_VOLUMES: "scratch-e2e_postgres-idp-oss-data-v18_0123\\n" },
-      command: "docker volume rm scratch-e2e_postgres-idp-oss-data-v18_0123",
+      command: "scratch-e2e_postgres-idp-oss-data-v18_0123",
     },
     "a labelled network": {
       env: { STUB_NETWORKS: "scratch-e2e_default_0123\\n" },
-      command: "docker network rm scratch-e2e_default_0123",
+      command: "scratch-e2e_default_0123",
     },
     "a same-named container of another project": {
       env: { STUB_CONTAINERS: "scratch-e2e-postgres\\tsomeone-else\\n" },
-      command: null,
+      command: "scratch-e2e-postgres",
+    },
+    "a protected-name container with a copied project label": {
+      env: { STUB_CONTAINERS: "identuum-idp-oss-postgres\\tscratch-e2e\\n" },
+      command: "identuum-idp-oss-postgres",
     },
   };
   for (const [label, { env, command }] of Object.entries(cases)) {
-    it(`${label}: refuses with the operator's explicit command and runs nothing destructive`, () => {
+    it(`${label}: offers inspection only and runs nothing destructive`, () => {
       const r = runRunner({ env });
       expect(r.status, r.out).not.toBe(0);
       expect(resourceActions(r)).toEqual([]);
       expect(makeCalls(r)).toEqual([]);
       expect(removals(r)).toEqual([]);
       expect(r.out).toMatch(/REFUSING/);
+      expectInspectionOnly(r.out);
       expect(r.out, "no project-level down is offered").not.toMatch(/ down --volumes/);
-      if (command) expect(r.out).toContain(`  ${command}\n`);
-      else
+      if (command) {
+        expect(r.out).toContain(command);
+        expect(r.out).toMatch(/docker (?:volume |network )?inspect /);
+      } else
         expect(r.out, "nothing of another project is offered for removal").not.toMatch(
           /docker (rm|volume rm|network rm) /
         );
@@ -964,12 +1075,31 @@ describe("full-run.sh inspects every expected name and holds one invocation clai
     expect(composeCalls(r), "nothing of the running invocation is touched").toEqual([]);
     expect(r.out).toMatch(/REFUSING/);
     expect(r.out).toContain(lockOf(r.root));
+    expect(r.out).toContain("holder: no holder file");
     expect(
       r.out,
       "SPEC K2: the claim is shared with idp-oss devseed-live and openid-conformance"
     ).toMatch(/idp-oss devseed-live or openid-conformance/);
     expect(existsSync(join(lockOf(r.root), "pid")), "the other invocation's lock stays").toBe(true);
     expect(readFileSync(join(lockOf(r.root), "pid"), "utf8")).toBe("424242\n");
+  });
+
+  it("prints only the filtered first holder line, bounded to 80 characters", () => {
+    const first = `final-conformance scratch-test <>;\t${"x".repeat(90)}`;
+    const r = runRunner({
+      arrange: (root) => {
+        mkdirSync(lockOf(root));
+        writeFileSync(join(lockOf(root), "holder"), `${first}\nSECOND-LINE\n`);
+      },
+    });
+    const holder = first.replace(/[^A-Za-z0-9._ -]/g, "").slice(0, 80);
+    expect(r.out).toContain(`holder: ${holder}\n`);
+    expect(r.out).not.toContain("SECOND-LINE");
+    for (const kind of ["final-conformance", "testbook-fixtures", "human-acceptance"]) {
+      expect(r.out).toContain(kind);
+    }
+    expect(r.calls.filter((c) => c.tool === "docker")).toEqual([]);
+    expect(readFileSync(join(lockOf(r.root), "holder"), "utf8")).toBe(`${first}\nSECOND-LINE\n`);
   });
 
   it("REVIEW-H1: a caller with another TMPDIR meets the same claim, so it refuses before any startup, docker call or teardown", () => {
@@ -1155,7 +1285,9 @@ describe("full-run.sh removes a volume only under its own invocation-unique name
     expectRetained(r);
     expect(r.status).not.toBe(0);
     expect(r.out).toMatch(/TEARDOWN REFUSED/);
-    expect(r.out).toMatch(/creation record is missing or incomplete/);
+    // N3 (OSS-TEARDOWN-MESSAGES): the empty record sealed before the start
+    // stays the record, so what the failed record step left is unrecorded.
+    expect(r.out).toMatch(/not recorded as created by this run/);
   });
 });
 

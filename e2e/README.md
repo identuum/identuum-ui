@@ -125,7 +125,7 @@ run is killed, the container stays and the next run refuses, naming it:
 check that no e2e-full, e2e-quick, devseed-live or openid-conformance run is
 active, inspect it
 (`docker container inspect identuum-harness-lock-engine`, labels
-`io.identuum.harness.*`), then remove it by its ID. The run also records the
+`io.identuum.harness.*`). Removing it is a manual owner decision. The run also records the
 engine's ID (`docker info`) and checks it before every later Docker command;
 if another engine answers, the run stops all Docker commands, is red, and
 leaves the mutex in place. These checks do not prove where a unix socket
@@ -171,9 +171,11 @@ its volume) is found BEFORE the first removal, and then nothing at all is
 removed — not the run's own resources either: the teardown prints
 `TEARDOWN REFUSED` naming it, the run is red, and the claim, the mutex and
 the record stay. After the removals every recorded resource is checked gone;
-a failed removal or one still present is red and keeps them too. Resolve the
-named resources by hand, then remove the mutex by its ID and the claim
-directory.
+a failed removal or one still present is red and keeps them too. The
+refusal prints read-only inspection commands (`docker inspect`,
+`docker network inspect`, `docker volume inspect`) for what it found and
+never a removal command. Removal of those resources, the mutex and the
+claim directory is a manual owner decision.
 
 ### Security
 

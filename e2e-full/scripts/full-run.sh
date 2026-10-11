@@ -174,14 +174,26 @@ NESTED_VARS=(COMPOSE_CMD="docker compose" IDENTUUM_IDP_COMPOSE_PROJECT="$E2E_PRO
 # authority reserves every harness project and port together. A claim that
 # outlives its run (a refused teardown keeps it, below) is refused here.
 E2E_LOCK=/tmp/identuum-harness.lock
+# N5 (OSS-TEARDOWN-MESSAGES): the claim and its record are readable by this
+# user only; the record carries the invocation id.
+umask 077
 if ! mkdir "$E2E_LOCK" 2>/dev/null; then
+	# The holder line is another writer's text: first line only, filtered to
+	# [A-Za-z0-9._ -], at most 80 characters.
+	holder='no holder file'
+	if [ -f "$E2E_LOCK/holder" ]; then
+		IFS= read -r holder <"$E2E_LOCK/holder" || true
+		holder=$(printf '%s' "$holder" | LC_ALL=C tr -cd 'A-Za-z0-9._ -' | cut -c1-80)
+	fi
 	{
-		echo "e2e-full: REFUSING — could not take the harness claim $E2E_LOCK (it already exists: another harness run on this machine may hold it — e2e-full, e2e-quick, idp-oss devseed-live or openid-conformance, whatever its TMPDIR — or a refused teardown kept it, with its record)"
-		echo "Read $E2E_LOCK/manifest.json when present: it names the run, its project and the resources it recorded. Remove that directory only after confirming no harness run is active and those resources are gone."
+		echo "e2e-full: REFUSING — could not take the harness claim $E2E_LOCK (it already exists: another harness run on this machine may hold it — e2e-full, e2e-quick, idp-oss devseed-live or openid-conformance, final-conformance, testbook-fixtures or human-acceptance, whatever its TMPDIR — or a refused teardown kept it, with its record)"
+		echo "e2e-full: holder: $holder"
+		echo "Read $E2E_LOCK/manifest.json when present: it names the run, its project and the resources it recorded. Removal is a manual owner decision."
 	} >&2
 	exit 1
 fi
 echo "$$" >"$E2E_LOCK/pid"
+printf 'e2e-%s %s\n' "${E2E_MODE:-full}" "$E2E_PROJECT" >"$E2E_LOCK/holder"
 # Names only: what the resolved config expects (written by its validation
 # below) and, once proven absent, the names this run will create.
 E2E_EXPECTED="$E2E_LOCK/expected"
@@ -199,12 +211,44 @@ E2E_MANIFEST="$E2E_LOCK/manifest.json"
 # changed (SPEC K2, K5). Ownership is released only after every recorded
 # object is proved gone.
 E2E_RETAIN=0
+# OSS-TEARDOWN-MESSAGES: a refusal prints what was found and READ-ONLY
+# commands to inspect it — never a deleting command; removal is the owner's
+# manual decision. Advice is printed, never executed (an engine-change
+# refusal permits no further docker call). The format shows identity and
+# ownership labels only, never configuration or environment.
+inspection_command() {
+	local kind=$1 id=$2 format cmd
+	case "$kind" in
+	container) cmd='docker inspect'; format='{{.Id}} {{.Name}} {{index .Config.Labels "com.docker.compose.project"}} {{index .Config.Labels "io.identuum.harness.invocation"}}' ;;
+	network) cmd='docker network inspect'; format='{{.Id}} {{.Name}} {{index .Labels "com.docker.compose.project"}} {{index .Labels "io.identuum.harness.invocation"}}' ;;
+	volume) cmd='docker volume inspect'; format='{{.Name}} {{.CreatedAt}} {{index .Labels "com.docker.compose.project"}} {{index .Labels "io.identuum.harness.invocation"}}' ;;
+	*) return 0 ;;
+	esac
+	printf '  found %s %s; inspect its ID, name and ownership labels:\n    %s --format %q %q\n' "$kind" "$id" "$cmd" "$format" "$id"
+}
+inspection_advice() {
+	local kind id created
+	echo "Removal is a manual owner decision. Inspect on the original engine ${E2E_ENGINE_ID:-} (${E2E_DOCKER_ENDPOINT:-}); the commands below are read-only."
+	echo "Recorded project $E2E_PROJECT, invocation label $E2E_LABEL=$E2E_INVOCATION (a record, not proof of current ownership). List the project's objects:"
+	printf '    docker %s --filter %q\n' "ps -a" "label=com.docker.compose.project=$E2E_PROJECT" "volume ls" "label=com.docker.compose.project=$E2E_PROJECT" "network ls" "label=com.docker.compose.project=$E2E_PROJECT"
+	if [ -f "$E2E_CREATED" ]; then
+		while read -r kind id created; do
+			[ -n "$id" ] || continue
+			inspection_command "$kind" "$id"
+			[ "$kind" != volume ] || echo "    (recorded creation time $created)"
+		done <"$E2E_CREATED"
+	fi
+	inspection_command container "${E2E_MUTEX:-identuum-harness-lock-engine}"
+}
 release_claim() {
 	if [ "$E2E_RETAIN" = 1 ]; then
-		echo "e2e-full: the harness claim $E2E_LOCK is KEPT with this run's record ($E2E_MANIFEST, $E2E_CREATED): what it created was not all proved gone. Inspect the resources the record names, resolve them by hand, then remove $E2E_LOCK (and the daemon mutex ${E2E_MUTEX:-identuum-harness-lock-engine}, by its ID, if it is still there)" >&2
+		{
+			echo "e2e-full: the harness claim $E2E_LOCK is KEPT with this run's record ($E2E_MANIFEST, $E2E_CREATED): what it created was not all proved gone. The claim and the daemon mutex stay until the owner decides."
+			inspection_advice
+		} >&2
 		return 0
 	fi
-	rm -f "$E2E_LOCK/pid" "$E2E_EXPECTED" "$E2E_INVENTORY" "$E2E_INVOCATION_OVERLAY" "$E2E_CREATED" "$E2E_CREATED.part" "$E2E_CREATED.complete" "$E2E_CREATED.complete.part" "$E2E_LOCK/engine-changed" "$E2E_MANIFEST" "$E2E_MANIFEST.part"
+	rm -f "$E2E_LOCK/pid" "$E2E_LOCK/holder" "$E2E_EXPECTED" "$E2E_INVENTORY" "$E2E_INVOCATION_OVERLAY" "$E2E_CREATED" "$E2E_CREATED.part" "$E2E_CREATED.complete" "$E2E_CREATED.complete.part" "$E2E_LOCK/engine-changed" "$E2E_MANIFEST" "$E2E_MANIFEST.part"
 	rmdir "$E2E_LOCK" 2>/dev/null ||
 		echo "e2e-full: could not release the harness claim $E2E_LOCK — remove it once no harness run is active" >&2
 }
@@ -245,7 +289,7 @@ release_mutex() {
 	fi
 	if [ -e "$E2E_LOCK/engine-changed" ]; then
 		E2E_RETAIN=1
-		echo "e2e-full: the daemon mutex $E2E_MUTEX was not released — the Docker daemon answering is not the engine checked at preflight (its ID changed, or it did not answer); no further docker command was run, and the mutex is left on the engine it was taken on: inspect that engine by hand" >&2
+		echo "e2e-full: the daemon mutex $E2E_MUTEX was not released — the Docker daemon answering is not the engine checked at preflight (its ID changed, or it did not answer); no further docker command was run, and the mutex is left on the engine it was taken on. Removal is a manual owner decision. Inspect that engine read-only: docker container inspect $E2E_MUTEX" >&2
 		return 1
 	fi
 	got=$(docker container inspect --format "$E2E_MUTEX_FORMAT" "$m") || got=""
@@ -254,7 +298,7 @@ release_mutex() {
 		return 0
 	fi
 	E2E_RETAIN=1
-	echo "e2e-full: the daemon mutex $E2E_MUTEX is no longer this run's, or could not be removed; it was left in place: inspect it (docker container inspect $E2E_MUTEX) by hand" >&2
+	echo "e2e-full: the daemon mutex $E2E_MUTEX is no longer this run's, or could not be removed; it was left in place. Removal is a manual owner decision. Inspect it read-only: docker container inspect $E2E_MUTEX" >&2
 	return 1
 }
 # Until the teardown is armed (below), every exit releases the claim and only
@@ -343,8 +387,8 @@ docker() {
 # creates no volume), --pull=never: an absent image is a refusal. Held through
 # the teardown and removed by its ID after its labels are re-read
 # (release_mutex). One that already exists — another run's, or a killed run's
-# — is never removed here: the refusal names it, for an operator to inspect
-# and remove by its ID once no harness run is active. The claim stays as well.
+# — is never removed here: the refusal names it with a read-only inspection
+# command; removal is a manual owner decision. The claim stays as well.
 E2E_MUTEX=identuum-harness-lock-engine
 E2E_MUTEX_IMAGE=gcr.io/distroless/static-debian12@sha256:d75cdd72874d4790092fcb1b058493ecf6bb5bf2b2b897045b00ff01d91843f2
 E2E_MUTEX_FORMAT='{{.Id}} {{index .Config.Labels "io.identuum.harness.mutex-owner"}} {{index .Config.Labels "io.identuum.harness.engine"}}'
@@ -364,7 +408,7 @@ if ! E2E_MUTEX_ID=$(docker container create --name "$E2E_MUTEX" --pull=never --n
 	E2E_MUTEX_ID=""
 	{
 		echo "e2e-full: REFUSING — could not take the daemon mutex: container $E2E_MUTEX could not be created on this engine. Another harness run (e2e-full, e2e-quick, idp-oss devseed-live or openid-conformance, from any filesystem namespace) holds it, or a killed run left it; it is never removed automatically."
-		echo "Inspect it (docker container inspect $E2E_MUTEX; labels io.identuum.harness.*) and remove it by its ID only after confirming that no harness run is active on this engine (nothing was started)."
+		echo "Removal is a manual owner decision. Inspect it read-only (docker container inspect $E2E_MUTEX; labels io.identuum.harness.*) (nothing was started)."
 	} >&2
 	exit 1
 fi
@@ -400,14 +444,13 @@ rm -f "$UI_DIR/e2e-full/.auth/full-site-admin-totp"
 # project scratch-e2e only if it creates it: anything already carrying the
 # project's label, or a container already holding one of its fixed names
 # (whatever its labels), may be another run's or another stack's. The harness
-# never deletes such leftovers by assumption — it refuses, and prints the one
-# commands an operator may run to remove the scratch-e2e project's own
-# leftovers, each by its own name (OSS-MINT-GUARD-5, R1: never a project-level
-# `down --volumes`, which removes the config's volume and network names, and
-# this harness no longer creates those). Read-only listings only; nothing here
-# creates or removes anything. A failed listing is a refusal.
+# never deletes such leftovers by assumption — it refuses, and prints what it
+# found with a read-only inspection command for each (OSS-TEARDOWN-MESSAGES:
+# a label proves no creation authority, so no removal command is ever offered;
+# removal is the owner's manual decision). Read-only listings only; nothing
+# here creates or removes anything. A failed listing is a refusal.
 leftovers=""
-remove_commands=""
+inspect_commands=""
 if ! containers=$(docker ps -a --format '{{.Names}}	{{.Label "com.docker.compose.project"}}') ||
 	! volumes=$(docker volume ls --filter "label=com.docker.compose.project=$E2E_PROJECT" --format '{{.Name}}') ||
 	! networks=$(docker network ls --filter "label=com.docker.compose.project=$E2E_PROJECT" --format '{{.Name}}'); then
@@ -418,11 +461,11 @@ while IFS=$'\t' read -r name project; do
 	[ -n "$name" ] || continue
 	if [ "$project" = "$E2E_PROJECT" ] || [ "$name" = "$E2E_APP_CONTAINER" ] || [ "$name" = "$E2E_PROJECT-postgres" ]; then
 		leftovers+="  container $name (project label: ${project:-none})"$'\n'
-		[ "$project" != "$E2E_PROJECT" ] || remove_commands+="  docker rm -f -v $name"$'\n'
+		inspect_commands+=$(inspection_command container "$name")$'\n'
 	fi
 done <<<"$containers"
-while read -r name; do [ -z "$name" ] || { leftovers+="  volume $name"$'\n'; remove_commands+="  docker volume rm $name"$'\n'; }; done <<<"$volumes"
-while read -r name; do [ -z "$name" ] || { leftovers+="  network $name"$'\n'; remove_commands+="  docker network rm $name"$'\n'; }; done <<<"$networks"
+while read -r name; do [ -z "$name" ] || { leftovers+="  volume $name"$'\n'; inspect_commands+=$(inspection_command volume "$name")$'\n'; }; done <<<"$volumes"
+while read -r name; do [ -z "$name" ] || { leftovers+="  network $name"$'\n'; inspect_commands+=$(inspection_command network "$name")$'\n'; }; done <<<"$networks"
 
 # RESOLVED-CONFIG VALIDATION (C1): what Compose will actually act on, read
 # before the first resource action. `config` creates nothing. The resolved
@@ -477,31 +520,36 @@ const allowed = (process.env.E2E_SERVICES || "").split(" ").filter(Boolean);
 const ports = (process.env.E2E_PORTS || "").split(" ").filter(Boolean);
 const svcs = Object.keys(cfg.services || {});
 if (svcs.slice().sort().join(" ") !== allowed.slice().sort().join(" ")) bad.push(`services ${svcs.join(",") || "-"} are not exactly ${allowed.join(",")}`);
+// N1/N2 (OSS-TEARDOWN-MESSAGES): ONE reviewed allowlist of service keys and
+// values, the same rule in all three harnesses (idp-oss devseed-live and
+// openid-conformance): a key not on it is refused (cap_add, privileged,
+// userns_mode, volume_driver, devices, security_opt, deploy, env_file, a host
+// namespace, ...); build takes context and dockerfile only; labels only the
+// invocation label; logging only json-file with size options; a mount
+// is a named volume of this project or a tmpfs; a network belongs to this project,
+// with aliases only, none protected; a port is a reserved one on 127.0.0.1.
+const KEYS = ["build", "container_name", "depends_on", "environment", "healthcheck", "image", "labels", "logging", "networks", "ports", "profiles", "restart", "volumes"];
 for (const [svc, def] of Object.entries(cfg.services || {})) {
 	if (!def) continue;
-	if (def.privileged) bad.push(`service ${svc} is privileged`);
-	for (const key of ["volumes_from", "external_links", "links", "network_mode", "pid", "ipc", "uts", "use_api_socket", "devices", "device_cgroup_rules", "gpus", "configs", "secrets", "provider", "develop", "post_start", "pre_stop", "credential_spec", "runtime", "cgroup", "cgroup_parent", "extra_hosts"]) {
-		if (def[key] !== undefined) bad.push(`service ${svc} sets forbidden reference key ${key}`);
-	}
-	for (const m of def.volumes || []) {
-		if (m && m.type === "volume" && (!m.source || !Object.hasOwn(cfg.volumes || {}, m.source))) bad.push(`service ${svc} has an unowned volume source`);
-	}
-	for (const key of Object.keys(def.networks || {})) if (!Object.hasOwn(cfg.networks || {}, key)) bad.push(`service ${svc} has an unowned network`);
-
-	for (const mode of ["network_mode", "pid", "ipc"]) {
-		const v = def[mode];
-		if (typeof v === "string" && (v === "host" || v.startsWith("container:") || v.startsWith("service:"))) bad.push(`service ${svc} ${mode} ${v}`);
+	for (const key of Object.keys(def)) if (!KEYS.includes(key)) bad.push(`service ${svc} sets unreviewed key ${key}`);
+	for (const key of Object.keys(def.build || {})) if (key !== "context" && key !== "dockerfile") bad.push(`service ${svc} sets unreviewed build key ${key}`);
+	for (const [k, v] of Object.entries(def.labels || {})) if (k !== process.env.E2E_LABEL || v !== invocation) bad.push(`service ${svc} sets label ${k}`);
+	const log = def.logging;
+	if (log && (log.driver !== "json-file" || Object.keys(log).some((k) => k !== "driver" && k !== "options") || Object.keys(log.options || {}).some((k) => k !== "max-size" && k !== "max-file"))) bad.push(`service ${svc} logs through an unreviewed driver or option`);
+	if (def.restart !== undefined && !["no", "always", "on-failure", "unless-stopped"].includes(def.restart)) bad.push(`service ${svc} restart ${def.restart}`);
+	for (const [key, n] of Object.entries(def.networks || {})) {
+		if (!Object.hasOwn(cfg.networks || {}, key)) bad.push(`service ${svc} has an unowned network`);
+		for (const k of Object.keys(n || {})) if (k !== "aliases") bad.push(`service ${svc} sets unreviewed network key ${k}`);
+		for (const a of (n && n.aliases) || []) if (prot(a)) bad.push(`service ${svc} alias ${a}`);
 	}
 	for (const m of def.volumes || []) {
 		if (!m || m.type !== "volume" && m.type !== "tmpfs") bad.push(`service ${svc} mounts a ${(m && m.type) || "host"} path`);
+		else if (m.type === "volume" && (!m.source || !Object.hasOwn(cfg.volumes || {}, m.source))) bad.push(`service ${svc} has an unowned volume source`);
 	}
 	for (const p of def.ports || []) {
 		if (!p || p.host_ip !== "127.0.0.1" || !ports.includes(String(p.published))) bad.push(`service ${svc} publishes ${(p && p.host_ip) || "*"}:${(p && p.published) || "?"}`);
 	}
 	if (def.build && !(typeof def.image === "string" && def.image.startsWith(`${project}:`))) bad.push(`service ${svc} builds image ${def.image || "-"}`);
-	for (const n of Object.values(def.networks || {})) {
-		for (const a of (n && n.aliases) || []) if (prot(a)) bad.push(`service ${svc} alias ${a}`);
-	}
 }
 for (const [key, def] of Object.entries(cfg.networks || {})) {
 	if (def && (def.driver_opts || def.driver && def.driver !== "bridge")) bad.push(`network ${key} uses an unreviewed host/plugin driver`);
@@ -556,22 +604,16 @@ while IFS=$'\t' read -r kind name; do
 	esac
 	if listed "$name" "$all" && ! listed "$name" "$own"; then
 		foreign+="  $kind $name (exists without the project label $E2E_PROJECT: not this harness's)"$'\n'
+		inspect_commands+=$(inspection_command "$kind" "$name")$'\n'
 	fi
 done <"$E2E_EXPECTED"
 if [ -n "$leftovers$foreign" ]; then
 	{
 		echo "e2e-full: REFUSING — resources of project $E2E_PROJECT, its container names or its volume/network names already exist:"
 		printf '%s' "$leftovers$foreign"
-		echo "The harness deletes nothing it did not create in this run."
-		if [ -n "$foreign" ]; then
-			echo "A volume or network holding one of the names this run creates without the project's label belongs to something else. Inspect it (docker volume inspect / docker network inspect) and resolve it by hand; no removal command is offered while one exists."
-		else
-			if [ -n "$remove_commands" ]; then
-				echo "If these are a previous harness run's (no harness run is active), an operator may remove each by its own name:"
-				printf '%s' "$remove_commands"
-			fi
-			echo "A container whose project label is not $E2E_PROJECT is not this harness's; inspect it and decide by hand."
-		fi
+		echo "The harness deletes nothing it did not create in this run. A project label or a name proves no creation authority."
+		echo "Removal is a manual owner decision. The commands below are read-only:"
+		printf '%s' "$inspect_commands"
 	} >&2
 	exit 1
 fi
@@ -632,6 +674,15 @@ record_created() {
 			echo "volume $v $t"
 		done
 	} >"$E2E_CREATED.part" || return 1
+	seal_record
+}
+# seal_record publishes E2E_CREATED.part as the record, with the manifest and
+# the cksum seal over both. N3 (OSS-TEARDOWN-MESSAGES): an EMPTY record is
+# sealed before the first creating command, so a run that fails before it
+# created anything tears down nothing, proves its project empty and releases
+# the claim and the mutex; anything of the project found then is still
+# unrecorded, and refuses.
+seal_record() {
 	mv "$E2E_CREATED.part" "$E2E_CREATED" && write_manifest created && cksum "$E2E_CREATED" "$E2E_MANIFEST" >"$E2E_CREATED.complete.part" && mv "$E2E_CREATED.complete.part" "$E2E_CREATED.complete"
 }
 
@@ -785,7 +836,7 @@ remove_recorded() {
 				failed+="  container $id (its identity changed right before its removal; not removed)"$'\n'
 				continue
 			fi
-			docker rm -f "$id" >/dev/null || failed+="  container $id (docker rm failed)"$'\n'
+			docker rm -f "$id" >/dev/null || failed+="  container $id (its removal failed)"$'\n'
 			;;
 		network)
 			awk '{print $1}' <<<"$all_n" | grep -qxF -- "$id" || continue
@@ -794,7 +845,7 @@ remove_recorded() {
 				failed+="  network $id (its identity changed right before its removal; not removed)"$'\n'
 				continue
 			fi
-			docker network rm "$id" >/dev/null || failed+="  network $id (docker network rm failed)"$'\n'
+			docker network rm "$id" >/dev/null || failed+="  network $id (its removal failed)"$'\n'
 			;;
 		volume)
 			listed "$id" "$all_v" || continue
@@ -803,7 +854,7 @@ remove_recorded() {
 				failed+="  volume $id (replaced right before its removal: its creation time or invocation label changed; not removed)"$'\n'
 				continue
 			fi
-			docker volume rm "$id" >/dev/null || failed+="  volume $id (docker volume rm failed)"$'\n'
+			docker volume rm "$id" >/dev/null || failed+="  volume $id (its removal failed)"$'\n'
 			;;
 		esac
 	done <"$E2E_CREATED"
@@ -828,7 +879,7 @@ teardown() {
 		teardown_done=1
 		if [ ! -f "$E2E_CREATED.complete" ] || [ ! -f "$E2E_CREATED" ] || [ ! -f "$E2E_MANIFEST" ] || [ "$(cksum "$E2E_CREATED" "$E2E_MANIFEST")" != "$(cat "$E2E_CREATED.complete")" ]; then
 			E2E_RETAIN=1
-			echo "e2e-full: TEARDOWN REFUSED for project $E2E_PROJECT — the creation record is missing or incomplete, so nothing was removed; labels cannot reconstruct creation evidence; inspect the project's containers, networks and volumes and remove them by hand" >&2
+			echo "e2e-full: TEARDOWN REFUSED for project $E2E_PROJECT — the creation record is missing or incomplete, so nothing was removed; labels cannot reconstruct creation evidence" >&2
 			[ "$status" -ne 0 ] || status=1
 		elif refused=$(remove_recorded); then
 			echo "e2e-full: teardown (project $E2E_PROJECT: removed only what this run recorded creating, each by ID after rechecking its identity, and proved every one gone; no project-level down)"
@@ -837,7 +888,7 @@ teardown() {
 			{
 				echo "e2e-full: TEARDOWN REFUSED for project $E2E_PROJECT — these were not created by this run, changed identity, are attached to what it created, or could not be removed or proved gone:"
 				printf '%s' "$refused"
-				echo "Nothing else was removed. Inspect them (docker inspect / docker network inspect / docker volume inspect) and resolve them by hand."
+				echo "Nothing else was removed."
 			} >&2
 			[ "$status" -ne 0 ] || status=1
 		fi
@@ -848,6 +899,10 @@ teardown() {
 	release_claim
 	exit "$status"
 }
+if ! { : >"$E2E_CREATED.part" && seal_record; }; then
+	echo "e2e-full: REFUSING — the empty creation record could not be sealed (nothing was started)" >&2
+	exit 1
+fi
 trap teardown EXIT
 
 echo "e2e-full: rebuilding + starting the appliance (oss-up, INSECURE_DEV_MODE)"
