@@ -15,8 +15,15 @@
 #                     REFUSES any Docker endpoint but this host's own engine
 #                     through a unix socket, and pins every later docker call
 #                     to that endpoint (OSS-MINT-GUARD-5, review
-#                     OSS-MINT-GUARD-4 R2, owner ruling Q-TOPOLOGY (b)): the
-#                     claim serializes only callers on this host
+#                     OSS-MINT-GUARD-4 R2, owner ruling Q-TOPOLOGY (b)).
+#                     OSS-MINT-GUARD-6 (review OSS-MINT-GUARD-5 F1, F2): a
+#                     COMPOSE_CMD other than exactly `docker compose` is
+#                     refused before the claim; the engine's ID is recorded
+#                     and re-checked before every later docker call; and the
+#                     daemon mutex, the never-started container
+#                     identuum-harness-lock-engine, is created on that engine
+#                     before any resource call and held through the teardown,
+#                     so callers with different /tmp claims are serialized too
 #   1. ownership    — REFUSES when anything of project identuum-e2e (or a
 #                     container named identuum-e2e / identuum-e2e-postgres)
 #                     already exists, validates the resolved Compose config
@@ -76,6 +83,21 @@ set -euo pipefail
 # command or the nested make below.
 unset COMPOSE_PROJECT_NAME COMPOSE_REMOVE_ORPHANS
 
+# OSS-MINT-GUARD-6 (review OSS-MINT-GUARD-5 F1): the Compose command is the
+# harness's, not the caller's. idp-oss's nested make starts the appliance with
+# $(COMPOSE_CMD), and a COMPOSE_CMD carrying a docker global option (--host,
+# -H, --context, -c or any other) would start it on an engine the topology
+# check below never saw. Inherited from the environment, from a make command
+# line (`make e2e-full COMPOSE_CMD=...` exports it) or through `make -e`, any
+# value but exactly `docker compose` is refused here, before the claim and any
+# docker command; the nested make is then handed COMPOSE_CMD='docker compose'
+# on its own command line.
+if [ "${COMPOSE_CMD-docker compose}" != "docker compose" ]; then
+	echo "e2e-full: REFUSING — COMPOSE_CMD is not exactly 'docker compose'. The harness fixes its Compose command: a global option in it (--host, -H, --context, -c or any other) would select an engine the topology check never saw. Unset COMPOSE_CMD (no docker command was run)" >&2
+	exit 1
+fi
+unset COMPOSE_CMD
+
 UI_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 IDP_DIR=$(cd "$UI_DIR/../identuum-idp-oss" && pwd)
 
@@ -115,9 +137,9 @@ export IDENTUUM_E2E_FULL_IDP_ORIGIN="http://localhost:${E2E_APP_PORT}"
 # flags or Compose selectors, and is handed the project and ports on its
 # command line, so a caller's `make VAR=...` can never split the project the
 # startup uses from the one validated and torn down here (C1).
-NESTED_MAKE=(env -u MAKEFLAGS -u MAKEOVERRIDES -u MFLAGS -u COMPOSE_PROJECT_NAME -u COMPOSE_REMOVE_ORPHANS
+NESTED_MAKE=(env -u MAKEFLAGS -u MAKEOVERRIDES -u MFLAGS -u MAKEFILES -u COMPOSE_PROJECT_NAME -u COMPOSE_REMOVE_ORPHANS
 	make -C "$IDP_DIR")
-NESTED_VARS=(IDENTUUM_IDP_COMPOSE_PROJECT="$E2E_PROJECT" DEV_PG_HOST_PORT="$DEV_PG_HOST_PORT" DEV_APP_PORT="$E2E_APP_PORT")
+NESTED_VARS=(COMPOSE_CMD="docker compose" IDENTUUM_IDP_COMPOSE_PROJECT="$E2E_PROJECT" DEV_PG_HOST_PORT="$DEV_PG_HOST_PORT" DEV_APP_PORT="$E2E_APP_PORT")
 
 # EXCLUSIVE INVOCATION CLAIM (OSS-MINT-GUARD-3, review G2). The project name
 # and ports are fixed, so two invocations would share one identity: both could
@@ -153,15 +175,35 @@ E2E_INVOCATION=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
 E2E_INVOCATION_OVERLAY="$E2E_LOCK/invocation.json"
 E2E_CREATED="$E2E_LOCK/created"
 release_claim() {
-	rm -f "$E2E_LOCK/pid" "$E2E_EXPECTED" "$E2E_INVENTORY" "$E2E_INVOCATION_OVERLAY" "$E2E_CREATED" "$E2E_CREATED.part"
+	rm -f "$E2E_LOCK/pid" "$E2E_EXPECTED" "$E2E_INVENTORY" "$E2E_INVOCATION_OVERLAY" "$E2E_CREATED" "$E2E_CREATED.part" "$E2E_LOCK/engine-changed"
 	rmdir "$E2E_LOCK" 2>/dev/null ||
 		echo "e2e-full: could not release the harness claim $E2E_LOCK — remove it once no harness run is active" >&2
 }
+# release_mutex removes the daemon mutex this run created (E2E_MUTEX_ID, set
+# below), by its ID, after re-reading its owner and engine labels; it leaves it
+# and fails when the engine changed or the mutex is no longer this run's.
+E2E_MUTEX_ID=""
+release_mutex() {
+	local m="$E2E_MUTEX_ID" got
+	[ -n "$m" ] || return 0
+	E2E_MUTEX_ID=""
+	if [ -e "$E2E_LOCK/engine-changed" ]; then
+		echo "e2e-full: the daemon mutex $E2E_MUTEX was not released — the Docker daemon answering is not the engine checked at preflight (its ID changed, or it did not answer); no further docker command was run, and the mutex is left on the engine it was taken on: inspect that engine by hand" >&2
+		return 1
+	fi
+	got=$(docker container inspect --format "$E2E_MUTEX_FORMAT" "$m") || got=""
+	if [ "$got" = "$m $E2E_INVOCATION $E2E_ENGINE_ID" ] && docker container rm "$m" >/dev/null; then
+		return 0
+	fi
+	echo "e2e-full: the daemon mutex $E2E_MUTEX is no longer this run's, or could not be removed; it was left in place: inspect it (docker container inspect $E2E_MUTEX) by hand" >&2
+	return 1
+}
 # Until the teardown is armed (below), every exit releases the claim and only
-# the claim: this run has created nothing yet.
+# the claim (and the daemon mutex, once taken): this run has created nothing yet.
 release_claim_on_exit() {
 	local status=$?
 	trap - EXIT
+	release_mutex || [ "$status" -ne 0 ] || status=1
 	release_claim
 	exit "$status"
 }
@@ -175,11 +217,12 @@ fi
 
 # ONE SUPPORTED TOPOLOGY (OSS-MINT-GUARD-5, review OSS-MINT-GUARD-4 R2, owner
 # ruling Q-TOPOLOGY (b)): this host's own Docker engine, through a unix socket
-# on this host. The claim above is a directory on this host, so it serializes
-# only callers that share this host's filesystem; a client on another host or
-# in another filesystem namespace reaches the daemon through a remote endpoint
-# (tcp://, ssh://, another context), takes a different claim, and is refused
-# here, before any other docker call. The endpoint is resolved once, as the
+# on this host. A remote endpoint (tcp://, ssh://, a context naming one) is
+# refused here, before any other docker call. A unix socket can still be
+# forwarded, or shared with a caller in another filesystem namespace whose /tmp
+# holds another claim (review OSS-MINT-GUARD-5 F2): the daemon mutex below, not
+# this claim, is what serializes every harness caller of the engine, and the
+# engine's ID binds the run to it. The endpoint is resolved once, as the
 # docker CLI resolves it (DOCKER_HOST, else DOCKER_CONTEXT, else the current
 # context), and every later docker call, the nested make's included, is pinned
 # to it, so a context switched during the run cannot move it. No endpoint
@@ -187,7 +230,7 @@ fi
 refuse_topology() {
 	{
 		echo "e2e-full: REFUSING — $1"
-		echo "The harness supports exactly one topology: this host's own Docker engine, through a unix socket on this host (unix:///...), because its claim $E2E_LOCK serializes only callers on this host. Unset DOCKER_HOST and DOCKER_CONTEXT, or select the local context (docker context use <name>)."
+		echo "The harness supports exactly one topology: this host's own Docker engine, through a unix socket on this host (unix:///...). Unset DOCKER_HOST and DOCKER_CONTEXT, or select the local context (docker context use <name>)."
 	} >&2
 	exit 1
 }
@@ -202,6 +245,72 @@ if ! [[ "$E2E_DOCKER_ENDPOINT" =~ ^unix:/// ]]; then
 fi
 export DOCKER_HOST="$E2E_DOCKER_ENDPOINT"
 unset DOCKER_CONTEXT
+
+# ENGINE IDENTITY (OSS-MINT-GUARD-6, review OSS-MINT-GUARD-5 F2, judge ruling
+# Q2 (a)). The daemon's ID is recorded once the endpoint is pinned. Every later
+# docker call of this runner goes through docker() below, which first checks
+# that the same ID answers, and the nested oss-up checks it again (idp-oss
+# HARNESS_BINDING_CHECK). A changed or silent daemon makes every later docker
+# call fail: nothing more is listed, started or removed, the run is red, and
+# the daemon mutex stays where it was taken. The check precedes each call; an
+# engine switched inside one docker or Compose call is not seen. Docker's ID
+# names a daemon's data, not a machine: it does not prove where a forwarded
+# socket leads.
+if ! E2E_ENGINE_ID=$(docker info --format '{{.ID}}' 2>/dev/null) || [ -z "$E2E_ENGINE_ID" ]; then
+	refuse_topology "the Docker daemon did not report its ID, so this run cannot bind to the engine it checked"
+fi
+E2E_ENGINE_FLAG="$E2E_LOCK/engine-changed"
+docker() {
+	if [ ! -e "$E2E_ENGINE_FLAG" ] && [ "$(command docker info --format '{{.ID}}' 2>/dev/null)" = "$E2E_ENGINE_ID" ]; then
+		command docker "$@"
+		return
+	fi
+	: >"$E2E_ENGINE_FLAG"
+	echo "e2e-full: REFUSING docker $1 — the Docker daemon answering is not the engine checked at preflight (its ID changed, or it did not answer); no further docker command runs" >&2
+	return 1
+}
+
+# THE DAEMON MUTEX (OSS-MINT-GUARD-6, F2, judge ruling Q2 (a)). The claim
+# above is a directory in this caller's /tmp; a caller with another /tmp takes
+# another claim. So, before any resource call, the run also creates the
+# never-started container identuum-harness-lock-engine on the checked engine
+# (the name idp-oss's devseed-live takes too), and the daemon refuses a second
+# container of one name: a second harness run against this engine is refused
+# here, whatever its filesystem namespace. Created from the distroless image
+# idp-oss's deployment/Dockerfile.local pins (no VOLUME, so creating it
+# creates no volume), --pull=never: an absent image is a refusal. Held through
+# the teardown and removed by its ID after its labels are re-read
+# (release_mutex). One that already exists — another run's, or a killed run's
+# — is never removed here: the refusal names it, for an operator to inspect
+# and remove by its ID once no harness run is active. The claim stays as well.
+E2E_MUTEX=identuum-harness-lock-engine
+E2E_MUTEX_IMAGE=gcr.io/distroless/static-debian12@sha256:d75cdd72874d4790092fcb1b058493ecf6bb5bf2b2b897045b00ff01d91843f2
+E2E_MUTEX_FORMAT='{{.Id}} {{index .Config.Labels "io.identuum.harness.mutex-owner"}} {{index .Config.Labels "io.identuum.harness.engine"}}'
+if ! mutex_volumes=$(docker image inspect --format '{{json .Config.Volumes}}' "$E2E_MUTEX_IMAGE" 2>/dev/null); then
+	echo "e2e-full: REFUSING — the daemon mutex image $E2E_MUTEX_IMAGE is not on this engine; pull it once (docker pull $E2E_MUTEX_IMAGE) and re-run (nothing was started)" >&2
+	exit 1
+fi
+if [ "$mutex_volumes" != null ]; then
+	echo "e2e-full: REFUSING — the daemon mutex image $E2E_MUTEX_IMAGE declares a VOLUME, so creating the mutex would create a volume (nothing was started)" >&2
+	exit 1
+fi
+if ! E2E_MUTEX_ID=$(docker container create --name "$E2E_MUTEX" --pull=never --network=none --restart=no --read-only \
+	--label io.identuum.harness.mutex=engine-v1 --label "io.identuum.harness.mutex-owner=$E2E_INVOCATION" \
+	--label "io.identuum.harness.engine=$E2E_ENGINE_ID" --label io.identuum.harness.kind=e2e-full \
+	"$E2E_MUTEX_IMAGE" /identuum-harness-lock) || [ -z "$E2E_MUTEX_ID" ]; then
+	E2E_MUTEX_ID=""
+	{
+		echo "e2e-full: REFUSING — could not take the daemon mutex: container $E2E_MUTEX could not be created on this engine. Another harness run (e2e-full, e2e-quick or idp-oss devseed-live, from any filesystem namespace) holds it, or a killed run left it; it is never removed automatically."
+		echo "Inspect it (docker container inspect $E2E_MUTEX; labels io.identuum.harness.*) and remove it by its ID only after confirming that no harness run is active on this engine (nothing was started)."
+	} >&2
+	exit 1
+fi
+if [ "$(docker container inspect --format "$E2E_MUTEX_FORMAT" "$E2E_MUTEX_ID")" != "$E2E_MUTEX_ID $E2E_INVOCATION $E2E_ENGINE_ID" ]; then
+	echo "e2e-full: REFUSING — the daemon mutex $E2E_MUTEX read back is not the one this run created (nothing was started)" >&2
+	exit 1
+fi
+NESTED_VARS+=(IDENTUUM_HARNESS_ENGINE_ID="$E2E_ENGINE_ID" IDENTUUM_HARNESS_MUTEX_ID="$E2E_MUTEX_ID")
+echo "e2e-full: took the daemon mutex $E2E_MUTEX on the checked engine; held through the teardown"
 # listed NAME LIST: NAME is a whole line of LIST (an exact name match).
 listed() { grep -Fxq -- "$1" <<<"$2"; }
 
@@ -255,9 +364,11 @@ while read -r name; do [ -z "$name" ] || { leftovers+="  network $name"$'\n'; re
 # only) to $E2E_EXPECTED for the inspection and the inventory below. Those are
 # the names this run creates: each volume and network name the config
 # resolves to, with this invocation's id appended (OSS-MINT-GUARD-5, review
-# OSS-MINT-GUARD-4 R1), which the overlay gives Compose. No other writer
-# produces such a name, so the teardown's removal of a volume by name cannot
-# reach a volume another writer (re)created under the config's name.
+# OSS-MINT-GUARD-4 R1), which the overlay gives Compose. An ordinary stack
+# does not produce such a name, so the teardown's removal of a volume by name
+# cannot reach a volume another writer (re)created under the config's name; a
+# writer that copies this run's exact name is the accepted residual (judge
+# ruling Q3 (a), OSS-MINT-GUARD-6; see the teardown below).
 if ! "${E2E_COMPOSE[@]}" --profile app config --format json | E2E_PROJECT="$E2E_PROJECT" E2E_EXPECTED="$E2E_EXPECTED" E2E_LABEL="$E2E_LABEL" E2E_INVOCATION="$E2E_INVOCATION" E2E_INVOCATION_OVERLAY="$E2E_INVOCATION_OVERLAY" node -e '
 const project = process.env.E2E_PROJECT;
 let cfg;
@@ -411,9 +522,13 @@ record_created() {
 # match (the harness's own disposable appliance; AGENTS.md's one exemption).
 # A volume is removed by name only when that name carries this invocation's id
 # (R1): Docker has no conditional removal, so between the last inspection and
-# the removal another writer could replace a volume under a shared name; under
-# an invocation-unique name no other writer creates one. A recorded volume
-# without the id in its name is refused, not removed.
+# the removal another writer could replace a volume under a shared name; an
+# invocation-unique name keeps an ordinary stack's volume out of reach. A
+# recorded volume without the id in its name is refused, not removed. The
+# accepted residual (judge ruling Q3 (a), OSS-MINT-GUARD-6): a writer outside
+# the harness that copies this run's exact name from the daemon between the
+# last inspection and the removal can have its volume removed without a red
+# verdict; neither the claim nor the daemon mutex binds such a writer.
 # Anything of the project, or holding one of its container, volume or network
 # names, that is not in the record — a foreign same-project container, a
 # same-name replacement, whatever its labels — is TEARDOWN REFUSED: not removed,
@@ -484,8 +599,9 @@ remove_recorded() {
 		volume)
 			listed "$id" "$all_v" || continue
 			# R1: Docker removes a volume by name, with no identity
-			# precondition, so a name is removed only when it is one no other
-			# writer produces: this invocation's own (it ends with the id).
+			# precondition, so a name is removed only when it is this
+			# invocation's own (it ends with the id); a writer that copies the
+			# exact name is the accepted residual described above.
 			case "$id" in
 			*"_$E2E_INVOCATION") ;;
 			*)
@@ -524,6 +640,7 @@ teardown() {
 			[ "$status" -ne 0 ] || status=1
 		fi
 		rm -f "$FIXTURE_FILE" "$ADMIN_RESET_ENVELOPE"
+		release_mutex || [ "$status" -ne 0 ] || status=1
 	fi
 	release_claim
 	exit "$status"

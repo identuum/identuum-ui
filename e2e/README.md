@@ -97,10 +97,34 @@ it refuses, before any other Docker command, a `DOCKER_HOST` that is not a
 `unix:///` socket, and a Docker context (`DOCKER_CONTEXT` or the current one)
 whose endpoint is not one, such as `tcp://` or `ssh://`; every later Docker
 command of the run, the nested `oss-up` included, is pinned to the checked
-endpoint. The reason: the claim is a directory on this computer, so it cannot
-keep out a client on another computer that uses the same engine. A unix
-socket forwarded from another computer, or shared into a container with its
-own `/tmp`, looks local and is not detected; do not run the harness that way.
+endpoint. Before the claim it also refuses a `COMPOSE_CMD` that is not
+exactly `docker compose` (from the environment, a `make e2e-full
+COMPOSE_CMD=...` command line, or `make -e`): an option such as `--host`,
+`-H`, `--context` or `-c` in it would start the appliance on another engine.
+The nested `make oss-up` gets `COMPOSE_CMD='docker compose'` on its own
+command line, with `MAKEFLAGS`, `MAKEOVERRIDES`, `MFLAGS` and `MAKEFILES`
+cleared, and checks the binding below again before it builds or starts.
+
+The claim keeps out a second run that sees the same `/tmp`. A run with
+another `/tmp` (a container sharing the Docker socket, another mount
+namespace) is kept out by the daemon mutex: before it lists or starts
+anything, the run creates a stopped container named
+`identuum-harness-lock-engine` on the checked engine, and Docker refuses a
+second container of that name. identuum-idp-oss's `make devseed-live` takes
+the same mutex. The container is made from the distroless image that
+identuum-idp-oss's `deployment/Dockerfile.local` pins
+(`gcr.io/distroless/static-debian12@sha256:d75cdd72...`); the run never pulls
+it, and when it is missing the run refuses and prints the `docker pull`
+command. It is never started, and it is removed by its ID at the end. When a
+run is killed, the container stays and the next run refuses, naming it:
+check that no e2e-full, e2e-quick or devseed-live run is active, inspect it
+(`docker container inspect identuum-harness-lock-engine`, labels
+`io.identuum.harness.*`), then remove it by its ID. The run also records the
+engine's ID (`docker info`) and checks it before every later Docker command;
+if another engine answers, the run stops all Docker commands, is red, and
+leaves the mutex in place. These checks do not prove where a unix socket
+leads: a socket forwarded from another computer can answer with a stable ID,
+and an engine switched inside one Docker command is not seen.
 
 Before it creates anything it refuses leftovers of project `identuum-e2e`
 (and prints, for each labelled one, the command that removes it by its own
@@ -108,7 +132,8 @@ name; never a project-level `down --volumes`). Every volume and network it
 creates is named with a random id of this invocation appended to the name
 the resolved Compose config gives it
 (`identuum-e2e_postgres-idp-oss-data-v18_<id>`, `identuum-e2e_default_<id>`),
-so no other stack or run creates the same name; those names are listed
+so an ordinary stack or another run does not create the same name by
+accident; those names are listed
 UNFILTERED, and one that already exists, whatever its labels, is a refusal
 (no removal command is offered for it). Those names, all proven absent, are
 the run's inventory. Every service, volume and network it starts carries a
@@ -119,8 +144,12 @@ On exit the teardown removes exactly those, each by ID after rechecking its
 identity and label, a volume only under a name carrying the invocation id,
 and runs no project-level `down`. Docker removes a volume by name with no
 check of its identity, so a volume replaced under a shared name between the
-last check and the removal would be removed; under the run's own name no
-other writer creates one. Anything of the project, or holding one of its
+last check and the removal would be removed; the run's own name keeps an
+ordinary stack's volume out of reach. One case is not caught: another Docker
+user that copies the run's exact volume name and puts a volume of their own
+under it in that interval has it removed, and the run is not red. Neither the
+claim nor the mutex stops a Docker user outside these harnesses. Anything of
+the project, or holding one of its
 names, that is not in that record (a foreign container of the same project,
 a volume replaced under the same name, a recorded volume without the id in
 its name) is not removed: the teardown prints `TEARDOWN REFUSED` naming it,
