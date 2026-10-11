@@ -124,7 +124,7 @@ test.describe("admin reset without customer data loss (destructive, last phase)"
     // The harness's OWN project (full-run.sh exports it; the app container is
     // named after it) — never a default that would name the dev stack's.
     const project = process.env.IDENTUUM_IDP_COMPOSE_PROJECT ?? "";
-    expect(project, "the harness exports its own Compose project").toBe("identuum-e2e");
+    expect(project, "the harness exports its own Compose project").toBe("scratch-e2e");
     const dsn = execFileSync(
       "docker",
       ["inspect", project, "--format", "{{range .Config.Env}}{{println .}}{{end}}"],

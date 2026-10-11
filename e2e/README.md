@@ -80,16 +80,20 @@ logins with the same 30-second code).
 
 Under `make e2e-full` / `make e2e-quick` the dev-loop phases run
 OUTER-OWNED (`IDENTUUM_E2E_FIXTURE_OWNER=outer`): the outer runner
-(`e2e-full/scripts/full-run.sh`, project `identuum-e2e`) provisions the
+(`e2e-full/scripts/full-run.sh`, project `scratch-e2e`) provisions the
 appliance and the envelope, global setup must reuse them or refuse, and global
 teardown makes no Compose call and keeps the envelope — the runner removes
 what it created once, on exit.
 
 The runner first takes an exclusive invocation claim, an atomic `mkdir` of
-`/tmp/identuum-e2e.lock` (holding its pid; one fixed path per machine,
+`/tmp/identuum-harness.lock` (holding its pid; one fixed path per machine,
 whatever `TMPDIR` says), and keeps it through its teardown; if the claim
-already exists it refuses and changes nothing. Remove a left-behind claim only
-after confirming no harness run is active.
+already exists it refuses and changes nothing. The claim is shared with
+identuum-idp-oss's `make devseed-live` and `make openid-conformance`, so no
+two harness runs share a host port. A claim kept by a refused teardown holds
+the run's record, `manifest.json` (see below). Remove a left-behind claim only
+after confirming no harness run is active and the resources its record names
+are gone.
 
 The harness supports exactly one setup: the Docker engine of this computer,
 reached through a unix socket on this computer. Right after taking the claim
@@ -110,14 +114,16 @@ another `/tmp` (a container sharing the Docker socket, another mount
 namespace) is kept out by the daemon mutex: before it lists or starts
 anything, the run creates a stopped container named
 `identuum-harness-lock-engine` on the checked engine, and Docker refuses a
-second container of that name. identuum-idp-oss's `make devseed-live` takes
-the same mutex. The container is made from the distroless image that
+second container of that name; the mutex carries the run's project and
+ports as labels. identuum-idp-oss's `make devseed-live` and
+`make openid-conformance` take the same mutex. The container is made from the distroless image that
 identuum-idp-oss's `deployment/Dockerfile.local` pins
 (`gcr.io/distroless/static-debian12@sha256:d75cdd72...`); the run never pulls
 it, and when it is missing the run refuses and prints the `docker pull`
 command. It is never started, and it is removed by its ID at the end. When a
 run is killed, the container stays and the next run refuses, naming it:
-check that no e2e-full, e2e-quick or devseed-live run is active, inspect it
+check that no e2e-full, e2e-quick, devseed-live or openid-conformance run is
+active, inspect it
 (`docker container inspect identuum-harness-lock-engine`, labels
 `io.identuum.harness.*`), then remove it by its ID. The run also records the
 engine's ID (`docker info`) and checks it before every later Docker command;
@@ -126,20 +132,28 @@ leaves the mutex in place. These checks do not prove where a unix socket
 leads: a socket forwarded from another computer can answer with a stable ID,
 and an engine switched inside one Docker command is not seen.
 
-Before it creates anything it refuses leftovers of project `identuum-e2e`
+Before it creates anything it refuses leftovers of project `scratch-e2e`
 (and prints, for each labelled one, the command that removes it by its own
 name; never a project-level `down --volumes`). Every volume and network it
 creates is named with a random id of this invocation appended to the name
 the resolved Compose config gives it
-(`identuum-e2e_postgres-idp-oss-data-v18_<id>`, `identuum-e2e_default_<id>`),
+(`scratch-e2e_postgres-idp-oss-data-v18_<id>`, `scratch-e2e_default_<id>`),
 so an ordinary stack or another run does not create the same name by
 accident; those names are listed
 UNFILTERED, and one that already exists, whatever its labels, is a refusal
-(no removal command is offered for it). Those names, all proven absent, are
+(no removal command is offered for it). The resolved Compose config is
+refused, too, unless its services are exactly the appliance's three, none is
+privileged or in the host's network, PID or IPC namespace, none mounts a
+folder of this computer, every published port is one the run reserved on
+`127.0.0.1`, the built image is named for the project and no network alias
+takes a protected name. Those names, all proven absent, are
 the run's inventory. Every service, volume and network it starts carries a
 label with the same id (`io.identuum.harness.invocation`, from a generated
 overlay), and right after the start the runner records what carries that
-label: containers and networks by ID, volumes by name and creation time.
+label: containers and networks by ID, volumes by name and creation time,
+with a public projection, `manifest.json` in the claim (the engine's ID and
+endpoint, project, invocation, ports, the mutex's ID and every recorded
+resource), rewritten whole after each step.
 On exit the teardown removes exactly those, each by ID after rechecking its
 identity and label, a volume only under a name carrying the invocation id,
 and runs no project-level `down`. Docker removes a volume by name with no
@@ -152,8 +166,14 @@ claim nor the mutex stops a Docker user outside these harnesses. Anything of
 the project, or holding one of its
 names, that is not in that record (a foreign container of the same project,
 a volume replaced under the same name, a recorded volume without the id in
-its name) is not removed: the teardown prints `TEARDOWN REFUSED` naming it,
-and the run is red.
+its name, a container of someone else attached to the run's network or using
+its volume) is found BEFORE the first removal, and then nothing at all is
+removed — not the run's own resources either: the teardown prints
+`TEARDOWN REFUSED` naming it, the run is red, and the claim, the mutex and
+the record stay. After the removals every recorded resource is checked gone;
+a failed removal or one still present is red and keeps them too. Resolve the
+named resources by hand, then remove the mutex by its ID and the claim
+directory.
 
 ### Security
 
@@ -278,12 +298,12 @@ scratch appliance (OSS-MINT-GUARD-2):
 
 - It runs only when the dev-loop phase is outer-owned
   (`IDENTUUM_E2E_FIXTURE_OWNER=outer`, set by `e2e-full/scripts/full-run.sh`
-  for `make e2e-full`) and the harness project is `identuum-e2e`. Anywhere
+  for `make e2e-full`) and the harness project is `scratch-e2e`. Anywhere
   else the spec does not attempt it and the two conditional tests self-skip;
   called directly without that context, the helper refuses before any
   process, query or HTTP request.
 - Its one SQL time-warp runs inside that project's postgres container:
-  `docker compose -p identuum-e2e -f ../identuum-idp-oss/deployment/docker-compose.dev.yml
+  `docker compose -p scratch-e2e -f ../identuum-idp-oss/deployment/docker-compose.dev.yml
   -f e2e-full/compose.mail-sink.yml --profile app exec -T postgres-idp-oss psql ...`
   (argv, no shell, the container's own socket — no host psql, no host port,
   no password). Its HTTP calls use the harness's own bases
@@ -308,7 +328,7 @@ scratch appliance (OSS-MINT-GUARD-2):
 **Important limitations:**
 
 - **Scratch-only.** No production-safe API endpoint exists for the expiry, so
-  the fixture mutates only the disposable `identuum-e2e` appliance, which the
+  the fixture mutates only the disposable `scratch-e2e` appliance, which the
   harness destroys at the end of the run.
 - **No local or development database.** There is no repair or setup procedure
   against a local stack: never point `psql` at a development database

@@ -134,7 +134,7 @@ afterEach(() => {
 
 function harness(): void {
   process.env.IDENTUUM_E2E_FIXTURE_OWNER = "outer";
-  process.env.IDENTUUM_IDP_COMPOSE_PROJECT = "identuum-e2e";
+  process.env.IDENTUUM_IDP_COMPOSE_PROJECT = "scratch-e2e";
   process.env.IDENTUUM_E2E_IDP_DIR = idpDir;
   process.env.IDENTUUM_E2E_BASE_URL = "http://localhost:17108";
   process.env.IDENTUUM_E2E_FULL_IDP_BASE = "http://127.0.0.1:17113";
@@ -157,7 +157,7 @@ function expectScratchOnly(): void {
     expect(p.args.slice(0, 12)).toEqual([
       "compose",
       "-p",
-      "identuum-e2e",
+      "scratch-e2e",
       "-f",
       join(idpDir, "deployment", "docker-compose.dev.yml"),
       "-f",
@@ -279,7 +279,7 @@ describe("the bases must be the selected owned harness endpoints [G4]", () => {
 describe("valid synthetic harness context: scratch project only [C2]", () => {
   const ORG = "11111111-2222-4333-8444-555555555555";
 
-  it("fresh appliance: creates the org through the harness UI and expires inside identuum-e2e", async () => {
+  it("fresh appliance: creates the org through the harness UI and expires inside scratch-e2e", async () => {
     harness();
     world.sql = (op) => (op === "SQL:SELECT" ? "" : "UPDATE 1");
     respond = (method) =>
@@ -295,7 +295,7 @@ describe("valid synthetic harness context: scratch project only [C2]", () => {
     ]);
   });
 
-  it("active fixture user: resets inside identuum-e2e and finds the org through the harness UI", async () => {
+  it("active fixture user: resets inside scratch-e2e and finds the org through the harness UI", async () => {
     harness();
     world.sql = (op) => (op === "SQL:SELECT" ? "active" : "UPDATE 1");
     respond = () => ({

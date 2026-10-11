@@ -12,11 +12,11 @@
  * SCRATCH-ONLY (OSS-MINT-GUARD-2, C2). The expired state needs one SQL
  * time-warp no API offers, so this fixture runs ONLY inside the e2e-full
  * harness's own disposable appliance: the outer-owned dev-loop phase
- * (IDENTUUM_E2E_FIXTURE_OWNER=outer) of Compose project identuum-e2e, whose
+ * (IDENTUUM_E2E_FIXTURE_OWNER=outer) of Compose project scratch-e2e, whose
  * resolved config full-run.sh validated before creating it. Without that
  * context it REFUSES before any process, query or HTTP request. There is no
  * host psql and no fixed port: SQL runs as
- *   docker compose -p identuum-e2e -f <idp-oss dev compose> -f <mail overlay>
+ *   docker compose -p scratch-e2e -f <idp-oss dev compose> -f <mail overlay>
  *     --profile app exec -T postgres-idp-oss psql ...
  * (argv, no shell), over the container's own socket; HTTP goes to the
  * harness's UI base (IDENTUUM_E2E_BASE_URL) and IdP base
@@ -60,7 +60,9 @@ const FIXTURE_ADMIN_EMAIL = "expired-admin@playwright-expired.local";
 // The e2e-full harness's own Compose project and its database, as
 // identuum-idp-oss deployment/docker-compose.dev.yml defines them (service
 // postgres-idp-oss, POSTGRES_USER idp_oss_user, POSTGRES_DB identuum_idp_oss).
-const SCRATCH_PROJECT = "identuum-e2e";
+// scratch-e2e since OSS-CANDIDATE-LIFECYCLE-FIX (SPEC K1: every
+// candidate-effective project is scratch-prefixed); full-run.sh sets it.
+const SCRATCH_PROJECT = "scratch-e2e";
 const SCRATCH_DB_SERVICE = "postgres-idp-oss";
 const SCRATCH_DB_USER = "idp_oss_user";
 const SCRATCH_DB_NAME = "identuum_idp_oss";
@@ -156,7 +158,7 @@ function scratchContext(): ScratchContext {
  * Ensures the fixture org is in the has_admin=true / can_assign_admin=true state.
  * Uses the already-authenticated siteAdminCtx — no second TOTP needed.
  * Refuses (throws) before any process or HTTP request unless the outer-owned
- * harness context is complete: project identuum-e2e, its compose files present,
+ * harness context is complete: project scratch-e2e, its compose files present,
  * and both bases on loopback http at the harness's selected ports.
  * @returns the fixture organization UUID
  */
@@ -197,7 +199,7 @@ export async function ensureExpiredPendingOrgFixture(
   return orgId;
 }
 
-// ── scratch SQL (inside the identuum-e2e postgres container only) ─────────────
+// ── scratch SQL (inside the scratch-e2e postgres container only) ──────────────
 
 /**
  * Runs one statement in the scratch project's postgres container: argv, no

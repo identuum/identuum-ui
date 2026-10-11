@@ -558,9 +558,11 @@ tool-versions:
 	@printf 'yq         %s  %s\n' "$$(yq --version 2>/dev/null | grep -oE 'v[0-9.]+' | head -1)" "$$(command -v yq || echo MISSING)"
 
 ## e2e-full: the DISPOSABLE full-behavior suite (THE-DISPOSABLE-HARNESS).
-## Runs as its OWN Compose project (identuum-e2e, Postgres on 127.0.0.1:15513,
+## Runs as its OWN Compose project (scratch-e2e since OSS-CANDIDATE-LIFECYCLE-FIX,
+## Postgres on 127.0.0.1:15513,
 ## app on 17113, dev-loop UI on 17108 — owner ruling t, 2026-10-07, declared
-## once in full-run.sh): holds an exclusive claim (/tmp/identuum-e2e.lock, one
+## once in full-run.sh): holds an exclusive claim (/tmp/identuum-harness.lock,
+## shared with identuum-idp-oss devseed-live and openid-conformance; one
 ## fixed path whatever TMPDIR says; an atomic mkdir; a held claim is a refusal) from before its first listing
 ## through its teardown, refuses leftovers of that project (OSS-MINT-GUARD-2)
 ## and any volume or network name its resolved config names that already
@@ -572,7 +574,9 @@ tool-versions:
 ## containers and networks by ID, the postgres volume by name and creation
 ## time), once on exit, each only after rechecking its identity, and never a
 ## project-level down; anything else of the project is TEARDOWN REFUSED, not
-## removed, red (OSS-MINT-GUARD-4). The operator's dev stack (project identuum-idp-oss-dev
+## removed, red (OSS-MINT-GUARD-4) — as one whole step: then nothing at all is
+## removed, and the claim, the daemon mutex and the run's manifest.json record
+## stay for an operator (OSS-CANDIDATE-LIFECYCLE-FIX, SPEC K5). The operator's dev stack (project identuum-idp-oss-dev
 ## since D-024, identuum-idp-oss before; 5513) is never touched; a host port it needs that is already taken is a
 ## refusal naming the holder. OPT-IN ONLY — never wired into verify, wiki make
 ## check, or CI.
