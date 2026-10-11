@@ -39,6 +39,13 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vites
 
 const REPO = resolve(__dirname, "..", "..");
 
+// Each runner case spawns the whole runner against PATH stubs — dozens of
+// stubbed docker calls, more since the whole-step teardown lists and checks
+// everything before and after its removals (OSS-CANDIDATE-LIFECYCLE-FIX). Under
+// the full suite's parallel load one case outran vitest's 5 s default; the
+// spawn itself stays bounded at 60 s (runRunner), and so is each case.
+vi.setConfig({ testTimeout: 60_000 });
+
 // ── execFileSync interception (TS lifecycle proofs) ─────────────────────────
 const cp = vi.hoisted(() => ({
   calls: [] as { file: string; args: string[]; env?: Record<string, string | undefined> }[],
