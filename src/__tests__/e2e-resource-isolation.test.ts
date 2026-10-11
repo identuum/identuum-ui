@@ -1272,9 +1272,10 @@ describe("full-run.sh cleans up exactly once and keeps the run's status [C5]", (
   it("every return in the runner names its status: a bare return reached from the EXIT trap answers the pre-trap status under bash 5.2", () => {
     const bare = /(^|[;{&|]|\bthen|\belse|\bdo)\s*return\s*($|[;}])/;
     expect(bare.test("\t\treturn"), "control: a bare return is found").toBe(true);
-    expect(bare.test("\tcommand docker; return; }"), "control: a bare return mid-line is found").toBe(
-      true
-    );
+    expect(
+      bare.test("\tcommand docker; return; }"),
+      "control: a bare return mid-line is found"
+    ).toBe(true);
     expect(bare.test('\t\treturn "$?"'), "control: a named status is not bare").toBe(false);
     const source = readFileSync(resolve(REPO, "e2e-full/scripts/full-run.sh"), "utf8");
     const found = source
