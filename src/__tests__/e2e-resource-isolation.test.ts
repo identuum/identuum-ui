@@ -264,7 +264,7 @@ case "$1 $2" in
   [ -z "$q" ] && { [ -n "$own" ] || [ -z "$filt" ]; } && printf '%b' "\${STUB_VOLUMES:-}"
   [ -z "$q" ] && [ -z "$filt" ] && foreign "\${STUB_FOREIGN_VOLUMES:-}"
   exit 0 ;;
-"network inspect") [ -e "$S/n/$last" ] || exit 1; read -r nm pj iv <"$S/n/$last"; echo "$last $iv"; exit 0 ;;
+"network inspect") [ -e "$S/n/$last" ] || exit 1; read -r nm pj iv <"$S/n/$last"; case "$fmt" in *index*) echo "$last $iv" ;; *) echo "$nm" ;; esac; exit 0 ;;
 "volume inspect")
   [ -e "$S/v/$last" ] || exit 1; read -r ct pj iv <"$S/v/$last"
   case "$fmt" in *index*) echo "$ct $iv" ;; *) echo "$ct" ;; esac
@@ -306,8 +306,13 @@ ps)
   exit 0 ;;
 inspect)
   case "$fmt" in *Config.Env*) echo "IDENTUUM_IDP_OSS_DB=synthetic-not-a-dsn"; exit 0 ;; esac
-  [ -e "$S/c/$last" ] || exit 1; read -r nm pj iv <"$S/c/$last"; echo "$last $iv"; exit 0 ;;
-rm) [ "\${STUB_RM_STATUS:-0}" = 0 ] || exit "$STUB_RM_STATUS"; [ "\${STUB_RM_NOOP:-}" = 1 ] || rm -f "$S/c/$last"; exit 0 ;;
+  [ -e "$S/c/$last" ] || exit 1; read -r nm pj iv <"$S/c/$last"
+  case "$fmt" in
+  *Mounts*) for v in "$S"/v/*; do [ -e "$v" ] && echo "\${v##*/}"; done ;;
+  *compose.project*) echo "$last $iv $pj /$nm" ;;
+  *) echo "$last $iv" ;;
+  esac; exit 0 ;;
+rm) case " $* " in *" -v "*) rm -f "$S/v/ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"; log implicit-anonymous-removal volume ;; esac; [ "\${STUB_RM_STATUS:-0}" = 0 ] || exit "$STUB_RM_STATUS"; [ "\${STUB_RM_NOOP:-}" = 1 ] || rm -f "$S/c/$last"; exit 0 ;;
 esac
 exit 0
 `;
@@ -378,6 +383,20 @@ if [ "$1" = step ]; then
   if [ "$name" = provisioner ] && [ "\${STUB_FOREIGN_CONTAINER:-}" = 1 ]; then
     echo "scratch-e2e-intruder-1 scratch-e2e someone-else" >"$STUB_STATE/c/f1"
     log foreign-container-started
+  fi
+  if [ "$name" = provisioner ]; then
+    if [ -n "\${STUB_RECORD_DAMAGE:-}" ]; then
+      read -r nm pj iv < "$STUB_STATE/c/c1"
+      echo "foreign-preserve foreign-project $iv" > "$STUB_STATE/c/spoof"
+    fi
+    case "\${STUB_RECORD_DAMAGE:-}" in
+    missing) rm -f "$(dirname "$STUB_OVERLAY")/created" ;;
+    incomplete) printf 'incomplete\\n' >> "$(dirname "$STUB_OVERLAY")/created" ;;
+    manifest) rm -f "$(dirname "$STUB_OVERLAY")/manifest.json" ;;
+    esac
+    if [ -n "\${STUB_ANONYMOUS:-}" ]; then
+      echo "2030-01-01T00:00:00Z \${STUB_ANONYMOUS} -" > "$STUB_STATE/v/ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    fi
   fi
   exit 0
 fi
@@ -638,9 +657,9 @@ const volumeOf = (r: RunResult) => `scratch-e2e_postgres-idp-oss-data-v18_${invo
  */
 const createdRemovals = (r: RunResult) => [
   "network rm n1",
-  "rm -f -v c1",
-  "rm -f -v c2",
-  "rm -f -v c3",
+  "rm -f c1",
+  "rm -f c2",
+  "rm -f c3",
   `volume rm ${volumeOf(r)}`,
 ];
 
@@ -698,6 +717,11 @@ describe("full-run.sh owns exactly one Compose project [C1/C5]", () => {
       r.calls.indexOf(removals(r)[0]),
       "the removals follow the last Compose action"
     ).toBeGreaterThan(lastCompose);
+    // Bind the missing-record refusal to the ownership rule's extracted span.
+    const damaged = runRunner({ env: { STUB_RECORD_DAMAGE: "missing" } });
+    expect(damaged.status, damaged.out).not.toBe(0);
+    expect(removals(damaged), "labels cannot replace creation evidence").toEqual([]);
+    expectRetained(damaged);
   });
 
   it("quick mode keeps the same ownership contract", () => {
@@ -800,6 +824,28 @@ describe("full-run.sh refuses a resolved config it does not own [C1]", () => {
       },
     },
   };
+  for (const key of [
+    "volumes_from",
+    "external_links",
+    "links",
+    "network_mode",
+    "pid",
+    "ipc",
+    "uts",
+    "use_api_socket",
+    "devices",
+    "configs",
+    "secrets",
+    "provider",
+  ]) {
+    variants[`R-ADV B2 ${key} outside this run`] = {
+      ...SAFE_CONFIG,
+      services: {
+        ...SAFE_CONFIG.services,
+        "mail-sink": { [key]: ["container:identuum-idp-oss-postgres:ro"] },
+      },
+    };
+  }
   for (const [label, config] of Object.entries(variants)) {
     it(`${label}: refuses before any up/down/exec or nested make`, () => {
       const r = runRunner({ config });
@@ -807,6 +853,30 @@ describe("full-run.sh refuses a resolved config it does not own [C1]", () => {
       expect(resourceActions(r).map((c) => composeSub(c.argv))).toEqual([]);
       expect(makeCalls(r)).toEqual([]);
       expect(r.out).toMatch(/REFUSING/);
+    });
+  }
+});
+
+describe("R-ADV creation evidence and anonymous mounts", () => {
+  for (const damage of ["missing", "incomplete", "manifest"]) {
+    it(`B1 ${damage}: retains resources, claim and mutex without reconstruction`, () => {
+      const r = runRunner({ env: { STUB_RECORD_DAMAGE: damage } });
+      expect(r.status, r.out).not.toBe(0);
+      expect(
+        r.calls.filter((c) => c.tool === "docker" && (c.argv[0] === "rm" || c.argv[1] === "rm"))
+      ).toEqual([]);
+      expect(existsSync(lockOf(r.root))).toBe(true);
+      expect(r.out).toMatch(/TEARDOWN REFUSED/);
+    });
+  }
+  for (const label of ["scratch-e2e", "-"]) {
+    it(`B3 anonymous mount, project label ${label}: refuses before any removal`, () => {
+      const r = runRunner({ env: { STUB_ANONYMOUS: label } });
+      expect(r.status, r.out).not.toBe(0);
+      expect(
+        r.calls.filter((c) => c.tool === "docker" && (c.argv[0] === "rm" || c.argv[1] === "rm"))
+      ).toEqual([]);
+      expect(existsSync(lockOf(r.root))).toBe(true);
     });
   }
 });
@@ -1085,9 +1155,7 @@ describe("full-run.sh removes a volume only under its own invocation-unique name
     expectRetained(r);
     expect(r.status).not.toBe(0);
     expect(r.out).toMatch(/TEARDOWN REFUSED/);
-    expect(r.out).toMatch(
-      /scratch-e2e_postgres-idp-oss-data-v18 \(its name does not carry this invocation's id/
-    );
+    expect(r.out).toMatch(/creation record is missing or incomplete/);
   });
 });
 
@@ -1320,11 +1388,15 @@ describe("full-run.sh runs only against this host's own Docker engine [R2, owner
 });
 
 describe("full-run.sh cleans up exactly once and keeps the run's status [C5]", () => {
-  it("nested startup fails after a partial create: what it created is recorded and removed by ID, status 7 kept", () => {
+  it("nested startup fails before recording: refuses teardown and retains claim and mutex, status 7 kept", () => {
     const r = runRunner({ env: { STUB_FAIL: "oss-up" } });
     expect(r.status, r.out).toBe(7);
     expect(r.calls.some((c) => c.tool === "partial-create")).toBe(true);
-    expectRecordedRemovalAfterCreate(r);
+    expect(
+      r.calls.filter((c) => c.tool === "docker" && (c.argv[0] === "rm" || c.argv[1] === "rm"))
+    ).toEqual([]);
+    expect(existsSync(lockOf(r.root))).toBe(true);
+    expect(r.out).toMatch(/TEARDOWN REFUSED/);
   });
 
   it("the appliance never turns healthy: what it recorded removed by ID, red", () => {

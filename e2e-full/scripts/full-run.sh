@@ -204,7 +204,7 @@ release_claim() {
 		echo "e2e-full: the harness claim $E2E_LOCK is KEPT with this run's record ($E2E_MANIFEST, $E2E_CREATED): what it created was not all proved gone. Inspect the resources the record names, resolve them by hand, then remove $E2E_LOCK (and the daemon mutex ${E2E_MUTEX:-identuum-harness-lock-engine}, by its ID, if it is still there)" >&2
 		return 0
 	fi
-	rm -f "$E2E_LOCK/pid" "$E2E_EXPECTED" "$E2E_INVENTORY" "$E2E_INVOCATION_OVERLAY" "$E2E_CREATED" "$E2E_CREATED.part" "$E2E_LOCK/engine-changed" "$E2E_MANIFEST" "$E2E_MANIFEST.part"
+	rm -f "$E2E_LOCK/pid" "$E2E_EXPECTED" "$E2E_INVENTORY" "$E2E_INVOCATION_OVERLAY" "$E2E_CREATED" "$E2E_CREATED.part" "$E2E_CREATED.complete" "$E2E_CREATED.complete.part" "$E2E_LOCK/engine-changed" "$E2E_MANIFEST" "$E2E_MANIFEST.part"
 	rmdir "$E2E_LOCK" 2>/dev/null ||
 		echo "e2e-full: could not release the harness claim $E2E_LOCK — remove it once no harness run is active" >&2
 }
@@ -480,6 +480,14 @@ if (svcs.slice().sort().join(" ") !== allowed.slice().sort().join(" ")) bad.push
 for (const [svc, def] of Object.entries(cfg.services || {})) {
 	if (!def) continue;
 	if (def.privileged) bad.push(`service ${svc} is privileged`);
+	for (const key of ["volumes_from", "external_links", "links", "network_mode", "pid", "ipc", "uts", "use_api_socket", "devices", "device_cgroup_rules", "gpus", "configs", "secrets", "provider", "develop", "post_start", "pre_stop", "credential_spec", "runtime", "cgroup", "cgroup_parent", "extra_hosts"]) {
+		if (def[key] !== undefined) bad.push(`service ${svc} sets forbidden reference key ${key}`);
+	}
+	for (const m of def.volumes || []) {
+		if (m && m.type === "volume" && (!m.source || !Object.hasOwn(cfg.volumes || {}, m.source))) bad.push(`service ${svc} has an unowned volume source`);
+	}
+	for (const key of Object.keys(def.networks || {})) if (!Object.hasOwn(cfg.networks || {}, key)) bad.push(`service ${svc} has an unowned network`);
+
 	for (const mode of ["network_mode", "pid", "ipc"]) {
 		const v = def[mode];
 		if (typeof v === "string" && (v === "host" || v.startsWith("container:") || v.startsWith("service:"))) bad.push(`service ${svc} ${mode} ${v}`);
@@ -495,7 +503,11 @@ for (const [svc, def] of Object.entries(cfg.services || {})) {
 		for (const a of (n && n.aliases) || []) if (prot(a)) bad.push(`service ${svc} alias ${a}`);
 	}
 }
+for (const [key, def] of Object.entries(cfg.networks || {})) {
+	if (def && (def.driver_opts || def.driver && def.driver !== "bridge")) bad.push(`network ${key} uses an unreviewed host/plugin driver`);
+}
 for (const [key, def] of Object.entries(cfg.volumes || {})) {
+	if (def && def.driver && def.driver !== "local") bad.push(`volume ${key} uses an unreviewed plugin driver`);
 	if (def && def.driver_opts) bad.push(`volume ${key} sets driver options`);
 }
 if (bad.length) {
@@ -597,15 +609,30 @@ record_created() {
 		! rv=$(docker volume ls -q --filter "label=$E2E_LABEL=$E2E_INVOCATION"); then
 		return 1
 	fi
+	for c in $rc; do
+		got=$(docker inspect --format "{{.Id}} {{index .Config.Labels \"$E2E_LABEL\"}} {{index .Config.Labels \"com.docker.compose.project\"}} {{.Name}}" "$c") || return 1
+		read -r id marker project name <<<"$got"; name=${name#/}
+		[ "$id $marker $project" = "$c $E2E_INVOCATION $E2E_PROJECT" ] || return 1
+		case "$name" in "$E2E_PROJECT"|"$E2E_PROJECT-postgres"|"$E2E_PROJECT-mail-sink-1") ;; *) return 1;; esac
+		users=$(docker inspect --format '{{range .Mounts}}{{if eq .Type "volume"}}{{println .Name}}{{end}}{{end}}' "$c") || return 1
+		for v in $users; do
+			grep -qxF "$v" <<<"$rv" || { echo "unrecorded volume $v attached to $c" >&2; return 1; }
+		done
+	done
 	{
 		for c in $rc; do echo "container $c"; done
-		for n in $rn; do echo "network $n"; done
+		for n in $rn; do
+			name=$(docker network inspect --format '{{.Name}}' "$n") || return 1
+			grep -qxF "network"$'\t'"$name" "$E2E_INVENTORY" || return 1
+			echo "network $n"
+		done
 		for v in $rv; do
+			grep -qxF "volume"$'\t'"$v" "$E2E_INVENTORY" || return 1
 			t=$(docker volume inspect --format '{{.CreatedAt}}' "$v") && [ -n "$t" ] || return 1
 			echo "volume $v $t"
 		done
 	} >"$E2E_CREATED.part" || return 1
-	mv "$E2E_CREATED.part" "$E2E_CREATED" && write_manifest created
+	mv "$E2E_CREATED.part" "$E2E_CREATED" && write_manifest created && cksum "$E2E_CREATED" "$E2E_MANIFEST" >"$E2E_CREATED.complete.part" && mv "$E2E_CREATED.complete.part" "$E2E_CREATED.complete"
 }
 
 # THE ONE TEARDOWN (C5; OSS-MINT-GUARD-4, review OSS-MINT-GUARD-3-PREREVIEW
@@ -614,7 +641,7 @@ record_created() {
 # label and an expected name are shared by anything of the project, so neither
 # proves this run created a resource, and `down --volumes` removes configured
 # volumes by name: the teardown runs NO project-level down. It removes the
-# RECORDED resources (record_created; recorded here if the start was cut short)
+# RECORDED resources (record_created at the creation boundary only)
 # and nothing else: each container and network by ID, each volume by name, only
 # after re-inspecting that its ID (or creation time) and invocation label still
 # match (the harness's own disposable appliance; AGENTS.md's one exemption).
@@ -655,6 +682,10 @@ recorded() { grep -qxF "$1 $2" "$E2E_CREATED" || grep -qF "$1 $2 " "$E2E_CREATED
 # each recorded object, its identity rechecked right before its removal.
 # Phase 3 proves every recorded object gone.
 remove_recorded() {
+	if [ ! -f "$E2E_CREATED.complete" ] || [ ! -f "$E2E_CREATED" ] || [ ! -f "$E2E_MANIFEST" ] || [ "$(cksum "$E2E_CREATED" "$E2E_MANIFEST")" != "$(cat "$E2E_CREATED.complete")" ]; then
+		echo "  creation record missing or incomplete; nothing was removed"
+		return 1
+	fi
 	local all_c proj_c name_c all_n proj_n all_v proj_v strange="" failed="" left="" kind id t name got c n v users
 	if ! all_c=$(docker ps -aq --no-trunc) ||
 		! proj_c=$(docker ps -aq --no-trunc --filter "label=com.docker.compose.project=$E2E_PROJECT") ||
@@ -691,6 +722,11 @@ remove_recorded() {
 			listed "$id" "$all_c" || continue
 			got=$(docker inspect --format "{{.Id}} {{index .Config.Labels \"$E2E_LABEL\"}}" "$id") || got=""
 			[ "$got" = "$id $E2E_INVOCATION" ] || strange+="  container $id (its identity changed since it was recorded)"$'\n'
+			if ! users=$(docker inspect --format '{{range .Mounts}}{{if eq .Type "volume"}}{{println .Name}}{{end}}{{end}}' "$id"); then
+				strange+="  container $id (mounts could not be listed)"$'\n'
+			else
+				for v in $users; do recorded volume "$v" || strange+="  container $id (unrecorded volume $v is attached)"$'\n'; done
+			fi
 			;;
 		network)
 			awk '{print $1}' <<<"$all_n" | grep -qxF -- "$id" || continue
@@ -749,7 +785,7 @@ remove_recorded() {
 				failed+="  container $id (its identity changed right before its removal; not removed)"$'\n'
 				continue
 			fi
-			docker rm -f -v "$id" >/dev/null || failed+="  container $id (docker rm failed)"$'\n'
+			docker rm -f "$id" >/dev/null || failed+="  container $id (docker rm failed)"$'\n'
 			;;
 		network)
 			awk '{print $1}' <<<"$all_n" | grep -qxF -- "$id" || continue
@@ -790,9 +826,9 @@ teardown() {
 	trap - EXIT
 	if [ "$teardown_done" = 0 ]; then
 		teardown_done=1
-		if [ ! -e "$E2E_CREATED" ] && ! record_created; then
+		if [ ! -f "$E2E_CREATED.complete" ] || [ ! -f "$E2E_CREATED" ] || [ ! -f "$E2E_MANIFEST" ] || [ "$(cksum "$E2E_CREATED" "$E2E_MANIFEST")" != "$(cat "$E2E_CREATED.complete")" ]; then
 			E2E_RETAIN=1
-			echo "e2e-full: TEARDOWN REFUSED for project $E2E_PROJECT — what this run created could not be listed, so nothing was removed; inspect the project's containers, networks and volumes and remove them by hand" >&2
+			echo "e2e-full: TEARDOWN REFUSED for project $E2E_PROJECT — the creation record is missing or incomplete, so nothing was removed; labels cannot reconstruct creation evidence; inspect the project's containers, networks and volumes and remove them by hand" >&2
 			[ "$status" -ne 0 ] || status=1
 		elif refused=$(remove_recorded); then
 			echo "e2e-full: teardown (project $E2E_PROJECT: removed only what this run recorded creating, each by ID after rechecking its identity, and proved every one gone; no project-level down)"
