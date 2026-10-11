@@ -255,7 +255,9 @@ unset DOCKER_CONTEXT
 # the daemon mutex stays where it was taken. The check precedes each call; an
 # engine switched inside one docker or Compose call is not seen. Docker's ID
 # names a daemon's data, not a machine: it does not prove where a forwarded
-# socket leads.
+# socket leads. The wrapper returns docker's status by name: the teardown runs
+# in the EXIT trap, where bash 5.2 and earlier give a bare `return` the status
+# the script exited with, not docker's (UI-CI-RED-FIX).
 if ! E2E_ENGINE_ID=$(docker info --format '{{.ID}}' 2>/dev/null) || [ -z "$E2E_ENGINE_ID" ]; then
 	refuse_topology "the Docker daemon did not report its ID, so this run cannot bind to the engine it checked"
 fi
@@ -263,7 +265,7 @@ E2E_ENGINE_FLAG="$E2E_LOCK/engine-changed"
 docker() {
 	if [ ! -e "$E2E_ENGINE_FLAG" ] && [ "$(command docker info --format '{{.ID}}' 2>/dev/null)" = "$E2E_ENGINE_ID" ]; then
 		command docker "$@"
-		return
+		return "$?"
 	fi
 	: >"$E2E_ENGINE_FLAG"
 	echo "e2e-full: REFUSING docker $1 — the Docker daemon answering is not the engine checked at preflight (its ID changed, or it did not answer); no further docker command runs" >&2

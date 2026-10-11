@@ -1261,6 +1261,28 @@ describe("full-run.sh cleans up exactly once and keeps the run's status [C5]", (
         .sort()
     ).toEqual(createdRemovals(r));
   });
+
+  // UI-CI-RED-FIX: the teardown runs inside the EXIT trap. Under bash 5.2 and
+  // earlier (Ubuntu 24.04 ships 5.2.21), a bare `return` in any function the
+  // trap reaches answers the status the script had when the trap fired, not
+  // the last command's; bash 5.3 and 3.2 answer the last command's. So the
+  // docker() wrapper's bare `return` hid every failed docker call of a green
+  // run's teardown and failed every listing of a red run's (nothing removed).
+  // The tests above catch it only under such a bash; this one on any bash.
+  it("every return in the runner names its status: a bare return reached from the EXIT trap answers the pre-trap status under bash 5.2", () => {
+    const bare = /(^|[;{&|]|\bthen|\belse|\bdo)\s*return\s*($|[;}])/;
+    expect(bare.test("\t\treturn"), "control: a bare return is found").toBe(true);
+    expect(bare.test("\tcommand docker; return; }"), "control: a bare return mid-line is found").toBe(
+      true
+    );
+    expect(bare.test('\t\treturn "$?"'), "control: a named status is not bare").toBe(false);
+    const source = readFileSync(resolve(REPO, "e2e-full/scripts/full-run.sh"), "utf8");
+    const found = source
+      .split("\n")
+      .map((line, i) => `${i + 1}: ${line.replace(/(^|\s)#.*$/, "").trim()}`)
+      .filter((line) => bare.test(line.replace(/^\d+: /, "")));
+    expect(found, "bare returns in full-run.sh").toEqual([]);
+  });
 });
 
 // ── the secondary released appliance (identuum-ui-e2e) ──────────────────────
