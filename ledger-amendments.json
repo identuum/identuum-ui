@@ -1,22 +1,5 @@
 {
   "schema_version": "ledger-amendments.v1",
-  "base_commit": "6d4562518b85de6c7d4a73956d5de54a37c4a1ea",
-  "changes": [
-    {
-      "rule_id": "E2E-RESOURCE-OWNERSHIP-1",
-      "change_class": "proof_changed",
-      "reason": "Strengthen existing ownership/floor rules with B1 persisted creation evidence, B2 resolved reference refusals and B3 explicit volume ownership; preserve existing verdict and mutation floors."
-    },
-    {
-      "rule_id": "E2E-RESOURCE-OWNERSHIP-1",
-      "change_class": "sentence_changed",
-      "after_sentence_sha256": "aee5e97671f08ee2a6dd8ab53ab6c1c81f1d29279b855b5c3a0c09d9703a9d1c",
-      "reason": "Strengthen existing ownership/floor rules with B1 persisted creation evidence, B2 resolved reference refusals and B3 explicit volume ownership; preserve existing verdict and mutation floors."
-    },
-    {
-      "rule_id": "E2E-RESOURCE-OWNERSHIP-1",
-      "change_class": "test_fingerprint_changed",
-      "reason": "Strengthen existing ownership/floor rules with B1 persisted creation evidence, B2 resolved reference refusals and B3 explicit volume ownership; preserve existing verdict and mutation floors."
-    }
-  ]
+  "base_commit": "bf792e52439a4fbdefe98fdba3e0de9cca1a6cdb",
+  "changes": []
 }
