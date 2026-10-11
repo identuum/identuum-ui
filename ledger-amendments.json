@@ -1,5 +1,33 @@
 {
   "schema_version": "ledger-amendments.v1",
-  "base_commit": "8b1c88f35e7eebb24fce609d85c3769ebbe7ac21",
-  "changes": []
+  "base_commit": "be8d7542ff88af289cd565f7364f877b42734336",
+  "changes": [
+    {
+      "rule_id": "E2E-NAME-OWNERSHIP-1",
+      "change_class": "test_fingerprint_changed",
+      "reason": "OSS-CANDIDATE-LIFECYCLE-FIX: src/__tests__/e2e-resource-isolation.test.ts, the file this rule's test lives in, changed for the scratch-e2e project, the shared claim path and the whole-step teardown; this rule's own assertions (refusal of a foreign same-name volume or network before any start) are unchanged apart from the project name. Rehashed after review."
+    },
+    {
+      "rule_id": "E2E-NO-LOCAL-DB-1",
+      "change_class": "sentence_changed",
+      "after_sentence_sha256": "842a78a9e062d9a8eac76b261231b90026d3c88b831bba1a803b3a7fd36644f5",
+      "reason": "OSS-CANDIDATE-LIFECYCLE-FIX (SPEC K1): the harness project the fixture runs inside is now scratch-e2e (full-run.sh exports it); the sentence names the new project and is otherwise unchanged. e2e/helpers/fixture-expired-org.ts and its test changed only that name; the bound test still proves every refusal it proved."
+    },
+    {
+      "rule_id": "E2E-RESOURCE-OWNERSHIP-1",
+      "change_class": "proof_changed",
+      "reason": "OSS-CANDIDATE-LIFECYCLE-FIX (SPEC K1, K2, K5, K6): the e2e-full runner now runs as scratch-e2e, takes the claim /tmp/identuum-harness.lock shared with identuum-idp-oss devseed-live and openid-conformance, refuses a resolved config that is not its own services alone, refuses its whole teardown before the first removal when anything it did not create is found, proves each recorded resource gone, and keeps the claim, the daemon mutex and its manifest.json record when the teardown is refused or fails. The sentence states the new names and the stronger teardown (no clause weakened); the bound test was extended (12 new tests), rehashed after review, and re-proved by the pre-change red run and two watched mutants."
+    },
+    {
+      "rule_id": "E2E-RESOURCE-OWNERSHIP-1",
+      "change_class": "sentence_changed",
+      "after_sentence_sha256": "302bab0cbd2e924a5ea4466be38c3e4834ac8f8ad2c060f516d574c6a8750c19",
+      "reason": "OSS-CANDIDATE-LIFECYCLE-FIX (SPEC K1, K2, K5, K6): the e2e-full runner now runs as scratch-e2e, takes the claim /tmp/identuum-harness.lock shared with identuum-idp-oss devseed-live and openid-conformance, refuses a resolved config that is not its own services alone, refuses its whole teardown before the first removal when anything it did not create is found, proves each recorded resource gone, and keeps the claim, the daemon mutex and its manifest.json record when the teardown is refused or fails. The sentence states the new names and the stronger teardown (no clause weakened); the bound test was extended (12 new tests), rehashed after review, and re-proved by the pre-change red run and two watched mutants."
+    },
+    {
+      "rule_id": "E2E-RESOURCE-OWNERSHIP-1",
+      "change_class": "test_fingerprint_changed",
+      "reason": "OSS-CANDIDATE-LIFECYCLE-FIX (SPEC K1, K2, K5, K6): the e2e-full runner now runs as scratch-e2e, takes the claim /tmp/identuum-harness.lock shared with identuum-idp-oss devseed-live and openid-conformance, refuses a resolved config that is not its own services alone, refuses its whole teardown before the first removal when anything it did not create is found, proves each recorded resource gone, and keeps the claim, the daemon mutex and its manifest.json record when the teardown is refused or fails. The sentence states the new names and the stronger teardown (no clause weakened); the bound test was extended (12 new tests), rehashed after review, and re-proved by the pre-change red run and two watched mutants."
+    }
+  ]
 }
