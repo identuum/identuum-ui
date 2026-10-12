@@ -154,7 +154,7 @@ export default async function DashboardPage() {
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-baseline gap-3">
       <span className="w-32 shrink-0 text-xs text-stone-400">{label}</span>
       <div className="min-w-0 break-words text-sm text-sky-950 font-medium">{value}</div>
     </div>
