@@ -35,6 +35,26 @@ to `v0.6.2` were written when the artifact was the container image
 - **Clearer text:** the password tab says this device stays signed in and
   your other devices are signed out; the two-step tab explains recovery
   codes; the application forms point to "Rotate client secret".
+- **Sign-in providers are listed in Settings.** The new "Sign-in providers"
+  card shows each provider's name, type, short identifier, status, email
+  domains, last update and the redirect URI, with a Copy button. It also
+  says in words how members sign in (password only, password or a
+  provider, or a provider only), and adds a hint when that policy and the
+  list do not match.
+- **Add and Edit return to Settings.** After a save you are back on Settings
+  with "Provider saved." or "Provider updated." and the redirect URI in the
+  list. You no longer need to reload the page. Cancel goes back without a
+  change.
+- **Remove asks first and stays on the page.** "Remove…" opens a short
+  question. After you confirm, the provider leaves the list and the card
+  says "Provider removed." If removal fails, the provider stays and the card
+  says so.
+- **"Add provider" says why it is off.** This edition supports one sign-in
+  provider, so the button is disabled while one exists, with that reason
+  next to it.
+- **The old provider page address opens Settings** at the providers card,
+  so old links still work.
+- **One backup code reads in the singular:** "Only 1 backup code left."
 
 ## `v0.9.11`
 
