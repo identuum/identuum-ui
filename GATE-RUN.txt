@@ -1,8 +1,8 @@
 schema: gate-run.v1
 gate: identuum-ui make verify
 note: evidence lines are the tools' own summary lines; a summary format this script does not match is recorded only as an exit code
-repo-head: ec273ea
-started: 2026-10-12T18:32:56Z
+repo-head: 1b65a49
+started: 2026-10-12T18:37:39Z
 plan: tool-versions witness-parity tracked-binary-check credential-transparency workflow-yaml workflow-yaml-parity frozen-lockfile advisory ci-witness toolchain-parity rulefloor ledger-diff-gate role-matrix-denominator sbom-scan biome tsc vitest
 tool: node       v26.8.1  /Users/odemir/.local/state/fnm_multishells/65985_1791734590102/bin/node
 tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/65985_1791734590102/bin/pnpm
@@ -25,33 +25,33 @@ elapsed: workflow-yaml-parity 0s
 target: workflow-yaml-parity exit=0
 elapsed: frozen-lockfile 0s
 target: frozen-lockfile exit=0
-elapsed: advisory 0s
+elapsed: advisory 1s
 target: advisory exit=0
-evidence: [ci-witness] check OK: ci-witness identuum-ui CI build-and-test (node 26) green, 13 planned target(s) all exit=0, ties commit 6a18b0d, 438 commit(s) behind HEAD — the CI claim covers that tree, not this one, run https://github.com/identuum/identuum-ui/actions/runs/35397115955 attempt=1 sha=6a18b0d3067a5bcdf89b2f9b96d50f34b340e35b
-elapsed: ci-witness 1s
+evidence: [ci-witness] check OK: ci-witness identuum-ui CI build-and-test (node 26) green, 13 planned target(s) all exit=0, ties commit 6a18b0d, 441 commit(s) behind HEAD — the CI claim covers that tree, not this one, run https://github.com/identuum/identuum-ui/actions/runs/35397115955 attempt=1 sha=6a18b0d3067a5bcdf89b2f9b96d50f34b340e35b
+elapsed: ci-witness 0s
 target: ci-witness exit=0
 evidence: [toolchain-parity] check OK: toolchain-parity 13 pins agree (node 26 in matrix [26 ], engines/@types/node 26/26, local node 26, pnpm 11.3.0, go 1.27.2, rulefloor v0.9.1, yq v4.54.1, syft v1.52.0, both vendored digests)
 elapsed: toolchain-parity 0s
 target: toolchain-parity exit=0
 evidence: [rulefloor] check OK: 73 rows (73 armed), FLOOR 73, RED-PROOFS 70 (measured 70)
-elapsed: rulefloor 0s
+elapsed: rulefloor 1s
 target: rulefloor exit=0
-evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=5c1a2518b7738ec8c663c64b3f798ec47a09be08 status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=a270cdabd603e55e4515d399daadff86e15f7dae3bf4d89c3c08401e56145607
+evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=3f5c0d3db91466a22f0c7a956ed52fbdc556c77b status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=9c8421d24a3a3aa25d324b2b5db86538337e060fe6e898b04427a061e4696ccd
 elapsed: ledger-diff-gate 1s
 target: ledger-diff-gate exit=0
 evidence: [role-matrix-denominator] check OK: role-matrix denominator 160/105/34 (total/role/class endpoints) matches the golden
 elapsed: role-matrix-denominator 0s
 target: role-matrix-denominator exit=0
-evidence: [sbom-scan] check OK: grype-gate matches=0 fixable=0 allowlisted=0 unfixable=0 severe=0 — subject sbom:identuum-ui-export.spdx.json sha256:6014557bb3c16c10d14ed0c3d1de450ca9910b09ad9b24aa37fa494769222141; config: not applicable (sbom subject: no directory declaration to compare); coverage: not applicable (sbom subject: no gitignored tree to enumerate)
-elapsed: sbom-scan 6s
+evidence: [sbom-scan] check OK: grype-gate matches=0 fixable=0 allowlisted=0 unfixable=0 severe=0 — subject sbom:identuum-ui-export.spdx.json sha256:54bc7d244913e05873a2a6dd1f5bd5cddaff111905006d0296b9d4b8d4c8d9fd; config: not applicable (sbom subject: no directory declaration to compare); coverage: not applicable (sbom subject: no gitignored tree to enumerate)
+elapsed: sbom-scan 7s
 target: sbom-scan exit=0
-elapsed: biome 0s
+elapsed: biome 1s
 target: biome exit=0
 elapsed: tsc 0s
 target: tsc exit=0
 evidence: [vitest] [2m Test Files [22m [1m[32m228 passed[39m[22m[90m (228)[39m
-elapsed: vitest 73s
+elapsed: vitest 77s
 target: vitest exit=0
-finished: 2026-10-12T18:34:21Z
-tree: sha256=b8ffb33fef9231fdbf814c06b9e6005f0add2f52dd28efb2aeb0283c2d68bff3
+finished: 2026-10-12T18:39:11Z
+tree: sha256=60b11a1833858e0790d5e2fedfaba74eed52838ab3b4aaec5fa2fd6ec1c25a5a
 result: green
