@@ -1,5 +1,16 @@
 {
   "schema_version": "ledger-amendments.v1",
-  "base_commit": "43bc5a4a087362bfc60a00d47cf39731f6e32fef",
-  "changes": []
+  "base_commit": "9c5b502d0752f0b02c7f3d738c84fef61a7628e5",
+  "changes": [
+    {
+      "rule_id": "RENEW-NO-CREDENTIAL-1",
+      "change_class": "rule_added",
+      "reason": "UI-0912-A (2026-10-12, OSS v0.9.12 C3, cause H1): new rule RENEW-NO-CREDENTIAL-1, armed on src/__tests__/ui-0912-a-renewal.test.ts @ vitest: the export's bff() renews a safe /api/v1 read answered 401 no_credential through the shared refresh and retries it once, because identuum-idp-oss answers a dead access token with no_credential. Red-proved by swapping export/src/bff.ts back to 9c5b502."
+    },
+    {
+      "rule_id": "GUARD-PLAIN-LOGIN-1",
+      "change_class": "rule_added",
+      "reason": "UI-0912-A (2026-10-12, UI019, owner RQ-4 a): new rule GUARD-PLAIN-LOGIN-1, armed on src/__tests__/ui-0912-a-guard.test.ts @ vitest: decideSessionGuard sends a verdict of signed_out or no_credential to the plain /login and every other unauthenticated verdict to /login?reason=session_expired. Red-proved by swapping src/lib/session-guard.ts back to 9c5b502."
+    }
+  ]
 }
