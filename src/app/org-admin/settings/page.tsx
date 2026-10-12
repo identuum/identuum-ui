@@ -23,6 +23,7 @@ import {
   listScopeTemplates,
 } from "@/lib/idp-admin-client";
 import { getOrgRegistration, getRegistrationInfoSignedIn } from "@/lib/idp-registration-client";
+import { loadRuntimeConfig } from "@/lib/runtime-config";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { SelfRegistrationSection } from "./self-registration-section";
 import {
@@ -33,10 +34,10 @@ import {
   ORG_ADMIN_SETTINGS_PLACEHOLDERS,
 } from "./settings-helpers";
 import {
-  IdentityProvidersReadOnlySection,
   OrgRolesReadOnlySection,
   ScopeTemplatesReadOnlySection,
 } from "./settings-readonly-sections";
+import { SignInProvidersSection } from "./sign-in-providers-section";
 
 export const metadata: Metadata = { title: "Organization Settings — Identuum Org Admin" };
 
@@ -163,14 +164,24 @@ export default async function OrgAdminSettingsPage() {
         selfRegistration={selfRegistrationServed}
       />
 
+      {/* Sign-in providers (UI-0912-B): listed here with the sign-in policy
+          in words; Add and Edit open their own pages and return here,
+          Remove happens in place. The redirect URI is on the IdP's public
+          address; the card falls back to its own origin, which is the IdP's
+          when the IdP serves the console. */}
+      {identityProvidersResult && (
+        <SignInProvidersSection
+          result={identityProvidersResult}
+          authPolicy={org?.auth_policy ?? null}
+          publicBase={loadRuntimeConfig()?.idp.public_base_url ?? ""}
+        />
+      )}
+
       {/* Read-only observability sections landed by
           identuum-20260530-org-admin-settings-readonly-tabs. Each
           section renders ONLY the operator-safe field set returned
           by its wire helper; mutation (create / edit / delete) is
-          intentionally not available from this page. */}
-      {identityProvidersResult && (
-        <IdentityProvidersReadOnlySection result={identityProvidersResult} />
-      )}
+          intentionally not available from these sections. */}
       {rolesResult && <OrgRolesReadOnlySection result={rolesResult} />}
       {/* CE-UI-5a: an IdP that does not serve scope templates gets no
           section at all, not a "not exposed" panel. */}

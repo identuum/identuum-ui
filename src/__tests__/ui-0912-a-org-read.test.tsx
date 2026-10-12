@@ -36,6 +36,8 @@ vi.mock("next/navigation", () => ({
   redirect: (to: string) => {
     throw new Error(`redirect:${to}`);
   },
+  // UI-0912-B: the provider form returns to Settings after a save.
+  useRouter: () => ({ push: () => {} }),
 }));
 vi.mock("react", async (orig) => ({
   ...(await orig<typeof import("react")>()),
@@ -173,7 +175,7 @@ describe("the provider actions say why the organization could not be read", () =
     ],
   ])("%s", async (_cause, org, saveText, removeText) => {
     const { saveOidcProviderAction, deleteOidcProviderAction } = await import(
-      "../app/org-admin/identity-provider/actions"
+      "../app/org-admin/settings/sign-in-providers/actions"
     );
     orgReadAnswers(org);
     const saved = await saveOidcProviderAction({ phase: "idle" }, typed());
@@ -185,7 +187,7 @@ describe("the provider actions say why the organization could not be read", () =
 
   it("401 sends the browser to the sign-in page with the expiry reason", async () => {
     const { saveOidcProviderAction, deleteOidcProviderAction } = await import(
-      "../app/org-admin/identity-provider/actions"
+      "../app/org-admin/settings/sign-in-providers/actions"
     );
     orgReadAnswers(async () => answer(401));
     await expect(saveOidcProviderAction({ phase: "idle" }, typed())).rejects.toThrow(
@@ -202,7 +204,9 @@ describe("a failed save keeps what was typed, never the client secret", () => {
     ["the organization read failed", async () => answer(503)],
     ["the provider save was refused", async () => answer(200, ORG)],
   ])("%s", async (_cause, org) => {
-    const { saveOidcProviderAction } = await import("../app/org-admin/identity-provider/actions");
+    const { saveOidcProviderAction } = await import(
+      "../app/org-admin/settings/sign-in-providers/actions"
+    );
     orgReadAnswers(org);
     const state = await saveOidcProviderAction({ phase: "idle" }, typed());
     expect(state.phase).toBe("idle");
@@ -213,7 +217,9 @@ describe("a failed save keeps what was typed, never the client secret", () => {
   });
 
   it("the console's own field check keeps the input too", async () => {
-    const { saveOidcProviderAction } = await import("../app/org-admin/identity-provider/actions");
+    const { saveOidcProviderAction } = await import(
+      "../app/org-admin/settings/sign-in-providers/actions"
+    );
     const fd = typed();
     fd.set("name", "");
     const state = await saveOidcProviderAction({ phase: "idle" }, fd);
@@ -224,7 +230,9 @@ describe("a failed save keeps what was typed, never the client secret", () => {
   });
 
   it("the form shows the handed-back values and an empty secret field", async () => {
-    const { ProviderForm } = await import("../app/org-admin/identity-provider/provider-form");
+    const { ProviderForm } = await import(
+      "../app/org-admin/settings/sign-in-providers/provider-form"
+    );
     h.state = {
       phase: "idle",
       error: "The server did not answer. Nothing was saved. Try again in a moment.",

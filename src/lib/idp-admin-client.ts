@@ -3369,12 +3369,12 @@ export async function getSystemInfo(): Promise<GetSystemInfoResult> {
 /**
  * Operator-safe projection of one configured organization identity
  * provider. The wire helper reads ONLY these fields from the IDP
- * response; the backend's `config` block — which historically has
- * carried client_id / issuer_url / scopes etc. but NEVER the
- * encrypted client_secret or bind_password (those live on the domain
- * struct and are dropped by the mapper) — is EXPLICITLY dropped at
- * the helper boundary. The UI surface displays only the operator-
- * recognizable identity fields.
+ * response. Of the backend's `config` block — which carries client_id /
+ * issuer_url / scopes etc. but NEVER the encrypted client_secret or
+ * bind_password (those live on the domain struct and are dropped by the
+ * mapper) — it reads only the two fields that say who may sign in
+ * (UI-0912-B, the Settings card); every other config field is dropped at
+ * the helper boundary.
  */
 export interface OrgIdentityProviderItem {
   id: string;
@@ -3383,6 +3383,8 @@ export interface OrgIdentityProviderItem {
   type: string;
   priority: number;
   active: boolean;
+  email_domains: string[];
+  allow_external_domains: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -3404,17 +3406,25 @@ export async function listOrganizationIdentityProviders(
     return { ok: false, status: 503, forbidden: false, featureUnavailable: false };
   }
   const base = `${idpBaseUrl(cfg)}/api/v1/organizations/${encodeURIComponent(orgID)}`;
-  // Map one raw IDP record to the operator-safe shape (drops config/secret).
-  const mapOne = (p: Record<string, unknown>): OrgIdentityProviderItem => ({
-    id: typeof p.id === "string" ? p.id : "",
-    name: typeof p.name === "string" ? p.name : "",
-    slug: typeof p.slug === "string" ? p.slug : "",
-    type: typeof p.type === "string" ? p.type : "",
-    priority: typeof p.priority === "number" ? p.priority : 0,
-    active: Boolean(p.active),
-    created_at: typeof p.created_at === "string" ? p.created_at : "",
-    updated_at: typeof p.updated_at === "string" ? p.updated_at : "",
-  });
+  // Map one raw IDP record to the operator-safe shape (drops the secret and
+  // every config field but the two domain fields).
+  const mapOne = (p: Record<string, unknown>): OrgIdentityProviderItem => {
+    const c = isRecord(p.config) ? p.config : {};
+    return {
+      id: typeof p.id === "string" ? p.id : "",
+      name: typeof p.name === "string" ? p.name : "",
+      slug: typeof p.slug === "string" ? p.slug : "",
+      type: typeof p.type === "string" ? p.type : "",
+      priority: typeof p.priority === "number" ? p.priority : 0,
+      active: Boolean(p.active),
+      email_domains: Array.isArray(c.email_domains)
+        ? c.email_domains.filter((d): d is string => typeof d === "string")
+        : [],
+      allow_external_domains: c.allow_external_domains === true,
+      created_at: typeof p.created_at === "string" ? p.created_at : "",
+      updated_at: typeof p.updated_at === "string" ? p.updated_at : "",
+    };
+  };
   try {
     // The singular route, which identuum-idp-oss and (since CE-UI-3c)
     // identuum-idp-ce both serve: one optional provider. No edition serves a
@@ -3461,7 +3471,8 @@ export async function listOrganizationIdentityProviders(
 
 // ── The organization's upstream OIDC provider (editable) ─────────────────
 //
-// The org_admin page /org-admin/identity-provider (v0.9.7) configures the ONE
+// The org_admin Settings card and its Add / Edit pages (UI-0912-B; until then
+// the page /org-admin/identity-provider, v0.9.7) configure the ONE
 // upstream OIDC provider of the organization through the routes
 // docs/guides/oidc-upstream-login.md describes: GET / POST / PUT / DELETE
 // /api/v1/organizations/:id/identity-provider. client_secret is write-only:

@@ -278,9 +278,20 @@ const IDP_ROUTE_SURFACE_MATRIX: SurfaceMatrixRow[] = [
   {
     route: "/org-admin/identity-provider",
     classification: "OSS-supported",
-    coveredRoutes: ["/org-admin/identity-provider"],
-    files: ["app/org-admin/identity-provider/page.tsx", "lib/idp-admin-client.ts"],
-    signals: ["Sign-in provider", "getOrgOidcProvider"],
+    // UI-0912-B: the providers are listed on Settings; Add and Edit have
+    // their own pages, and the old address opens Settings at the card.
+    coveredRoutes: [
+      "/org-admin/identity-provider",
+      "/org-admin/settings/sign-in-providers/new",
+      "/org-admin/settings/sign-in-providers/[id]/edit",
+    ],
+    files: [
+      "app/org-admin/identity-provider/page.tsx",
+      "app/org-admin/settings/sign-in-providers/new/page.tsx",
+      "app/org-admin/settings/sign-in-providers/[id]/edit/page.tsx",
+      "lib/idp-admin-client.ts",
+    ],
+    signals: ["Sign-in provider", "getOrgOidcProvider", "#sign-in-providers"],
   },
   {
     route: "/site-admin overview + settings",

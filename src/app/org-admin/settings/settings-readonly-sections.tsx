@@ -3,91 +3,26 @@
  * identuum-20260530-org-admin-settings-readonly-tabs.
  *
  * Sections mounted on /org-admin/settings BELOW the existing
- * Domains card: Identity providers / Roles / Scope templates (the
- * webhooks list was removed by owner decision 5, 2026-09-25: no edition
- * serves it). Each section renders the operator-safe field set
- * returned by its wire helper; no mutation control is rendered.
+ * Domains card: Roles / Scope templates (the webhooks list was removed by
+ * owner decision 5, 2026-09-25: no edition serves it). Each section renders
+ * the operator-safe field set returned by its wire helper; no mutation
+ * control is rendered.
+ *
+ * The identity providers section left this module in UI-0912-B: the
+ * "Sign-in providers" card (sign-in-providers-section.tsx) lists the
+ * providers with Add, Edit and Remove…, and carries the no-secret pin
+ * (it never renders client_secret / private_key / signing_cert / SAML
+ * private material / raw metadata XML / token / authorization-header
+ * field).
  *
  * SECURITY (load-bearing — pinned by Vitest):
- *   - Identity providers section NEVER renders client_secret /
- *     private_key / signing_cert / SAML private material / raw
- *     metadata XML / token / authorization-header field. The
- *     backend mapper drops these at the wire layer; the helper's
- *     projection drops them again; the section reads ONLY the
- *     documented operator-safe fields.
  *   - Roles and Scope templates sections render scope-name strings
  *     only; no scope value carries credential material.
  *   - No mutation control on any section (no <form>, no <button
  *     type="submit">, no Create / Edit / Delete affordance).
  */
-import { LocalTime } from "@/components/ui/local-time";
 import type { AuthorizationServerPageBoundary } from "@/lib/capability-affordances";
-import type {
-  ListOrganizationIdentityProvidersResult,
-  ListOrgRolesResult,
-  ListScopeTemplatesResult,
-} from "@/lib/idp-admin-client";
-
-// ── Identity providers section ─────────────────────────────────────────────
-
-export function IdentityProvidersReadOnlySection({
-  result,
-}: {
-  result: ListOrganizationIdentityProvidersResult;
-}) {
-  return (
-    <Card
-      headingId="identity-providers-heading"
-      title="Identity providers"
-      subtitle="Read-only view of configured SSO providers for your organization. The OpenID Connect sign-in provider is configured on its own page."
-    >
-      <p className="px-6 pt-3 text-xs">
-        <a
-          href="/org-admin/identity-provider"
-          className="font-semibold text-sky-700 hover:text-sky-900"
-        >
-          Configure the sign-in provider →
-        </a>
-      </p>
-      {!result.ok && result.forbidden && (
-        <Forbidden body="Your session does not have permission to view identity providers." />
-      )}
-      {!result.ok && result.featureUnavailable && (
-        <Unavailable body="Identity provider federation is a CE IDP capability. IDP OSS deployments show this boundary instead of treating the section as a Starter feature." />
-      )}
-      {!result.ok && !result.forbidden && !result.featureUnavailable && <ErrorBody />}
-      {result.ok && result.identity_providers.length === 0 && (
-        <EmptyBody body="No identity providers are configured for your organization." />
-      )}
-      {result.ok && result.identity_providers.length > 0 && (
-        <ul className="divide-y divide-stone-100">
-          {result.identity_providers.map((p) => (
-            <li key={p.id} className="px-6 py-3 flex items-start justify-between gap-4">
-              <div className="min-w-0 flex-1 space-y-0.5">
-                <p className="text-sm font-semibold text-sky-950 truncate">{p.name}</p>
-                <p className="text-[10px] text-stone-400 leading-tight">
-                  Type: <span className="font-mono">{p.type}</span>
-                  {p.slug && (
-                    <>
-                      {" · "}Slug: <span className="font-mono">{p.slug}</span>
-                    </>
-                  )}
-                </p>
-                <p className="text-[10px] text-stone-400 leading-tight">
-                  Created <LocalTime value={p.created_at} style="date" /> · Updated{" "}
-                  <LocalTime value={p.updated_at} style="date" />
-                </p>
-              </div>
-              <div className="shrink-0">
-                <StatusPill active={p.active} />
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
-  );
-}
+import type { ListOrgRolesResult, ListScopeTemplatesResult } from "@/lib/idp-admin-client";
 
 // ── Roles section ──────────────────────────────────────────────────────────
 
@@ -227,19 +162,6 @@ function Card({
       </div>
       {children}
     </section>
-  );
-}
-
-function StatusPill({ active }: { active: boolean }) {
-  return active ? (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-      enabled
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 border border-stone-200 px-2.5 py-0.5 text-[10px] font-semibold text-stone-500">
-      disabled
-    </span>
   );
 }
 

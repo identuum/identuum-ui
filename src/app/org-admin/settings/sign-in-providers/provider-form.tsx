@@ -1,20 +1,20 @@
 "use client";
 
 /**
- * ProviderForm — create, edit or remove the organization's upstream OIDC
- * provider. The fields are those of docs/guides/oidc-upstream-login.md.
+ * ProviderForm — add or edit the organization's upstream OIDC provider. The
+ * fields are those of docs/guides/oidc-upstream-login.md. A save returns to
+ * the Settings card, which shows the result once (UI-0912-B); Remove is on
+ * that card.
  *
  * SECURITY: the client secret input is type=password, autocomplete off, and
  * never pre-filled; on edit, leaving it empty keeps the stored secret.
  */
 
+import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import type { OrgOidcProviderView } from "@/lib/idp-admin-client";
-import {
-  deleteOidcProviderAction,
-  type ProviderFormState,
-  saveOidcProviderAction,
-} from "./actions";
+import { type ProviderFormState, saveOidcProviderAction } from "./actions";
+import { rememberProviderResult, SIGN_IN_PROVIDERS_HREF, sessionStore } from "./result-flash";
 
 const initialState: ProviderFormState = { phase: "idle" };
 
@@ -24,7 +24,7 @@ const inputClass =
   "focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500 transition-colors";
 
 const secondaryBtn =
-  "inline-flex items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-sky-950 hover:bg-stone-50 disabled:opacity-60 shadow-sm transition-colors";
+  "inline-flex min-h-11 items-center justify-center rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-sky-950 hover:bg-stone-50 shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60";
 
 /** The callback to register with the provider (the guide's "Redirect URI"). */
 export function providerCallbackUrl(base: string, providerId: string): string {
@@ -39,33 +39,25 @@ export function ProviderForm({
   publicBase: string;
 }) {
   const [state, formAction, isPending] = useActionState(saveOidcProviderAction, initialState);
-  const [delState, deleteAction, isDeleting] = useActionState(
-    deleteOidcProviderAction,
-    initialState
-  );
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const router = useRouter();
   const [origin, setOrigin] = useState(publicBase);
   useEffect(() => {
     if (!publicBase) setOrigin(window.location.origin);
   }, [publicBase]);
+  // Saved: back to Settings, which shows "Provider saved." or "Provider
+  // updated." once, with the redirect URI in the provider's row.
+  useEffect(() => {
+    if (state.phase !== "saved") return;
+    const store = sessionStore();
+    if (store) rememberProviderResult(store, state.result);
+    router.push(SIGN_IN_PROVIDERS_HREF);
+  }, [state, router]);
 
   const editing = provider !== null;
   const fe = state.phase === "idle" ? (state.fieldErrors ?? {}) : {};
   // React resets this form after every submission. A failed save hands back
   // what was typed (never the client secret) and the reset restores it.
   const typed = state.phase === "idle" ? state.values : undefined;
-
-  if (delState.phase === "deleted") {
-    return (
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-        <p className="text-sm font-semibold text-emerald-700">Provider removed</p>
-        <p className="text-xs text-stone-600 mt-1">
-          Users who signed in through it keep their accounts but can no longer sign in with it.
-          Reload the page to configure a new one.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-5">
@@ -85,13 +77,20 @@ export function ProviderForm({
       )}
       {!editing && (
         <p className="text-xs text-stone-500">
-          After you save, this page shows the redirect URI to register with the provider (it
-          contains the provider&apos;s ID).
+          After you save, the redirect URI appears in the list on the Settings page.
         </p>
       )}
 
       <form action={formAction} className="space-y-4" autoComplete="off">
         <input type="hidden" name="mode" value={editing ? "update" : "create"} />
+        {state.phase === "idle" && state.error && (
+          <p
+            role="alert"
+            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          >
+            {state.error}
+          </p>
+        )}
         <Field id="idp-name" label="Name" error={fe.name}>
           <input
             id="idp-name"
@@ -196,66 +195,19 @@ export function ProviderForm({
           </span>
         </label>
 
-        {state.phase === "idle" && state.error && (
-          <p role="alert" className="text-xs text-red-600">
-            {state.error}
-          </p>
-        )}
-        {state.phase === "saved" && (
-          <p role="status" className="text-xs text-emerald-700">
-            {state.message} Reload the page to see the redirect URI.
-          </p>
-        )}
-        <button
-          type="submit"
-          disabled={isPending}
-          className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-60 shadow-sm transition-colors"
-        >
-          {isPending ? "Saving…" : editing ? "Save changes" : "Save provider"}
-        </button>
-      </form>
-
-      {editing && (
-        <div className="border-t border-stone-100 pt-4 space-y-2">
-          {confirmingDelete ? (
-            <form action={deleteAction} className="space-y-2">
-              <p className="text-xs text-stone-600">
-                Users can no longer sign in with this provider. Remove it?
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="submit"
-                  disabled={isDeleting}
-                  className="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-60 shadow-sm transition-colors"
-                >
-                  {isDeleting ? "Removing…" : "Remove provider"}
-                </button>
-                <button
-                  type="button"
-                  disabled={isDeleting}
-                  onClick={() => setConfirmingDelete(false)}
-                  className={secondaryBtn}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmingDelete(true)}
-              className={secondaryBtn}
-            >
-              Remove provider…
-            </button>
-          )}
-          {delState.phase === "idle" && delState.error && (
-            <p role="alert" className="text-xs text-red-600">
-              {delState.error}
-            </p>
-          )}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="submit"
+            disabled={isPending || state.phase === "saved"}
+            className="inline-flex min-h-11 items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-60 shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60"
+          >
+            {isPending ? "Saving…" : editing ? "Save changes" : "Save provider"}
+          </button>
+          <a href={SIGN_IN_PROVIDERS_HREF} className={secondaryBtn}>
+            Cancel
+          </a>
         </div>
-      )}
+      </form>
     </div>
   );
 }

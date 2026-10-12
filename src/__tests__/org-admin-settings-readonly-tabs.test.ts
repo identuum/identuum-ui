@@ -27,7 +27,13 @@ function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
 
+const PROVIDERS_SRC = readFileSync(
+  resolve(__dirname, "..", "app", "org-admin", "settings", "sign-in-providers-section.tsx"),
+  "utf-8"
+);
+
 const SECTIONS_NO_COMMENTS = stripComments(SECTIONS_SRC);
+const PROVIDERS_NO_COMMENTS = stripComments(PROVIDERS_SRC);
 const PAGE_NO_COMMENTS = stripComments(PAGE_SRC);
 
 // ── Wire helpers — generic invariants ───────────────────────────────────────
@@ -123,7 +129,7 @@ describe("listOrganizationIdentityProviders — explicit allowlist", () => {
     expect(body).toMatch(/body\?\.identity_provider === null/);
   });
 
-  it("projects ONLY id/name/slug/type/priority/active/created_at/updated_at — and DROPS the IDP's `config` block", () => {
+  it("projects ONLY id/name/slug/type/priority/active/created_at/updated_at plus the two domain fields of `config` (UI-0912-B)", () => {
     const body = isolateHelperBody("listOrganizationIdentityProviders");
     expect(body).toMatch(/p\.id/);
     expect(body).toMatch(/p\.name/);
@@ -133,13 +139,15 @@ describe("listOrganizationIdentityProviders — explicit allowlist", () => {
     expect(body).toMatch(/p\.active/);
     expect(body).toMatch(/p\.created_at/);
     expect(body).toMatch(/p\.updated_at/);
+    // The Settings card shows who may sign in (UI-0912-B): the email domains
+    // and the allow-every-domain switch, read from `config` and nothing else.
+    expect(body).toMatch(/c\.email_domains/);
+    expect(body).toMatch(/c\.allow_external_domains/);
     const stripped = stripComments(body);
-    // The IDP's response carries a `config` block with operator-
-    // configured fields (issuer_url / client_id / scopes etc.).
-    // The wire helper EXPLICITLY drops it; the UI surfaces only
-    // the high-level identity fields. A future regression that
-    // started reading p.config.* would surface here.
-    expect(stripped).not.toMatch(/p\.config/);
+    // Every other `config` field stays out: a future regression that started
+    // reading the client id, the issuer or the scopes would surface here.
+    const configReads = [...stripped.matchAll(/\bc\.(\w+)/g)].map((m) => m[1]);
+    expect(new Set(configReads)).toEqual(new Set(["email_domains", "allow_external_domains"]));
     expect(stripped).not.toMatch(/p\.client_id\b/);
     expect(stripped).not.toMatch(/p\.issuer_url\b/);
     expect(stripped).not.toMatch(/p\.scopes\b/);
@@ -210,48 +218,60 @@ describe("listScopeTemplates — explicit allowlist + feature gate", () => {
 
 // ── settings-readonly-sections.tsx — per-section invariants ────────────────
 
-describe("Identity providers section — read-only", () => {
-  it("exports IdentityProvidersReadOnlySection and renders the documented heading + subtitle", () => {
-    expect(SECTIONS_SRC).toMatch(/export function IdentityProvidersReadOnlySection/);
-    expect(SECTIONS_SRC).toMatch(/headingId="identity-providers-heading"/);
-    expect(SECTIONS_SRC).toMatch(/title="Identity providers"/);
-    expect(SECTIONS_SRC).toMatch(/Read-only view of configured SSO providers/i);
+// UI-0912-B: the providers card left the read-only module for its own file
+// (sign-in-providers-section.tsx), with Add, Edit and Remove…; its no-secret
+// pin moved with it and became a positive control list.
+describe("Sign-in providers section — no secret, exactly Add / Edit / Remove…", () => {
+  it("is no longer in the read-only module", () => {
+    expect(SECTIONS_SRC).not.toMatch(/IdentityProvidersReadOnlySection/);
+    expect(SECTIONS_SRC).not.toMatch(/title="Identity providers"/);
   });
 
-  it("uses CE/OSS boundary copy for unavailable federation instead of generic retry copy", () => {
-    expect(SECTIONS_SRC).toContain("Identity provider federation is a CE IDP capability");
-    expect(SECTIONS_SRC).toContain("IDP OSS deployments show this boundary");
+  it("exports SignInProvidersSection with the new title, anchor and server-boundary copy", () => {
+    expect(PROVIDERS_SRC).toMatch(/export function SignInProvidersSection/);
+    expect(PROVIDERS_SRC).toContain('id="sign-in-providers"');
+    expect(PROVIDERS_SRC).toContain("Sign-in providers");
+    expect(PROVIDERS_SRC).toContain("This server does not offer sign-in providers.");
+    expect(PROVIDERS_SRC).not.toContain("Identity provider federation is a CE IDP capability");
   });
 
-  it("renders only id/name/slug/type/priority/active/created_at/updated_at — never client_secret / private_key / signing_cert / metadata XML", () => {
-    const start = SECTIONS_SRC.indexOf("function IdentityProvidersReadOnlySection");
-    const end = SECTIONS_SRC.indexOf("\nexport function", start + 1);
-    expect(start).toBeGreaterThan(0);
-    expect(end).toBeGreaterThan(start);
-    const block = stripComments(SECTIONS_SRC.slice(start, end));
-    // Allowed reads.
-    expect(block).toMatch(/p\.name/);
-    expect(block).toMatch(/p\.type/);
-    expect(block).toMatch(/p\.slug/);
-    expect(block).toMatch(/p\.active/);
-    expect(block).toMatch(/p\.created_at/);
-    expect(block).toMatch(/p\.updated_at/);
-    // Forbidden.
+  it("reads only the operator-safe fields — never a secret, the client id or a token", () => {
+    const block = PROVIDERS_NO_COMMENTS;
+    for (const read of [/p\.name/, /p\.type/, /p\.slug/, /p\.active/, /p\.updated_at/]) {
+      expect(block).toMatch(read);
+    }
     const BANNED: RegExp[] = [
-      /p\.client_secret/,
-      /p\.client_secret_encrypted/,
-      /p\.private_key/,
-      /p\.signing_cert/i,
-      /p\.metadata_xml/i,
-      /p\.raw_metadata/,
-      /p\.bind_password/,
-      /p\.access_token/,
+      /\bclient_secret\b/,
+      /\bclient_secret_encrypted\b/,
+      /\bclient_id\b/,
+      /\bprivate_key\b/,
+      /\bsigning_cert\b/i,
+      /\bmetadata_xml\b/i,
+      /\braw_metadata\b/,
+      /\bbind_password\b/,
+      /\baccess_token\b/,
+      /\brefresh_token\b/,
       /p\.config/,
       /JSON\.stringify\(/,
+      /console\.\w+/,
+      /localStorage/,
     ];
     for (const pat of BANNED) {
-      expect(block, `IdentityProvidersReadOnlySection must not render ${pat}`).not.toMatch(pat);
+      expect(block, `SignInProvidersSection must not reference ${pat}`).not.toMatch(pat);
     }
+  });
+
+  it("its controls are exactly Add provider, Edit, Remove…, Copy and the dialog's two buttons", () => {
+    // Literal labels between tags, and the labels chosen in an expression.
+    const literal = [
+      ...PROVIDERS_NO_COMMENTS.matchAll(/>\s*([A-Z][^<>{}]*?)\s*<\/(a|button)>/g),
+    ].map((m) => m[1]);
+    expect(new Set(literal)).toEqual(new Set(["Add provider", "Edit", "Remove…", "Cancel"]));
+    expect(PROVIDERS_NO_COMMENTS).toContain('{copied === p.id ? "Copied" : "Copy"}');
+    expect(PROVIDERS_NO_COMMENTS).toContain('{pending ? "Removing…" : "Remove provider"}');
+    expect(PROVIDERS_NO_COMMENTS).not.toMatch(/>\s*(Create|Delete|Test|New)\b/);
+    // Exactly one form: the remove confirmation.
+    expect(PROVIDERS_NO_COMMENTS.match(/<form\b/g)).toHaveLength(1);
   });
 });
 
@@ -380,13 +400,12 @@ describe("/org-admin/settings/page.tsx — Promise.all + section mounts", () => 
       /import\s*\{[\s\S]*?\}\s*from\s+["']\.\/settings-readonly-sections["']/
     )?.[0];
     expect(sectionsImport, "the sections import must exist").toBeTruthy();
-    for (const name of [
-      "IdentityProvidersReadOnlySection",
-      "OrgRolesReadOnlySection",
-      "ScopeTemplatesReadOnlySection",
-    ]) {
+    for (const name of ["OrgRolesReadOnlySection", "ScopeTemplatesReadOnlySection"]) {
       expect(sectionsImport, `${name} must be imported from the sections module`).toContain(name);
     }
+    expect(PAGE_SRC).toMatch(
+      /import\s*\{\s*SignInProvidersSection\s*\}\s*from\s+["']\.\/sign-in-providers-section["']/
+    );
   });
 
   it("fetches the resources in parallel via Promise.all (includes protocol settings)", () => {
@@ -417,7 +436,7 @@ describe("/org-admin/settings/page.tsx — Promise.all + section mounts", () => 
 
   it("mounts the four sections AFTER DomainsCard and BEFORE the placeholders array map", () => {
     const domainsIdx = PAGE_SRC.indexOf("<DomainsCard");
-    const idpsIdx = PAGE_SRC.indexOf("<IdentityProvidersReadOnlySection");
+    const idpsIdx = PAGE_SRC.indexOf("<SignInProvidersSection");
     const rolesIdx = PAGE_SRC.indexOf("<OrgRolesReadOnlySection");
     const templatesIdx = PAGE_SRC.indexOf("<ScopeTemplatesReadOnlySection");
     const placeholderIdx = PAGE_SRC.indexOf("ORG_ADMIN_SETTINGS_PLACEHOLDERS.map");

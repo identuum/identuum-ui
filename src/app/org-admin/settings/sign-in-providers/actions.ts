@@ -1,9 +1,10 @@
 "use server";
 
 /**
- * Server actions for /org-admin/identity-provider: the organization's ONE
- * upstream OIDC provider (docs/guides/oidc-upstream-login.md in
- * identuum-idp-oss).
+ * Server actions for the sign-in providers on /org-admin/settings and its Add
+ * and Edit pages (UI-0912-B; until then /org-admin/identity-provider): the
+ * organization's ONE upstream OIDC provider (docs/guides/oidc-upstream-login.md
+ * in identuum-idp-oss).
  *
  *   - Session and role re-validated on every action (org_admin only; the IdP
  *     refuses site_admin as well).
@@ -24,6 +25,7 @@ import {
 } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
+import type { ProviderResult } from "./result-flash";
 
 /**
  * What the admin typed, handed back on a failed save so the form keeps it
@@ -47,7 +49,7 @@ export type ProviderFormState =
       fieldErrors?: Partial<Record<string, string>>;
       values?: ProviderTypedValues;
     }
-  | { phase: "saved"; message: string }
+  | { phase: "saved"; result: ProviderResult }
   | { phase: "deleted" };
 
 /**
@@ -62,6 +64,17 @@ function orgReadFailure(kind: OwnOrganizationFailureKind, verb: string) {
     return "You do not have permission to change this organization's sign-in settings.";
   }
   return `Your organization could not be read. Nothing was ${verb}. Try again.`;
+}
+
+/**
+ * A save the IdP refused (COPY B-30, B-34). The IdP's own sentence names the
+ * field problem (it is fixed and secret-free); 409 is the one-provider limit.
+ */
+function saveRefused(status: number, reason: string): string {
+  if (status === 409) {
+    return "This organization already has a sign-in provider. Edit or remove it first.";
+  }
+  return `The provider was not saved: ${reason.replace(/[.\s]+$/, "")}.`;
 }
 
 /** Splits a list typed with spaces, commas or new lines. */
@@ -127,11 +140,10 @@ export async function saveOidcProviderAction(
   const result = await saveOrgOidcProvider(org.org.id, input, mode);
   if (!result.ok) {
     if (result.status === 401) redirect("/login?reason=session_expired");
-    return { phase: "idle", error: result.error, values };
+    return { phase: "idle", error: saveRefused(result.status, result.error), values };
   }
-  revalidatePath("/org-admin/identity-provider");
   revalidatePath("/org-admin/settings");
-  return { phase: "saved", message: mode === "create" ? "Provider saved." : "Provider updated." };
+  return { phase: "saved", result: mode === "create" ? "saved" : "updated" };
 }
 
 export async function deleteOidcProviderAction(
@@ -147,9 +159,9 @@ export async function deleteOidcProviderAction(
   const result = await deleteOrgOidcProvider(org.org.id);
   if (!result.ok) {
     if (result.status === 401) redirect("/login?reason=session_expired");
-    return { phase: "idle", error: result.error };
+    // COPY B-31: the row stays, and the line says so plainly.
+    return { phase: "idle", error: "The provider was not removed. Try again." };
   }
-  revalidatePath("/org-admin/identity-provider");
   revalidatePath("/org-admin/settings");
   return { phase: "deleted" };
 }

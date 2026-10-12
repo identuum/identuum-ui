@@ -39,6 +39,12 @@ import ServiceAccountsPage, {
   metadata as serviceAccountsMeta,
 } from "@/app/org-admin/service-accounts/page";
 import SettingsPage, { metadata as settingsMeta } from "@/app/org-admin/settings/page";
+import SignInProviderEditPage, {
+  metadata as signInProviderEditMeta,
+} from "@/app/org-admin/settings/sign-in-providers/[id]/edit/page";
+import SignInProviderNewPage, {
+  metadata as signInProviderNewMeta,
+} from "@/app/org-admin/settings/sign-in-providers/new/page";
 import UserDetailPage, { metadata as userDetailMeta } from "@/app/org-admin/users/[id]/page";
 import UserNewPage, { metadata as userNewMeta } from "@/app/org-admin/users/new/page";
 import UsersPage, { metadata as usersMeta } from "@/app/org-admin/users/page";
@@ -87,6 +93,19 @@ export const ORG_ADMIN_ROUTES: readonly Route[] = [
     serviceAccountDetailMeta
   ),
   route(/^\/org-admin\/settings$/, [], SettingsPage, settingsMeta),
+  route(
+    /^\/org-admin\/settings\/sign-in-providers\/new$/,
+    [],
+    SignInProviderNewPage,
+    signInProviderNewMeta
+  ),
+  route(
+    /^\/org-admin\/settings\/sign-in-providers\/([^/]+)\/edit$/,
+    ["id"],
+    SignInProviderEditPage,
+    signInProviderEditMeta
+  ),
+  // The old provider page address (v0.9.7-v0.9.11): opens Settings at the card.
   route(/^\/org-admin\/identity-provider$/, [], IdentityProviderPage, identityProviderMeta),
   route(/^\/org-admin\/audit$/, [], AuditPage, auditMeta),
 ];

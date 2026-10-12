@@ -195,9 +195,7 @@ test.describe("/org-admin — authenticated route access", () => {
       expect(await page.getByText("Domains", { exact: true }).count()).toBeGreaterThan(0);
       // The former "Coming soon" placeholders are gone: with the released
       // appliance resolving the org, the REAL sections render — pin them.
-      expect(await page.getByText("Identity providers", { exact: true }).count()).toBeGreaterThan(
-        0
-      );
+      expect(await page.getByText("Sign-in providers", { exact: true }).count()).toBeGreaterThan(0);
       expect(await page.getByText("Protocol settings", { exact: true }).count()).toBeGreaterThan(0);
     } finally {
       await page.close();

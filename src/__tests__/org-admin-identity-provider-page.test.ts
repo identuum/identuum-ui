@@ -24,7 +24,7 @@ vi.mock("../lib/runtime-config", () => ({
   idpBaseUrl: () => "http://idp.test",
 }));
 
-import { providerCallbackUrl } from "../app/org-admin/identity-provider/provider-form";
+import { providerCallbackUrl } from "../app/org-admin/settings/sign-in-providers/provider-form";
 import {
   deleteOrgOidcProvider,
   getOrgOidcProvider,
@@ -125,7 +125,7 @@ describe("the organization's OIDC provider, through the API the guide documents"
 });
 
 describe("the page", () => {
-  const dir = resolve(__dirname, "../app/org-admin/identity-provider");
+  const dir = resolve(__dirname, "../app/org-admin/settings/sign-in-providers");
   const form = readFileSync(resolve(dir, "provider-form.tsx"), "utf8");
   const actions = readFileSync(resolve(dir, "actions.ts"), "utf8");
 
@@ -144,11 +144,11 @@ describe("the page", () => {
     expect(actions).toContain("List at least one email domain, or allow every domain.");
   });
 
-  it("the settings page links to it", () => {
-    const sections = readFileSync(
-      resolve(__dirname, "../app/org-admin/settings/settings-readonly-sections.tsx"),
+  it("the old address opens the Settings card (UI-0912-B)", () => {
+    const old = readFileSync(
+      resolve(__dirname, "../app/org-admin/identity-provider/page.tsx"),
       "utf8"
     );
-    expect(sections).toContain('href="/org-admin/identity-provider"');
+    expect(old).toContain('redirect("/org-admin/settings#sign-in-providers")');
   });
 });

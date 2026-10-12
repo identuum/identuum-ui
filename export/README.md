@@ -20,9 +20,12 @@ and the sign-in reason banner for the boundary's logout outcomes
 (export/src/login-route.tsx). It must not replace the Next deployment before
 the remaining acceptance gates named below have run.
 
-The org-admin route table includes `/org-admin/identity-provider`, reached
-from Settings. It uses the shared sign-in provider page and its load, save
-and delete actions through the same platform adapters as Settings.
+Settings lists the organization's sign-in providers. The org-admin route
+table includes their Add and Edit pages
+(`/org-admin/settings/sign-in-providers/new` and `/<id>/edit`), which use the
+shared save action through the same platform adapters as Settings; Remove
+runs on Settings itself. The old address `/org-admin/identity-provider` stays
+in the table and opens Settings at the providers card.
 
 ## Security contract
 

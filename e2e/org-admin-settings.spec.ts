@@ -115,7 +115,7 @@ test.describe("/org-admin/settings — main settings surface", () => {
       // identuum-20260530-org-admin-settings-readonly-tabs. Each
       // section's <h2> is the load-bearing anchor. The Webhooks section is
       // gone (owner decision 5, 2026-09-25: no edition serves the list).
-      await expect(page.getByRole("heading", { name: "Identity providers" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Sign-in providers" })).toBeVisible();
       expect(await page.getByRole("heading", { name: "Webhooks" }).count()).toBe(0);
       await expect(page.getByRole("heading", { name: "Roles" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Scope templates" })).toBeVisible();
