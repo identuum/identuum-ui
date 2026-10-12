@@ -55,6 +55,18 @@ to `v0.6.2` were written when the artifact was the container image
 - **The old provider page address opens Settings** at the providers card,
   so old links still work.
 - **One backup code reads in the singular:** "Only 1 backup code left."
+- **The member Overview says how your email address was verified.** It
+  shows "Verified by email", "Verified by your sign-in provider" or
+  "Verified". When the address is not verified yet, "Send verification
+  email" mails you a link, and the page says what happened. When this
+  server cannot send email, the page says so and asks you to contact your
+  administrator. Needs identuum-idp-oss v0.9.12; other servers show the
+  previous Verified / Unverified row.
+- **An administrator sees how a user's address was checked.** The user
+  page shows, under the address, whether it was verified by email, by the
+  sign-in provider or before v0.9.12, or why it is not verified (set by an
+  administrator, activated with an administrator's link, or set during
+  setup).
 
 ## `v0.9.11`
 
