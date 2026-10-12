@@ -1,16 +1,5 @@
 {
   "schema_version": "ledger-amendments.v1",
-  "base_commit": "34c4d8149f02113d3873aed1c5842a11a2783a15",
-  "changes": [
-    {
-      "rule_id": "GUARD-PLAIN-LOGIN-1",
-      "change_class": "test_fingerprint_changed",
-      "reason": "UI-0912-AB-FIX F1 (review UI-0912-AB-REVIEW, 2026-10-12): the rule test now names the Next case. identuum-idp-oss HandleValidateSession answers a request with no credential 401 reason missing_credential (auth_sessions.go:933); the test reads that body through validateSessionResponse and requires the plain /login. missing_credential joins signed_out and no_credential."
-    },
-    {
-      "rule_id": "GUARD-PLAIN-LOGIN-1",
-      "change_class": "proof_changed",
-      "reason": "UI-0912-AB-FIX F1: re-proved on the extended test. src/lib/session-guard.ts swapped back to 34c4d81 fails the tagged test on the Next missing_credential body; restored, green. The prior proof is superseded, not removed."
-    }
-  ]
+  "base_commit": "b457e0df453f209a8d628c4563062f0948aead3d",
+  "changes": []
 }
