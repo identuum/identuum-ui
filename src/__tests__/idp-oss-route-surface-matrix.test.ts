@@ -126,8 +126,18 @@ const IDP_ROUTE_SURFACE_MATRIX: SurfaceMatrixRow[] = [
     route: "/dashboard + /dashboard/security",
     classification: "OSS-supported",
     coveredRoutes: ["/dashboard", "/dashboard/security"],
-    files: ["app/dashboard/page.tsx", "app/dashboard/security/page.tsx"],
-    signals: ["getOwnProfile", "/account/settings?tab=passkeys"],
+    files: [
+      "app/dashboard/page.tsx",
+      "app/dashboard/security/page.tsx",
+      "app/dashboard/email-actions.ts",
+      "lib/idp-account-client.ts",
+    ],
+    signals: [
+      "getOwnProfile",
+      "/account/settings?tab=passkeys",
+      "sendOwnVerificationEmail",
+      "/api/v1/me/email/verification",
+    ],
   },
   {
     route: "/org-admin overview + users",
