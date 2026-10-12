@@ -29,7 +29,8 @@ export function SendVerificationEmail({ address }: { address: string }) {
   const failed = state.outcome !== undefined && state.outcome !== "sent";
   return (
     <form action={formAction} className="space-y-1.5">
-      <Button type="submit" variant="secondary" size="sm" loading={isPending}>
+      {/* 44 px touch target (UI-0912-A4 Q2, judge ruling b). */}
+      <Button type="submit" variant="secondary" size="lg" loading={isPending}>
         Send verification email
       </Button>
       <p className="text-xs text-stone-500">

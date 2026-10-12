@@ -86,7 +86,7 @@ export default async function DashboardPage() {
           {domain && orgName && <InfoRow label="Domain" value={domain} />}
           {mfaEnabled !== null && (
             <InfoRow
-              label="Two-factor auth"
+              label="Two-step sign-in"
               value={
                 mfaEnabled ? (
                   <span className="inline-block text-xs font-medium text-sky-700 bg-sky-50 px-2 py-0.5 rounded">
@@ -246,7 +246,9 @@ function ProfileFacts({ profile }: { profile: UserProfile | null }) {
 function SecurityFacts({ mfa }: { mfa: MfaStatusResult }) {
   if (!mfa.ok) {
     // CE and older servers do not serve /me/mfa/status: the card still links.
-    return <p>{mfa.unavailable ? "Manage your password and two-step sign-in." : NOT_LOADED}</p>;
+    // A 503 is a server that did not answer, not a missing route (F10): A-08.
+    const noRoute = mfa.unavailable && mfa.statusCode !== 503;
+    return <p>{noRoute ? "Manage your password and two-step sign-in." : NOT_LOADED}</p>;
   }
   if (!mfa.status.mfa_enabled) {
     return (
