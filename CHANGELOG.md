@@ -13,6 +13,29 @@ to `v0.6.2` were written when the artifact was the container image
 
 ## Unreleased
 
+- **The member Overview shows real facts.** The four "Coming soon" cards are
+  gone. Three cards — Profile, Security and Sessions — show your name and
+  email, whether two-step sign-in is on and how many backup codes are left,
+  and how many devices are signed in. Each card opens its page. A card that
+  cannot load says so and still opens its page.
+- **The member menu has Profile, Security and Sessions** next to Overview,
+  on the Overview and on the account settings pages.
+- **The provider page keeps working when a tab stays open.** When the
+  access token has expired, the console renews it and reads the
+  organization again. After a server restart, a failed first read is tried
+  once more.
+- **Provider save and remove failures say what happened.** The message now
+  says whether the server did not answer, you lack permission, or the
+  organization could not be read. A failed save keeps what you typed, except
+  the client secret. An expired session goes to the sign-in page.
+- **A visitor who never signed in sees the plain sign-in page.** "Your
+  session has expired" is shown only when a session really ended.
+- **The sign-in page shows its message once.** "You have been signed out."
+  goes away after a sign-in attempt or a reload.
+- **Clearer text:** the password tab says this device stays signed in and
+  your other devices are signed out; the two-step tab explains recovery
+  codes; the application forms point to "Rotate client secret".
+
 ## `v0.9.11`
 
 The static console export for identuum-idp-oss `v0.9.11`, with a sign-in

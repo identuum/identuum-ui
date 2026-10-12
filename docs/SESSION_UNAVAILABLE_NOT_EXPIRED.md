@@ -25,7 +25,7 @@ same day in identuum-idp-oss; it now answers `503` with `Retry-After: 1`, an
 | state | how it is recognised | what the UI does |
 |---|---|---|
 | `authenticated` | validate 200 | proceed; the layout applies its role rules |
-| `unauthenticated` | validate 4xx (401 with the IdP's `reason`, or any other 4xx) | the VERDICT: redirect to `/login?reason=session_expired`, exactly as before |
+| `unauthenticated` | validate 4xx (401 with the IdP's `reason`, or any other 4xx) | the VERDICT: redirect to `/login?reason=session_expired`; since UI-0912-A (2026-10-12) a verdict that NO credential was presented (`signed_out` from the export's opted-in probe, `no_credential` from the IdP) redirects to the plain `/login`, because a visitor who never signed in has no session to expire |
 | `unavailable` | validate 5xx, or no answer, for the whole retry budget | NO redirect to /login, NO cookie touched. Layouts render `ServiceUnavailable` in place (URL stays; "Try again" reloads). Server actions / data helpers that go through `getServerSession()` are sent to `/unavailable?cid=…&status=…&retry=…`. The correlation id is shown as the reference; it is the join key to the IdP's `AUTH-503` ERROR line. |
 
 Code: `src/lib/server-session.ts` (`getServerSessionState()` — the tri-state
@@ -94,5 +94,6 @@ cannot answer").
 - `e2e/unavailable-not-expired.spec.ts` (devloop): repoints the UI's runtime
   config at a local 503 stub (Retry-After 1, X-Request-ID, correlation_id):
   the unavailable state renders with the id, no /login, cookies kept; stub
-  removed → the session resumes without re-login; cookies dropped → the real
-  verdict still lands on `/login?reason=session_expired`.
+  removed → the session resumes without re-login; cookies replaced by a
+  refused access cookie → the real verdict still lands on
+  `/login?reason=session_expired`.
