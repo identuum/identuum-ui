@@ -24,14 +24,20 @@ to `v0.6.2` were written when the artifact was the container image
   access token has expired, the console renews it and reads the
   organization again. After a server restart, a failed first read is tried
   once more.
-- **Provider save and remove failures say what happened.** The message now
-  says whether the server did not answer, you lack permission, or the
-  organization could not be read. A failed save keeps what you typed, except
-  the client secret. An expired session goes to the sign-in page.
-- **A visitor who never signed in sees the plain sign-in page.** "Your
-  session has expired" is shown only when a session really ended.
-- **The sign-in page shows its message once.** "You have been signed out."
-  goes away after a sign-in attempt or a reload.
+- **Provider save and remove failures say what happened.** When the
+  organization cannot be read, the message says whether the server did not
+  answer, you lack permission, or the organization could not be read; a
+  save the server refuses gives the server's reason. Settings
+  and the Add and Edit pages say the same when they cannot read the
+  organization. A failed save keeps what you typed, except the client
+  secret. An expired session goes to the sign-in page.
+- **A visitor who never signed in sees the plain sign-in page,** in the
+  exported console and in the Next deployment. "Your session has expired"
+  is shown only when a sign-in that was presented is refused.
+- **The sign-in page shows "You have been signed out." once.** It goes away
+  after a sign-in attempt or a reload. "Sign-out could not be confirmed"
+  (with Retry sign-out) and "signed out on this device only" stay until they
+  are resolved.
 - **Clearer text:** the password tab says this device stays signed in and
   your other devices are signed out; the two-step tab explains recovery
   codes; the application forms point to "Rotate client secret".
@@ -47,8 +53,12 @@ to `v0.6.2` were written when the artifact was the container image
   change.
 - **Remove asks first and stays on the page.** "Remove…" opens a short
   question. After you confirm, the provider leaves the list and the card
-  says "Provider removed." If removal fails, the provider stays and the card
-  says so.
+  says "Provider removed." A provider another tab already removed leaves the
+  list too. If removal fails, the provider stays, the card says so, and the
+  keyboard focus moves to that message.
+- **An unknown sign-in policy is not shown as "password only".** A server
+  that does not report the policy shows "The sign-in policy could not be
+  read."
 - **"Add provider" says why it is off.** This edition supports one sign-in
   provider, so the button is disabled while one exists, with that reason
   next to it.
@@ -67,6 +77,10 @@ to `v0.6.2` were written when the artifact was the container image
   sign-in provider or before v0.9.12, or why it is not verified (set by an
   administrator, activated with an administrator's link, or set during
   setup).
+- **Smaller fixes on the member Overview.** "Send verification email" is a
+  44 px button. The "Signed in as" card says "Two-step sign-in", like the
+  Security card. When the server does not answer, the Security card says it
+  could not load.
 
 ## `v0.9.11`
 
