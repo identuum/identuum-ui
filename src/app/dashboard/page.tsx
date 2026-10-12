@@ -199,7 +199,8 @@ function SecurityFacts({ mfa }: { mfa: MfaStatusResult }) {
       <p>Two-step sign-in: On</p>
       <p>Backup codes left: {left}</p>
       {left === 0 && <Warning>No backup codes left. Make new ones.</Warning>}
-      {left > 0 && left <= 2 && <Warning>Only {left} backup codes left. Make new ones.</Warning>}
+      {left === 1 && <Warning>Only 1 backup code left. Make new ones.</Warning>}
+      {left === 2 && <Warning>Only 2 backup codes left. Make new ones.</Warning>}
     </>
   );
 }

@@ -118,6 +118,11 @@ describe("member Overview", () => {
     h.mfa = mfaOn(2);
     t = text(await overview());
     expect(t).toContain("Only 2 backup codes left. Make new ones.");
+    // UI-0912-B: the judge's copy decision for UI-0912-A Q3 (b).
+    h.mfa = mfaOn(1);
+    t = text(await overview());
+    expect(t).toContain("Only 1 backup code left. Make new ones.");
+    expect(t).not.toContain("1 backup codes");
     h.mfa = mfaOn(0);
     t = text(await overview());
     expect(t).toContain("No backup codes left. Make new ones.");
