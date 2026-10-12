@@ -18,6 +18,7 @@ import type { Metadata } from "next";
 import { AuditIdentityCell } from "@/components/shared/audit-identity-cell";
 import { UserUnavailable } from "@/components/shared/user-unavailable";
 import { LocalTime } from "@/components/ui/local-time";
+import { adminEmailStatus } from "@/lib/email-verification";
 import type { OrgRoleItem } from "@/lib/idp-admin-client";
 import {
   getOrgUserById,
@@ -141,6 +142,8 @@ export default async function OrgAdminUserDetailPage({
     (user.invitation_pending && !user.invitation_email_bound) ||
     (!user.invitation_email_bound && isNoEmailSentinel(user.email));
   const displayEmail = isNoEmailSentinel(user.email) ? null : user.email || null;
+  // UI-0912-A4 (OSS v0.9.12 C2): how the address was checked; null on CE.
+  const emailStatus = adminEmailStatus(user);
 
   const headingName = user.name ?? displayEmail ?? "Pending user";
 
@@ -243,6 +246,11 @@ export default async function OrgAdminUserDetailPage({
               <span className="font-mono text-xs text-sky-950 break-all">
                 {displayEmail ?? "—"}
               </span>
+              {emailStatus && (
+                <span data-testid="email-status" className="block text-xs text-stone-500 mt-0.5">
+                  {emailStatus}
+                </span>
+              )}
             </DetailRow>
           )}
           <DetailRow label="Display name">
@@ -260,9 +268,12 @@ export default async function OrgAdminUserDetailPage({
               {sBadge.label}
             </span>
           </DetailRow>
-          <DetailRow label="Email verified">
-            <span className="text-xs text-sky-950">{user.email_verified ? "Yes" : "No"}</span>
-          </DetailRow>
+          {/* identuum-idp-ce sends no C2 fields: today's activation row stays. */}
+          {emailStatus === null && (
+            <DetailRow label="Email verified">
+              <span className="text-xs text-sky-950">{user.email_verified ? "Yes" : "No"}</span>
+            </DetailRow>
+          )}
           <DetailRow label="MFA">
             <span className="text-xs text-sky-950">
               {user.mfa_enabled ? "Enabled" : "Disabled"}

@@ -820,6 +820,7 @@ export async function getOwnProfile(): Promise<UserProfile | null> {
       domain: optStr(u.domain),
       mfa_enabled: Boolean(u.mfa_enabled),
       email_verified: Boolean(u.email_verified),
+      ...emailVerificationFields(u),
       // THE-PROFILE-CLAIMS: OIDC §5.1 profile fields, null when unset.
       given_name: optStr(u.given_name),
       family_name: optStr(u.family_name),
@@ -907,6 +908,7 @@ export async function listOrgUsers(opts?: {
         deleted: Boolean(u.deleted),
         mfa_enabled: Boolean(u.mfa_enabled),
         email_verified: Boolean(u.email_verified),
+        ...emailVerificationFields(u),
         created_at: String(u.created_at ?? ""),
         last_login_at: typeof u.last_login_at === "string" ? u.last_login_at : null,
         invitation_pending: Boolean(u.invitation_pending),
@@ -1028,6 +1030,18 @@ function invitationEmailBound(u: any): boolean {
   if (typeof u.invitation_email_bound === "boolean") return u.invitation_email_bound;
   const email = String(u.email ?? "");
   return !(email.startsWith("noemail+") && email.endsWith("@no-email.internal"));
+}
+
+// UI-0912-A4 (OSS v0.9.12 C2): email_verified_via and email_proven on a user
+// object. identuum-idp-ce and older OSS send neither: both stay absent (never
+// coerced), so the screens keep today's display.
+// biome-ignore lint/suspicious/noExplicitAny: raw API response item
+function emailVerificationFields(u: any): Pick<UserProfile, "email_verified_via" | "email_proven"> {
+  if (typeof u.email_proven !== "boolean") return {};
+  return {
+    email_verified_via: typeof u.email_verified_via === "string" ? u.email_verified_via : null,
+    email_proven: u.email_proven,
+  };
 }
 
 // ── User invite (OSS-ONBOARD-B, D-016; capabilities.user_invite) ─────────────
@@ -1264,6 +1278,7 @@ export async function getOrgUserById(id: string): Promise<OrgUserItem | null> {
       deleted: Boolean(u.deleted),
       mfa_enabled: Boolean(u.mfa_enabled),
       email_verified: Boolean(u.email_verified),
+      ...emailVerificationFields(u),
       created_at: String(u.created_at ?? ""),
       last_login_at: typeof u.last_login_at === "string" ? u.last_login_at : null,
       invitation_pending: Boolean(u.invitation_pending),

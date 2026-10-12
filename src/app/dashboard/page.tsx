@@ -17,14 +17,21 @@
 
 import type { Metadata } from "next";
 import {
+  type MemberEmailStatus,
+  memberEmailStatus,
+  NOT_CONFIGURED_TEXT,
+} from "@/lib/email-verification";
+import {
   getOwnMfaStatus,
   type ListSessionsResult,
   listOwnSessions,
   type MfaStatusResult,
 } from "@/lib/idp-account-client";
 import { getOwnProfile } from "@/lib/idp-admin-client";
+import { mailCeremoniesAvailable } from "@/lib/mail-capabilities";
 import { getServerSession } from "@/lib/server-session";
 import type { UserProfile } from "@/lib/types";
+import { SendVerificationEmail } from "./send-verification-email";
 
 const NOT_LOADED = "We could not load this right now. Open the page to see it.";
 
@@ -32,11 +39,12 @@ export const metadata: Metadata = { title: "Dashboard — Identuum" };
 
 export default async function DashboardPage() {
   // getServerSession() is cached per-request — the layout already called it.
-  const [session, profile, mfa, sessions] = await Promise.all([
+  const [session, profile, mfa, sessions, mailCeremonies] = await Promise.all([
     getServerSession(),
     getOwnProfile(),
     getOwnMfaStatus(),
     listOwnSessions(),
+    mailCeremoniesAvailable(),
   ]);
 
   // Layout guarantees session exists and role is org_user at this point.
@@ -47,6 +55,8 @@ export default async function DashboardPage() {
   const domain = profile?.domain ?? null;
   const mfaEnabled = profile?.mfa_enabled ?? null;
   const emailVerified = profile?.email_verified ?? null;
+  // UI-0912-A4: null on identuum-idp-ce (no C2 fields): today's row stays.
+  const emailStatus = profile ? memberEmailStatus(profile) : null;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -90,21 +100,35 @@ export default async function DashboardPage() {
               }
             />
           )}
-          {emailVerified !== null && (
+          {emailStatus ? (
             <InfoRow
-              label="Email verified"
+              label="Email address"
               value={
-                emailVerified ? (
-                  <span className="inline-block text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                    Verified
-                  </span>
-                ) : (
-                  <span className="inline-block text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
-                    Unverified
-                  </span>
-                )
+                <EmailStatus
+                  status={emailStatus}
+                  address={email}
+                  mailReady={mailCeremonies}
+                  offerSend={role !== "site_admin"}
+                />
               }
             />
+          ) : (
+            emailVerified !== null && (
+              <InfoRow
+                label="Email verified"
+                value={
+                  emailVerified ? (
+                    <span className="inline-block text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                      Verified
+                    </span>
+                  ) : (
+                    <span className="inline-block text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                      Unverified
+                    </span>
+                  )
+                }
+              />
+            )
           )}
         </div>
       </div>
@@ -132,7 +156,46 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3">
       <span className="w-32 shrink-0 text-xs text-stone-400">{label}</span>
-      <span className="min-w-0 break-words text-sm text-sky-950 font-medium">{value}</span>
+      <div className="min-w-0 break-words text-sm text-sky-950 font-medium">{value}</div>
+    </div>
+  );
+}
+
+/**
+ * UI-0912-A4: how the mailbox was proven, or "Not verified yet" with the
+ * send button. A server that cannot send email says so and offers no button
+ * (owner rule 2026-10-12 18:05). The site_admin is never offered it.
+ */
+function EmailStatus({
+  status,
+  address,
+  mailReady,
+  offerSend,
+}: {
+  status: MemberEmailStatus;
+  address: string;
+  mailReady: boolean;
+  offerSend: boolean;
+}) {
+  const badge = (
+    <span
+      className={`inline-block text-xs font-medium px-2 py-0.5 rounded ${
+        status.proven ? "text-emerald-700 bg-emerald-50" : "text-amber-700 bg-amber-50"
+      }`}
+    >
+      {status.label}
+    </span>
+  );
+  if (status.proven || !offerSend) return badge;
+  if (!mailReady) {
+    return <span className="text-xs font-normal text-amber-700">{NOT_CONFIGURED_TEXT}</span>;
+  }
+  return (
+    <div className="space-y-2">
+      {badge}
+      <div className="font-normal">
+        <SendVerificationEmail address={address} />
+      </div>
     </div>
   );
 }

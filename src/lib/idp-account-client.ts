@@ -7,6 +7,7 @@
  */
 import "server-only";
 
+import type { SendVerificationOutcome } from "./email-verification";
 import { idpAuthHeaders, idpFetch } from "./idp-transport";
 import { idpBaseUrl, loadRuntimeConfig } from "./runtime-config";
 
@@ -275,5 +276,44 @@ export async function disableOwnMfa(input: {
     return { ok: true };
   } catch {
     return failedMutation(0);
+  }
+}
+
+/**
+ * UI-0912-A4 (OSS v0.9.12 C2): mails a verification link to the signed-in
+ * user's own address — POST /api/v1/me/email/verification, no body; the
+ * principal names the user. Each answer is told apart so the page can say
+ * what happened:
+ *   200 {status:"sent"} | {status:"already_verified"};
+ *   503 {error:"email_delivery_not_configured"} — this server has no SMTP
+ *   (any other 503 is an outage, a failed send);
+ *   502 email_delivery_failed, 404, 5xx, network — a failed send;
+ *   429 — rate limited; 401 — the session is gone;
+ *   409 / 422 — the account cannot verify this way (the site_admin).
+ */
+export async function sendOwnVerificationEmail(): Promise<{ outcome: SendVerificationOutcome }> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) return { outcome: "failed" };
+
+  try {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/me/email/verification`, {
+      method: "POST",
+      headers: await idpAuthHeaders(),
+      cache: "no-store",
+    });
+    if (res.ok) {
+      // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+      const data: any = await res.json().catch(() => null);
+      return { outcome: data?.status === "already_verified" ? "already_verified" : "sent" };
+    }
+    if (res.status === 401) return { outcome: "unauthorized" };
+    if (res.status === 429) return { outcome: "rate_limited" };
+    if (res.status === 409 || res.status === 422) return { outcome: "not_for_account" };
+    if (res.status === 503 && (await serverErrorCode(res)) === "email_delivery_not_configured") {
+      return { outcome: "not_configured" };
+    }
+    return { outcome: "failed" };
+  } catch {
+    return { outcome: "failed" };
   }
 }

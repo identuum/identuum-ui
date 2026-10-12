@@ -257,6 +257,13 @@ export interface OrgUserItem {
   deleted: boolean;
   mfa_enabled: boolean;
   email_verified: boolean;
+  /**
+   * UI-0912-A4 (OSS v0.9.12 C2): how the address was verified, and whether
+   * the mailbox was proven (email_verified is ACTIVATION). Absent on
+   * identuum-idp-ce and older OSS: the screens keep today's display.
+   */
+  email_verified_via?: string | null;
+  email_proven?: boolean;
   created_at: string;
   last_login_at: string | null;
   /** Backend-authoritative: true when the user has an outstanding unclaimed invitation. */
@@ -526,6 +533,13 @@ export interface UserProfile {
   domain: string | null;
   mfa_enabled: boolean;
   email_verified: boolean;
+  /**
+   * UI-0912-A4 (OSS v0.9.12 C2): how the address was verified, and whether
+   * the mailbox was proven (email_verified is ACTIVATION). Absent on
+   * identuum-idp-ce and older OSS: the screens keep today's display.
+   */
+  email_verified_via?: string | null;
+  email_proven?: boolean;
   /**
    * OIDC Core §5.1 profile fields (THE-PROFILE-CLAIMS). Optional on the IdP;
    * null when unset. Edited on /account/settings?tab=profile via PUT /api/v1/profile.
