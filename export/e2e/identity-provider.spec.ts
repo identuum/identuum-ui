@@ -32,7 +32,9 @@ test("org admin finds the sign-in providers on Settings in the binary", async ({
   }
 });
 
-async function fakeBoundary(page: Page) {
+// deleteStatus: what DELETE answers (UI-0912-AB-FIX F4/F6). 404 means another
+// tab removed the provider first; any other refusal leaves it in place.
+async function fakeBoundary(page: Page, opts: { deleteStatus?: number } = {}) {
   let signedIn = false;
   let provider: Record<string, unknown> | null = null;
   const writes: string[] = [];
@@ -70,9 +72,14 @@ async function fakeBoundary(page: Page) {
           config,
         };
       } else if (method === "DELETE") {
-        provider = null;
+        if (!opts.deleteStatus || opts.deleteStatus === 404) provider = null;
       }
-      status = method === "GET" && !provider ? 404 : 200;
+      status =
+        method === "DELETE" && opts.deleteStatus
+          ? opts.deleteStatus
+          : method === "GET" && !provider
+            ? 404
+            : 200;
       json = { identity_provider: provider };
       expect(JSON.stringify(json).includes("client_secret")).toBe(false);
     } else {
@@ -208,6 +215,60 @@ test("providers on Settings: add, edit, remove in place, keyboard only", async (
   await page.goto(OLD_PATH);
   await expect(page).toHaveURL(/\/org-admin\/settings#sign-in-providers$/);
   await expect(card.getByRole("heading", { name: "Sign-in providers", exact: true })).toBeVisible();
+});
+
+/** Add one provider through the shared Add page; back on Settings. */
+async function addOne(page: Page) {
+  await page.goto("/org-admin/settings/sign-in-providers/new");
+  await page.getByLabel("Name", { exact: true }).fill("Browser provider");
+  await page.getByLabel("Short identifier").fill("browser-provider");
+  await page.getByLabel("Issuer URL", { exact: true }).fill("https://issuer.example.test");
+  await page.getByLabel("Client ID", { exact: true }).fill("browser-client");
+  await proofRequest(() =>
+    page.getByLabel("Client secret", { exact: true }).fill("disposable-provider-fixture")
+  );
+  await page.getByLabel("Email domains").fill("capture.test");
+  await page.getByRole("button", { name: "Save provider", exact: true }).click();
+  await expect(page.locator("#sign-in-providers").getByRole("status")).toHaveText(
+    "Provider saved."
+  );
+}
+
+// UI-0912-AB-FIX F6: a failed remove keeps the row, says so, and moves focus to
+// that line (it was moved to the empty status line); a retry is reachable.
+test("a failed remove moves focus to the line that says so", async ({ page }) => {
+  await fakeBoundary(page, { deleteStatus: 500 });
+  await login(page, "admin@capture.test", "disposable-browser-fixture");
+  await addOne(page);
+  const card = page.locator("#sign-in-providers");
+  await card.getByRole("button", { name: "Remove…", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Enter");
+  const alert = card.getByRole("alert").filter({ hasText: "The provider was not removed." });
+  await expect(alert).toHaveText("The provider was not removed. Try again.");
+  await expect(alert).toBeFocused();
+  await expect(card.getByText("Browser provider", { exact: true })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Remove…", exact: true })).toBeVisible();
+});
+
+// UI-0912-AB-FIX F4: another tab removed the provider first (DELETE 404). The
+// removal is what was asked: the row leaves and the card says so.
+test("a remove answered 404 (already removed) leaves the list", async ({ page }) => {
+  await fakeBoundary(page, { deleteStatus: 404 });
+  await login(page, "admin@capture.test", "disposable-browser-fixture");
+  await addOne(page);
+  const card = page.locator("#sign-in-providers");
+  await card.getByRole("button", { name: "Remove…", exact: true }).click();
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Remove provider", exact: true })
+    .click();
+  await expect(card.getByRole("status")).toHaveText("Provider removed.");
+  await expect(card.getByText("The provider was not removed. Try again.")).toHaveCount(0);
+  await expect(
+    card.getByText("No sign-in provider yet. Members sign in with a password.")
+  ).toBeVisible();
 });
 
 // RQ-1 (a), owner 2026-10-12: the console shell keeps a fixed 240 px sidebar,

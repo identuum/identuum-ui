@@ -20,11 +20,11 @@ import {
   deleteOrgOidcProvider,
   getOwnOrganizationResult,
   type OrgOidcProviderInput,
-  type OwnOrganizationFailureKind,
   saveOrgOidcProvider,
 } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
+import { orgReadFailure } from "./org-read";
 import type { ProviderResult } from "./result-flash";
 
 /**
@@ -53,20 +53,6 @@ export type ProviderFormState =
   | { phase: "deleted" };
 
 /**
- * One plain line per cause of a failed organization read (UI-0912-A, C3).
- * A "session" failure never reaches it: the callers redirect to sign-in.
- */
-function orgReadFailure(kind: OwnOrganizationFailureKind, verb: string) {
-  if (kind === "unavailable") {
-    return `The server did not answer. Nothing was ${verb}. Try again in a moment.`;
-  }
-  if (kind === "forbidden") {
-    return "You do not have permission to change this organization's sign-in settings.";
-  }
-  return `Your organization could not be read. Nothing was ${verb}. Try again.`;
-}
-
-/**
  * A save the IdP refused (COPY B-30, B-34). The IdP's own sentence names the
  * field problem (it is fixed and secret-free); 409 is the one-provider limit.
  */
@@ -74,7 +60,12 @@ function saveRefused(status: number, reason: string): string {
   if (status === 409) {
     return "This organization already has a sign-in provider. Edit or remove it first.";
   }
-  return `The provider was not saved: ${reason.replace(/[.\s]+$/, "")}.`;
+  const clause = reason.replace(/[.\s]+$/, "");
+  // "The IdP is…" reads "the IdP is…" mid-sentence; "IdP" itself stays.
+  const lowered = /^[A-Z][a-z]+\b/.test(clause)
+    ? clause.charAt(0).toLowerCase() + clause.slice(1)
+    : clause;
+  return `The provider was not saved: ${lowered}.`;
 }
 
 /** Splits a list typed with spaces, commas or new lines. */
@@ -142,7 +133,10 @@ export async function saveOidcProviderAction(
     if (result.status === 401) redirect("/login?reason=session_expired");
     return { phase: "idle", error: saveRefused(result.status, result.error), values };
   }
-  revalidatePath("/org-admin/settings");
+  // No revalidatePath here (UI-0912-AB-FIX F2): in Next it re-renders the
+  // page that saved, and the Add page with a provider swaps the form for the
+  // "already has a provider" alert before the form can open Settings. The
+  // form opens Settings itself, which reads the list fresh.
   return { phase: "saved", result: mode === "create" ? "saved" : "updated" };
 }
 
@@ -157,7 +151,8 @@ export async function deleteOidcProviderAction(
     return { phase: "idle", error: orgReadFailure(org.ok ? "other" : org.kind, "removed") };
   }
   const result = await deleteOrgOidcProvider(org.org.id);
-  if (!result.ok) {
+  // 404: another tab already removed it, which is what was asked (F4).
+  if (!result.ok && result.status !== 404) {
     if (result.status === 401) redirect("/login?reason=session_expired");
     // COPY B-31: the row stays, and the line says so plainly.
     return { phase: "idle", error: "The provider was not removed. Try again." };

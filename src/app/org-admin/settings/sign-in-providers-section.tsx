@@ -93,6 +93,7 @@ export function SignInProvidersSection({
   const [copied, setCopied] = useState<string | null>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const statusRef = useRef<HTMLParagraphElement>(null);
+  const alertRef = useRef<HTMLParagraphElement>(null);
   const removeTrigger = useRef<HTMLElement | null>(null);
   const headingId = useId();
   const limitId = useId();
@@ -112,12 +113,16 @@ export function SignInProvidersSection({
     }
   }, []);
 
-  // A removal finished: close the dialog and move focus to the result line,
-  // because the Remove… button it came from may be gone.
+  // A removal finished: close the dialog and move focus to the line that
+  // says what happened — the result line, or the alert when it failed
+  // (UI-0912-AB-FIX F6) — because the Remove… button may be gone.
   useEffect(() => {
-    if (delState.phase === "deleted" || (delState.phase === "idle" && delState.error)) {
+    if (delState.phase === "deleted") {
       setRemoving(null);
       statusRef.current?.focus();
+    } else if (delState.phase === "idle" && delState.error) {
+      setRemoving(null);
+      alertRef.current?.focus();
     }
   }, [delState]);
 
@@ -173,8 +178,11 @@ export function SignInProvidersSection({
         </p>
         {removeError && (
           <p
+            ref={alertRef}
             role="alert"
-            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            tabIndex={-1}
+            data-testid="remove-error"
+            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60"
           >
             {removeError}
           </p>

@@ -350,7 +350,8 @@ export type OwnOrganizationResult =
  */
 export async function getOwnOrganizationResult(): Promise<OwnOrganizationResult> {
   const cfg = loadRuntimeConfig();
-  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 0, kind: "unavailable" };
+  // No IdP configured is not "the server did not answer" (F10): nothing was asked.
+  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 0, kind: "other" };
 
   const url = `${idpBaseUrl(cfg)}/api/v1/organizations/current`;
   const read = async () =>
@@ -398,7 +399,10 @@ export async function getOwnOrganizationResult(): Promise<OwnOrganizationResult>
       active: Boolean(o.active),
       // OSS sends deleted_at (a timestamp), not a deleted flag.
       deleted: Boolean(o.deleted) || (typeof o.deleted_at === "string" && o.deleted_at !== ""),
-      auth_policy: String(o.auth_policy ?? "local_only"),
+      // ABSENT ≠ local_only (UI-0912-AB-FIX F3): a server that does not send
+      // the policy leaves it empty, and the Settings card says it could not
+      // be read (COPY B-06) instead of "password only".
+      auth_policy: typeof o.auth_policy === "string" ? o.auth_policy : "",
       mfa_policy: String(o.mfa_policy ?? "optional"),
       // /current does not emit admin state today; preserve absence.
       has_admin: typeof o.is_claimed === "boolean" ? o.is_claimed : undefined,

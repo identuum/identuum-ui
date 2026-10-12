@@ -11,16 +11,21 @@
  */
 
 import type { Metadata } from "next";
-import { getOrgOidcProvider, getOwnOrganization } from "@/lib/idp-admin-client";
+import { redirect } from "next/navigation";
+import { getOrgOidcProvider, getOwnOrganizationResult } from "@/lib/idp-admin-client";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
+import { orgReadFailure } from "../org-read";
 import { ProviderForm } from "../provider-form";
 import { SIGN_IN_PROVIDERS_HREF } from "../result-flash";
 
 export const metadata: Metadata = { title: "Add sign-in provider — Identuum Org Admin" };
 
 export default async function NewSignInProviderPage() {
-  const org = await getOwnOrganization();
-  const result = org?.id ? await getOrgOidcProvider(org.id) : null;
+  const org = await getOwnOrganizationResult();
+  if (!org.ok && org.kind === "session") redirect("/login?reason=session_expired");
+  const result = org.ok && org.org.id ? await getOrgOidcProvider(org.org.id) : null;
+  // F5: an organization read that failed names its own cause, not B-33.
+  const orgLine = org.ok ? null : orgReadFailure(org.kind);
   const publicBase = loadRuntimeConfig()?.idp.public_base_url ?? "";
 
   return (
@@ -41,7 +46,12 @@ export default async function NewSignInProviderPage() {
           when their verified email domain is listed below.
         </p>
       </div>
-      {(!result || (!result.ok && !result.forbidden)) && (
+      {orgLine && (
+        <p role="alert" className="text-sm text-red-600">
+          {orgLine}
+        </p>
+      )}
+      {!orgLine && (!result || (!result.ok && !result.forbidden)) && (
         <p role="alert" className="text-sm text-red-600">
           The sign-in providers could not be read. Try again in a moment.
         </p>

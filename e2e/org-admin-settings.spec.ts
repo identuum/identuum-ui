@@ -315,6 +315,61 @@ test.describe("/org-admin/settings — Organization profile and security policy"
   });
 });
 
+// ── 4b. Sign-in providers: the Add flow in Next (UI-0912-AB-FIX F2) ─────────
+//
+// Under Next a server action that revalidated the path re-rendered the Add
+// page, which then had a provider and showed "already has a sign-in
+// provider" instead of opening Settings. This walks the real Add -> Settings
+// -> Remove loop on the disposable fixture org and ends with no provider.
+test.describe("/org-admin/settings — Sign-in providers in Next", () => {
+  test("[dynamic mode only] Add saves and opens Settings with Provider saved.; Remove empties the list", async () => {
+    if (skipOrgAdminTests) {
+      test.skip(true, SKIP_MSG);
+    }
+    if (process.env.IDENTUUM_E2E_USE_DYNAMIC_FIXTURE !== "true") {
+      test.skip(
+        true,
+        "Set IDENTUUM_E2E_USE_DYNAMIC_FIXTURE=true to opt in. This test issues writes against the disposable fixture org."
+      );
+    }
+
+    const page = await getSharedContext().newPage();
+    const card = page.locator("#sign-in-providers");
+    try {
+      await page.goto("/org-admin/settings/sign-in-providers/new");
+      await expect(
+        page.getByRole("heading", { name: "Add sign-in provider", exact: true })
+      ).toBeVisible();
+      await page.getByLabel("Name", { exact: true }).fill("E2E provider");
+      await page.getByLabel("Short identifier").fill("e2e-provider");
+      await page.getByLabel("Issuer URL", { exact: true }).fill("https://issuer.example.test");
+      await page.getByLabel("Client ID", { exact: true }).fill("e2e-client");
+      await page.getByLabel("Client secret", { exact: true }).fill("e2e-disposable-value");
+      await page.getByLabel("Email domains").fill("example.test");
+      await page.getByRole("button", { name: "Save provider", exact: true }).click();
+
+      await expect(page).toHaveURL(/\/org-admin\/settings#sign-in-providers$/);
+      await expect(card.getByRole("status")).toHaveText("Provider saved.");
+      await expect(card.getByText("E2E provider", { exact: true })).toBeVisible();
+      await expect(page.getByText("This organization already has a sign-in provider.")).toHaveCount(
+        0
+      );
+
+      await card.getByRole("button", { name: "Remove…", exact: true }).click();
+      await page
+        .getByRole("alertdialog")
+        .getByRole("button", { name: "Remove provider", exact: true })
+        .click();
+      await expect(card.getByRole("status")).toHaveText("Provider removed.");
+      await expect(
+        card.getByText("No sign-in provider yet. Members sign in with a password.")
+      ).toBeVisible();
+    } finally {
+      await page.close();
+    }
+  });
+});
+
 // ── 5. Domains card — real (no longer a placeholder) ───────────────────────
 
 test.describe("/org-admin/settings — Domains card", () => {

@@ -8,6 +8,7 @@
  */
 
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { ProtocolSettingsPanel } from "@/app/site-admin/organizations/[id]/protocol-settings-panel";
 import { DomainsCard } from "@/components/org-admin/domains-card";
 import { MFAPolicyForm } from "@/components/org-admin/mfa-policy-form";
@@ -16,7 +17,7 @@ import { ServiceAccountExpiryForm } from "@/components/org-admin/service-account
 import { getAuthorizationServerPageBoundary } from "@/lib/capability-affordances";
 import {
   getOrgProtocolSettings,
-  getOwnOrganization,
+  getOwnOrganizationResult,
   listOrganizationDomains,
   listOrganizationIdentityProviders,
   listOrgRoles,
@@ -37,12 +38,18 @@ import {
   OrgRolesReadOnlySection,
   ScopeTemplatesReadOnlySection,
 } from "./settings-readonly-sections";
+import { orgReadFailure } from "./sign-in-providers/org-read";
 import { SignInProvidersSection } from "./sign-in-providers-section";
 
 export const metadata: Metadata = { title: "Organization Settings — Identuum Org Admin" };
 
 export default async function OrgAdminSettingsPage() {
-  const org = await getOwnOrganization();
+  const orgResult = await getOwnOrganizationResult();
+  if (!orgResult.ok && orgResult.kind === "session") redirect("/login?reason=session_expired");
+  const org = orgResult.ok ? orgResult.org : null;
+  // UI-0912-AB-FIX F5: without the organization the cards below that need it
+  // are not shown; this line says why (COPY A-30..A-32, read form).
+  const orgReadLine = orgResult.ok ? null : orgReadFailure(orgResult.kind);
   const orgName = org?.name ?? "—";
   const domain = org?.domain;
   const mfaPolicy = org?.mfa_policy ?? "optional";
@@ -104,6 +111,15 @@ export default async function OrgAdminSettingsPage() {
         </h1>
         <p className="text-sm text-stone-500 mt-0.5">{ORG_ADMIN_SETTINGS_PAGE_COPY.pageSubtitle}</p>
       </div>
+      {orgReadLine && (
+        <p
+          role="alert"
+          data-testid="org-read-failure"
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+        >
+          {orgReadLine}
+        </p>
+      )}
 
       {/* Organization profile and security policy — the organization's own
           administrator sets its name and policies (owner ruling,
