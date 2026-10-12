@@ -1307,8 +1307,10 @@ if planned closure; then bash "$GW" step "$RECORD" 'closure=node e2e-full/script
 # also reads (the dev-loop phase removes the fixture file itself); an absent
 # envelope fails the phase. A failing spec fails the phase. Before
 # admin-reset, which rotates the site administrator they sign in as.
+# UI-0912-E2E-SPECS: member-overview signs in as the run's org_user and
+# session-renewal as its org_admin (it removes the provider it adds).
 echo "e2e-full: export specs against the binary's own console"
-if planned export-specs; then bash "$GW" step "$RECORD" 'export-specs=IDENTUUM_E2E_EXPORT_PHASE=ready IDENTUUM_E2E_EXPORT_FIXTURE=1 IDENTUUM_E2E_FIXTURE_FILE='"$ADMIN_RESET_ENVELOPE"' IDENTUUM_E2E_EXPORT_BASE_URL='"$IDENTUUM_E2E_FULL_IDP_ORIGIN"' bash e2e-full/scripts/pw-phase.sh export-specs '"$UI_DIR"'/e2e/.auth/pw-export.json -- --config export/playwright.config.ts --workers=1 --output='"$UI_DIR"'/e2e/.auth/export-results console-clean.spec.ts claim-link.spec.ts register.spec.ts shell-policy.spec.ts identity-provider.spec.ts' || rc=1; fi
+if planned export-specs; then bash "$GW" step "$RECORD" 'export-specs=IDENTUUM_E2E_EXPORT_PHASE=ready IDENTUUM_E2E_EXPORT_FIXTURE=1 IDENTUUM_E2E_FIXTURE_FILE='"$ADMIN_RESET_ENVELOPE"' IDENTUUM_E2E_EXPORT_BASE_URL='"$IDENTUUM_E2E_FULL_IDP_ORIGIN"' bash e2e-full/scripts/pw-phase.sh export-specs '"$UI_DIR"'/e2e/.auth/pw-export.json -- --config export/playwright.config.ts --workers=1 --output='"$UI_DIR"'/e2e/.auth/export-results console-clean.spec.ts claim-link.spec.ts register.spec.ts shell-policy.spec.ts identity-provider.spec.ts member-overview.spec.ts session-renewal.spec.ts' || rc=1; fi
 
 # THE-ADMIN-RESET (T-R2a): the LAST CREDENTIALED phase, because it rotates
 # site_admin's credentials — nothing after it may depend on them (only the

@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import {
   loadOrgAdminFixture,
+  loadOrgUserFixture,
   loadPasswordChangeFixture,
   loadSiteAdminFixture,
 } from "../../e2e/helpers/fixture";
@@ -36,10 +37,12 @@ interface Account {
 }
 let siteAdmin: Account | null = null;
 let orgAdmin: Account | null = null;
+let orgUser: Account | null = null;
 let passwordChange: Account | null = null;
 if (process.env.IDENTUUM_E2E_EXPORT_FIXTURE === "1") {
   const sa = loadSiteAdminFixture();
   const oa = loadOrgAdminFixture();
+  const ou = loadOrgUserFixture();
   passwordChange = loadPasswordChangeFixture();
   if (sa) {
     rememberSecret(sa.email, sa.totpSecret);
@@ -48,6 +51,10 @@ if (process.env.IDENTUUM_E2E_EXPORT_FIXTURE === "1") {
   if (oa) {
     rememberSecret(oa.email, oa.totpSecret);
     orgAdmin = { email: oa.email, password: oa.password };
+  }
+  if (ou) {
+    rememberSecret(ou.email, ou.totpSecret);
+    orgUser = { email: ou.email, password: ou.password };
   }
   // Inside the run an absent envelope is a failure, never a quiet skip: a
   // phase whose specs all skipped would read green having proven nothing.
@@ -71,6 +78,11 @@ export function siteAdminAccount(): Account {
 /** The run fixture's organization administrator (e2e-full only). */
 export function orgAdminAccount(): Account | null {
   return orgAdmin;
+}
+
+/** The run fixture's organization member, org_user (e2e-full only). */
+export function orgUserAccount(): Account | null {
+  return orgUser;
 }
 
 /**
