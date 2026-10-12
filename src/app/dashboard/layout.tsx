@@ -12,7 +12,9 @@
  *
  * Rendering paths:
  *   - Not configured / IdP disabled → DashboardUnavailableMessage (no shell, no children)
- *   - Unauthenticated              → redirect to /login?reason=session_expired
+ *   - Unauthenticated              → redirect to /login (plain when no
+ *                                     credential was presented; with
+ *                                     ?reason=session_expired when one was refused)
  *   - org_admin                    → redirect to /org-admin
  *   - site_admin                   → redirect to /site-admin
  *   - Authenticated org_user       → render shell + children
@@ -21,6 +23,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AccountMenu } from "@/components/shared/account-menu";
+import { MemberNav } from "@/components/shared/member-nav";
 import { ServiceUnavailable } from "@/components/shared/service-unavailable";
 import { roleToPath } from "@/lib/role-routing";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
@@ -91,9 +94,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          <NavItem href="/dashboard" label="Overview" />
-        </nav>
+        <MemberNav />
 
         {/* Logout */}
         <div className="px-3 py-4 border-t border-sky-900/60">
@@ -118,17 +119,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <main className="flex-1 overflow-auto bg-stone-50 px-8 py-8">{children}</main>
       </div>
     </div>
-  );
-}
-
-function NavItem({ href, label }: { href: string; label: string }) {
-  return (
-    <a
-      href={href}
-      className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-sky-300 hover:bg-sky-900/60 hover:text-white transition-colors"
-    >
-      {label}
-    </a>
   );
 }
 

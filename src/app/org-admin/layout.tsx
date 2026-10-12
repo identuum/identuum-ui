@@ -12,7 +12,8 @@
  *
  * Rendering paths:
  *   - Not configured / IdP disabled → IdpRequiredMessage (no shell, no children)
- *   - Unauthenticated              → redirect to /login?reason=session_expired
+ *   - Unauthenticated              → redirect to /login (session-guard.ts adds
+ *                                     ?reason=session_expired for a refused credential)
  *   - Wrong role                   → redirect to roleToPath(role)
  *   - Authenticated org_admin      → render shell + children
  */

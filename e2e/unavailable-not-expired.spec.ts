@@ -11,7 +11,7 @@
  *      auth cookies are untouched;
  *   3. the stub is removed (config restored) — a reload resumes the session
  *      WITHOUT re-login;
- *   4. a genuine verdict (cookies dropped) still lands on
+ *   4. a genuine verdict (a refused access cookie) still lands on
  *      /login?reason=session_expired.
  *
  * The UI dev server reads its runtime config file on every request
@@ -25,6 +25,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import { addDeadAccessCookie } from "./helpers/guard-redirect";
 import { loginAsSiteAdmin, SKIP_AUTH_MSG, skipAuthTests } from "./helpers/login";
 
 const STUB_CID = "e2e-stub-503";
@@ -62,6 +63,7 @@ async function startStub(): Promise<{ server: Server; url: string }> {
 test.describe("UNAVAILABLE-NOT-EXPIRED-1 — an outage is not a sign-out", () => {
   test("503 stub → unavailable state with the correlation id, no /login, cookies kept; stub gone → session resumes; real 401 → /login", async ({
     page,
+    baseURL,
   }) => {
     if (skipAuthTests) {
       test.skip(true, SKIP_AUTH_MSG);
@@ -114,8 +116,11 @@ test.describe("UNAVAILABLE-NOT-EXPIRED-1 — an outage is not a sign-out", () =>
     await page.goto("/unavailable?cid=e2e-direct&status=503&retry=1");
     await expect(page.getByTestId("service-unavailable-correlation-id")).toHaveText("e2e-direct");
 
-    // A genuine verdict still redirects: drop the cookies, the guard sends us to /login.
+    // A genuine verdict still redirects: a refused access cookie, the guard sends
+    // us to /login with the expiry reason (UI-0912-A: NO cookie at all now goes
+    // to the plain /login, so the cookie is replaced, not just dropped).
     await page.context().clearCookies();
+    await addDeadAccessCookie(page, baseURL);
     await page.goto("/site-admin");
     await expect(page).toHaveURL(/\/login\?reason=session_expired/);
   });

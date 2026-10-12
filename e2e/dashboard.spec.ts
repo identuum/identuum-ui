@@ -2,7 +2,8 @@
  * E2E tests for /dashboard — the regular org_user surface.
  *
  * The guard in dashboard/layout.tsx:
- *   - Unauthenticated → redirect to /login?reason=session_expired
+ *   - Unauthenticated → redirect to /login; ?reason=session_expired only for a
+ *     credential that was presented and refused (src/lib/session-guard.ts)
  *   - org_admin       → redirect to /org-admin
  *   - site_admin      → redirect to /site-admin
  *   - Authenticated org_user → render shell + children
@@ -16,22 +17,36 @@
  */
 
 import { expect, test } from "@playwright/test";
+import { addDeadAccessCookie, isPlainLogin } from "./helpers/guard-redirect";
 import { loginAsOrgUser, skipOrgUserTests } from "./helpers/login";
 
 test.describe("/dashboard route guard", () => {
-  test("unauthenticated request redirects to /login?reason=session_expired", async ({ page }) => {
+  test("a visitor with no credential is sent to the plain /login (no expiry banner)", async ({
+    page,
+  }) => {
     await page.goto("/dashboard");
 
-    // Guard redirects unauthenticated visitors to login with a reason hint.
+    // No credential at all: the plain sign-in page (UI-0912-A, UI019).
     await page.waitForURL(/\/login/, { timeout: 15000 }).catch(() => {
       // waitForURL may time out if the redirect already resolved in goto().
     });
 
     expect(page.url()).toContain("/login");
-    expect(page.url()).toContain("reason=session_expired");
+    expect(isPlainLogin(page.url())).toBe(true);
 
     // Dashboard shell must not render for unauthenticated visitors.
     await expect(page.getByRole("heading", { name: "Overview" })).not.toBeVisible();
+  });
+
+  test("a refused access cookie still redirects to /login?reason=session_expired", async ({
+    page,
+    baseURL,
+  }) => {
+    await addDeadAccessCookie(page, baseURL);
+    await page.goto("/dashboard");
+    await page.waitForURL(/\/login/, { timeout: 15000 }).catch(() => {});
+    expect(page.url()).toContain("/login");
+    expect(page.url()).toContain("reason=session_expired");
   });
 });
 

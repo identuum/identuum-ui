@@ -538,11 +538,12 @@ test.describe("bootstrapped appliance", () => {
     );
     expect(revalidate.status()).toBe(401);
 
-    // A guarded page after logout leaves for /login with the expiry reason.
+    // A guarded page after logout leaves for the plain /login: the cookies are
+    // gone, so nothing was refused and no session "expired" (UI-0912-A, UI019).
     await page.goto("/site-admin");
-    await expect(page.getByTestId("login-reason")).toHaveText(
-      "Your session has expired. Sign in again."
-    );
+    await expect(page.getByTestId("login")).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe("/login");
+    await expect(page.getByTestId("login-reason")).toHaveCount(0);
   });
 
   // LAST, and once per run: every wrong password counts toward the account

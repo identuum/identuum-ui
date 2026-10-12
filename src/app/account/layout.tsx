@@ -5,7 +5,8 @@ import { OrgAdminNav } from "@/components/org-admin/org-admin-nav";
  * Account route segment guard.
  *
  * Accessible to all authenticated human users (site_admin, org_admin, org_user).
- * Unauthenticated visitors are redirected to /login?reason=session_expired.
+ * Unauthenticated visitors are redirected to /login (session-guard.ts says
+ * when the expiry reason is added).
  *
  * This layout does NOT check role — any valid session is allowed. Role-specific
  * access control lives in the role shells (/site-admin, /org-admin, /dashboard).
@@ -25,9 +26,8 @@ import { OrgAdminNav } from "@/components/org-admin/org-admin-nav";
  *     /site-admin/layout.tsx; no behavior change to that Nav component).
  *   - org_admin  → <OrgAdminNav  capabilities={…} /> (re-used verbatim from
  *     /org-admin/layout.tsx).
- *   - org_user   → an inline "Overview" link to /dashboard (matches the
- *     dashboard layout's single-NavItem shape; the dashboard sidebar does
- *     not expose a dedicated Nav component today).
+ *   - org_user   → <MemberNav /> (shared with /dashboard/layout.tsx since
+ *     UI-0912-A: Overview, Profile, Security, Sessions).
  *
  * The role-shell layouts themselves are NOT touched. This file simply re-uses
  * the same composable seams (AccountMenu + role-specific Nav + getServerRuntimeState
@@ -35,6 +35,7 @@ import { OrgAdminNav } from "@/components/org-admin/org-admin-nav";
  * role's sidebar shape propagates here automatically.
  */
 import { AccountMenu } from "@/components/shared/account-menu";
+import { MemberNav } from "@/components/shared/member-nav";
 import { ServiceUnavailable } from "@/components/shared/service-unavailable";
 import { SiteAdminNav } from "@/components/site-admin/site-admin-nav";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
@@ -105,16 +106,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
         {/* Role-appropriate navigation. */}
         {role === "site_admin" && <SiteAdminNav capabilities={idpCapabilities} />}
         {role === "org_admin" && <OrgAdminNav capabilities={idpCapabilities} />}
-        {role === "org_user" && (
-          <nav className="flex-1 px-3 py-4 space-y-1">
-            <a
-              href="/dashboard"
-              className="flex items-center rounded-lg px-3 py-2 text-sm text-sky-200 hover:bg-sky-900/60 hover:text-white transition-colors"
-            >
-              Overview
-            </a>
-          </nav>
-        )}
+        {role === "org_user" && <MemberNav />}
         {role !== "site_admin" && role !== "org_admin" && role !== "org_user" && (
           <nav className="flex-1 px-3 py-4 space-y-1" aria-hidden="true" />
         )}

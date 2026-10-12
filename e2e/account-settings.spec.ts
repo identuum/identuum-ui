@@ -6,7 +6,8 @@
  * The UI must be running at http://localhost:7104 (started by webServer).
  *
  * Guard rules (account/layout.tsx):
- *   - Unauthenticated  → redirect to /login?reason=session_expired
+ *   - Unauthenticated  → redirect to /login; ?reason=session_expired only for a
+ *     credential that was presented and refused (src/lib/session-guard.ts)
  *   - Any valid role   → render account settings
  *
  * Tab routing: ?tab=password (default) | sessions | passkeys | mfa.
@@ -26,10 +27,13 @@
 
 import type { BrowserContext } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import { addDeadAccessCookie, isPlainLogin } from "./helpers/guard-redirect";
 import { loginAsSiteAdmin, SKIP_AUTH_MSG, skipAuthTests } from "./helpers/login";
 
 test.describe("/account/settings route guard", () => {
-  test("unauthenticated request redirects to /login?reason=session_expired", async ({ page }) => {
+  test("a visitor with no credential is sent to the plain /login (no expiry banner)", async ({
+    page,
+  }) => {
     await page.goto("/account/settings");
 
     await page.waitForURL(/\/login/, { timeout: 15000 }).catch(() => {
@@ -37,7 +41,7 @@ test.describe("/account/settings route guard", () => {
     });
 
     expect(page.url()).toContain("/login");
-    expect(page.url()).toContain("reason=session_expired");
+    expect(isPlainLogin(page.url())).toBe(true);
 
     // Must not render any account settings shell.
     await expect(page.getByRole("heading", { name: "Account settings" })).not.toBeVisible();
@@ -48,14 +52,14 @@ test.describe("/account/settings route guard", () => {
     await page.goto("/account/settings?tab=sessions");
     await page.waitForURL(/\/login/, { timeout: 15000 }).catch(() => {});
     expect(page.url()).toContain("/login");
-    expect(page.url()).toContain("reason=session_expired");
+    expect(isPlainLogin(page.url())).toBe(true);
   });
 
   test("unauthenticated ?tab=passkeys redirects to /login", async ({ page }) => {
     await page.goto("/account/settings?tab=passkeys");
     await page.waitForURL(/\/login/, { timeout: 15000 }).catch(() => {});
     expect(page.url()).toContain("/login");
-    expect(page.url()).toContain("reason=session_expired");
+    expect(isPlainLogin(page.url())).toBe(true);
   });
 
   test("unauthenticated ?tab=invalid redirects to /login (unknown tab falls back safely)", async ({
@@ -64,20 +68,29 @@ test.describe("/account/settings route guard", () => {
     await page.goto("/account/settings?tab=invalid");
     await page.waitForURL(/\/login/, { timeout: 15000 }).catch(() => {});
     expect(page.url()).toContain("/login");
+    expect(isPlainLogin(page.url())).toBe(true);
+  });
+
+  test("a refused access cookie still redirects to /login?reason=session_expired", async ({
+    page,
+    baseURL,
+  }) => {
+    await addDeadAccessCookie(page, baseURL);
+    await page.goto("/account/settings");
+    await page.waitForURL(/\/login/, { timeout: 15000 }).catch(() => {});
+    expect(page.url()).toContain("/login");
     expect(page.url()).toContain("reason=session_expired");
   });
 });
 
 test.describe("/org-admin/settings route guard (unchanged)", () => {
-  test("unauthenticated request still redirects to /login?reason=session_expired", async ({
-    page,
-  }) => {
+  test("a visitor with no credential is still sent to the plain /login", async ({ page }) => {
     await page.goto("/org-admin/settings");
 
     await page.waitForURL(/\/login/, { timeout: 15000 }).catch(() => {});
 
     expect(page.url()).toContain("/login");
-    expect(page.url()).toContain("reason=session_expired");
+    expect(isPlainLogin(page.url())).toBe(true);
   });
 
   test("org-admin settings page title no longer mentions personal account settings", async ({
@@ -102,13 +115,13 @@ test.describe("/dashboard/security compat redirect", () => {
   }) => {
     // The dashboard layout guard fires before the page redirect to
     // /account/settings?tab=passkeys, so unauthenticated users hit
-    // the session-expired redirect first.
+    // the plain sign-in redirect first (no credential, UI-0912-A).
     await page.goto("/dashboard/security");
 
     await page.waitForURL(/\/login/, { timeout: 15000 }).catch(() => {});
 
     expect(page.url()).toContain("/login");
-    expect(page.url()).toContain("reason=session_expired");
+    expect(isPlainLogin(page.url())).toBe(true);
   });
 });
 

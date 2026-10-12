@@ -167,7 +167,8 @@ export default async function AccountSettingsPage({
           <div className="px-6 py-4 border-b border-stone-100">
             <p className="text-sm font-semibold text-sky-950">Password</p>
             <p className="text-xs text-stone-400 mt-0.5">
-              Change your password. All active sessions are revoked on save.
+              Change your password. You stay signed in here. Your other devices are signed out, and
+              apps you connected will ask you to sign in again.
             </p>
           </div>
           <div className="px-6 py-5">

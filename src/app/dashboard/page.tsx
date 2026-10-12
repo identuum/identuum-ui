@@ -7,17 +7,37 @@
  * Fetches the calling user's own profile via getOwnProfile() (server-side,
  * session cookies forwarded to IdP). Falls back to session validate data when
  * the profile call is unavailable. No client-side session validation needed.
+ *
+ * UI-0912-A (OSS v0.9.12 C4): below the identity card, three cards — Profile,
+ * Security, Sessions — each one link to its tab of /account/settings with the
+ * facts the member's own reads return. Each card reads on its own, so one
+ * failed read does not hide the others; a card that cannot read says so and
+ * still links. No Applications card (owner Q4 b); no "Coming soon".
  */
 
 import type { Metadata } from "next";
+import {
+  getOwnMfaStatus,
+  type ListSessionsResult,
+  listOwnSessions,
+  type MfaStatusResult,
+} from "@/lib/idp-account-client";
 import { getOwnProfile } from "@/lib/idp-admin-client";
 import { getServerSession } from "@/lib/server-session";
+import type { UserProfile } from "@/lib/types";
+
+const NOT_LOADED = "We could not load this right now. Open the page to see it.";
 
 export const metadata: Metadata = { title: "Dashboard — Identuum" };
 
 export default async function DashboardPage() {
   // getServerSession() is cached per-request — the layout already called it.
-  const [session, profile] = await Promise.all([getServerSession(), getOwnProfile()]);
+  const [session, profile, mfa, sessions] = await Promise.all([
+    getServerSession(),
+    getOwnProfile(),
+    getOwnMfaStatus(),
+    listOwnSessions(),
+  ]);
 
   // Layout guarantees session exists and role is org_user at this point.
   const email = profile?.email ?? session?.user?.email ?? "—";
@@ -89,24 +109,20 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Feature placeholder cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <PlaceholderCard
-          title="Profile"
-          description="Update your display name and contact information."
-        />
-        <PlaceholderCard
-          title="Security"
-          description="Manage your password and two-factor authentication."
-        />
-        <PlaceholderCard
-          title="Applications"
-          description="View applications you have authorized access to."
-        />
-        <PlaceholderCard
+        <LinkCard title="Profile" href="/account/settings?tab=profile" link="Edit profile">
+          <ProfileFacts profile={profile} />
+        </LinkCard>
+        <LinkCard title="Security" href="/account/settings?tab=password" link="Manage security">
+          <SecurityFacts mfa={mfa} />
+        </LinkCard>
+        <LinkCard
           title="Sessions"
-          description="See where you are signed in and revoke access."
-        />
+          href="/account/settings?tab=sessions"
+          link="See devices and sign out"
+        >
+          <SessionFacts sessions={sessions} />
+        </LinkCard>
       </div>
     </div>
   );
@@ -116,17 +132,81 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3">
       <span className="w-32 shrink-0 text-xs text-stone-400">{label}</span>
-      <span className="text-sm text-sky-950 font-medium">{value}</span>
+      <span className="min-w-0 break-words text-sm text-sky-950 font-medium">{value}</span>
     </div>
   );
 }
 
-function PlaceholderCard({ title, description }: { title: string; description: string }) {
+/** The whole card is one link: one focus stop, Enter opens the page. */
+function LinkCard({
+  title,
+  href,
+  link,
+  children,
+}: {
+  title: string;
+  href: string;
+  link: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm px-5 py-4 opacity-60">
-      <p className="text-sm font-semibold text-sky-950">{title}</p>
-      <p className="text-xs text-stone-500 mt-1 leading-relaxed">{description}</p>
-      <p className="text-xs text-stone-400 mt-3 font-medium">Coming soon</p>
-    </div>
+    <a
+      href={href}
+      className="group block bg-white border border-stone-200 rounded-[1.5rem] shadow-sm px-5 py-4 hover:border-sky-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+    >
+      <h2 className="text-sm font-semibold text-sky-950">{title}</h2>
+      <div className="mt-1 space-y-1 text-xs text-stone-600 leading-relaxed break-words">
+        {children}
+      </div>
+      <p className="mt-3 text-xs font-semibold text-sky-700 group-hover:underline">{link}</p>
+    </a>
   );
+}
+
+function Warning({ children }: { children: React.ReactNode }) {
+  return <p className="text-amber-700">{children}</p>;
+}
+
+function ProfileFacts({ profile }: { profile: UserProfile | null }) {
+  if (!profile) return <p>{NOT_LOADED}</p>;
+  return (
+    <>
+      <p>Name: {profile.name ?? "not set"}</p>
+      <p>Email: {profile.email}</p>
+      <p className="text-stone-400">
+        Your name and the details apps can ask for. Apps see only what you agree to share.
+      </p>
+    </>
+  );
+}
+
+function SecurityFacts({ mfa }: { mfa: MfaStatusResult }) {
+  if (!mfa.ok) {
+    // CE and older servers do not serve /me/mfa/status: the card still links.
+    return <p>{mfa.unavailable ? "Manage your password and two-step sign-in." : NOT_LOADED}</p>;
+  }
+  if (!mfa.status.mfa_enabled) {
+    return (
+      <>
+        <p>Two-step sign-in: Off</p>
+        <Warning>Add a second sign-in step to protect your account.</Warning>
+      </>
+    );
+  }
+  const left = mfa.status.recovery_codes_remaining_count;
+  return (
+    <>
+      <p>Two-step sign-in: On</p>
+      <p>Backup codes left: {left}</p>
+      {left === 0 && <Warning>No backup codes left. Make new ones.</Warning>}
+      {left > 0 && left <= 2 && <Warning>Only {left} backup codes left. Make new ones.</Warning>}
+    </>
+  );
+}
+
+function SessionFacts({ sessions }: { sessions: ListSessionsResult }) {
+  if (!sessions.ok) return <p>{NOT_LOADED}</p>;
+  const n = sessions.sessions.length;
+  if (n === 0) return <p>No active sign-ins found.</p>;
+  return <p>{n === 1 ? "Signed in on this device only." : `Signed in on ${n} devices.`}</p>;
 }

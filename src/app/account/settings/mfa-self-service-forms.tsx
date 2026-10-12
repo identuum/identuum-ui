@@ -25,6 +25,10 @@ export function RecoveryCodesRegenerateForm() {
           Replaces your existing recovery codes. Existing unused codes stop working. Requires a
           current authenticator code. A recovery code cannot be used to generate new recovery codes.
         </p>
+        <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+          Recovery codes are for getting back in when your authenticator is lost. To make new
+          recovery codes you must show you still have the authenticator.
+        </p>
       </div>
       <label className="block text-[11px] font-medium text-stone-500">
         Type REGENERATE to confirm
