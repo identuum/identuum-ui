@@ -327,25 +327,61 @@ export async function getOrganization(id: string): Promise<OrgDetail | null> {
 
 // ── Own organization (org_admin self-service) ─────────────────────────────────
 
-/**
- * Fetches the calling org_admin's own organization from
- * GET /api/v1/organizations/current.
- *
- * The backend derives the organization from the session cookie — no org ID is
- * passed from the client, so this cannot be used to read another org's data.
- * Returns null when the IdP is unavailable or the session is absent/expired.
- */
-export async function getOwnOrganization(): Promise<OrgDetail | null> {
-  const cfg = loadRuntimeConfig();
-  if (!cfg || !cfg.idp.enabled) return null;
+/** Why the own-organization read failed, so a page can say it plainly. */
+export type OwnOrganizationFailureKind = "session" | "forbidden" | "unavailable" | "other";
 
-  try {
-    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/organizations/current`, {
+export type OwnOrganizationResult =
+  | { ok: true; org: OrgDetail }
+  | { ok: false; status: number; kind: OwnOrganizationFailureKind };
+
+// WIRE-READ-ORG-1 (src/__tests__/phantom-no-admin-mapping.test.ts) finds the
+// own-organization mapper by the first exported function whose name starts
+// with getOwnOrganization: getOwnOrganizationResult holds the mapper and is
+// declared before the getOwnOrganization wrapper on purpose.
+/**
+ * getOwnOrganization() with the cause of a failure: 401 is "session",
+ * 403 "forbidden", no answer (status 0) or 502/503/504 "unavailable", any
+ * other refusal "other".
+ *
+ * UI-0912-A (C3): the first request after the server restarts can meet a
+ * stale connection and throw. The read is safe, so a thrown request or a
+ * timeout is retried ONCE, with its own 6 s timeout; an HTTP answer is never
+ * retried.
+ */
+export async function getOwnOrganizationResult(): Promise<OwnOrganizationResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 0, kind: "unavailable" };
+
+  const url = `${idpBaseUrl(cfg)}/api/v1/organizations/current`;
+  const read = async () =>
+    idpFetch(url, {
       headers: await idpAuthHeaders(),
       cache: "no-store",
+      signal: AbortSignal.timeout(6000),
     });
-    if (!res.ok) return null;
+  let res: Response;
+  try {
+    res = await read();
+  } catch {
+    try {
+      res = await read();
+    } catch {
+      return { ok: false, status: 0, kind: "unavailable" };
+    }
+  }
+  if (!res.ok) {
+    const kind: OwnOrganizationFailureKind =
+      res.status === 401
+        ? "session"
+        : res.status === 403
+          ? "forbidden"
+          : [502, 503, 504].includes(res.status)
+            ? "unavailable"
+            : "other";
+    return { ok: false, status: res.status, kind };
+  }
 
+  try {
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
     const data: any = await res.json();
     // Released OSS GET /organizations/current returns the org fields at the TOP
@@ -354,7 +390,7 @@ export async function getOwnOrganization(): Promise<OrgDetail | null> {
     // response still round-trips.
     const o = data.organization ?? data ?? {};
 
-    return {
+    const org: OrgDetail = {
       id: String(o.id ?? ""),
       name: String(o.name ?? ""),
       domain: String(o.domain ?? ""),
@@ -377,9 +413,24 @@ export async function getOwnOrganization(): Promise<OrgDetail | null> {
       created_at: String(o.created_at ?? ""),
       updated_at: String(o.updated_at ?? ""),
     };
+    return { ok: true, org };
   } catch {
-    return null;
+    return { ok: false, status: res.status, kind: "other" };
   }
+}
+
+/**
+ * Fetches the calling org_admin's own organization from
+ * GET /api/v1/organizations/current.
+ *
+ * The backend derives the organization from the session cookie — no org ID is
+ * passed from the client, so this cannot be used to read another org's data.
+ * Returns null when the IdP is unavailable or the session is absent/expired;
+ * getOwnOrganizationResult() says which.
+ */
+export async function getOwnOrganization(): Promise<OrgDetail | null> {
+  const result = await getOwnOrganizationResult();
+  return result.ok ? result.org : null;
 }
 
 // ── Update organization ───────────────────────────────────────────────────────

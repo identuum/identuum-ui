@@ -17,17 +17,52 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   deleteOrgOidcProvider,
-  getOwnOrganization,
+  getOwnOrganizationResult,
   type OrgOidcProviderInput,
+  type OwnOrganizationFailureKind,
   saveOrgOidcProvider,
 } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
 
+/**
+ * What the admin typed, handed back on a failed save so the form keeps it
+ * (React 19 resets an uncontrolled form after every action). Never the
+ * client secret.
+ */
+export type ProviderTypedValues = {
+  name: string;
+  slug: string;
+  issuer_url: string;
+  client_id: string;
+  scopes: string;
+  email_domains: string;
+  allow_external_domains: boolean;
+};
+
 export type ProviderFormState =
-  | { phase: "idle"; error?: string; fieldErrors?: Partial<Record<string, string>> }
+  | {
+      phase: "idle";
+      error?: string;
+      fieldErrors?: Partial<Record<string, string>>;
+      values?: ProviderTypedValues;
+    }
   | { phase: "saved"; message: string }
   | { phase: "deleted" };
+
+/**
+ * One plain line per cause of a failed organization read (UI-0912-A, C3).
+ * A "session" failure never reaches it: the callers redirect to sign-in.
+ */
+function orgReadFailure(kind: OwnOrganizationFailureKind, verb: string) {
+  if (kind === "unavailable") {
+    return `The server did not answer. Nothing was ${verb}. Try again in a moment.`;
+  }
+  if (kind === "forbidden") {
+    return "You do not have permission to change this organization's sign-in settings.";
+  }
+  return `Your organization could not be read. Nothing was ${verb}. Try again.`;
+}
 
 /** Splits a list typed with spaces, commas or new lines. */
 function splitList(raw: string): string[] {
@@ -51,15 +86,24 @@ export async function saveOidcProviderAction(
   await requireOrgAdmin();
   const field = (k: string) => ((formData.get(k) as string | null) ?? "").trim();
   const mode = field("mode") === "update" ? "update" : "create";
-  const input: OrgOidcProviderInput = {
+  const values: ProviderTypedValues = {
     name: field("name"),
     slug: field("slug"),
     issuer_url: field("issuer_url"),
     client_id: field("client_id"),
-    client_secret: (formData.get("client_secret") as string | null) ?? "",
-    scopes: splitList(field("scopes")),
-    email_domains: splitList(field("email_domains")),
+    scopes: field("scopes"),
+    email_domains: field("email_domains"),
     allow_external_domains: formData.get("allow_external_domains") === "on",
+  };
+  const input: OrgOidcProviderInput = {
+    name: values.name,
+    slug: values.slug,
+    issuer_url: values.issuer_url,
+    client_id: values.client_id,
+    client_secret: (formData.get("client_secret") as string | null) ?? "",
+    scopes: splitList(values.scopes),
+    email_domains: splitList(values.email_domains),
+    allow_external_domains: values.allow_external_domains,
   };
   const fieldErrors: Partial<Record<string, string>> = {};
   if (!input.name) fieldErrors.name = "Enter a name.";
@@ -72,15 +116,18 @@ export async function saveOidcProviderAction(
     fieldErrors.email_domains =
       "List at least one email domain, or allow every domain. Without either, nobody can sign in.";
   if (Object.keys(fieldErrors).length > 0) {
-    return { phase: "idle", error: "Check the fields below.", fieldErrors };
+    return { phase: "idle", error: "Check the fields below.", fieldErrors, values };
   }
 
-  const org = await getOwnOrganization();
-  if (!org?.id) return { phase: "idle", error: "Your organization could not be read. Try again." };
-  const result = await saveOrgOidcProvider(org.id, input, mode);
+  const org = await getOwnOrganizationResult();
+  if (!org.ok || !org.org.id) {
+    if (!org.ok && org.kind === "session") redirect("/login?reason=session_expired");
+    return { phase: "idle", error: orgReadFailure(org.ok ? "other" : org.kind, "saved"), values };
+  }
+  const result = await saveOrgOidcProvider(org.org.id, input, mode);
   if (!result.ok) {
     if (result.status === 401) redirect("/login?reason=session_expired");
-    return { phase: "idle", error: result.error };
+    return { phase: "idle", error: result.error, values };
   }
   revalidatePath("/org-admin/identity-provider");
   revalidatePath("/org-admin/settings");
@@ -92,9 +139,12 @@ export async function deleteOidcProviderAction(
   _formData: FormData
 ): Promise<ProviderFormState> {
   await requireOrgAdmin();
-  const org = await getOwnOrganization();
-  if (!org?.id) return { phase: "idle", error: "Your organization could not be read. Try again." };
-  const result = await deleteOrgOidcProvider(org.id);
+  const org = await getOwnOrganizationResult();
+  if (!org.ok || !org.org.id) {
+    if (!org.ok && org.kind === "session") redirect("/login?reason=session_expired");
+    return { phase: "idle", error: orgReadFailure(org.ok ? "other" : org.kind, "removed") };
+  }
+  const result = await deleteOrgOidcProvider(org.org.id);
   if (!result.ok) {
     if (result.status === 401) redirect("/login?reason=session_expired");
     return { phase: "idle", error: result.error };

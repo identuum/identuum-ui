@@ -51,6 +51,9 @@ export function ProviderForm({
 
   const editing = provider !== null;
   const fe = state.phase === "idle" ? (state.fieldErrors ?? {}) : {};
+  // React resets this form after every submission. A failed save hands back
+  // what was typed (never the client secret) and the reset restores it.
+  const typed = state.phase === "idle" ? state.values : undefined;
 
   if (delState.phase === "deleted") {
     return (
@@ -93,7 +96,7 @@ export function ProviderForm({
           <input
             id="idp-name"
             name="name"
-            defaultValue={provider?.name ?? ""}
+            defaultValue={typed?.name ?? provider?.name ?? ""}
             placeholder="Example SSO"
             className={inputClass}
           />
@@ -102,7 +105,7 @@ export function ProviderForm({
           <input
             id="idp-slug"
             name="slug"
-            defaultValue={provider?.slug ?? ""}
+            defaultValue={typed?.slug ?? provider?.slug ?? ""}
             placeholder="example-sso"
             className={inputClass}
           />
@@ -117,7 +120,7 @@ export function ProviderForm({
             id="idp-issuer"
             name="issuer_url"
             type="url"
-            defaultValue={provider?.issuer_url ?? ""}
+            defaultValue={typed?.issuer_url ?? provider?.issuer_url ?? ""}
             placeholder="https://accounts.google.com"
             className={inputClass}
           />
@@ -126,7 +129,7 @@ export function ProviderForm({
           <input
             id="idp-client-id"
             name="client_id"
-            defaultValue={provider?.client_id ?? ""}
+            defaultValue={typed?.client_id ?? provider?.client_id ?? ""}
             className={inputClass}
           />
         </Field>
@@ -157,10 +160,10 @@ export function ProviderForm({
           <input
             id="idp-scopes"
             name="scopes"
-            defaultValue={(provider?.scopes.length
-              ? provider.scopes
-              : ["openid", "email", "profile"]
-            ).join(" ")}
+            defaultValue={
+              typed?.scopes ??
+              (provider?.scopes.length ? provider.scopes : ["openid", "email", "profile"]).join(" ")
+            }
             className={inputClass}
           />
         </Field>
@@ -173,7 +176,7 @@ export function ProviderForm({
           <input
             id="idp-domains"
             name="email_domains"
-            defaultValue={provider?.email_domains.join(" ") ?? ""}
+            defaultValue={typed?.email_domains ?? provider?.email_domains.join(" ") ?? ""}
             placeholder="example.com"
             className={inputClass}
           />
@@ -182,7 +185,9 @@ export function ProviderForm({
           <input
             type="checkbox"
             name="allow_external_domains"
-            defaultChecked={provider?.allow_external_domains ?? false}
+            defaultChecked={
+              typed?.allow_external_domains ?? provider?.allow_external_domains ?? false
+            }
             className="mt-0.5"
           />
           <span>

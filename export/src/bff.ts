@@ -113,11 +113,17 @@ export async function bff(path: string, init: RequestInit = {}): Promise<Respons
   if (!readOnly || !api || explicitBearer) return response;
   // An opted-in "signed out" is the 401 missing_credential of a caller that
   // did not opt in: the refresh cookie is still tried before it is believed.
+  // UI-0912-A (C3): identuum-idp-oss answers a dead access token with
+  // no_credential — the boundary retries the dead cookie anonymously — so
+  // no_credential is renewed too, or a tab left open past the access
+  // token's life could never read again.
   if (!(optedIn && (await isSignedOut(response)))) {
     if (response.status !== 401) return response;
     const failure = await readJson(response.clone());
     if (
-      !["missing_credential", "token_invalid", "token_expired"].includes(String(failure?.reason))
+      !["missing_credential", "no_credential", "token_invalid", "token_expired"].includes(
+        String(failure?.reason)
+      )
     ) {
       return response;
     }
