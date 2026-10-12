@@ -11,7 +11,11 @@ that export. The release body is this file's section for the tag. Entries up
 to `v0.6.2` were written when the artifact was the container image
 `ghcr.io/identuum/identuum-ui`, retired by owner ruling D-019 (2026-09-30).
 
-## Unreleased
+## `v0.9.12`
+
+The static console export for identuum-idp-oss `v0.9.12`: a complete member
+area, sign-in providers in Settings, truthful email status, and fewer false
+error messages.
 
 - **The member Overview shows real facts.** The four "Coming soon" cards are
   gone. Three cards — Profile, Security and Sessions — show your name and
