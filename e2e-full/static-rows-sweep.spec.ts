@@ -786,6 +786,33 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
         label: "mfa-disable ou (empty proof, policy refuses: F4)",
       },
       {
+        // OSS-0912-C2-FIX: a site_admin address is not a mailbox, so the
+        // send is refused 409 not_available_for_this_account; the cell is
+        // still observed (UI-0912-A4 Q1 a).
+        method: "POST",
+        path: "/api/v1/me/email/verification",
+        bearer: sa,
+        ok: [409],
+        label: "email-verification sa (not a mailbox)",
+      },
+      {
+        // The appliance has the mail sink (CE-UI-2b), so a tenant send is
+        // 200 sent, or 200 already_verified for a proven address; one email
+        // to the sink, nothing else changes.
+        method: "POST",
+        path: "/api/v1/me/email/verification",
+        bearer: oa,
+        ok: [200],
+        label: "email-verification oa",
+      },
+      {
+        method: "POST",
+        path: "/api/v1/me/email/verification",
+        bearer: ou,
+        ok: [200],
+        label: "email-verification ou",
+      },
+      {
         // MEASURED: an EMPTY update binds all-optional fields to nil and is
         // accepted as a 200 no-op — proven by the name/domain comparison
         // after the loop below.
