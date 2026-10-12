@@ -22,9 +22,10 @@ export const LOGIN_SESSION_EXPIRED = "/login?reason=session_expired";
 /**
  * The verdicts that mean no credential at all: the export's opted-in probe
  * answers `signed_out` (session-validation.ts); the Next deployment's probe
- * does not opt in and the IdP answers 401 `no_credential`.
+ * does not opt in, and /api/v1/validate answers it 401 `missing_credential`
+ * (identuum-idp-oss HandleValidateSession). Route guards say `no_credential`.
  */
-const NO_CREDENTIAL_REASONS = new Set(["signed_out", "no_credential"]);
+const NO_CREDENTIAL_REASONS = new Set(["signed_out", "no_credential", "missing_credential"]);
 
 export type SessionGuardDecision =
   | { action: "proceed"; session: ValidateResponse }
