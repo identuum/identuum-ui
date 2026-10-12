@@ -10,9 +10,12 @@
  * session_expired) are where the export's sign-out and the shared layouts'
  * expiry send the browser.
  *
- * UI-0912-A (C6): the banner shows ONCE. After its first render the reason
- * leaves the address bar (a reload or a bookmark does not repeat it), and it
- * is hidden as soon as the sign-in form is submitted.
+ * UI-0912-A (C6): the signed-out banner shows ONCE. After its first render
+ * the reason leaves the address bar (a reload or a bookmark does not repeat
+ * it), and it is hidden as soon as the sign-in form is submitted.
+ * UI-0912-AB-FIX F7 (judge ruling): ONLY that banner. "Sign-out could not be
+ * confirmed" (with Retry sign-out) and "signed out on this device only" stay,
+ * address and all, until they are resolved; so does "session expired".
  */
 import { type ReactNode, useEffect, useState } from "react";
 import LoginPage from "@/app/login/page";
@@ -33,6 +36,11 @@ export async function ExportLoginPage({ searchParams }: PageProps): Promise<Reac
   );
 }
 
+/** Whether this reason's banner shows once (F7: only signed_out). */
+export function showsOnce(reason: string | null): boolean {
+  return reason === "signed_out";
+}
+
 /** The address without its `reason` parameter, or null when it has none. */
 export function addressWithoutReason(pathname: string, search: string): string | null {
   const params = new URLSearchParams(search);
@@ -44,14 +52,16 @@ export function addressWithoutReason(pathname: string, search: string): string |
 
 function LoginReason({ reason }: { reason: string | null }) {
   const [hidden, setHidden] = useState(false);
+  const once = showsOnce(reason);
   useEffect(() => {
+    if (!once) return;
     // Not navigate(): the route must not re-render; only the address changes.
     const to = addressWithoutReason(window.location.pathname, window.location.search);
     if (to !== null) window.history.replaceState(window.history.state, "", to);
     const hide = () => setHidden(true);
     document.addEventListener("submit", hide, true);
     return () => document.removeEventListener("submit", hide, true);
-  }, []);
+  }, [once]);
   if (hidden) return null;
   const frame = "mx-auto mt-4 max-w-sm rounded-xl border px-4 py-3 text-sm";
   if (reason === "sign_out_unconfirmed") {
