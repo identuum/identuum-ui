@@ -116,7 +116,7 @@ function Form({
         </p>
         <p className="mt-1 text-stone-500 leading-relaxed">
           Client ID and Type cannot be changed from this form. To switch between Public and
-          Confidential, create a replacement application — secret rotation is not yet available.
+          Confidential, create a replacement application.
         </p>
       </div>
 

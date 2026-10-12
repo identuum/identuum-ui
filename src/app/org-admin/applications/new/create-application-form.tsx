@@ -240,8 +240,8 @@ function SuccessPanel({
           <p className="text-sm font-semibold text-sky-950">Application credentials</p>
           {hasSecret && (
             <p className="text-xs text-amber-700 mt-1 leading-relaxed">
-              Copy this secret now. It will not be shown again. If you lose it, create a replacement
-              application — secret rotation is not yet available from this page.
+              Copy this secret now. It will not be shown again. If you lose it, open the application
+              and use Rotate client secret.
             </p>
           )}
           {!hasSecret && (

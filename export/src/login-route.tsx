@@ -9,8 +9,12 @@
  * the Next deployment has no equivalent of; the other two (signed_out,
  * session_expired) are where the export's sign-out and the shared layouts'
  * expiry send the browser.
+ *
+ * UI-0912-A (C6): the banner shows ONCE. After its first render the reason
+ * leaves the address bar (a reload or a bookmark does not repeat it), and it
+ * is hidden as soon as the sign-in form is submitted.
  */
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import LoginPage from "@/app/login/page";
 import { signOutDestination } from "./logout";
 import { navigate } from "./router";
@@ -29,7 +33,26 @@ export async function ExportLoginPage({ searchParams }: PageProps): Promise<Reac
   );
 }
 
+/** The address without its `reason` parameter, or null when it has none. */
+export function addressWithoutReason(pathname: string, search: string): string | null {
+  const params = new URLSearchParams(search);
+  if (!params.has("reason")) return null;
+  params.delete("reason");
+  const rest = params.toString();
+  return rest ? `${pathname}?${rest}` : pathname;
+}
+
 function LoginReason({ reason }: { reason: string | null }) {
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    // Not navigate(): the route must not re-render; only the address changes.
+    const to = addressWithoutReason(window.location.pathname, window.location.search);
+    if (to !== null) window.history.replaceState(window.history.state, "", to);
+    const hide = () => setHidden(true);
+    document.addEventListener("submit", hide, true);
+    return () => document.removeEventListener("submit", hide, true);
+  }, []);
+  if (hidden) return null;
   const frame = "mx-auto mt-4 max-w-sm rounded-xl border px-4 py-3 text-sm";
   if (reason === "sign_out_unconfirmed") {
     return (
