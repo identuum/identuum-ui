@@ -1,8 +1,8 @@
 schema: gate-run.v1
 gate: identuum-ui make verify
 note: evidence lines are the tools' own summary lines; a summary format this script does not match is recorded only as an exit code
-repo-head: a32d019
-started: 2026-10-13T12:07:39Z
+repo-head: 2739281
+started: 2026-10-13T12:58:36Z
 plan: tool-versions witness-parity tracked-binary-check credential-transparency workflow-yaml workflow-yaml-parity frozen-lockfile advisory ci-witness toolchain-parity rulefloor ledger-diff-gate role-matrix-denominator sbom-scan biome tsc vitest
 tool: node       v26.8.1  /Users/odemir/.local/state/fnm_multishells/65985_1791734590102/bin/node
 tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/65985_1791734590102/bin/pnpm
@@ -23,11 +23,11 @@ target: workflow-yaml exit=0
 evidence: [workflow-yaml-parity] check OK: workflow-yaml-parity block md5 d63f3fdb5cd211c38abe98a03ecb1544 matches the shared pin
 elapsed: workflow-yaml-parity 0s
 target: workflow-yaml-parity exit=0
-elapsed: frozen-lockfile 0s
+elapsed: frozen-lockfile 1s
 target: frozen-lockfile exit=0
-elapsed: advisory 2s
+elapsed: advisory 1s
 target: advisory exit=0
-evidence: [ci-witness] check OK: ci-witness identuum-ui CI build-and-test (node 26) green, 13 planned target(s) all exit=0, ties commit 6a18b0d, 462 commit(s) behind HEAD — the CI claim covers that tree, not this one, run https://github.com/identuum/identuum-ui/actions/runs/35397115955 attempt=1 sha=6a18b0d3067a5bcdf89b2f9b96d50f34b340e35b
+evidence: [ci-witness] check OK: ci-witness identuum-ui CI build-and-test (node 26) green, 13 planned target(s) all exit=0, ties commit 6a18b0d, 466 commit(s) behind HEAD — the CI claim covers that tree, not this one, run https://github.com/identuum/identuum-ui/actions/runs/35397115955 attempt=1 sha=6a18b0d3067a5bcdf89b2f9b96d50f34b340e35b
 elapsed: ci-witness 0s
 target: ci-witness exit=0
 evidence: [toolchain-parity] check OK: toolchain-parity 13 pins agree (node 26 in matrix [26 ], engines/@types/node 26/26, local node 26, pnpm 11.3.0, go 1.27.2, rulefloor v0.9.1, yq v4.54.1, syft v1.52.0, both vendored digests)
@@ -36,22 +36,22 @@ target: toolchain-parity exit=0
 evidence: [rulefloor] check OK: 73 rows (73 armed), FLOOR 73, RED-PROOFS 70 (measured 70)
 elapsed: rulefloor 0s
 target: rulefloor exit=0
-evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=557720141a03b62853434862516e4378a71dc568 status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=4cda35f27d6edd7e8cbf1f7abce8ff7633e0498a41c042b94e4242d20cf4ffa8
+evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=7d01d34ab82afbc0f7ef9359243cf875e1306c72 status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=851c7bd1a08937842cce9a074afd011e56422645fba8fc91e148362a16e4394f
 elapsed: ledger-diff-gate 0s
 target: ledger-diff-gate exit=0
 evidence: [role-matrix-denominator] check OK: role-matrix denominator 160/105/34 (total/role/class endpoints) matches the golden
 elapsed: role-matrix-denominator 1s
 target: role-matrix-denominator exit=0
-evidence: [sbom-scan] check OK: grype-gate matches=0 fixable=0 allowlisted=0 unfixable=0 severe=0 — subject sbom:identuum-ui-export.spdx.json sha256:0f970572f4a3762ebb3df19019325090b988a2d212dd168c87e5aeaa96d98df0; config: not applicable (sbom subject: no directory declaration to compare); coverage: not applicable (sbom subject: no gitignored tree to enumerate)
-elapsed: sbom-scan 6s
+evidence: [sbom-scan] check OK: grype-gate matches=0 fixable=0 allowlisted=0 unfixable=0 severe=0 — subject sbom:identuum-ui-export.spdx.json sha256:bccac2b1a262e82ed84a597510cbb4a12d5dcb99c7197540f2a1dd8f34aa067d; config: not applicable (sbom subject: no directory declaration to compare); coverage: not applicable (sbom subject: no gitignored tree to enumerate)
+elapsed: sbom-scan 7s
 target: sbom-scan exit=0
 elapsed: biome 0s
 target: biome exit=0
 elapsed: tsc 1s
 target: tsc exit=0
 evidence: [vitest] [2m Test Files [22m [1m[32m235 passed[39m[22m[90m (235)[39m
-elapsed: vitest 135s
+elapsed: vitest 120s
 target: vitest exit=0
-finished: 2026-10-13T12:10:08Z
-tree: sha256=520d891b621b1020531114a91059235566cd498cd9db983135b6081bc6a84a2e
+finished: 2026-10-13T13:00:51Z
+tree: sha256=8bd23bd29987223e24df049c7a96eda2ac8d68477e2eefaf1c278ca0d2d0a47e
 result: green
