@@ -84,6 +84,14 @@ to `v0.6.2` were written when the artifact was the container image
   reads the email address outside the menu items; the phone menu keeps
   focus in place when the screen gets wider.
 
+### Verification machinery (repository-visible, not in the export)
+
+- e2e-full exercises authenticator setup (initiate and complete), the
+  caller's own consents (list and remove; the app's refresh token is then
+  refused) and the administrator's reset link with its public validate and
+  redeem pair. The role matrix grows 315 -> 332 committed cells; the
+  closure set 55 -> 57.
+
 ## `v0.9.12`
 
 The static console export for identuum-idp-oss `v0.9.12`: a complete member

@@ -74,6 +74,12 @@
       "statuses": [200]
     },
     {
+      "endpoint": "GET /api/v1/auth/reset-link/validate",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200]
+    },
+    {
       "endpoint": "GET /api/v1/auth/step-up",
       "kind": "session",
       "sources": ["jsonl"],
@@ -266,6 +272,12 @@
       "statuses": [200]
     },
     {
+      "endpoint": "POST /api/v1/auth/reset-link",
+      "kind": "class",
+      "sources": ["jsonl"],
+      "statuses": [200, 400]
+    },
+    {
       "endpoint": "POST /api/v1/auth/session/refresh",
       "kind": "session",
       "sources": ["jsonl"],
@@ -332,5 +344,5 @@
       "statuses": [200, 400]
     }
   ],
-  "closure_floor": 55
+  "closure_floor": 57
 }
