@@ -15,9 +15,20 @@ export function ResetLinkFormClient({ rawToken }: { rawToken: string }) {
     return (
       <div className="space-y-3">
         <p className="text-sm text-emerald-700 font-semibold">Your password was changed.</p>
-        <p className="text-sm text-stone-600 leading-relaxed">
-          You were signed out everywhere. Sign in with your new password and your authenticator.
-        </p>
+        {state.warning ? (
+          <>
+            <p role="alert" className="text-sm text-amber-700 leading-relaxed">
+              {state.warning}
+            </p>
+            <p className="text-sm text-stone-600 leading-relaxed">
+              Sign in with your new password and your authenticator.
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-stone-600 leading-relaxed">
+            You were signed out everywhere. Sign in with your new password and your authenticator.
+          </p>
+        )}
         <a
           href="/login"
           className="text-sm font-semibold text-sky-600 hover:text-sky-700 underline"

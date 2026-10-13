@@ -10,6 +10,9 @@
  *        → 200 {"success":true}
  *        → 400 {"error":"weak_password"}  (the link stays usable)
  *        → 400 {"error":"invalid_token"}  (used, expired or replaced)
+ *        → 500 {"error":"sessions_not_ended"} (identuum-idp-oss v0.9.13: the
+ *          password IS set, but other sign-ins could not be ended; a retry
+ *          would only answer invalid_token, so the page offers none)
  *
  * The token and the password are never logged or returned. Redeeming signs
  * the user out everywhere and leaves the authenticator enrolled.
@@ -36,6 +39,8 @@ export async function validateResetLinkToken(rawToken: string): Promise<boolean>
 export interface RedeemResetLinkState {
   phase: "form" | "success" | "invalid";
   error?: string;
+  /** Success only: the password is set but something the reset owes was not done. */
+  warning?: string;
 }
 
 const MIN_PASSWORD = 12;
@@ -78,6 +83,13 @@ export async function redeemResetLinkAction(
       };
     }
     if (code === "invalid_token") return { phase: "invalid" };
+    if (code === "sessions_not_ended") {
+      return {
+        phase: "success",
+        warning:
+          "Your other sign-ins could not be ended. Ask your administrator to end your other sessions.",
+      };
+    }
     return { phase: "form", error: "Could not reset the password right now. Try again." };
   } catch {
     return {

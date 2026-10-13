@@ -78,7 +78,6 @@ describe("CE-only routes on an edition that does not serve them", () => {
     "/api/setup/license",
     "/bff/api/v1/anomaly/events?page_size=20",
     "/bff/api/v1/anomaly/stats",
-    "/bff/api/v1/audit/event-types",
     "/bff/api/v1/system/sessions",
     "/bff/api/v1/system/audit/chain/verify",
   ];
@@ -106,11 +105,13 @@ describe("CE-only routes on an edition that does not serve them", () => {
       "/bff/api/v1/organizations/01990000-0000-7000-8000-00000000000a/identity-provider"
     );
     await wrapped("/bff/api/v1/audit/events");
+    await wrapped("/bff/api/v1/audit/event-types");
     await wrapped("/api/idp/api/setup/status");
     await wrapped("/api/status");
     expect(seen.map((s) => s.url)).toEqual([
       "/bff/api/v1/organizations/01990000-0000-7000-8000-00000000000a/identity-provider",
       "/bff/api/v1/audit/events",
+      "/bff/api/v1/audit/event-types",
       "/api/setup/status",
       "/api/status",
     ]);

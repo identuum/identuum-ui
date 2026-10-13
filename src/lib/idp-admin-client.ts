@@ -1640,9 +1640,10 @@ export interface AuditEventTypeGroupFromAPI {
 
 /**
  * Fetches the grouped list of known audit event types from the backend.
- * Backend: GET /api/v1/audit/event-types
- * Requires Enterprise/CE commercial capability (inherits AppendOnlyAudit gate from audit group).
- * Returns null on any failure; callers should fall back to the static list.
+ * Backend: GET /api/v1/audit/event-types → {"groups":[{"label","types":[{"value","label"}]}]}
+ * Served by both editions since identuum-idp-oss v0.9.13 (route 166), with
+ * the /audit/events guard. Returns null on any failure; the filter then says
+ * in plain words that the list could not be loaded.
  */
 export async function listAuditEventTypes(): Promise<AuditEventTypeGroupFromAPI[] | null> {
   const cfg = loadRuntimeConfig();

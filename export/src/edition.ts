@@ -18,13 +18,15 @@ const CE_ONLY_ROUTES: readonly RegExp[] = [
   /^\/api\/upgrade\/status$/,
   /^\/api\/setup\/license$/,
   /^\/api\/v1\/anomaly\/(events|stats)$/,
-  /^\/api\/v1\/audit\/event-types$/,
   /^\/api\/v1\/system\/sessions$/,
   /^\/api\/v1\/system\/audit\/chain\/verify$/,
   // The org_admin's reset link (POST /api/v1/users/:id/recovery/reset-link)
   // left this list in v0.9.13: identuum-idp-oss serves it too. The page
   // offers it only where capabilities.admin_reset_link is true, so an older
   // OSS binary is never asked.
+  // The audit event-type list (GET /api/v1/audit/event-types) left it in
+  // v0.9.13 too: identuum-idp-oss serves it (route 166). An older OSS binary
+  // answers 404 and the audit filter says it could not load the list.
 ];
 
 /** `pathname` is the IdP path, without the /api/idp or /bff prefix or a query. */

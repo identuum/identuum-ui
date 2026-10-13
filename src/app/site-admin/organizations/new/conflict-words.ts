@@ -1,18 +1,30 @@
 /**
  * Which field a 409 from organization create names, and its words. The code
  * is the 409 body's "error" (OSS-0913-C, owner Q-C2 a). Only codes that the
- * OSS contract has confirmed get an entry here; any other 409 keeps the
- * domain words the form has always shown.
+ * OSS contract has confirmed get an entry here; any other 409 (or one from a
+ * binary that sends no code) keeps the domain words the form has always shown.
  */
 
 export type OrgCreateField = "name" | "domain" | "admin_email";
-
-const BY_CODE: Readonly<Record<string, { field: OrgCreateField; text: string }>> = {};
 
 const DOMAIN = {
   field: "domain",
   text: "An organization with this domain already exists.",
 } as const;
+
+// identuum-idp-oss d6072cf: 409 {"error":"domain_exists"|"slug_exists"|"email_exists"};
+// email_exists comes only from a create that names an initial administrator.
+const BY_CODE: Readonly<Record<string, { field: OrgCreateField; text: string }>> = {
+  domain_exists: DOMAIN,
+  slug_exists: {
+    field: "name",
+    text: "An organization with this name already exists. Choose another name.",
+  },
+  email_exists: {
+    field: "admin_email",
+    text: "This email address already has an account. Use another address.",
+  },
+};
 
 export function orgCreateConflict(code: string | undefined): {
   field: OrgCreateField;

@@ -9,11 +9,6 @@
  * Page resets to 1 on every filter submission.
  */
 
-import {
-  AUDIT_EVENT_TYPE_GROUPS,
-  humanizeEventType,
-  KNOWN_AUDIT_EVENT_TYPES,
-} from "@/lib/audit-event-types";
 import type { AuditEventTypeGroupFromAPI } from "@/lib/idp-admin-client";
 import { CustomRangeToggle } from "./custom-range-toggle";
 import { LocalDayBounds } from "./local-day-bounds";
@@ -33,8 +28,9 @@ interface AuditFilterPanelProps {
   basePath: string;
   filters: AuditFilterValues;
   /**
-   * Event type groups from the backend endpoint. Falls back to the static
-   * compile-time list when null (endpoint unavailable or feature not licensed).
+   * Event type groups from GET /api/v1/audit/event-types (both editions).
+   * When null or empty the read failed: the select offers "All events" only
+   * and a plain-words line says so. There is no compile-time list.
    */
   eventTypeGroups?: AuditEventTypeGroupFromAPI[] | null;
   /**
@@ -85,19 +81,11 @@ export function AuditFilterPanel({
   const windowVal = windowSelectValue(filters);
   const isCustom = windowVal === "custom";
 
-  // Resolve which groups to render: backend-provided → static fallback
-  const resolvedGroups: Array<{ label: string; types: Array<{ value: string; label: string }> }> =
-    eventTypeGroups && eventTypeGroups.length > 0
-      ? eventTypeGroups
-      : AUDIT_EVENT_TYPE_GROUPS.map((g) => ({
-          label: g.label,
-          types: g.types.map((t) => ({ value: t, label: humanizeEventType(t) })),
-        }));
-
-  const knownValues: ReadonlySet<string> =
-    eventTypeGroups && eventTypeGroups.length > 0
-      ? new Set(eventTypeGroups.flatMap((g) => g.types.map((t) => t.value)))
-      : KNOWN_AUDIT_EVENT_TYPES;
+  const resolvedGroups = eventTypeGroups ?? [];
+  const listUnavailable = resolvedGroups.length === 0;
+  const knownValues: ReadonlySet<string> = new Set(
+    resolvedGroups.flatMap((g) => g.types.map((t) => t.value))
+  );
 
   // If the current eventType is set but not in the known list, show it as a custom option.
   const customEventType =
@@ -142,7 +130,7 @@ export function AuditFilterPanel({
         <LocalDayBounds />
         <CustomRangeToggle />
 
-        {/* Event type — grouped select from known backend constants */}
+        {/* Event type — grouped select from the server's list */}
         <div className="space-y-1 sm:col-span-2 lg:col-span-1">
           <label htmlFor="af-event-type" className="block text-xs font-semibold text-stone-600">
             Event type
@@ -166,6 +154,11 @@ export function AuditFilterPanel({
               </optgroup>
             ))}
           </select>
+          {listUnavailable && (
+            <p className="text-xs text-stone-500">
+              The list of event types could not be loaded. You can still filter by the other fields.
+            </p>
+          )}
         </div>
 
         {/* Subject type */}

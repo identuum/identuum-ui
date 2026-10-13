@@ -40,6 +40,17 @@ to `v0.6.2` were written when the artifact was the container image
 - **A taken domain is named.** When a new organization cannot be created
   because its domain may already be in use, the Domain field says so,
   instead of "The backend returned an error".
+- **A taken name or email address is named too.** When a new
+  organization's name, domain or administrator email address is already
+  in use, the server now says which, and that field shows it.
+- **The audit filter lists what the server records.** The event types in
+  the audit log filter now come from the server, on every edition, in
+  groups with plain-word names. When the server cannot send the list, the
+  filter says so and the other filters still work.
+- **A reset link that could not sign you out elsewhere.** When the new
+  password was set but your other sign-ins could not be ended, the page
+  says the password was changed and asks you to have your administrator
+  end the other sessions. It does not offer to try again.
 
 - **The console works on a phone.** On screens narrower than 768 px the
   menu at the left is hidden, so pages no longer scroll sideways. A
@@ -91,6 +102,9 @@ to `v0.6.2` were written when the artifact was the container image
   refused) and the administrator's reset link with its public validate and
   redeem pair. The role matrix grows 315 -> 332 committed cells; the
   closure set 55 -> 57.
+- The role matrix's denominators follow the identuum-idp-oss golden to
+  166/109/36 (total/role/class endpoints) for GET
+  /api/v1/audit/event-types; no cells are added until a spec exercises it.
 
 ## `v0.9.12`
 
