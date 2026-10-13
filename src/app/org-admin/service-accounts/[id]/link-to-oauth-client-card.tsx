@@ -80,7 +80,7 @@ export function LinkToOAuthClientCard({
   serviceAccountName,
   oauthClients,
   loadError,
-  initialLinkedClients,
+  initialLinkedClients: serverLinkedClients,
   linkedClientsLoadError,
 }: LinkToOAuthClientCardProps) {
   const boundAction = linkServiceAccountToOAuthClientAction.bind(null, serviceAccountId);
@@ -99,22 +99,27 @@ export function LinkToOAuthClientCard({
   //      navigate, just cannot see/manage links).
   //   4. Form (default).
   //
-  // `linkAgainNonce` lets the operator dismiss either the
-  // UnlinkSuccessPanel or the persistent linked-state and return to
-  // the Form ("Link another OAuth client" button). useActionState
-  // cannot be imperatively reset; this local nonce gates the view.
-  // The in-memory link `state` survives once the operator has visibly
-  // moved past it.
-  const [linkAgainNonce, setLinkAgainNonce] = useState(0);
+  // `dismissed` lets the operator dismiss either the UnlinkSuccessPanel
+  // or the persistent linked-state and return to the Form ("Link another
+  // OAuth client" button). useActionState cannot be imperatively reset,
+  // so the button records the link `state` it dismissed: the Form opens
+  // empty, and the NEXT result of that Form (success or refusal) is
+  // shown as usual (V3-037).
+  const [dismissed, setDismissed] = useState<LinkSAToOAuthClientState | null>(null);
+  const onLinkAgain = () => setDismissed(state);
+  // An unlink revalidates the page and the server then sends an empty
+  // list. Keep the list of the first render so each row stays mounted
+  // and shows its "OAuth client unlinked." line (V3-027).
+  const [initialLinkedClients] = useState(serverLinkedClients);
 
-  if (linkAgainNonce > 0) {
+  if (dismissed !== null && (state === dismissed || state.phase !== "success")) {
     return (
       <CardShell>
         <Form
           serviceAccountName={serviceAccountName}
           oauthClients={oauthClients}
           loadError={loadError}
-          state={initialState}
+          state={state === dismissed ? initialState : state}
           action={action}
           pending={pending}
         />
@@ -128,7 +133,7 @@ export function LinkToOAuthClientCard({
         <SuccessPanel
           serviceAccountId={serviceAccountId}
           linked={state.linked}
-          onLinkAgain={() => setLinkAgainNonce((n) => n + 1)}
+          onLinkAgain={onLinkAgain}
         />
       </CardShell>
     );
@@ -140,7 +145,7 @@ export function LinkToOAuthClientCard({
         <LinkedStatePanel
           serviceAccountId={serviceAccountId}
           linkedClients={initialLinkedClients}
-          onLinkAgain={() => setLinkAgainNonce((n) => n + 1)}
+          onLinkAgain={onLinkAgain}
         />
       </CardShell>
     );
