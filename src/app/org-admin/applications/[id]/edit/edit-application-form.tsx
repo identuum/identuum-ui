@@ -35,7 +35,7 @@
  *     skip_consent (D-018) is, for a confidential client only.
  */
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { type UpdateApplicationState, updateApplicationAction } from "../../actions";
 import { FirstPartyField } from "../../first-party-field";
@@ -89,6 +89,12 @@ function Form({
 }) {
   // D4: someone changed the application since this page read it.
   const changed = state.phase === "error" ? state.changed : undefined;
+  // The Save button that was pressed may be far below: focus goes to the
+  // banner so its two choices come next (UI-0913-A-EARLY-FIX F5).
+  const bannerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (changed) bannerRef.current?.focus();
+  }, [changed]);
   // A changed application has its own banner below, not this line.
   const errorMessage = state.phase === "error" && !state.changed ? state.error : null;
   const fieldErrors = state.phase === "error" ? (state.fieldErrors ?? {}) : {};
@@ -114,16 +120,18 @@ function Form({
       )}
       {changed && (
         <div
+          ref={bannerRef}
           role="alert"
+          tabIndex={-1}
           data-testid="client-changed"
-          className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          className="space-y-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
         >
           <p>Someone changed this application since you opened it. Nothing was saved.</p>
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="secondary"
-              size="sm"
+              size="lg"
               // Discards the typed values: the page reads the application again.
               onClick={() => window.location.reload()}
               disabled={pending}
@@ -133,7 +141,7 @@ function Form({
             {changed.latestUpdatedAt && (
               <Button
                 type="submit"
-                size="sm"
+                size="lg"
                 name="save_anyway_updated_at"
                 value={changed.latestUpdatedAt}
                 disabled={pending}

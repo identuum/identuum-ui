@@ -148,6 +148,15 @@ describe("O19 and D7: the sign-in refusals in plain words (item 2a)", () => {
     ["invitation_pending", "Accept your invitation first. Use the link in your invitation email."],
     ["registration_pending", "Your account is waiting for an administrator's approval."],
     ["email_not_shared", "The sign-in provider did not share your email address."],
+    // UI-0913-A-EARLY-FIX F1: the rest of OSS's closed list (ef4ced9, 3e1fa09).
+    ["sign_in_failed", "Sign-in with the provider did not work. Try again."],
+    ["sign_in_expired", "The sign-in took too long or was already used. Start again."],
+    [
+      "sign_in_not_permitted",
+      "Your account cannot sign in this way. Ask your administrator for help.",
+    ],
+    ["provider_unavailable", "The sign-in provider could not be reached. Try again in a moment."],
+    ["sign_in_unavailable", "Sign-in is not available right now. Try again in a moment."],
   ])("%s", async (code, words) => {
     // proposed module and export; the mapping point itself is QUESTION Q-A1.
     const mod = (await import("../lib/sign-in-refusals")) as {

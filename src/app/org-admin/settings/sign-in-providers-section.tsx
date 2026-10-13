@@ -88,6 +88,37 @@ export function policyNeedsConfirm(current: string | null, choice: AuthPolicy): 
 }
 
 /**
+ * The question says who is affected in its own direction (UI-0913-A-EARLY-FIX
+ * F2): leaving provider-only gives passwords back, and "Password only" also
+ * hides the provider button.
+ */
+export function policyConfirmText(choice: AuthPolicy): string {
+  if (choice === "idp_only") return POLICY_CONFIRM_TEXT;
+  if (choice === "local_only") {
+    return "Members who sign in only with a provider will not be able to sign in. Continue?";
+  }
+  return "Members will be able to sign in with a password again. Continue?";
+}
+
+/** The card's one result line: the last action wins (F4). */
+export function cardStatus({
+  policySaved,
+  removed,
+  last,
+  saved,
+}: {
+  policySaved: boolean;
+  removed: boolean;
+  last: "policy" | "remove" | null;
+  saved: string | null;
+}): string | null {
+  if (removed && last === "remove") return "Provider removed.";
+  if (policySaved) return "Sign-in policy saved.";
+  if (removed) return "Provider removed.";
+  return saved;
+}
+
+/**
  * The hint, only when the policy and the list disagree (COPY B-05, B-05b).
  * The Change button sits next to the policy line (D2), so the hint no longer
  * sends the administrator to an administrator.
@@ -135,6 +166,7 @@ export function SignInProvidersSection({
   const [saved, setSaved] = useState<string | null>(initialResult);
   const [origin, setOrigin] = useState(publicBase);
   const [removing, setRemoving] = useState<OrgIdentityProviderItem | null>(null);
+  const [last, setLast] = useState<"policy" | "remove" | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const statusRef = useRef<HTMLParagraphElement>(null);
@@ -165,6 +197,7 @@ export function SignInProvidersSection({
   useEffect(() => {
     if (delState.phase === "deleted") {
       setRemoving(null);
+      setLast("remove");
       statusRef.current?.focus();
     } else if (delState.phase === "idle" && delState.error) {
       setRemoving(null);
@@ -178,6 +211,7 @@ export function SignInProvidersSection({
     if (policyState.phase === "saved") {
       setPolicyOpen(false);
       setPolicyConfirming(false);
+      setLast("policy");
       changeRef.current?.focus();
     } else if (policyState.error) {
       setPolicyConfirming(false);
@@ -190,7 +224,7 @@ export function SignInProvidersSection({
   const policy = policyState.phase === "saved" ? policyState.policy : authPolicy;
   const policySaved = policyState.phase === "saved" && !policyOpen;
   // One result line for the card: the sign-in policy, a removal or a save.
-  const status = policySaved ? "Sign-in policy saved." : removed ? "Provider removed." : saved;
+  const status = cardStatus({ policySaved, removed, last, saved });
   const hint = result.ok ? policyHint(policy, providers.length) : null;
   const activeCount = providers.filter((p) => p.active).length;
   const lastProvider = (p: OrgIdentityProviderItem) =>
@@ -454,6 +488,11 @@ export function PolicyPanel({
 }) {
   const legendId = useId();
   const needsConfirm = policyNeedsConfirm(current, choice);
+  // Save is gone once it asks (F3): focus goes to the question, not the page.
+  const questionRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (confirming) questionRef.current?.focus();
+  }, [confirming]);
   return (
     <form
       action={action}
@@ -469,7 +508,7 @@ export function PolicyPanel({
           const blocked = c.value === "idp_only" && activeProviders === 0 && current !== "idp_only";
           const lineId = `${legendId}-${c.value}`;
           return (
-            <label key={c.value} className="flex items-start gap-2 text-sm">
+            <label key={c.value} className="flex min-h-11 items-start gap-2 text-sm">
               <input
                 type="radio"
                 name="auth_policy"
@@ -499,7 +538,13 @@ export function PolicyPanel({
       )}
       {confirming ? (
         <div className="space-y-2">
-          <p className="text-sm text-amber-800">{POLICY_CONFIRM_TEXT}</p>
+          <p
+            ref={questionRef}
+            tabIndex={-1}
+            className="text-sm text-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/60"
+          >
+            {policyConfirmText(choice)}
+          </p>
           <div className="flex flex-wrap gap-2">
             <button type="submit" disabled={pending} className={primaryBtn}>
               {pending ? "Saving…" : "Continue"}

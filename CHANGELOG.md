@@ -25,8 +25,10 @@ to `v0.6.2` were written when the artifact was the container image
   has a "Change" button next to the sign-in policy. Choose "Password only",
   "Password or a sign-in provider" or "Sign-in provider only". "Sign-in
   provider only" stays off until the organization has an active provider.
-  A move to or from it asks first, because members who only have a
-  password cannot sign in then. A site administrator sees the policy and is
+  A move to or from it asks first and says who it affects: going to it,
+  members who only have a password cannot sign in; going to "Password
+  only", members who only sign in with a provider cannot sign in; going to
+  both, passwords work again. A site administrator sees the policy and is
   told that only the organization's own administrator can change it.
 - **Removing the last provider is explained.** When members can only sign in
   with a provider, the card says why its only provider cannot be removed,
@@ -37,7 +39,9 @@ to `v0.6.2` were written when the artifact was the container image
   anyway". Your typed values stay in the form.
 - **Plain words when a provider sign-in is refused**: when the invitation is
   not accepted yet, when an administrator has not approved the account yet,
-  or when the provider did not share the email address.
+  when the provider did not share the email address, when the sign-in did
+  not work or took too long, when the account may not sign in this way, or
+  when the provider or sign-in cannot be reached.
 - **Administrators can verify their own email address** from Account
   settings, Profile, like members on their Overview. The site administrator
   sees the status only.

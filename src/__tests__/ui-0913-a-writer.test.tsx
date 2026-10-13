@@ -626,3 +626,126 @@ describe("F2: the account menu holds only its items", () => {
     expect(address).toBeLessThan(menu);
   });
 });
+
+// ── UI-0913-A-EARLY-FIX: F2..F5 of UI-0913-A-EARLY-REVIEW ───────────────────
+
+describe("EARLY-FIX F2: the policy question says what happens in its direction", () => {
+  async function asking(current: string, choice: string) {
+    const { PolicyPanel } = await import("../app/org-admin/settings/sign-in-providers-section");
+    return text(
+      renderToStaticMarkup(
+        <PolicyPanel
+          current={current}
+          choice={choice as "mixed"}
+          activeProviders={1}
+          confirming={true}
+          pending={false}
+          onChoose={() => {}}
+          onConfirm={() => {}}
+          onCancel={() => {}}
+          action={() => {}}
+        />
+      )
+    );
+  }
+  const TO_PROVIDER = "Members who only have a password will not be able to sign in. Continue?";
+
+  it("to provider-only: password members lose access", async () => {
+    expect(await asking("mixed", "idp_only")).toContain(TO_PROVIDER);
+  });
+
+  it("from provider-only to password only: provider members lose access", async () => {
+    const t = await asking("idp_only", "local_only");
+    expect(t).toContain(
+      "Members who sign in only with a provider will not be able to sign in. Continue?"
+    );
+    expect(t).not.toContain(TO_PROVIDER);
+  });
+
+  it("from provider-only to both: password members can sign in again", async () => {
+    const t = await asking("idp_only", "mixed");
+    expect(t).toContain("Members will be able to sign in with a password again. Continue?");
+    expect(t).not.toContain(TO_PROVIDER);
+  });
+});
+
+describe("EARLY-FIX F3: focus moves to the question when Save opens it", () => {
+  it("the question can take focus and the panel moves focus to it", () => {
+    const s = src("src/app/org-admin/settings/sign-in-providers-section.tsx");
+    expect(s).toMatch(/ref=\{questionRef\}[^>]*tabIndex=\{-1\}/);
+    expect(s).toMatch(/if \(confirming\) questionRef\.current\?\.focus\(\);/);
+  });
+});
+
+describe("EARLY-FIX F4: the card's line names the last thing that happened", () => {
+  it("a removal after a policy save says the removal", async () => {
+    const { cardStatus } = await import("../app/org-admin/settings/sign-in-providers-section");
+    expect(cardStatus({ policySaved: true, removed: true, last: "remove", saved: null })).toBe(
+      "Provider removed."
+    );
+    expect(cardStatus({ policySaved: true, removed: true, last: "policy", saved: null })).toBe(
+      "Sign-in policy saved."
+    );
+    expect(cardStatus({ policySaved: false, removed: false, last: null, saved: "Saved." })).toBe(
+      "Saved."
+    );
+  });
+});
+
+describe("EARLY-FIX F5: the conflict banner takes focus; tap targets are 44 px", () => {
+  const PROPS = {
+    clientId: "0198b2d0-0000-7000-8000-0000000000aa",
+    initialName: "Stored name",
+    initialClientID: "app-1",
+    initialIsPublic: true,
+    initialSkipConsent: false,
+    initialAuthMethod: "none",
+    initialRedirectURIs: ["https://stored.example/cb"],
+    initialPostLogoutRedirectURIs: [],
+    initialAllowedAudiences: [],
+    initialScope: "openid",
+    initialUpdatedAt: "2026-10-13T09:15:42.123456Z",
+  };
+
+  it("the banner can take focus, the form moves focus to it, and both buttons are h-11", async () => {
+    h.state = {
+      phase: "error",
+      error: "x",
+      values: { name: "Typed name", redirect_uris: "https://typed.example/cb" },
+      changed: { latestUpdatedAt: "2026-10-13T09:20:01.654321Z" },
+    };
+    const { EditApplicationForm } = await import(
+      "../app/org-admin/applications/[id]/edit/edit-application-form"
+    );
+    const html = renderToStaticMarkup(<EditApplicationForm {...PROPS} />);
+    expect(html).toMatch(/role="alert" tabindex="-1" data-testid="client-changed"/);
+    for (const name of ["Load the latest version", "Save my version anyway"]) {
+      const button = html.match(new RegExp(`<button[^>]*>${name}</button>`))?.[0] ?? "";
+      expect(button).toContain("h-11");
+      expect(button).not.toContain("h-8");
+    }
+    expect(src("src/app/org-admin/applications/[id]/edit/edit-application-form.tsx")).toMatch(
+      /if \(changed\) bannerRef\.current\?\.focus\(\);/
+    );
+  });
+
+  it("each policy choice is at least 44 px high", async () => {
+    const { PolicyPanel } = await import("../app/org-admin/settings/sign-in-providers-section");
+    const html = renderToStaticMarkup(
+      <PolicyPanel
+        current="mixed"
+        choice="mixed"
+        activeProviders={1}
+        confirming={false}
+        pending={false}
+        onChoose={() => {}}
+        onConfirm={() => {}}
+        onCancel={() => {}}
+        action={() => {}}
+      />
+    );
+    const labels = html.match(/<label[^>]*>/g) ?? [];
+    expect(labels).toHaveLength(3);
+    for (const l of labels) expect(l).toContain("min-h-11");
+  });
+});
