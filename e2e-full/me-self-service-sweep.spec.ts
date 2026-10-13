@@ -75,6 +75,9 @@ function refusal(res: { status: number; json: Json }) {
   return { status: res.status, json: { error: res.json.error } };
 }
 
+// Serial: a failed test skips the rest. The org_user MFA ceremony therefore
+// runs LAST, so a failure in it skips nothing, and the consent and reset-link
+// tests (which sign the same org_user in by password) never meet it enrolled.
 test.describe.configure({ mode: "serial" });
 
 test.describe("self-service MFA setup, own consents, admin reset link (UI-0913-D)", () => {
@@ -196,99 +199,6 @@ test.describe("self-service MFA setup, own consents, admin reset link (UI-0913-D
     expect(clientSecret.length, "client_secret issued").toBeGreaterThan(0);
   });
 
-  // ── POST /api/v1/mfa/setup/initiate and /complete ─────────────────────────
-  test("MFA setup, org_user: wrong password 401, initiate 200, complete 200, again 409, disable 204", async () => {
-    const login = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
-      email: ouEmail,
-      password: ouPw,
-    });
-    expectStatus(login, 200, "throwaway org_user password login (policy not required)");
-    const ou = login.json.access_token as string;
-
-    // One wrong password on the THROWAWAY user only: one recorded miss on its
-    // own budget, far from the limit; no shared user is involved.
-    const wrong = await api(
-      IDP_BASE,
-      "POST",
-      "/api/v1/mfa/setup/initiate",
-      { password: "Not-The-Password-1!" },
-      ou
-    );
-    expectStatus(wrong, 401, "initiate with a wrong password");
-    expect(wrong.json.error, "wrong password → invalid_proof").toBe("invalid_proof");
-
-    const init = await api(IDP_BASE, "POST", "/api/v1/mfa/setup/initiate", { password: ouPw }, ou);
-    expectStatus(init, 200, "initiate with the current password");
-    const secret = (init.json.secret as string) ?? "";
-    expect(secret.length > 0, "initiate answers a secret (value not printed)").toBe(true);
-    expect(
-      String(init.json.otpauth_url ?? "").startsWith("otpauth://"),
-      "initiate answers an otpauth URL (value not printed)"
-    ).toBe(true);
-
-    const empty = await api(IDP_BASE, "POST", "/api/v1/mfa/setup/complete", { code: "" }, ou);
-    expectStatus(empty, 400, "complete without a code");
-    expect(empty.json.error, "no code → code_required").toBe("code_required");
-
-    let done = await api(
-      IDP_BASE,
-      "POST",
-      "/api/v1/mfa/setup/complete",
-      { code: await unconsumedTOTP(secret, ouEmail) },
-      ou
-    );
-    if (done.status !== 200) {
-      done = await api(
-        IDP_BASE,
-        "POST",
-        "/api/v1/mfa/setup/complete",
-        { code: await unconsumedTOTPAfterFreshStep(secret, ouEmail) },
-        ou
-      );
-    }
-    expectStatus(done, 200, "complete with a computed code");
-    const codes = done.json.recovery_codes;
-    expect(
-      Array.isArray(codes) && codes.length > 0,
-      "complete answers recovery codes (not printed)"
-    ).toBe(true);
-
-    const status = await api(IDP_BASE, "GET", "/api/v1/me/mfa/status", undefined, ou);
-    expectStatus(status, 200, "mfa status after setup");
-    expect(status.json.mfa_enabled, "MFA is on after complete").toBe(true);
-
-    const again = await api(IDP_BASE, "POST", "/api/v1/mfa/setup/initiate", { password: ouPw }, ou);
-    expectStatus(again, 409, "initiate when already enrolled");
-    expect(again.json.error, "→ mfa_already_enrolled").toBe("mfa_already_enrolled");
-
-    // Clean-up that is also the disable cell's positive: a fresh code is the
-    // only proof (the password is never consulted). 204, sessions revoked.
-    let off = await api(
-      IDP_BASE,
-      "POST",
-      "/api/v1/me/mfa/disable",
-      { code: await unconsumedTOTP(secret, ouEmail) },
-      ou
-    );
-    if (off.status !== 204) {
-      off = await api(
-        IDP_BASE,
-        "POST",
-        "/api/v1/me/mfa/disable",
-        { code: await unconsumedTOTPAfterFreshStep(secret, ouEmail) },
-        ou
-      );
-    }
-    expectStatus(off, 204, "self-disable with a fresh code");
-
-    // Proof the disable held: the password alone signs in again (no MFA step).
-    const relogin = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
-      email: ouEmail,
-      password: ouPw,
-    });
-    expectStatus(relogin, 200, "password-only sign-in after disable");
-  });
-
   test("MFA setup, admins: an admin bearer is always enrolled → 409 before any proof", async () => {
     for (const [label, bearer] of [
       ["site_admin", site.bearer],
@@ -384,6 +294,9 @@ test.describe("self-service MFA setup, own consents, admin reset link (UI-0913-D
     });
     expect(tok.status(), "code redemption → 200").toBe(200);
     const refresh = ((await tok.json()) as { refresh_token?: string }).refresh_token ?? "";
+    // Mint triage (UI-0913-D-REVIEW F3): red here is a spec premise first (the
+    // scope was clamped, or refresh is not wired); red at the DCR above means
+    // DCR refused offline_access; red at "refresh after remove" is a product bug.
     expect(refresh.length > 0, "offline_access → a refresh token (not printed)").toBe(true);
 
     const login = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
@@ -542,5 +455,129 @@ test.describe("self-service MFA setup, own consents, admin reset link (UI-0913-D
     );
     expectStatus(refusal(bySite), 403, "site_admin may not issue a link for a tenant user");
     expect(bySite.json.error, "site_admin → forbidden").toBe("forbidden");
+  });
+
+  // ── POST /api/v1/mfa/setup/initiate and /complete ─────────────────────────
+  test("MFA setup, org_user: wrong password 401, initiate 200, complete 200, again 409, disable 204", async () => {
+    const login = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
+      email: ouEmail,
+      password: ouPw,
+    });
+    expectStatus(login, 200, "throwaway org_user password login (policy not required)");
+    const ou = login.json.access_token as string;
+
+    // One wrong password on the THROWAWAY user only: one recorded miss on its
+    // own budget, far from the limit; no shared user is involved.
+    const wrong = await api(
+      IDP_BASE,
+      "POST",
+      "/api/v1/mfa/setup/initiate",
+      { password: "Not-The-Password-1!" },
+      ou
+    );
+    expectStatus(wrong, 401, "initiate with a wrong password");
+    expect(wrong.json.error, "wrong password → invalid_proof").toBe("invalid_proof");
+
+    const init = await api(IDP_BASE, "POST", "/api/v1/mfa/setup/initiate", { password: ouPw }, ou);
+    expectStatus(init, 200, "initiate with the current password");
+    const secret = (init.json.secret as string) ?? "";
+    expect(secret.length > 0, "initiate answers a secret (value not printed)").toBe(true);
+    expect(
+      String(init.json.otpauth_url ?? "").startsWith("otpauth://"),
+      "initiate answers an otpauth URL (value not printed)"
+    ).toBe(true);
+
+    const empty = await api(IDP_BASE, "POST", "/api/v1/mfa/setup/complete", { code: "" }, ou);
+    expectStatus(empty, 400, "complete without a code");
+    expect(empty.json.error, "no code → code_required").toBe("code_required");
+
+    // F1 (UI-0913-D-REVIEW): once complete has answered 200 the throwaway is
+    // enrolled, and the disable below runs whatever fails between here and
+    // it. A clean-up failure never hides the first failure: both are
+    // reported, the first one first.
+    let enrolled = false;
+    let failure: unknown;
+    try {
+      let done = await api(
+        IDP_BASE,
+        "POST",
+        "/api/v1/mfa/setup/complete",
+        { code: await unconsumedTOTP(secret, ouEmail) },
+        ou
+      );
+      if (done.status !== 200) {
+        done = await api(
+          IDP_BASE,
+          "POST",
+          "/api/v1/mfa/setup/complete",
+          { code: await unconsumedTOTPAfterFreshStep(secret, ouEmail) },
+          ou
+        );
+      }
+      enrolled = done.status === 200;
+      expectStatus(done, 200, "complete with a computed code");
+      const codes = done.json.recovery_codes;
+      expect(
+        Array.isArray(codes) && codes.length > 0,
+        "complete answers recovery codes (not printed)"
+      ).toBe(true);
+
+      const status = await api(IDP_BASE, "GET", "/api/v1/me/mfa/status", undefined, ou);
+      expectStatus(status, 200, "mfa status after setup");
+      expect(status.json.mfa_enabled, "MFA is on after complete").toBe(true);
+
+      const again = await api(
+        IDP_BASE,
+        "POST",
+        "/api/v1/mfa/setup/initiate",
+        { password: ouPw },
+        ou
+      );
+      expectStatus(again, 409, "initiate when already enrolled");
+      expect(again.json.error, "→ mfa_already_enrolled").toBe("mfa_already_enrolled");
+    } catch (err) {
+      failure = err;
+    }
+    // The `finally` of the block above, written out: a throw inside `finally`
+    // would replace the first failure (biome noUnsafeFinally).
+    if (enrolled) {
+      try {
+        // Clean-up that is also the disable cell's positive: a fresh code is
+        // the only proof (the password is never consulted). 204, sessions
+        // revoked.
+        let off = await api(
+          IDP_BASE,
+          "POST",
+          "/api/v1/me/mfa/disable",
+          { code: await unconsumedTOTP(secret, ouEmail) },
+          ou
+        );
+        if (off.status !== 204) {
+          off = await api(
+            IDP_BASE,
+            "POST",
+            "/api/v1/me/mfa/disable",
+            { code: await unconsumedTOTPAfterFreshStep(secret, ouEmail) },
+            ou
+          );
+        }
+        expectStatus(off, 204, "self-disable with a fresh code");
+      } catch (cleanup) {
+        if (failure === undefined) throw cleanup;
+        const text = (e: unknown) => (e instanceof Error ? e.message : String(e));
+        throw new Error(
+          `${text(failure)}\n\nMFA clean-up (self-disable) also failed:\n${text(cleanup)}`,
+          { cause: failure }
+        );
+      }
+    }
+    if (failure !== undefined) throw failure;
+
+    // Proof the disable held: the password alone signs in again (no MFA step).
+    const relogin = await api(IDP_BASE, "POST", "/api/v1/auth/login", {
+      email: ouEmail,
+      password: ouPw,
+    });
+    expectStatus(relogin, 200, "password-only sign-in after disable");
   });
 });
