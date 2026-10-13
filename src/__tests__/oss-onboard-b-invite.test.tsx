@@ -224,6 +224,60 @@ describe("invite and re-issue through the IdP", () => {
     expect(!out.ok && out.status).toBe(409);
     expect(!out.ok && out.message).toMatch(/already accepted|no longer pending/i);
   });
+  // UI-0914-STAGE-2 (judge Q2 a, owner EMAIL-SCOPE a): one address is one
+  // account across the server, so an invite answers 409 email_exists.
+  it("a 409 email_exists on Invite user says the address already has an account", async () => {
+    idpAnswers["POST /api/v1/users"] = { status: 409, body: { error: "email_exists" } };
+    const { inviteOrgUser } = await import("../lib/idp-admin-client");
+    const { orgCreateConflict } = await import(
+      "../app/site-admin/organizations/new/conflict-words"
+    );
+    const out = await inviteOrgUser({ email: "taken@tenant-b.test", name: "T", role: "org_user" });
+    expect(!out.ok && out.status).toBe(409);
+    expect(!out.ok && out.message).toBe(
+      "This email address already has an account. Use another address."
+    );
+    expect(!out.ok && out.message).toBe(orgCreateConflict("email_exists").text);
+  });
+  it("a 409 email_exists on the first administrator's invite says the same", async () => {
+    idpAnswers["POST /api/v1/users"] = { status: 409, body: { error: "email_exists" } };
+    const { inviteFirstOrgAdmin } = await import("../lib/idp-admin-client");
+    const out = await inviteFirstOrgAdmin({
+      organizationId: "0198b2d0-0000-7000-8000-0000000000aa",
+      email: "taken@tenant-b.test",
+      name: "T",
+    });
+    expect(!out.ok && out.message).toBe(
+      "This email address already has an account. Use another address."
+    );
+  });
+  it("only user_not_pending reads already accepted; a 409 without that code does not", async () => {
+    idpAnswers[`POST /api/v1/users/${USER_ID}/invite`] = {
+      status: 409,
+      body: { error: "user_not_pending" },
+    };
+    idpAnswers["POST /api/v1/users"] = { status: 409, body: {} };
+    const { inviteOrgUser, reissueUserInvite } = await import("../lib/idp-admin-client");
+    const re = await reissueUserInvite(USER_ID);
+    expect(!re.ok && re.message).toBe(
+      "This user already accepted their invitation and is no longer pending."
+    );
+    const out = await inviteOrgUser({ email: "x@tenant-a.test", name: "X", role: "org_user" });
+    expect(!out.ok && out.message).toBe("Could not issue the invitation. Try again.");
+  });
+  it("the invite form shows the email_exists words", async () => {
+    idpAnswers["POST /api/v1/users"] = { status: 409, body: { error: "email_exists" } };
+    const { inviteUserAction } = await import("../app/org-admin/users/actions");
+    const f = new FormData();
+    f.set("email", "taken@tenant-b.test");
+    f.set("name", "T");
+    f.set("role", "org_user");
+    const state = await inviteUserAction({ phase: "form" }, f);
+    expect(state).toEqual({
+      phase: "form",
+      error: "This email address already has an account. Use another address.",
+    });
+  });
   it("the invite action returns the invite once from the form", async () => {
     idpAnswers["POST /api/v1/users"] = {
       status: 201,

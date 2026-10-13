@@ -13,6 +13,12 @@
  *     (internal/handlers/api_resources.go:383-385)
  *   a domain the organization already holds — POST
  *     /api/v1/organizations/:id/domains (internal/handlers/organization_domains.go:222-225)
+ *   email_exists — POST /api/v1/users with no password (Invite user), from the
+ *     OSS v0.9.14 series (internal/handlers/user_invite.go:42-46 after it); at
+ *     d6072cf the same duplicate answers 400, so this case needs that series
+ *
+ * user_not_pending (POST /api/v1/users/:id/invite, user_invite.go:88-89) is
+ * the only code that reads "already accepted their invitation".
  *
  * The console's words, from this tree:
  *
@@ -20,6 +26,7 @@
  *   src/app/org-admin/service-accounts/actions.ts:162-163
  *   src/app/org-admin/api-resources/actions.ts:141-142
  *   src/app/org-admin/settings/domains-actions.ts:118
+ *   src/lib/idp-admin-client.ts:1103-1105 (the invite's 409 words, by code)
  *
  * Every 409 here is provoked by a row this spec creates first, so no fixture
  * row is changed. The new rows are disposable: the organization is
@@ -277,6 +284,34 @@ test.describe("org_admin: create forms say what a 409 means", () => {
         })
       ).toBeVisible({ timeout: 15_000 });
       await expect(page.locator("li", { hasText: syntheticDomain })).toHaveCount(1);
+    } finally {
+      await page.close();
+    }
+  });
+
+  test("email_exists on Invite user", async () => {
+    const ctx = orgAdminCtx;
+    if (!ctx) throw new Error("orgAdminCtx not initialized — check beforeAll");
+    const page = await ctx.newPage();
+    const email = `invite+e2e-conflict-${NONCE}@disposible.org`;
+    const invite = async () => {
+      await page.goto("/org-admin/users/new");
+      await page.getByLabel("Email").fill(email);
+      await page.getByLabel("Name").fill(`E2E Conflict Invite ${NONCE}`);
+      await page.getByRole("button", { name: /^Invite user$/ }).click();
+    };
+    try {
+      // The first invite makes a pending account that holds the address.
+      await invite();
+      await expect(page.getByTestId("invite-issued")).toBeVisible({ timeout: 15_000 });
+      await invite();
+      await expect(
+        page.getByRole("alert").filter({
+          hasText: "This email address already has an account. Use another address.",
+        })
+      ).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText(/already accepted their invitation/)).toHaveCount(0);
+      await expect(page.getByTestId("invite-issued")).toHaveCount(0);
     } finally {
       await page.close();
     }

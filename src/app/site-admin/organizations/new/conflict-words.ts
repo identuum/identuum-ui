@@ -12,6 +12,9 @@ const DOMAIN = {
   text: "An organization with this domain already exists.",
 } as const;
 
+/** The words for a 409 email_exists, wherever the console meets it (Invite user too). */
+export const EMAIL_EXISTS_TEXT = "This email address already has an account. Use another address.";
+
 // identuum-idp-oss d6072cf: 409 {"error":"domain_exists"|"slug_exists"|"email_exists"};
 // email_exists comes only from a create that names an initial administrator.
 const BY_CODE: Readonly<Record<string, { field: OrgCreateField; text: string }>> = {
@@ -22,7 +25,7 @@ const BY_CODE: Readonly<Record<string, { field: OrgCreateField; text: string }>>
   },
   email_exists: {
     field: "admin_email",
-    text: "This email address already has an account. Use another address.",
+    text: EMAIL_EXISTS_TEXT,
   },
 };
 

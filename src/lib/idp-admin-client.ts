@@ -9,6 +9,7 @@
  * server-only, so client components may not import this module. The static
  * export swaps in a browser transport through the Go boundary.
  */
+import { EMAIL_EXISTS_TEXT } from "@/app/site-admin/organizations/new/conflict-words";
 import { classifyDomainVerifyErrorKind } from "./domain-verification-errors";
 import { classifyIDPStatus, type IDPStatusClassification, type IDPStatusKind } from "./idp-status";
 import { idpAuthHeaders, idpFetch } from "./idp-transport";
@@ -1106,7 +1107,14 @@ const INVITE_MESSAGES: Record<number, string> = {
   401: "Your session has expired. Sign in again.",
   403: "Only an organization administrator can invite users to this organization.",
   404: "User not found.",
-  409: "This user already accepted their invitation and is no longer pending.",
+};
+
+// A 409 is read by its code: user_not_pending comes only from the re-issue
+// (identuum-idp-oss user_invite.go:89); email_exists from the invite itself
+// once one address is one account across the server (OSS v0.9.14).
+const INVITE_CONFLICTS: Record<string, string> = {
+  user_not_pending: "This user already accepted their invitation and is no longer pending.",
+  email_exists: EMAIL_EXISTS_TEXT,
 };
 
 // biome-ignore lint/suspicious/noExplicitAny: raw API response before typing
@@ -1145,10 +1153,14 @@ async function postInvite(url: string, body: unknown, emailOf: (b: unknown) => s
     }
     const invite = res.ok ? issuedInviteFrom(data, emailOf(data)) : null;
     if (invite) return { ok: true, invite } as const;
+    const code = typeof data?.error === "string" ? data.error : "";
+    const conflict = res.status === 409 && Object.hasOwn(INVITE_CONFLICTS, code);
     return {
       ok: false,
       status: res.status,
-      message: INVITE_MESSAGES[res.status] ?? "Could not issue the invitation. Try again.",
+      message:
+        (conflict ? INVITE_CONFLICTS[code] : INVITE_MESSAGES[res.status]) ??
+        "Could not issue the invitation. Try again.",
     } as const;
   } catch {
     return { ok: false, status: 0, message: "Network error. Try again." } as const;
