@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { resolveServerTree } from "../src/area-routes";
 import { ExportRedirect } from "../src/platform/next-navigation";
 import { isServerRoute } from "../src/server-routes";
-import { installExport, session } from "./harness";
+import { installExport, OSS_COMPONENT, session } from "./harness";
 import { siteAnswers, sitePage } from "./recorded";
 
 // PLAN-D-3: the shared site-admin layout as the static export renders it —
@@ -59,6 +59,19 @@ describe("site-admin layout guard in the export", () => {
     expect(html).toContain('href="/site-admin/organizations"');
     expect(html).toContain('action="/api/auth/logout"');
     expect(html).toMatch(/<h1[^>]*>Organizations<\/h1>/);
+  });
+
+  // UI-0913-C-REVIEW F3: the layout passes the license strip already awaited
+  // (notice={await PlatformLicenseWarnings()}); an unawaited element would not
+  // reach the export's HTML.
+  it("an expired license shows its strip in the site-admin HTML", async () => {
+    const { html } = await sitePage("/site-admin/organizations", {
+      "GET /api/v1/component": {
+        json: { ...OSS_COMPONENT, license: { ...OSS_COMPONENT.license, status: "expired" } },
+      },
+    });
+    expect(html).toMatch(/data-testid="license-warning-[^"]+"/);
+    expect(html).toContain("license has expired.");
   });
 });
 
