@@ -103,7 +103,7 @@ function LoginReason({ reason }: { reason: string | null }) {
     signed_out: "You have been signed out.",
     session_expired: "Your session has expired. Sign in again.",
   };
-  const text = reason ? copy[reason] : undefined;
+  const text = reason && Object.hasOwn(copy, reason) ? copy[reason] : undefined;
   if (!text) return null;
   return (
     <p role="status" data-testid="login-reason" className={`${frame} border-stone-200 bg-white`}>

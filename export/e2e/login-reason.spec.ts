@@ -70,3 +70,16 @@ for (const [reason, line] of [
     await expect(page.getByTestId("login-reason")).toContainText(line);
   });
 }
+
+// UI-0913-A-REST (UI-0913-A-EARLY-FIX-REVIEW N2): a name every object
+// inherits is not a reason. The page shows no banner and signs in as usual.
+for (const reason of ["constructor", "__proto__"] as const) {
+  test(`${reason}: no banner, the sign-in form works`, async ({ page }) => {
+    await noOneBoundary(page);
+    await page.goto(`/login?reason=${reason}`);
+    await expect(page.getByLabel("Email or domain")).toBeVisible();
+    await expect(page.getByTestId("login-reason")).toHaveCount(0);
+    await attemptSignIn(page);
+    await expect(page.getByTestId("login-reason")).toHaveCount(0);
+  });
+}

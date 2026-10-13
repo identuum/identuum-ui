@@ -64,7 +64,8 @@ to `v0.6.2` were written when the artifact was the container image
   not accepted yet, when an administrator has not approved the account yet,
   when the provider did not share the email address, when the sign-in did
   not work or took too long, when the account may not sign in this way, or
-  when the provider or sign-in cannot be reached.
+  when the provider or sign-in cannot be reached. A sign-in address with a
+  made-up reason shows no message, instead of an empty box or an error page.
 - **Administrators can verify their own email address** from Account
   settings, Profile, like members on their Overview. The site administrator
   sees the status only.

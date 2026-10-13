@@ -122,6 +122,16 @@ describe("login", () => {
     const { html } = await render("/login?reason=whatever", READY);
     expect(html).not.toContain('data-testid="login-reason"');
   });
+
+  // UI-0913-A-REST (UI-0913-A-EARLY-FIX-REVIEW N2): a name every object
+  // inherits is not a reason; it shows nothing, not an empty box.
+  it.each(["constructor", "__proto__", "toString", "hasOwnProperty"])(
+    "?reason=%s shows nothing",
+    async (reason) => {
+      const { html } = await render(`/login?reason=${reason}`, READY);
+      expect(html).not.toContain('data-testid="login-reason"');
+    }
+  );
 });
 
 describe("platform-status", () => {
