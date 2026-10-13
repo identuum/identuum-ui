@@ -441,12 +441,17 @@ test.describe("auth+me sweep (18 census rows, ceremonies as chains)", () => {
     expect(ghostProv.status(), "unknown provider → 404").toBe(404);
 
     // ROW GET /auth/idp/:id/callback (SM): a state nobody minted is refused
-    // — the one-time-state contract's refusal branch.
+    // — the one-time-state contract's refusal branch. Since v0.9.13 (Q-A1)
+    // every callback refusal is a 302 to the console sign-in page with a
+    // reason code; a state this browser did not start is sign_in_expired.
     const badState = await request.get(
       `${IDP_BASE}/api/v1/auth/idp/${provId}/callback?code=x&state=bogus`,
       { maxRedirects: 0, failOnStatusCode: false }
     );
-    expect(badState.status(), "unminted state → 400").toBe(400);
+    expect(badState.status(), "unminted state → 302").toBe(302);
+    expect(badState.headers().location, "unminted state → /login?reason=sign_in_expired").toBe(
+      "/login?reason=sign_in_expired"
+    );
   });
 
   test("webauthn login pair: anti-enumeration begin, refused finish", async () => {
