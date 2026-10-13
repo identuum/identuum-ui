@@ -11,7 +11,12 @@ that export. The release body is this file's section for the tag. Entries up
 to `v0.6.2` were written when the artifact was the container image
 `ghcr.io/identuum/identuum-ui`, retired by owner ruling D-019 (2026-09-30).
 
-## Unreleased
+## `v0.9.13`
+
+The static console export for identuum-idp-oss `v0.9.13`: your connected
+apps in Account settings, administrator reset links, a sign-in policy per
+organization, a console that works on a phone, and plain words where the
+server refuses.
 
 - **See and remove the apps that use your account.** Account settings has
   a new "Applications" tab, also in the member menu. It lists each app you
