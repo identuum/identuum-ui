@@ -283,6 +283,11 @@ export interface OrgUserItem {
    * organization's sign-ups held for approval (FUNC-M4).
    */
   registration_held?: boolean;
+  /**
+   * OSS v0.9.13: the person must choose a new password at the next sign-in
+   * (an administrator set it). Absent on identuum-idp-ce: false.
+   */
+  requires_password_change?: boolean;
 }
 
 /**

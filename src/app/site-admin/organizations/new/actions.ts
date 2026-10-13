@@ -31,6 +31,7 @@ import { z } from "zod";
 import { createOrganization } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
+import { orgCreateConflict } from "./conflict-words";
 
 /**
  * THE-UNVALIDATED-DOMAIN (2026-08-31): a MIRROR of the server grammar in
@@ -157,7 +158,8 @@ export async function createOrgAction(
 
   if (!result.ok) {
     if (result.conflict) {
-      return { fieldErrors: { domain: "An organization with this domain already exists." } };
+      const { field, text } = orgCreateConflict(result.code);
+      return { fieldErrors: { [field]: text } };
     }
     if (result.status === 403) {
       redirect("/login?reason=unauthorized");

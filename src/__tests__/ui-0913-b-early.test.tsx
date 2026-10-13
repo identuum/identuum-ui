@@ -288,9 +288,13 @@ describe("D3: the Applications tab (item 2)", () => {
   });
 
   it("after removal the row is gone and a status line says so", async () => {
-    h.state = { phase: "removed" };
-    const { ApplicationRow } = await import("../app/account/settings/applications-section");
-    const html = renderToStaticMarkup(<ApplicationRow consent={consent} lifetimeSeconds={3600} />);
+    h.state = { phase: "removed", clientId: "app-1", name: "Example App" };
+    const { ApplicationsSection } = await import("../app/account/settings/applications-section");
+    const html = renderToStaticMarkup(
+      <ApplicationsSection
+        result={{ ok: true, consents: [consent], accessTokenLifetimeSeconds: 3600 }}
+      />
+    );
     expect(html).toContain('role="status"');
     expect(html).toContain("Access removed for Example App.");
     expect(html).not.toContain("Can see:");
@@ -298,17 +302,30 @@ describe("D3: the Applications tab (item 2)", () => {
   });
 
   it("404 on remove: the app no longer has access, and the row is gone", async () => {
-    h.state = { phase: "gone" };
-    const { ApplicationRow } = await import("../app/account/settings/applications-section");
-    const html = renderToStaticMarkup(<ApplicationRow consent={consent} lifetimeSeconds={3600} />);
+    h.state = { phase: "gone", clientId: "app-1", name: "Example App" };
+    const { ApplicationsSection } = await import("../app/account/settings/applications-section");
+    const html = renderToStaticMarkup(
+      <ApplicationsSection
+        result={{ ok: true, consents: [consent], accessTokenLifetimeSeconds: 3600 }}
+      />
+    );
     expect(html).toContain("This app no longer has access.");
     expect(html).not.toContain("Can see:");
   });
 
   it("a remove failure shows on the row, and the row stays", async () => {
-    h.state = { phase: "error", error: "Access could not be removed. Try again." };
-    const { ApplicationRow } = await import("../app/account/settings/applications-section");
-    const html = renderToStaticMarkup(<ApplicationRow consent={consent} lifetimeSeconds={3600} />);
+    h.state = {
+      phase: "error",
+      clientId: "app-1",
+      name: "Example App",
+      error: "Access could not be removed. Try again.",
+    };
+    const { ApplicationsSection } = await import("../app/account/settings/applications-section");
+    const html = renderToStaticMarkup(
+      <ApplicationsSection
+        result={{ ok: true, consents: [consent], accessTokenLifetimeSeconds: 3600 }}
+      />
+    );
     expect(html).toContain("Access could not be removed. Try again.");
     expect(html).toContain("Can see:");
     expect(html).toContain(">Remove access<");

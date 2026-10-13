@@ -21,7 +21,12 @@ to `v0.6.2` were written when the artifact was the container image
   working for a short time, which the page states from the server's own
   setting. The Overview has an "Applications" card with the count and a
   "Review" link. A server without this feature says "Not available on
-  this server."
+  this server." After a removal, the line "Access removed for <app>."
+  stays on the page and keyboard focus moves to it.
+- **The user page says when a new password is due.** When an
+  administrator set a person's password and the person has not yet
+  changed it, the user page shows "Must choose a new password at next
+  sign-in."
 - **Reset links say why they cannot be made.** When a reset link is
   refused, the user page now says why in plain words: the person has not
   activated the account, signs in only with a provider, belongs to an

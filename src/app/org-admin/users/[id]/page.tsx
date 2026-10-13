@@ -39,6 +39,7 @@ import {
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { ResetMFAButton, UserRowActions } from "../user-row-actions";
 import { ApproveButton } from "./approve-button";
+import { PasswordChangeRow } from "./password-change-row";
 import { ReissueInviteButton } from "./reissue-invite-button";
 import { ResetLinkButton } from "./reset-link-button";
 import {
@@ -289,6 +290,7 @@ export default async function OrgAdminUserDetailPage({
               <LocalTime value={user.last_login_at} />
             </span>
           </DetailRow>
+          <PasswordChangeRow required={user.requires_password_change === true} />
           {user.invitation_pending && (
             <DetailRow label="Invitation">
               <span className="text-xs text-amber-600 font-medium">

@@ -4,7 +4,9 @@ import { expect, type Page, test } from "@playwright/test";
 // the Overview's Applications card, over a fake boundary that answers the
 // identuum-idp-oss v0.9.13 contract (GET and DELETE /api/v1/me/consents).
 // The lifetime is 900 s here, so "15 minutes" in the question proves it is
-// read from the answer and not written into the page.
+// read from the answer and not written into the page. The fake keeps state
+// like identuum-idp-oss: after a 204 or a 404 not_found the app is no longer
+// in the list (review F1).
 
 const USER = {
   id: "01990000-0000-7000-8000-000000000021",
@@ -42,6 +44,8 @@ interface Fake {
   /** The DELETE answer. */
   remove?: 204 | 404 | 503;
   deletes: { path: string; body: string | null }[];
+  /** Apps that a 204 or 404 took out of the list. */
+  gone?: Set<string>;
 }
 
 async function fakeMember(page: Page, fake: Fake): Promise<void> {
@@ -62,11 +66,16 @@ async function fakeMember(page: Page, fake: Fake): Promise<void> {
       if (list === 503) {
         return route.fulfill({ status: 503, json: { error: "temporarily_unavailable" } });
       }
-      return route.fulfill({ json: { consents: list, access_token_lifetime_seconds: 900 } });
+      const consents = list.filter((a) => !fake.gone?.has(a.client_id));
+      return route.fulfill({ json: { consents, access_token_lifetime_seconds: 900 } });
     }
     if (path.startsWith("/api/v1/me/consents/") && req.method() === "DELETE") {
       fake.deletes.push({ path, body: req.postData() });
       const status = fake.remove ?? 204;
+      if (status !== 503) {
+        fake.gone ??= new Set();
+        fake.gone.add(decodeURIComponent(path.slice("/api/v1/me/consents/".length)));
+      }
       if (status === 204) return route.fulfill({ status: 204, body: "" });
       if (status === 404) return route.fulfill({ status: 404, json: { error: "not_found" } });
       return route.fulfill({ status: 503, json: { error: "temporarily_unavailable" } });
@@ -122,9 +131,14 @@ test("Applications tab: rows, the question with the lifetime, removal", async ({
 
   await app.getByRole("button", { name: "Remove access" }).click();
   await app.getByRole("button", { name: "Remove access" }).click();
-  await expect(page.getByRole("status")).toHaveText("Access removed for Example App.");
+  const status = page.getByRole("status");
+  await expect(status).toHaveText("Access removed for Example App.");
   await expect(page.getByText("Can see: who you are")).toHaveCount(0);
   await expect(row(page, "Second App")).toContainText("Can see: your name");
+  // The list was read again without the app; the line and the focus stay.
+  await expect(page.locator("main li")).toHaveCount(1);
+  await expect(status).toHaveText("Access removed for Example App.");
+  await expect(status).toBeFocused();
   // Only the client_id travels, in the path; no user id, no body.
   expect(fake.deletes).toEqual([{ path: "/api/v1/me/consents/app-1", body: null }]);
 });
@@ -143,6 +157,8 @@ test("Applications tab: keyboard opens and answers the question", async ({ page 
   ).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("status")).toHaveText("Access removed for Second App.");
+  await expect(page.getByRole("status")).toBeFocused();
+  await expect(page.locator("main li")).toHaveCount(1);
   expect(fake.deletes.map((d) => d.path)).toEqual(["/api/v1/me/consents/app-2"]);
 });
 
@@ -154,6 +170,9 @@ test("Applications tab: 404 not_found removes the row and says why", async ({ pa
   await app.getByRole("button", { name: "Remove access" }).click();
   await expect(page.getByRole("status")).toHaveText("This app no longer has access.");
   await expect(page.getByText("Can see: who you are")).toHaveCount(0);
+  await expect(page.locator("main li")).toHaveCount(1);
+  await expect(page.getByRole("status")).toHaveText("This app no longer has access.");
+  await expect(page.getByRole("status")).toBeFocused();
 });
 
 test("Applications tab: a failed removal shows on the row and keeps it", async ({ page }) => {
@@ -164,7 +183,7 @@ test("Applications tab: a failed removal shows on the row and keeps it", async (
   await app.getByRole("button", { name: "Remove access" }).click();
   await expect(app).toContainText("Access could not be removed. Try again.");
   await expect(app).toContainText("Can see: who you are");
-  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(page.getByRole("status")).toHaveText("");
 });
 
 test("Applications tab: list error, CE and no applications", async ({ page }) => {

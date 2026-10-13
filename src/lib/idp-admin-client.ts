@@ -76,7 +76,7 @@ export type CreateOrgResult =
       /** Why no link exists (names the setting). Never set together with activationUrl. */
       activationUrlUnavailable: string | null;
     }
-  | { ok: false; status: number; conflict: boolean };
+  | { ok: false; status: number; conflict: boolean; code?: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -236,7 +236,16 @@ export async function createOrganization(opts: CreateOrgOptions): Promise<Create
       cache: "no-store",
     });
 
-    if (res.status === 409) return { ok: false, status: 409, conflict: true };
+    if (res.status === 409) {
+      // The code says which field is taken (OSS-0913-C, owner Q-C2 a).
+      const code = await res
+        .json()
+        .then((b: { error?: unknown }) => (typeof b?.error === "string" ? b.error : undefined))
+        .catch(() => undefined);
+      return code
+        ? { ok: false, status: 409, conflict: true, code }
+        : { ok: false, status: 409, conflict: true };
+    }
     if (!res.ok) return { ok: false, status: res.status, conflict: false };
 
     // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
@@ -1303,6 +1312,7 @@ export async function getOrgUserById(id: string): Promise<OrgUserItem | null> {
       invitation_pending: Boolean(u.invitation_pending),
       invitation_email_bound: invitationEmailBound(u),
       banned: Boolean(u.banned),
+      requires_password_change: u.requires_password_change === true,
     };
   } catch (error) {
     if (error instanceof UserDetailUnavailable) throw error;
