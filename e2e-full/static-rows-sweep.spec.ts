@@ -654,6 +654,32 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
         ok: [200],
         label: "audit sa",
       },
+      // The event-type catalog sits under the audit log's own guard
+      // (identuum-idp-oss d6072cf internal/handlers/audit_events.go:108-109 and :120,
+      // mw/scope_denial.go:161-187): site_admin 200, org_admin with
+      // audit:read 200 (audit_events.go:149-151), org_user 403
+      // (scope_denial.go:173-175) even holding the scope.
+      {
+        method: "GET",
+        path: "/api/v1/audit/event-types",
+        bearer: sa,
+        ok: [200],
+        label: "audit-event-types sa",
+      },
+      {
+        method: "GET",
+        path: "/api/v1/audit/event-types",
+        bearer: oa,
+        ok: [200],
+        label: "audit-event-types oa",
+      },
+      {
+        method: "GET",
+        path: "/api/v1/audit/event-types",
+        bearer: ou,
+        ok: [403],
+        label: "audit-event-types ou",
+      },
       {
         method: "GET",
         path: "/api/v1/me/mfa/status",

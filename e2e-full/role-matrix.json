@@ -51,6 +51,7 @@
     "GET /api/v1/agent-communication-authorizations/:id": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/api-resources": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/api-resources/:id": ["site_admin", "org_admin", "org_user"],
+    "GET /api/v1/audit/event-types": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/audit/events": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/clients": ["site_admin", "org_admin", "org_user"],
     "GET /api/v1/clients/:id": ["site_admin", "org_admin", "org_user"],
@@ -191,5 +192,5 @@
     "POST /api/v1/oauth/token @ any",
     "POST /api/v1/oidc/userinfo @ any"
   ],
-  "covered_cells_floor": 297
+  "covered_cells_floor": 300
 }
