@@ -119,6 +119,7 @@ export default async function OrgAdminApplicationEditPage({
         initialPostLogoutRedirectURIs={client.post_logout_redirect_uris}
         initialAllowedAudiences={client.allowed_audiences}
         initialScope={client.scope}
+        initialUpdatedAt={client.updated_at}
       />
     </ShellWithBack>
   );

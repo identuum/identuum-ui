@@ -7,7 +7,8 @@
  * to see: name, type, short identifier, status, email domains, last update and
  * the redirect URI to register with the provider. Add and Edit open their own
  * pages and come back here with one result line; Remove asks first and happens
- * in place. The sign-in policy is shown in words, read-only (owner Q7 a).
+ * in place. The sign-in policy is shown in words, and its Change button
+ * opens three choices in place (D2, v0.9.13).
  *
  * Both editions serve ONE provider per organization (the singular
  * /api/v1/organizations/:id/identity-provider route), so "Add provider" is
@@ -24,8 +25,14 @@ import type {
   ListOrganizationIdentityProvidersResult,
   OrgIdentityProviderItem,
 } from "@/lib/idp-admin-client";
-import { deleteOidcProviderAction, type ProviderFormState } from "./sign-in-providers/actions";
+import {
+  type AuthPolicyFormState,
+  deleteOidcProviderAction,
+  type ProviderFormState,
+  updateAuthPolicyAction,
+} from "./sign-in-providers/actions";
 import { providerCallbackUrl } from "./sign-in-providers/provider-form";
+import { type AuthPolicy, LAST_PROVIDER_TEXT } from "./sign-in-providers/provider-words";
 import { sessionStore, takeProviderResult } from "./sign-in-providers/result-flash";
 
 const NEW_HREF = "/org-admin/settings/sign-in-providers/new";
@@ -33,6 +40,7 @@ const editHref = (id: string) =>
   `/org-admin/settings/sign-in-providers/${encodeURIComponent(id)}/edit`;
 
 const idle: ProviderFormState = { phase: "idle" };
+const policyIdle: AuthPolicyFormState = { phase: "idle" };
 
 const primaryBtn =
   "inline-flex min-h-11 items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-stone-600 disabled:shadow-none";
@@ -46,18 +54,47 @@ export function policyLine(authPolicy: string | null): string {
   if (authPolicy === "local_only") return "Members sign in with: password only.";
   if (authPolicy === "mixed") return "Members sign in with: password or a sign-in provider.";
   if (authPolicy === "idp_only") return "Members sign in with: a sign-in provider only.";
+  // An organization read without auth_policy is the IdP's permissive default.
+  if (authPolicy === "") return "Members sign in with: password or a sign-in provider (default).";
   return "The sign-in policy could not be read.";
+}
+
+/** The three choices of the policy panel, one plain line each (D2). */
+export const POLICY_CHOICES: { value: AuthPolicy; label: string; line: string }[] = [
+  {
+    value: "local_only",
+    label: "Password only",
+    line: "The sign-in page shows no provider button.",
+  },
+  {
+    value: "mixed",
+    label: "Password or a sign-in provider",
+    line: "Members choose on the sign-in page.",
+  },
+  {
+    value: "idp_only",
+    label: "Sign-in provider only",
+    line: "Members cannot use a password; administrators still can.",
+  },
+];
+
+export const POLICY_CONFIRM_TEXT =
+  "Members who only have a password will not be able to sign in. Continue?";
+export const PROVIDER_FIRST_TEXT = "Add a sign-in provider first.";
+
+/** Moving to or from provider-only asks first (D2). */
+export function policyNeedsConfirm(current: string | null, choice: AuthPolicy): boolean {
+  return (current === "idp_only") !== (choice === "idp_only");
 }
 
 /**
  * The hint, only when the policy and the list disagree (COPY B-05, B-05b).
- * Measured at identuum-idp-oss 16e01c5: PUT /api/v1/organizations/:id lets the
- * organization's own org_admin change auth_policy and refuses a site_admin
- * (403 forbidden_field), so B-05 names the organization administrator.
+ * The Change button sits next to the policy line (D2), so the hint no longer
+ * sends the administrator to an administrator.
  */
 export function policyHint(authPolicy: string | null, count: number): string | null {
   if (authPolicy === "local_only" && count > 0) {
-    return "The sign-in page will not offer this provider until the policy allows it. An organization administrator can change the policy.";
+    return "The sign-in page will not offer this provider until the policy allows it.";
   }
   if (authPolicy === "idp_only" && count === 0) {
     return "No provider is set up, so members cannot sign in with one yet. Add a provider.";
@@ -87,6 +124,14 @@ export function SignInProvidersSection({
   initialResult?: string | null;
 }) {
   const [delState, deleteAction, isDeleting] = useActionState(deleteOidcProviderAction, idle);
+  const [policyState, policyAction, policyPending] = useActionState(
+    updateAuthPolicyAction,
+    policyIdle
+  );
+  const [policyOpen, setPolicyOpen] = useState(false);
+  const [policyChoice, setPolicyChoice] = useState<AuthPolicy>("mixed");
+  const [policyConfirming, setPolicyConfirming] = useState(false);
+  const changeRef = useRef<HTMLButtonElement>(null);
   const [saved, setSaved] = useState<string | null>(initialResult);
   const [origin, setOrigin] = useState(publicBase);
   const [removing, setRemoving] = useState<OrgIdentityProviderItem | null>(null);
@@ -97,6 +142,7 @@ export function SignInProvidersSection({
   const removeTrigger = useRef<HTMLElement | null>(null);
   const headingId = useId();
   const limitId = useId();
+  const whyId = useId();
 
   useEffect(() => {
     if (!publicBase) setOrigin(window.location.origin);
@@ -126,11 +172,39 @@ export function SignInProvidersSection({
     }
   }, [delState]);
 
+  // The policy saved: close the panel, say so, and give focus back to Change.
+  // A refusal keeps the panel and the choice open with its line.
+  useEffect(() => {
+    if (policyState.phase === "saved") {
+      setPolicyOpen(false);
+      setPolicyConfirming(false);
+      changeRef.current?.focus();
+    } else if (policyState.error) {
+      setPolicyConfirming(false);
+    }
+  }, [policyState]);
+
   const providers = result.ok ? result.identity_providers : [];
   const removed = delState.phase === "deleted";
   const removeError = delState.phase === "idle" ? delState.error : undefined;
   const status = removed ? "Provider removed." : saved;
-  const hint = result.ok ? policyHint(authPolicy, providers.length) : null;
+  const policy = policyState.phase === "saved" ? policyState.policy : authPolicy;
+  const policySaved = policyState.phase === "saved" && !policyOpen;
+  const hint = result.ok ? policyHint(policy, providers.length) : null;
+  const activeCount = providers.filter((p) => p.active).length;
+  const lastProvider = (p: OrgIdentityProviderItem) =>
+    policy === "idp_only" && p.active && activeCount === 1;
+
+  const openPolicy = () => {
+    setPolicyChoice(policy === "local_only" || policy === "idp_only" ? policy : "mixed");
+    setPolicyConfirming(false);
+    setPolicyOpen(true);
+  };
+  const closePolicy = () => {
+    setPolicyOpen(false);
+    setPolicyConfirming(false);
+    changeRef.current?.focus();
+  };
   const atLimit = providers.length >= 1;
 
   const cancelRemove = () => {
@@ -188,7 +262,43 @@ export function SignInProvidersSection({
           </p>
         )}
 
-        <p className="text-sm text-sky-950">{policyLine(authPolicy)}</p>
+        <p
+          role="status"
+          className={policySaved ? "text-sm font-semibold text-emerald-800" : "sr-only"}
+        >
+          {policySaved ? "Sign-in policy saved." : ""}
+        </p>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <p className="text-sm text-sky-950">{policyLine(policy)}</p>
+          {policy !== null && (
+            <button
+              ref={changeRef}
+              type="button"
+              aria-expanded={policyOpen}
+              onClick={openPolicy}
+              className={secondaryBtn}
+            >
+              Change
+            </button>
+          )}
+        </div>
+        {policyOpen && (
+          <PolicyPanel
+            current={policy}
+            choice={policyChoice}
+            activeProviders={activeCount}
+            confirming={policyConfirming}
+            pending={policyPending}
+            error={policyState.phase === "idle" ? policyState.error : undefined}
+            onChoose={(v) => {
+              setPolicyChoice(v);
+              setPolicyConfirming(false);
+            }}
+            onConfirm={() => setPolicyConfirming(true)}
+            onCancel={closePolicy}
+            action={policyAction}
+          />
+        )}
         {hint && <p className="text-xs text-amber-800 leading-relaxed">{hint}</p>}
 
         {!result.ok && (
@@ -286,6 +396,7 @@ export function SignInProvidersSection({
                   </a>
                   <button
                     type="button"
+                    aria-describedby={lastProvider(p) ? whyId : undefined}
                     onClick={(e) => {
                       removeTrigger.current = e.currentTarget;
                       setRemoving(p);
@@ -295,6 +406,11 @@ export function SignInProvidersSection({
                     Remove…
                   </button>
                 </div>
+                {lastProvider(p) && (
+                  <p id={whyId} className="text-xs text-amber-800 leading-relaxed">
+                    {LAST_PROVIDER_TEXT}
+                  </p>
+                )}
               </li>
             );
           })}
@@ -314,8 +430,124 @@ export function SignInProvidersSection({
 }
 
 /**
+ * The sign-in policy choices, in place on the card (D2). Provider-only is
+ * disabled until the organization has an active provider (owner Q1 a), and
+ * moving to or from it asks first. The choice is kept when the IdP refuses.
+ */
+export function PolicyPanel({
+  current,
+  choice,
+  activeProviders,
+  confirming,
+  pending,
+  error,
+  onChoose,
+  onConfirm,
+  onCancel,
+  action,
+}: {
+  current: string | null;
+  choice: AuthPolicy;
+  activeProviders: number;
+  confirming: boolean;
+  pending: boolean;
+  error?: string;
+  onChoose: (v: AuthPolicy) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+  action: (formData: FormData) => void;
+}) {
+  const legendId = useId();
+  const needsConfirm = policyNeedsConfirm(current, choice);
+  return (
+    <form
+      action={action}
+      data-testid="policy-panel"
+      className="space-y-3 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3"
+    >
+      <fieldset aria-labelledby={legendId} className="space-y-2">
+        <legend id={legendId} className="text-sm font-semibold text-sky-950">
+          How members sign in
+        </legend>
+        {POLICY_CHOICES.map((c) => {
+          // A policy that is already provider-only stays selectable.
+          const blocked = c.value === "idp_only" && activeProviders === 0 && current !== "idp_only";
+          const lineId = `${legendId}-${c.value}`;
+          return (
+            <label key={c.value} className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name="auth_policy"
+                value={c.value}
+                checked={choice === c.value}
+                disabled={blocked || pending}
+                aria-describedby={lineId}
+                onChange={() => onChoose(c.value)}
+                className="mt-1"
+              />
+              <span>
+                <span className={blocked ? "text-stone-500" : "font-medium text-sky-950"}>
+                  {c.label}
+                </span>
+                <span id={lineId} className="block text-xs text-stone-600">
+                  {blocked ? PROVIDER_FIRST_TEXT : c.line}
+                </span>
+              </span>
+            </label>
+          );
+        })}
+      </fieldset>
+      {error && (
+        <p role="alert" data-testid="policy-error" className="text-sm text-red-700">
+          {error}
+        </p>
+      )}
+      {confirming ? (
+        <div className="space-y-2">
+          <p className="text-sm text-amber-800">{POLICY_CONFIRM_TEXT}</p>
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" disabled={pending} className={primaryBtn}>
+              {pending ? "Saving…" : "Continue"}
+            </button>
+            <button type="button" onClick={onCancel} disabled={pending} className={secondaryBtn}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type={needsConfirm ? "button" : "submit"}
+            onClick={needsConfirm ? onConfirm : undefined}
+            disabled={pending}
+            className={primaryBtn}
+          >
+            {pending ? "Saving…" : "Save"}
+          </button>
+          <button type="button" onClick={onCancel} disabled={pending} className={secondaryBtn}>
+            Cancel
+          </button>
+        </div>
+      )}
+    </form>
+  );
+}
+
+/**
+ * Whether focus left the dialog for somewhere outside it (U9): a click on the
+ * backdrop moves focus to nothing (next is null), so the dialog takes it back.
+ */
+export function focusLeftDialog(
+  dialog: { contains(node: unknown): boolean },
+  next: unknown | null
+): boolean {
+  return next === null || !dialog.contains(next);
+}
+
+/**
  * The confirmation before a removal (COPY B-16..B-18). Focus starts on
- * Cancel and stays inside; Esc is Cancel.
+ * Cancel and stays inside, also after a click on the backdrop (U9); Esc is
+ * Cancel.
  */
 export function RemoveProviderDialog({
   name,
@@ -363,6 +595,9 @@ export function RemoveProviderDialog({
         aria-labelledby={titleId}
         aria-describedby={bodyId}
         onKeyDown={onKeyDown}
+        onBlur={(e) => {
+          if (focusLeftDialog(e.currentTarget, e.relatedTarget)) cancelRef.current?.focus();
+        }}
         className="w-full max-w-sm rounded-[1.5rem] border border-stone-200 bg-white p-6 shadow-xl"
       >
         <h3 id={titleId} className="text-base font-semibold text-sky-950 break-words">

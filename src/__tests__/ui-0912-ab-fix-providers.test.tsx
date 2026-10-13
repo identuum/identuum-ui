@@ -128,8 +128,10 @@ describe("F2: a successful save leaves the page that saved as it is", () => {
   });
 });
 
+// UI-0913-A (D2): an absent policy is the IdP's permissive default, and the
+// card says so in words (it said "could not be read" until v0.9.13).
 describe("F3: an absent sign-in policy is not 'password only'", () => {
-  it("the own-organization read keeps it empty, and the card says it could not be read", async () => {
+  it("the own-organization read keeps it empty, and the card reads it as the default", async () => {
     const { auth_policy: _absent, ...withoutPolicy } = ORG;
     stubIdp({ org: [200, withoutPolicy] });
     const { getOwnOrganizationResult } = await import("@/lib/idp-admin-client");
@@ -163,7 +165,7 @@ describe("F3: an absent sign-in policy is not 'password only'", () => {
         publicBase="https://idp.example"
       />
     );
-    expect(text(html)).toContain("The sign-in policy could not be read.");
+    expect(text(html)).toContain("Members sign in with: password or a sign-in provider (default).");
     expect(text(html)).not.toContain("password only");
     expect(text(html)).not.toContain("will not offer this provider");
   });
@@ -196,7 +198,7 @@ describe("F4: a provider another tab already removed", () => {
 describe("F5: a failed organization read names its cause", () => {
   const cases: [number, string][] = [
     [503, "The server did not answer. Try again in a moment."],
-    [403, "You do not have permission to change this organization's sign-in settings."],
+    [403, "You do not have permission to see or change this organization's settings."],
     [500, "Your organization could not be read. Try again."],
   ];
 

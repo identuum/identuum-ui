@@ -116,14 +116,13 @@ export async function bff(path: string, init: RequestInit = {}): Promise<Respons
   // UI-0912-A (C3): identuum-idp-oss answers a dead access token with
   // no_credential — the boundary retries the dead cookie anonymously — so
   // no_credential is renewed too, or a tab left open past the access
-  // token's life could never read again.
+  // token's life could never read again. (UI-0913-A U15: neither IdP sends
+  // token_expired, so it is not listed.)
   if (!(optedIn && (await isSignedOut(response)))) {
     if (response.status !== 401) return response;
     const failure = await readJson(response.clone());
     if (
-      !["missing_credential", "no_credential", "token_invalid", "token_expired"].includes(
-        String(failure?.reason)
-      )
+      !["missing_credential", "no_credential", "token_invalid"].includes(String(failure?.reason))
     ) {
       return response;
     }

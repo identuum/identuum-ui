@@ -172,6 +172,10 @@ export default async function OrgDetailPage({ params }: { params: Promise<{ id: 
             <span className="text-xs text-sky-950">
               {authPolicyLabel[org.auth_policy] ?? org.auth_policy}
             </span>
+            {/* D2: the IdP refuses a site_admin this change (403). */}
+            <span className="block text-xs text-stone-500">
+              Only the organization&apos;s own administrator can change this.
+            </span>
           </DetailRow>
           <DetailRow label="MFA policy">
             <span className="text-xs text-sky-950 capitalize">{org.mfa_policy}</span>

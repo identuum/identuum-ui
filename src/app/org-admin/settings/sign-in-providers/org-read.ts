@@ -13,7 +13,9 @@ export function orgReadFailure(kind: OwnOrganizationFailureKind, verb?: string):
     return `The server did not answer.${nothing} Try again in a moment.`;
   }
   if (kind === "forbidden") {
-    return "You do not have permission to change this organization's sign-in settings.";
+    // U6: the page hides every card that needs the organization, not only
+    // the sign-in settings.
+    return "You do not have permission to see or change this organization's settings.";
   }
   return `Your organization could not be read.${nothing} Try again.`;
 }

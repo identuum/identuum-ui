@@ -261,17 +261,23 @@ describe("Sign-in providers section — no secret, exactly Add / Edit / Remove�
     }
   });
 
-  it("its controls are exactly Add provider, Edit, Remove…, Copy and the dialog's two buttons", () => {
+  // UI-0913-A (D2): the sign-in policy's Change button and its panel join
+  // (Save or Continue, and Cancel), with the panel as the second form.
+  it("its controls are exactly Add provider, Edit, Remove…, Copy, Change and the two forms' buttons", () => {
     // Literal labels between tags, and the labels chosen in an expression.
     const literal = [
       ...PROVIDERS_NO_COMMENTS.matchAll(/>\s*([A-Z][^<>{}]*?)\s*<\/(a|button)>/g),
     ].map((m) => m[1]);
-    expect(new Set(literal)).toEqual(new Set(["Add provider", "Edit", "Remove…", "Cancel"]));
+    expect(new Set(literal)).toEqual(
+      new Set(["Add provider", "Edit", "Remove…", "Cancel", "Change"])
+    );
     expect(PROVIDERS_NO_COMMENTS).toContain('{copied === p.id ? "Copied" : "Copy"}');
     expect(PROVIDERS_NO_COMMENTS).toContain('{pending ? "Removing…" : "Remove provider"}');
+    expect(PROVIDERS_NO_COMMENTS).toContain('{pending ? "Saving…" : "Save"}');
+    expect(PROVIDERS_NO_COMMENTS).toContain('{pending ? "Saving…" : "Continue"}');
     expect(PROVIDERS_NO_COMMENTS).not.toMatch(/>\s*(Create|Delete|Test|New)\b/);
-    // Exactly one form: the remove confirmation.
-    expect(PROVIDERS_NO_COMMENTS.match(/<form\b/g)).toHaveLength(1);
+    // Exactly two forms: the sign-in policy panel and the remove confirmation.
+    expect(PROVIDERS_NO_COMMENTS.match(/<form\b/g)).toHaveLength(2);
   });
 });
 

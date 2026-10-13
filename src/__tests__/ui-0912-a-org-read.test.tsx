@@ -164,8 +164,8 @@ describe("the provider actions say why the organization could not be read", () =
     [
       "403",
       async () => answer(403),
-      "You do not have permission to change this organization's sign-in settings.",
-      "You do not have permission to change this organization's sign-in settings.",
+      "You do not have permission to see or change this organization's settings.",
+      "You do not have permission to see or change this organization's settings.",
     ],
     [
       "500",

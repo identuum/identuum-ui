@@ -468,6 +468,8 @@ export type UpdateOrgResult =
       conflict: boolean;
       /** The IdP's own refusal text on a 400, when it gave one. */
       message?: string;
+      /** The IdP's refusal code on a 400 (e.g. no_active_identity_provider). */
+      code?: string;
     };
 
 /**
@@ -520,7 +522,11 @@ export async function updateOrganization(
         refusal && typeof refusal.message === "string" && refusal.message !== ""
           ? refusal.message
           : undefined;
-      return { ok: false, status: 400, notFound: false, conflict: false, message };
+      const code =
+        refusal && typeof refusal.error === "string" && refusal.error !== ""
+          ? refusal.error
+          : undefined;
+      return { ok: false, status: 400, notFound: false, conflict: false, message, code };
     }
     if (!res.ok) return { ok: false, status: res.status, notFound: false, conflict: false };
 
@@ -1013,6 +1019,8 @@ export async function createPasswordResetLink(
       cannot_reset_site_admin: "A site administrator's password cannot be reset here.",
       user_disabled: "Enable the user before creating a reset link.",
       not_found: "User not found.",
+      // G3: older OSS user routes spell the 404 code with a space.
+      "not found": "User not found.",
       forbidden: "Only an organization administrator can create a reset link.",
     };
     const code = typeof body?.error === "string" ? body.error : "";
@@ -2288,6 +2296,8 @@ export async function getOrganizationClientById(
             : "",
         organization_id: typeof c.organization_id === "string" ? c.organization_id : null,
         created_at: typeof c.created_at === "string" ? c.created_at : "",
+        // D4: kept byte for byte; absent stays absent.
+        ...(typeof c.updated_at === "string" && c.updated_at ? { updated_at: c.updated_at } : {}),
       },
     };
   } catch {
@@ -2555,6 +2565,8 @@ export type UpdateOrgClientResult =
       forbidden: boolean;
       invalid: boolean;
       conflict: boolean;
+      /** 409 client_changed: someone changed it since the form read it (D4). */
+      changed?: boolean;
       message: string;
     };
 
@@ -2598,6 +2610,10 @@ export async function updateOrganizationClient(
   }
   if (Array.isArray(opts.allowed_audiences)) {
     body.allowed_audiences = opts.allowed_audiences;
+  }
+  // D4: sent exactly as read, and only when the read carried one.
+  if (typeof opts.expect_updated_at === "string" && opts.expect_updated_at) {
+    body.expect_updated_at = opts.expect_updated_at;
   }
   if (typeof opts.skip_consent === "boolean") {
     body.skip_consent = opts.skip_consent;
@@ -2669,6 +2685,20 @@ export async function updateOrganizationClient(
       };
     }
     if (res.status === 409) {
+      // biome-ignore lint/suspicious/noExplicitAny: raw refusal body
+      const refusal: any = await res.json().catch(() => null);
+      if (refusal?.error === "client_changed") {
+        return {
+          ok: false,
+          status: 409,
+          notFound: false,
+          forbidden: false,
+          invalid: false,
+          conflict: false,
+          changed: true,
+          message: "Someone changed this application since you opened it. Nothing was saved.",
+        };
+      }
       return {
         ok: false,
         status: 409,
@@ -2727,6 +2757,8 @@ export async function updateOrganizationClient(
             : "",
         organization_id: typeof c.organization_id === "string" ? c.organization_id : null,
         created_at: typeof c.created_at === "string" ? c.created_at : "",
+        // D4: kept byte for byte; absent stays absent.
+        ...(typeof c.updated_at === "string" && c.updated_at ? { updated_at: c.updated_at } : {}),
       },
     };
   } catch {
@@ -3627,7 +3659,7 @@ export async function saveOrgOidcProvider(
 
 export async function deleteOrgOidcProvider(
   orgID: string
-): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+): Promise<{ ok: true } | { ok: false; status: number; error: string; routeMissing?: boolean }> {
   const cfg = loadRuntimeConfig();
   if (!cfg || !cfg.idp.enabled)
     return { ok: false, status: 503, error: "The IdP is not reachable." };
@@ -3637,11 +3669,12 @@ export async function deleteOrgOidcProvider(
       { method: "DELETE", headers: await idpAuthHeaders(), cache: "no-store" }
     );
     if (!res.ok) {
-      return {
-        ok: false,
-        status: res.status,
-        error: await oidcProviderError(res, "The provider could not be removed."),
-      };
+      const fallback = "The provider could not be removed.";
+      const error = await oidcProviderError(res, fallback);
+      // The route's own 404 is JSON ({"error": "..."}); a server without the
+      // route answers plain text, which is not "already removed" (U5).
+      const routeMissing = res.status === 404 && error === fallback;
+      return { ok: false, status: res.status, error, ...(routeMissing ? { routeMissing } : {}) };
     }
     return { ok: true };
   } catch {

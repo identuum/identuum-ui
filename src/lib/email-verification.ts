@@ -76,8 +76,10 @@ export type SendVerificationOutcome =
   | "not_for_account"
   | "unauthorized";
 
-export const NOT_CONFIGURED_TEXT =
-  "Not verified yet. This server cannot send email, so ask your administrator.";
+/** Under the "Not verified yet" badge, without repeating it (U3). */
+export const CANNOT_SEND_TEXT = "This server cannot send email, so ask your administrator.";
+
+export const NOT_CONFIGURED_TEXT = `Not verified yet. ${CANNOT_SEND_TEXT}`;
 
 /** One plain line per answer (A-13..A-17). */
 export function sendVerificationMessage(

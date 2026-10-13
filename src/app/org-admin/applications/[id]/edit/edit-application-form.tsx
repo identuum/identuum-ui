@@ -15,6 +15,13 @@
  * server action revalidates the list + detail caches; the form
  * surfaces a green status banner with a link back to the detail page.
  *
+ * D4 (v0.9.13, owner Q6 a): the save sends back the updated_at the page read
+ * (expect_updated_at, exactly as received). When someone changed the
+ * application since, the IdP refuses with 409 client_changed and a banner
+ * offers "Load the latest version" (reload, edits discarded) or "Save my
+ * version anyway" (the typed values, sent with the fresh updated_at). The
+ * typed values stay in the form meanwhile.
+ *
  * SECURITY:
  *   - The form NEVER renders, requests, or accepts a `client_secret`.
  *     There is no Regenerate / Rotate button. There is no secret
@@ -46,6 +53,12 @@ export interface EditApplicationFormProps {
   initialPostLogoutRedirectURIs: string[];
   initialAllowedAudiences: string[];
   initialScope: string;
+  /**
+   * The application's updated_at exactly as the IdP sent it (D4); the save
+   * hands it back so the IdP can refuse it when someone changed it since.
+   * Absent when the IdP sends none (identuum-idp-ce): nothing is sent.
+   */
+  initialUpdatedAt?: string;
 }
 
 export function EditApplicationForm(props: EditApplicationFormProps) {
@@ -74,7 +87,10 @@ function Form({
   action: (payload: FormData) => void;
   pending: boolean;
 }) {
-  const errorMessage = state.phase === "error" ? state.error : null;
+  // D4: someone changed the application since this page read it.
+  const changed = state.phase === "error" ? state.changed : undefined;
+  // A changed application has its own banner below, not this line.
+  const errorMessage = state.phase === "error" && !state.changed ? state.error : null;
   const fieldErrors = state.phase === "error" ? (state.fieldErrors ?? {}) : {};
   // React resets this form after every submission. A refused save hands back
   // what was typed, and the inputs take it as their defaults, so the reset
@@ -93,6 +109,41 @@ function Form({
 
   return (
     <form action={action} className="space-y-5">
+      {props.initialUpdatedAt && (
+        <input type="hidden" name="expect_updated_at" value={props.initialUpdatedAt} />
+      )}
+      {changed && (
+        <div
+          role="alert"
+          data-testid="client-changed"
+          className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+          <p>Someone changed this application since you opened it. Nothing was saved.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              // Discards the typed values: the page reads the application again.
+              onClick={() => window.location.reload()}
+              disabled={pending}
+            >
+              Load the latest version
+            </Button>
+            {changed.latestUpdatedAt && (
+              <Button
+                type="submit"
+                size="sm"
+                name="save_anyway_updated_at"
+                value={changed.latestUpdatedAt}
+                disabled={pending}
+              >
+                Save my version anyway
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
       {errorMessage && (
         <div
           role="alert"

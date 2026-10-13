@@ -22,8 +22,9 @@ function currentItem(pathname: string, tab: string | null): MemberNavItem | null
   if (pathname !== "/account/settings") return null;
   if (tab === "profile") return "profile";
   if (tab === "sessions") return "sessions";
-  // The settings page opens on the password tab when none is named.
-  if (tab === null || tab === "password" || tab === "mfa") return "security";
+  // The settings page opens on the password tab when none is named; passkeys
+  // are a sign-in method, so they belong to Security too (U10).
+  if (tab === null || tab === "password" || tab === "mfa" || tab === "passkeys") return "security";
   return null;
 }
 

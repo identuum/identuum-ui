@@ -33,6 +33,9 @@ export async function sendVerificationEmailAction(
 
   const { outcome } = await sendOwnVerificationEmail();
   if (outcome === "unauthorized") redirect("/login?reason=session_expired");
-  if (outcome === "already_verified") revalidatePath("/dashboard");
+  if (outcome === "already_verified") {
+    revalidatePath("/dashboard");
+    revalidatePath("/account/settings");
+  }
   return { outcome };
 }

@@ -166,8 +166,9 @@ describe("T-B2: one provider exists, so Add provider is disabled with the reason
 });
 
 describe("T-B3: the sign-in policy in words, with a hint only when it matters", () => {
-  const HINT =
-    "The sign-in page will not offer this provider until the policy allows it. An organization administrator can change the policy.";
+  // UI-0913-A (D2): the Change button sits next to the line, so the hint no
+  // longer sends the administrator to an administrator.
+  const HINT = "The sign-in page will not offer this provider until the policy allows it.";
   const NONE_HINT =
     "No provider is set up, so members cannot sign in with one yet. Add a provider.";
 
@@ -183,9 +184,9 @@ describe("T-B3: the sign-in policy in words, with a hint only when it matters", 
   });
 
   it("password only with a provider shows the hint; with none it does not", async () => {
-    expect(text(await card(await providers({ identity_provider: WIRE }), "local_only"))).toContain(
-      HINT
-    );
+    const t = text(await card(await providers({ identity_provider: WIRE }), "local_only"));
+    expect(t).toContain(HINT);
+    expect(t).not.toContain("An organization administrator can change the policy.");
     expect(
       text(await card(await providers({ identity_provider: null }), "local_only"))
     ).not.toContain("The sign-in page will not offer");
@@ -211,10 +212,12 @@ describe("T-B4: no secret reaches the card, and its controls are exactly Add, Ed
     expect(html).not.toContain("cid-fixture");
   });
 
-  it("the mutation controls are Add provider, Edit and Remove… (Copy changes nothing)", async () => {
+  // UI-0913-A (D2): the sign-in policy's Change joins; it opens a panel and
+  // changes nothing by itself.
+  it("the mutation controls are Add provider, Change, Edit and Remove… (Copy changes nothing)", async () => {
     const html = await card(await providers({ identity_provider: WIRE }));
     const controls = [...html.matchAll(/<(a|button)\b[^>]*>([^<]*)<\/\1>/g)].map((m) => m[2]);
-    expect(controls.sort()).toEqual(["Add provider", "Copy", "Edit", "Remove…"].sort());
+    expect(controls.sort()).toEqual(["Add provider", "Change", "Copy", "Edit", "Remove…"].sort());
     expect(html).not.toMatch(/<form/);
   });
 });

@@ -21,10 +21,18 @@ import {
   getOwnOrganizationResult,
   type OrgOidcProviderInput,
   saveOrgOidcProvider,
+  updateOrganization,
 } from "@/lib/idp-admin-client";
 import { roleToPath } from "@/lib/role-routing";
 import { getServerSession } from "@/lib/server-session";
 import { orgReadFailure } from "./org-read";
+import {
+  AUTH_POLICIES,
+  type AuthPolicy,
+  authPolicyRefused,
+  LAST_PROVIDER_TEXT,
+  saveRefused,
+} from "./provider-words";
 import type { ProviderResult } from "./result-flash";
 
 /**
@@ -51,22 +59,6 @@ export type ProviderFormState =
     }
   | { phase: "saved"; result: ProviderResult }
   | { phase: "deleted" };
-
-/**
- * A save the IdP refused (COPY B-30, B-34). The IdP's own sentence names the
- * field problem (it is fixed and secret-free); 409 is the one-provider limit.
- */
-function saveRefused(status: number, reason: string): string {
-  if (status === 409) {
-    return "This organization already has a sign-in provider. Edit or remove it first.";
-  }
-  const clause = reason.replace(/[.\s]+$/, "");
-  // "The IdP is…" reads "the IdP is…" mid-sentence; "IdP" itself stays.
-  const lowered = /^[A-Z][a-z]+\b/.test(clause)
-    ? clause.charAt(0).toLowerCase() + clause.slice(1)
-    : clause;
-  return `The provider was not saved: ${lowered}.`;
-}
 
 /** Splits a list typed with spaces, commas or new lines. */
 function splitList(raw: string): string[] {
@@ -151,12 +143,56 @@ export async function deleteOidcProviderAction(
     return { phase: "idle", error: orgReadFailure(org.ok ? "other" : org.kind, "removed") };
   }
   const result = await deleteOrgOidcProvider(org.org.id);
-  // 404: another tab already removed it, which is what was asked (F4).
-  if (!result.ok && result.status !== 404) {
+  // The route's own 404: another tab already removed it, which is what was
+  // asked (F4). A 404 from a server without the route is not a removal (U5).
+  if (!result.ok && (result.status !== 404 || result.routeMissing)) {
     if (result.status === 401) redirect("/login?reason=session_expired");
+    if (result.status === 409 && result.error === "last_active_identity_provider") {
+      return { phase: "idle", error: LAST_PROVIDER_TEXT };
+    }
+    if (result.routeMissing) {
+      return {
+        phase: "idle",
+        error: "The provider was not removed. This server does not offer sign-in providers.",
+      };
+    }
     // COPY B-31: the row stays, and the line says so plainly.
     return { phase: "idle", error: "The provider was not removed. Try again." };
   }
   revalidatePath("/org-admin/settings");
   return { phase: "deleted" };
+}
+
+export type AuthPolicyFormState =
+  | { phase: "idle"; error?: string }
+  | { phase: "saved"; policy: AuthPolicy };
+
+/**
+ * The organization's sign-in policy (D2): PUT /api/v1/organizations/:id with
+ * auth_policy. The IdP refuses provider-only without an active provider
+ * (owner Q1 a) and refuses a site_admin; the card disables the first and is
+ * read-only for the second, so these refusals are the last line.
+ */
+export async function updateAuthPolicyAction(
+  _prev: AuthPolicyFormState,
+  formData: FormData
+): Promise<AuthPolicyFormState> {
+  await requireOrgAdmin();
+  const raw = ((formData.get("auth_policy") as string | null) ?? "").trim();
+  if (!AUTH_POLICIES.includes(raw as AuthPolicy)) {
+    return { phase: "idle", error: "Choose how members sign in." };
+  }
+  const policy = raw as AuthPolicy;
+  const org = await getOwnOrganizationResult();
+  if (!org.ok || !org.org.id) {
+    if (!org.ok && org.kind === "session") redirect("/login?reason=session_expired");
+    return { phase: "idle", error: orgReadFailure(org.ok ? "other" : org.kind, "changed") };
+  }
+  const result = await updateOrganization(org.org.id, { auth_policy: policy });
+  if (!result.ok) {
+    if (result.status === 401) redirect("/login?reason=session_expired");
+    return { phase: "idle", error: authPolicyRefused(result) };
+  }
+  revalidatePath("/org-admin/settings");
+  return { phase: "saved", policy };
 }

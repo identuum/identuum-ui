@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import { EmailStatus } from "@/app/dashboard/email-status";
 import { PasskeySection } from "@/components/ui/passkey-section";
+import { memberEmailStatus } from "@/lib/email-verification";
 import { getOwnMfaStatus, listOwnSessions } from "@/lib/idp-account-client";
 import { getOwnProfile } from "@/lib/idp-admin-client";
+import { mailCeremoniesAvailable } from "@/lib/mail-capabilities";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { getServerSession } from "@/lib/server-session";
 import { ChangePasswordForm } from "./change-password-form";
@@ -97,6 +100,12 @@ export default async function AccountSettingsPage({
   // THE-PROFILE-CLAIMS: the profile tab edits the caller's own OIDC profile
   // fields (PUT /api/v1/profile); fetched only when that tab is active.
   const ownProfile = tab === "profile" ? await getOwnProfile() : null;
+  // Owner Q7 a: administrators get the member Overview's email row here. The
+  // site_admin sees the status only: OSS answers it 409
+  // not_available_for_this_account. null on identuum-idp-ce (no C2 fields).
+  const adminEmailRow =
+    ownProfile && ownProfile.role !== "org_user" ? memberEmailStatus(ownProfile) : null;
+  const mailReady = adminEmailRow ? await mailCeremoniesAvailable() : false;
 
   // Passkeys capability gate — landed by
   // agent-a-20260744-account-settings-passkeys-capability-gate per the
@@ -187,7 +196,19 @@ export default async function AccountSettingsPage({
               fields you set are ever shared, and only with applications you consent to.
             </p>
           </div>
-          <div className="px-6 py-5">
+          <div className="px-6 py-5 space-y-5">
+            {ownProfile && adminEmailRow && (
+              <div data-testid="account-email-status" className="space-y-1">
+                <p className="text-xs text-stone-400">Email address</p>
+                <p className="text-sm font-medium text-sky-950 break-words">{ownProfile.email}</p>
+                <EmailStatus
+                  status={adminEmailRow}
+                  address={ownProfile.email}
+                  mailReady={mailReady}
+                  offerSend={ownProfile.role !== "site_admin"}
+                />
+              </div>
+            )}
             <ProfileForm profile={ownProfile} />
           </div>
         </div>

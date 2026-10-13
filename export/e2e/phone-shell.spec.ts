@@ -251,8 +251,12 @@ test("the account menu shows the whole address", async ({ page }) => {
   await fakeBoundary(page, "org_user");
   await open(page, "/dashboard");
   await page.getByTestId("account-menu").click();
-  const full = page.getByRole("menu", { name: "Account options" }).getByTestId("account-email");
+  const full = page.getByTestId("account-popover").getByTestId("account-email");
   await expect(full).toHaveText(EMAIL);
+  // UI-0913-C-REVIEW F2: the address is outside the menu, which holds items only.
+  await expect(
+    page.getByRole("menu", { name: "Account options" }).getByTestId("account-email")
+  ).toHaveCount(0);
   const box = await full.boundingBox();
   expect(box && box.x >= 0 && box.x + box.width <= 320).toBe(true);
 });

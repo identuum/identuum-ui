@@ -72,39 +72,41 @@ export function AccountMenu({ email }: AccountMenuProps) {
 
       {open && (
         <div
-          role="menu"
-          aria-label="Account options"
+          data-testid="account-popover"
           className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-stone-200 bg-white shadow-lg z-50 py-1 overflow-hidden"
         >
-          {/* The header may cut the address short; the whole of it is here. */}
+          {/* The header may cut the address short; the whole of it is here,
+              above the menu: a menu holds only its items, so a screen reader
+              in menu mode would skip the address (UI-0913-C-REVIEW F2). */}
           <p data-testid="account-email" className="px-4 py-2 text-xs text-stone-500 break-all">
             {email}
           </p>
           <div aria-hidden="true" className="mb-1 border-t border-stone-100" />
-
-          <a
-            href="/account/settings"
-            role="menuitem"
-            data-testid="nav-account"
-            onClick={() => setOpen(false)}
-            className="block px-4 py-2 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
-          >
-            Account settings
-          </a>
-
-          <div aria-hidden="true" className="my-1 border-t border-stone-100" />
-
-          {/* Logout uses POST so the session cookie is sent correctly. */}
-          <form method="POST" action="/api/auth/logout">
-            <button
-              type="submit"
+          <div role="menu" aria-label="Account options">
+            <a
+              href="/account/settings"
               role="menuitem"
-              data-testid="sign-out"
-              className="w-full text-left px-4 py-2 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
+              data-testid="nav-account"
+              onClick={() => setOpen(false)}
+              className="block px-4 py-2 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
             >
-              Sign out
-            </button>
-          </form>
+              Account settings
+            </a>
+
+            <div aria-hidden="true" className="my-1 border-t border-stone-100" />
+
+            {/* Logout uses POST so the session cookie is sent correctly. */}
+            <form method="POST" action="/api/auth/logout">
+              <button
+                type="submit"
+                role="menuitem"
+                data-testid="sign-out"
+                className="w-full text-left px-4 py-2 text-sm text-stone-700 hover:bg-stone-50 transition-colors"
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
         </div>
       )}
     </div>

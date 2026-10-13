@@ -105,6 +105,19 @@ describe("login", () => {
     expect(html).toContain(text);
   });
 
+  // UI-0913-A (O19, D7; owner Q-A1 a): OSS sends a refused provider sign-in
+  // back here with its reason code; the banner says it in plain words.
+  it.each([
+    ["invitation_pending", "Accept your invitation first. Use the link in your invitation email."],
+    ["registration_pending", "Your account is waiting for an administrator&#x27;s approval."],
+    ["email_not_shared", "The sign-in provider did not share your email address."],
+  ])("?reason=%s shows the refused sign-in in plain words", async (reason, text) => {
+    const { html } = await render(`/login?reason=${reason}`, READY);
+    expect(html).toContain('data-testid="login-reason"');
+    expect(html).toContain('role="alert"');
+    expect(html).toContain(text);
+  });
+
   it("an unknown reason shows nothing", async () => {
     const { html } = await render("/login?reason=whatever", READY);
     expect(html).not.toContain('data-testid="login-reason"');

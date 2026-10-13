@@ -60,6 +60,7 @@ export function ShellFrame({
   const [open, setOpen] = useState(false);
   const drawerRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const closedForWidth = useRef(false);
 
   useEffect(() => {
     if (!open) return;
@@ -73,14 +74,18 @@ export function ShellFrame({
     // Widening past the breakpoint shows the sidebar: the drawer is done.
     const wide = window.matchMedia("(min-width: 768px)");
     const onWide = () => {
-      if (wide.matches) setOpen(false);
+      if (!wide.matches) return;
+      closedForWidth.current = true;
+      setOpen(false);
     };
     document.addEventListener("keydown", drawer.onKey);
     wide.addEventListener("change", onWide);
     return () => {
       document.removeEventListener("keydown", drawer.onKey);
       wide.removeEventListener("change", onWide);
-      drawer.release();
+      // Widened: "Menu" is hidden, so focus stays in the sidebar (F1).
+      drawer.release(!closedForWidth.current);
+      closedForWidth.current = false;
     };
   }, [open]);
 

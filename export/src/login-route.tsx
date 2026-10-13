@@ -8,7 +8,8 @@
  * sign_out_unconfirmed when no answer confirmed anything — logout.ts), which
  * the Next deployment has no equivalent of; the other two (signed_out,
  * session_expired) are where the export's sign-out and the shared layouts'
- * expiry send the browser.
+ * expiry send the browser. UI-0913-A adds the IdP's refused provider sign-in
+ * (invitation_pending, registration_pending, email_not_shared; owner Q-A1 a).
  *
  * UI-0912-A (C6): the signed-out banner shows ONCE. After its first render
  * the reason leaves the address bar (a reload or a bookmark does not repeat
@@ -19,6 +20,7 @@
  */
 import { type ReactNode, useEffect, useState } from "react";
 import LoginPage from "@/app/login/page";
+import { upstreamRefusalText } from "@/lib/sign-in-refusals";
 import { signOutDestination } from "./logout";
 import { navigate } from "./router";
 
@@ -79,6 +81,19 @@ function LoginReason({ reason }: { reason: string | null }) {
         >
           Retry sign-out
         </button>
+      </p>
+    );
+  }
+  // A provider sign-in the IdP refused (O19, D7; owner Q-A1 a).
+  const refused = upstreamRefusalText(reason);
+  if (refused) {
+    return (
+      <p
+        role="alert"
+        data-testid="login-reason"
+        className={`${frame} border-amber-200 bg-amber-50`}
+      >
+        {refused}
       </p>
     );
   }

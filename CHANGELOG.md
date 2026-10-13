@@ -21,6 +21,35 @@ to `v0.6.2` were written when the artifact was the container image
   goes back to "Menu" when it closes. A long email address at the top is
   cut short; the account menu shows all of it. On wider screens nothing
   changes.
+- **Choose how members sign in.** In Settings, the "Sign-in providers" card
+  has a "Change" button next to the sign-in policy. Choose "Password only",
+  "Password or a sign-in provider" or "Sign-in provider only". "Sign-in
+  provider only" stays off until the organization has an active provider.
+  A move to or from it asks first, because members who only have a
+  password cannot sign in then. A site administrator sees the policy and is
+  told that only the organization's own administrator can change it.
+- **Removing the last provider is explained.** When members can only sign in
+  with a provider, the card says why its only provider cannot be removed,
+  before you press "Remove…".
+- **Two people editing one application.** When someone else saved the
+  application after you opened it, your save is refused and nothing is
+  lost: a banner offers "Load the latest version" or "Save my version
+  anyway". Your typed values stay in the form.
+- **Plain words when a provider sign-in is refused**: when the invitation is
+  not accepted yet, when an administrator has not approved the account yet,
+  or when the provider did not share the email address.
+- **Administrators can verify their own email address** from Account
+  settings, Profile, like members on their Overview. The site administrator
+  sees the status only.
+- Smaller fixes: "Not verified yet" is not repeated when the server cannot
+  send email, and the line is read out by screen readers; a click outside
+  the remove dialog no longer lets focus escape it; "Passkeys" marks
+  Security in the member menu; a provider error that starts with a name,
+  such as "Google", keeps its capital letter; a server that does not offer
+  sign-in providers is not reported as "Provider removed"; "User not found"
+  is shown for both spellings of the server's answer; the account menu
+  reads the email address outside the menu items; the phone menu keeps
+  focus in place when the screen gets wider.
 
 ## `v0.9.12`
 

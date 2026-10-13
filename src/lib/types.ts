@@ -273,7 +273,7 @@ export interface OrgUserItem {
   /**
    * IDP-authoritative pending-approval flag. The IDP creates self-registered
    * users with banned=true; (*UserService).ApproveRegistration flips banned to
-   * false (and email_verified to true) only for role=org_user. The "Approve
+   * false only for role=org_user (it does not set email_verified). The "Approve
    * registration" UI affordance MUST be gated on `banned && role === "org_user"`
    * — never inferred from other fields.
    */
@@ -400,6 +400,12 @@ export interface OrgClientItem {
   organization_id: string | null;
   /** ISO 8601 creation timestamp. */
   created_at: string;
+  /**
+   * The last change, exactly as the IdP sent it (D4, OSS-0913-A: microsecond
+   * precision). The edit form hands it back as expect_updated_at, so it is
+   * never re-formatted. An IdP that omits it (identuum-idp-ce) leaves it out.
+   */
+  updated_at?: string;
 }
 
 /** Result envelope for the org-scoped client list call. */
@@ -518,6 +524,11 @@ export interface UpdateOrgClientOptions {
   scope?: string;
   /** New allowed-audiences list (REPLACES the existing list when supplied). */
   allowed_audiences?: string[];
+  /**
+   * The updated_at the form read (D4). The IdP refuses the save with 409
+   * client_changed when the application changed since. Omitted when unknown.
+   */
+  expect_updated_at?: string;
 }
 
 /**

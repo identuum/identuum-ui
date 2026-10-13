@@ -7,7 +7,10 @@
  *   - the page behind does not scroll (body overflow hidden);
  *   - focus moves to the drawer's first stop and Tab / Shift+Tab stay inside;
  *   - Escape closes.
- * On close the body scroll comes back and focus returns to the Menu button.
+ * On close the body scroll comes back and focus returns to the Menu button,
+ * except when the drawer closed because the window widened: the Menu button
+ * is hidden then, and focus stays where it is in the now visible sidebar
+ * (UI-0913-C-REVIEW F1).
  */
 
 export interface Focusable {
@@ -52,7 +55,7 @@ export function isLinkTap(target: { closest?(selector: string): unknown } | null
 
 export function openDrawer<T extends Focusable>(
   env: DrawerEnv<T>
-): { onKey(e: DrawerKey): void; release(): void } {
+): { onKey(e: DrawerKey): void; release(returnFocus?: boolean): void } {
   const previousOverflow = env.body.style.overflow;
   env.body.style.overflow = "hidden";
   env.stops()[0]?.focus();
@@ -70,9 +73,9 @@ export function openDrawer<T extends Focusable>(
         target.focus();
       }
     },
-    release() {
+    release(returnFocus = true) {
       env.body.style.overflow = previousOverflow;
-      env.menuButton()?.focus();
+      if (returnFocus) env.menuButton()?.focus();
     },
   };
 }

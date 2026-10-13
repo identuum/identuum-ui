@@ -31,6 +31,7 @@ import {
   CLIENT_REFUSAL_MESSAGES,
   createOrganizationClient,
   deleteOrganizationClient,
+  getOrganizationClientById,
   rotateOrganizationClientSecret,
   updateOrganizationClient,
 } from "@/lib/idp-admin-client";
@@ -311,6 +312,12 @@ export type UpdateApplicationState =
       error: string;
       fieldErrors?: { name?: string; redirect_uris?: string };
       values: ApplicationFormValues;
+      /**
+       * D4: someone changed the application since the form read it.
+       * latestUpdatedAt is the stored version's, read again, when that read
+       * worked; "Save my version anyway" sends it.
+       */
+      changed?: { latestUpdatedAt?: string };
     }
   | { phase: "success"; updated: { id: string; client_id: string; name: string } };
 
@@ -404,6 +411,12 @@ export async function updateApplicationAction(
   // each non-nil array slice and re-applies each non-nil scalar; the
   // form pre-fills from the current client so the operator's submit
   // intentionally re-asserts every value.
+  // D4: the updated_at the form read, exactly as the IdP sent it ("Save my
+  // version anyway" hands in the fresh one). None when the IdP sent none.
+  const stamp =
+    submittedText(formData, "save_anyway_updated_at") ||
+    submittedText(formData, "expect_updated_at");
+
   const result = await updateOrganizationClient(clientId, {
     name,
     redirect_uris: redirectURIs,
@@ -412,6 +425,7 @@ export async function updateApplicationAction(
     scope,
     skip_consent: skipConsent,
     mfa_code: skipConsent && mfaCode.length > 0 ? mfaCode : undefined,
+    expect_updated_at: stamp || undefined,
   });
 
   if (result.ok) {
@@ -442,6 +456,17 @@ export async function updateApplicationAction(
       phase: "error",
       error: "The application no longer exists. It may have been removed.",
       values,
+    };
+  }
+  if (result.changed) {
+    // Read the stored version's updated_at again, so the banner can save
+    // over it on purpose.
+    const fresh = await getOrganizationClientById(clientId);
+    return {
+      phase: "error",
+      error: "Someone changed this application since you opened it. Nothing was saved.",
+      values,
+      changed: { latestUpdatedAt: fresh.ok ? fresh.data.updated_at : undefined },
     };
   }
   if (result.conflict) {
