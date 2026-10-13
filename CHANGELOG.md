@@ -11,6 +11,17 @@ that export. The release body is this file's section for the tag. Entries up
 to `v0.6.2` were written when the artifact was the container image
 `ghcr.io/identuum/identuum-ui`, retired by owner ruling D-019 (2026-09-30).
 
+## Unreleased
+
+- **The console works on a phone.** On screens narrower than 768 px the
+  menu at the left is hidden, so pages no longer scroll sideways. A
+  "Menu" button at the top opens the same menu, with Sign out, from the
+  left. Tap a link, tap outside the menu, press Escape or press "Close
+  menu" to close it. With a keyboard, focus stays in the open menu and
+  goes back to "Menu" when it closes. A long email address at the top is
+  cut short; the account menu shows all of it. On wider screens nothing
+  changes.
+
 ## `v0.9.12`
 
 The static console export for identuum-idp-oss `v0.9.12`: a complete member

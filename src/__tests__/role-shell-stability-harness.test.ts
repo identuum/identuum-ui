@@ -46,22 +46,41 @@ function source(rel: string): string {
   return readFileSync(resolve(ROOT, rel), "utf8");
 }
 
+// UI-0913-C: the four role shells render ONE shared frame, ShellFrame, which
+// holds the <aside> sidebar (the phone drawer below 768 px) and the header's
+// AccountMenu. A layout pins the frame; the frame pins the aside and menu.
+const FRAME = source("components/shared/shell-frame.tsx");
+const FRAME_IMPORT = /import\s+\{\s*ShellFrame\s*\}\s+from\s+"@\/components\/shared\/shell-frame"/;
+const ACCOUNT_MENU_IMPORT =
+  /import\s+\{\s*AccountMenu\s*\}\s+from\s+"@\/components\/shared\/account-menu"/;
+
+function expectShellSidebar(layout: string): void {
+  expect(layout).toMatch(FRAME_IMPORT);
+  expect(layout).toMatch(/<ShellFrame\b/);
+  expect(FRAME).toMatch(/<aside\b/);
+}
+
+function expectShellAccountMenu(layout: string): void {
+  expect(layout).toMatch(FRAME_IMPORT);
+  expect(layout).toMatch(/email=\{userEmail\}/);
+  expect(FRAME).toMatch(ACCOUNT_MENU_IMPORT);
+  expect(FRAME).toMatch(/<AccountMenu email=\{email\} \/>/);
+}
+
 // ── /site-admin role shell ─────────────────────────────────────────────────
 
 describe("site-admin role-shell layout invariants", () => {
   const layout = source("app/site-admin/layout.tsx");
 
   it("renders <aside> as the sidebar container (catches sidebar-missing regression)", () => {
-    expect(layout).toMatch(/<aside\b/);
+    expectShellSidebar(layout);
   });
 
   it("imports SiteAdminNav + AccountMenu from the canonical paths", () => {
     expect(layout).toMatch(
       /import\s+\{\s*SiteAdminNav\s*\}\s+from\s+"@\/components\/site-admin\/site-admin-nav"/
     );
-    expect(layout).toMatch(
-      /import\s+\{\s*AccountMenu\s*\}\s+from\s+"@\/components\/shared\/account-menu"/
-    );
+    expectShellAccountMenu(layout);
   });
 
   it("imports getServerSession + getServerRuntimeState for the role gate + capability path", () => {
@@ -98,16 +117,14 @@ describe("org-admin role-shell layout invariants", () => {
   const layout = source("app/org-admin/layout.tsx");
 
   it("renders <aside> as the sidebar container", () => {
-    expect(layout).toMatch(/<aside\b/);
+    expectShellSidebar(layout);
   });
 
   it("imports OrgAdminNav + AccountMenu from the canonical paths", () => {
     expect(layout).toMatch(
       /import\s+\{\s*OrgAdminNav\s*\}\s+from\s+"@\/components\/org-admin\/org-admin-nav"/
     );
-    expect(layout).toMatch(
-      /import\s+\{\s*AccountMenu\s*\}\s+from\s+"@\/components\/shared\/account-menu"/
-    );
+    expectShellAccountMenu(layout);
   });
 
   it("imports getServerSession + getServerRuntimeState for the role gate + capability path", () => {
@@ -144,13 +161,11 @@ describe("dashboard role-shell layout invariants", () => {
   const layout = source("app/dashboard/layout.tsx");
 
   it("renders <aside> as the sidebar container", () => {
-    expect(layout).toMatch(/<aside\b/);
+    expectShellSidebar(layout);
   });
 
   it("imports AccountMenu + getServerSession for the header + role gate", () => {
-    expect(layout).toMatch(
-      /import\s+\{\s*AccountMenu\s*\}\s+from\s+"@\/components\/shared\/account-menu"/
-    );
+    expectShellAccountMenu(layout);
     expect(layout).toMatch(/getServerSession.*from\s+"@\/lib\/server-session"/);
   });
 
@@ -176,7 +191,7 @@ describe("account role-shell layout — smoke pin", () => {
   const layout = source("app/account/layout.tsx");
 
   it("renders <aside> (deep pins live in account-settings-stability-harness.test.ts)", () => {
-    expect(layout).toMatch(/<aside\b/);
+    expectShellSidebar(layout);
   });
 
   it("references the shared runtimeState capability path", () => {

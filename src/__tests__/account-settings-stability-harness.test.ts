@@ -165,7 +165,12 @@ describe("Account Settings — role-shell aside + main layout pattern", () => {
     // Pinning the <aside> token guards against a future refactor that
     // converts the layout back to the pre-agent-a-20260738 'minimal top
     // bar' shape (no sidebar) which is the original regression class.
-    expect(layout).toMatch(/<aside\b/);
+    // UI-0913-C: the aside lives in the shared ShellFrame the layout renders.
+    expect(layout).toMatch(
+      /import\s+\{\s*ShellFrame\s*\}\s+from\s+"@\/components\/shared\/shell-frame"/
+    );
+    expect(layout).toMatch(/<ShellFrame\b/);
+    expect(source("components/shared/shell-frame.tsx")).toMatch(/<aside\b/);
   });
 
   it("account/layout.tsx renders the SiteAdminNav + OrgAdminNav role-aware Nav components", () => {

@@ -22,9 +22,9 @@
 
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { AccountMenu } from "@/components/shared/account-menu";
 import { MemberNav } from "@/components/shared/member-nav";
 import { ServiceUnavailable } from "@/components/shared/service-unavailable";
+import { ShellFrame } from "@/components/shared/shell-frame";
 import { roleToPath } from "@/lib/role-routing";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
 import { getServerSessionState } from "@/lib/server-session";
@@ -76,49 +76,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const userEmail = session.user?.email ?? null;
 
+  // The sidebar, header and phone menu are the shared ShellFrame (UI-0913-C).
   return (
-    <div className="flex min-h-screen bg-stone-50">
-      {/* Sidebar */}
-      <aside className="w-60 shrink-0 flex flex-col bg-sky-950 border-r border-sky-900/60">
-        {/* Product name */}
-        <div className="px-5 py-5 border-b border-sky-900/60 flex items-center gap-2.5">
-          <div className="h-7 w-7 bg-sky-600 rounded-lg flex items-center justify-center shrink-0 shadow-sm">
-            <span className="font-black text-white text-[11px] tracking-tight leading-none">
-              Id
-            </span>
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-sky-400">Identuum</p>
-            <p className="text-sm font-semibold text-white leading-tight">Member</p>
-          </div>
-        </div>
-
-        {/* Navigation */}
-        <MemberNav />
-
-        {/* Logout */}
-        <div className="px-3 py-4 border-t border-sky-900/60">
-          <form method="POST" action="/api/auth/logout">
-            <button
-              type="submit"
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-sky-300 hover:bg-sky-900/60 hover:text-white transition-colors"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
-      </aside>
-
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
-        <header className="h-12 flex items-center justify-between px-6 border-b border-stone-200 bg-white/90 backdrop-blur-md shrink-0">
-          <span className="text-xs text-stone-400 font-mono">org_user</span>
-          {userEmail && <AccountMenu email={userEmail} />}
-        </header>
-        <main className="flex-1 overflow-auto bg-stone-50 px-8 py-8">{children}</main>
-      </div>
-    </div>
+    <ShellFrame area="Member" roleLabel="org_user" email={userEmail} nav={<MemberNav />}>
+      {children}
+    </ShellFrame>
   );
 }
 

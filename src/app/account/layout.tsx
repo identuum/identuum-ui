@@ -34,9 +34,9 @@ import { OrgAdminNav } from "@/components/org-admin/org-admin-nav";
  * for capabilities) the role shells already use, so any future change to a
  * role's sidebar shape propagates here automatically.
  */
-import { AccountMenu } from "@/components/shared/account-menu";
 import { MemberNav } from "@/components/shared/member-nav";
 import { ServiceUnavailable } from "@/components/shared/service-unavailable";
+import { ShellFrame } from "@/components/shared/shell-frame";
 import { SiteAdminNav } from "@/components/site-admin/site-admin-nav";
 import { loadRuntimeConfig } from "@/lib/runtime-config";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
@@ -81,60 +81,26 @@ export default async function AccountLayout({ children }: { children: React.Reac
   const runtimeState = await getServerRuntimeState();
   const idpCapabilities = runtimeState?.components?.idp?.capabilities ?? null;
 
+  // The role-aware sidebar, header and phone menu are the shared ShellFrame
+  // (UI-0913-C), so navigating into /account/settings keeps the operator's
+  // normal sidebar.
   return (
-    <div className="flex min-h-screen bg-stone-50">
-      {/* Sidebar — role-aware. Mirrors the role-shell pattern at
-          /site-admin/layout.tsx + /org-admin/layout.tsx + /dashboard/layout.tsx
-          so navigating into /account/settings does not strip the operator's
-          normal sidebar. */}
-      <aside className="w-60 shrink-0 flex flex-col bg-sky-950 border-r border-sky-900/60">
-        {/* Product name — matches the role shells verbatim. */}
-        <div className="px-5 py-5 border-b border-sky-900/60 flex items-center gap-2.5">
-          <div className="h-7 w-7 bg-sky-600 rounded-lg flex items-center justify-center shrink-0 shadow-sm">
-            <span className="font-black text-white text-[11px] tracking-tight leading-none">
-              Id
-            </span>
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-sky-400">Identuum</p>
-            <p className="text-sm font-semibold text-white leading-tight">
-              {role === "site_admin" ? "Admin" : role === "org_admin" ? "Workspace" : "Member"}
-            </p>
-          </div>
-        </div>
-
-        {/* Role-appropriate navigation. */}
-        {role === "site_admin" && <SiteAdminNav capabilities={idpCapabilities} />}
-        {role === "org_admin" && <OrgAdminNav capabilities={idpCapabilities} />}
-        {role === "org_user" && <MemberNav />}
-        {role !== "site_admin" && role !== "org_admin" && role !== "org_user" && (
-          <nav className="flex-1 px-3 py-4 space-y-1" aria-hidden="true" />
-        )}
-
-        {/* Logout */}
-        <div className="px-3 py-4 border-t border-sky-900/60">
-          <form method="POST" action="/api/auth/logout">
-            <button
-              type="submit"
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-sky-300 hover:bg-sky-900/60 hover:text-white transition-colors"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
-      </aside>
-
-      {/* Main content area — mirrors the role-shell pattern. */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar — role label + AccountMenu. The role-shell layouts show
-            the role label as a font-mono tag; we do the same for visual
-            consistency. */}
-        <header className="h-12 flex items-center justify-between px-6 border-b border-stone-200 bg-white/90 backdrop-blur-md shrink-0">
-          <span className="text-xs text-stone-400 font-mono">{role ?? "account"}</span>
-          {userEmail && <AccountMenu email={userEmail} />}
-        </header>
-        <main className="flex-1 overflow-auto bg-stone-50 px-8 py-8">{children}</main>
-      </div>
-    </div>
+    <ShellFrame
+      area={role === "site_admin" ? "Admin" : role === "org_admin" ? "Workspace" : "Member"}
+      roleLabel={role ?? "account"}
+      email={userEmail}
+      nav={
+        <>
+          {role === "site_admin" && <SiteAdminNav capabilities={idpCapabilities} />}
+          {role === "org_admin" && <OrgAdminNav capabilities={idpCapabilities} />}
+          {role === "org_user" && <MemberNav />}
+          {role !== "site_admin" && role !== "org_admin" && role !== "org_user" && (
+            <nav className="flex-1 px-3 py-4 space-y-1" aria-hidden="true" />
+          )}
+        </>
+      }
+    >
+      {children}
+    </ShellFrame>
   );
 }

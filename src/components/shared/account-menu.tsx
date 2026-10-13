@@ -42,7 +42,7 @@ export function AccountMenu({ email }: AccountMenuProps) {
   }, [open]);
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div className="relative min-w-0 max-w-xs" ref={containerRef}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -50,7 +50,7 @@ export function AccountMenu({ email }: AccountMenuProps) {
         aria-haspopup="menu"
         aria-label="Account menu"
         data-testid="account-menu"
-        className="flex items-center gap-1 text-xs text-stone-400 hover:text-stone-600 truncate max-w-xs transition-colors"
+        className="flex items-center gap-1 text-xs text-stone-400 hover:text-stone-600 truncate max-w-full transition-colors"
       >
         <span data-testid="who" className="truncate">
           {email}
@@ -76,6 +76,12 @@ export function AccountMenu({ email }: AccountMenuProps) {
           aria-label="Account options"
           className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-stone-200 bg-white shadow-lg z-50 py-1 overflow-hidden"
         >
+          {/* The header may cut the address short; the whole of it is here. */}
+          <p data-testid="account-email" className="px-4 py-2 text-xs text-stone-500 break-all">
+            {email}
+          </p>
+          <div aria-hidden="true" className="mb-1 border-t border-stone-100" />
+
           <a
             href="/account/settings"
             role="menuitem"
