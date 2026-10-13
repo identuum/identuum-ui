@@ -187,9 +187,10 @@ export function SignInProvidersSection({
   const providers = result.ok ? result.identity_providers : [];
   const removed = delState.phase === "deleted";
   const removeError = delState.phase === "idle" ? delState.error : undefined;
-  const status = removed ? "Provider removed." : saved;
   const policy = policyState.phase === "saved" ? policyState.policy : authPolicy;
   const policySaved = policyState.phase === "saved" && !policyOpen;
+  // One result line for the card: the sign-in policy, a removal or a save.
+  const status = policySaved ? "Sign-in policy saved." : removed ? "Provider removed." : saved;
   const hint = result.ok ? policyHint(policy, providers.length) : null;
   const activeCount = providers.filter((p) => p.active).length;
   const lastProvider = (p: OrgIdentityProviderItem) =>
@@ -262,12 +263,6 @@ export function SignInProvidersSection({
           </p>
         )}
 
-        <p
-          role="status"
-          className={policySaved ? "text-sm font-semibold text-emerald-800" : "sr-only"}
-        >
-          {policySaved ? "Sign-in policy saved." : ""}
-        </p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <p className="text-sm text-sky-950">{policyLine(policy)}</p>
           {policy !== null && (
@@ -534,14 +529,13 @@ export function PolicyPanel({
 }
 
 /**
- * Whether focus left the dialog for somewhere outside it (U9): a click on the
- * backdrop moves focus to nothing (next is null), so the dialog takes it back.
+ * Whether the dialog should take focus back on blur (U9): a click on the
+ * backdrop moves focus to nothing (next is null). A move to an element, such
+ * as Cancel returning focus to "Remove…", is left alone; Tab is trapped by
+ * the key handler.
  */
-export function focusLeftDialog(
-  dialog: { contains(node: unknown): boolean },
-  next: unknown | null
-): boolean {
-  return next === null || !dialog.contains(next);
+export function focusLeftDialog(next: unknown | null): boolean {
+  return next === null;
 }
 
 /**
@@ -596,7 +590,7 @@ export function RemoveProviderDialog({
         aria-describedby={bodyId}
         onKeyDown={onKeyDown}
         onBlur={(e) => {
-          if (focusLeftDialog(e.currentTarget, e.relatedTarget)) cancelRef.current?.focus();
+          if (focusLeftDialog(e.relatedTarget)) cancelRef.current?.focus();
         }}
         className="w-full max-w-sm rounded-[1.5rem] border border-stone-200 bg-white p-6 shadow-xl"
       >

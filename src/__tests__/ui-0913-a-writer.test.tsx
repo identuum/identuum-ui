@@ -569,18 +569,16 @@ describe("U3 and O20: the send row", () => {
 // ── U9, F1, F2: focus and menus ─────────────────────────────────────────────
 
 describe("U9: a click on the remove dialog's backdrop does not release the focus trap", () => {
-  it("focus moving to nothing or outside is taken back; inside is left alone", async () => {
+  it("focus moving to nothing is taken back; a move to an element is left alone", async () => {
     const { focusLeftDialog } = await import("../app/org-admin/settings/sign-in-providers-section");
-    const inside = {};
-    const dialog = { contains: (n: unknown) => n === inside };
-    expect(focusLeftDialog(dialog, null)).toBe(true);
-    expect(focusLeftDialog(dialog, {})).toBe(true);
-    expect(focusLeftDialog(dialog, inside)).toBe(false);
+    expect(focusLeftDialog(null)).toBe(true);
+    // Cancel hands focus back to "Remove…" (UI-0912-AB-FIX): not taken back.
+    expect(focusLeftDialog({})).toBe(false);
   });
 
   it("the dialog uses it on blur", () => {
     expect(src("src/app/org-admin/settings/sign-in-providers-section.tsx")).toMatch(
-      /onBlur=\{\(e\) => \{\s*if \(focusLeftDialog\(e\.currentTarget, e\.relatedTarget\)\)/
+      /onBlur=\{\(e\) => \{\s*if \(focusLeftDialog\(e\.relatedTarget\)\)/
     );
   });
 });

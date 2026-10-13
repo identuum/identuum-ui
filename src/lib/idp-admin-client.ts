@@ -3669,11 +3669,19 @@ export async function deleteOrgOidcProvider(
       { method: "DELETE", headers: await idpAuthHeaders(), cache: "no-store" }
     );
     if (!res.ok) {
-      const fallback = "The provider could not be removed.";
-      const error = await oidcProviderError(res, fallback);
       // The route's own 404 is JSON ({"error": "..."}); a server without the
-      // route answers plain text, which is not "already removed" (U5).
-      const routeMissing = res.status === 404 && error === fallback;
+      // route answers plain text ("404 page not found"), which is not
+      // "already removed" (U5).
+      const routeMissing =
+        res.status === 404 &&
+        !(await res
+          .clone()
+          .json()
+          .then(
+            () => true,
+            () => false
+          ));
+      const error = await oidcProviderError(res, "The provider could not be removed.");
       return { ok: false, status: res.status, error, ...(routeMissing ? { routeMissing } : {}) };
     }
     return { ok: true };
