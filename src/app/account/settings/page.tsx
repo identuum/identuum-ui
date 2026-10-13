@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import { EmailStatus } from "@/app/dashboard/email-status";
 import { PasskeySection } from "@/components/ui/passkey-section";
 import { memberEmailStatus } from "@/lib/email-verification";
-import { getOwnMfaStatus, listOwnSessions } from "@/lib/idp-account-client";
+import { getOwnMfaStatus, listOwnConsents, listOwnSessions } from "@/lib/idp-account-client";
 import { getOwnProfile } from "@/lib/idp-admin-client";
 import { mailCeremoniesAvailable } from "@/lib/mail-capabilities";
 import { getServerRuntimeState } from "@/lib/server-runtime-state";
 import { getServerSession } from "@/lib/server-session";
+import { ApplicationsSection } from "./applications-section";
 import { ChangePasswordForm } from "./change-password-form";
 import { MfaSection } from "./mfa-section";
 import { ProfileForm } from "./profile-form";
@@ -18,7 +19,7 @@ import { SessionsSection } from "./sessions-section";
  * Auth is enforced by the parent layout (account/layout.tsx).
  * This page does NOT repeat the guard.
  *
- * Tab routing: ?tab=password (default) | sessions | passkeys | mfa
+ * Tab routing: ?tab=password (default) | sessions | passkeys | mfa | profile | applications
  * Unknown values fall back to password.
  * Sessions are only fetched when the sessions tab is active.
  *
@@ -36,11 +37,18 @@ import { SessionsSection } from "./sessions-section";
 
 export const metadata: Metadata = { title: "Account Settings — Identuum" };
 
-type Tab = "password" | "sessions" | "passkeys" | "mfa" | "profile";
+type Tab = "password" | "sessions" | "passkeys" | "mfa" | "profile" | "applications";
 
 function parseTab(raw: string | string[] | undefined): Tab | null {
   const s = Array.isArray(raw) ? raw[0] : raw;
-  if (s === "password" || s === "sessions" || s === "passkeys" || s === "mfa" || s === "profile")
+  if (
+    s === "password" ||
+    s === "sessions" ||
+    s === "passkeys" ||
+    s === "mfa" ||
+    s === "profile" ||
+    s === "applications"
+  )
     return s;
   return null;
 }
@@ -97,6 +105,8 @@ export default async function AccountSettingsPage({
     : session?.user?.mfa_enabled;
 
   const sessionsResult = tab === "sessions" ? await listOwnSessions() : null;
+  // D3 (v0.9.13): the applications the user has allowed; read only on its tab.
+  const consentsResult = tab === "applications" ? await listOwnConsents() : null;
   // THE-PROFILE-CLAIMS: the profile tab edits the caller's own OIDC profile
   // fields (PUT /api/v1/profile); fetched only when that tab is active.
   const ownProfile = tab === "profile" ? await getOwnProfile() : null;
@@ -151,6 +161,7 @@ export default async function AccountSettingsPage({
             { label: "Profile", value: "profile" },
             { label: "MFA", value: "mfa" },
             { label: "Sessions", value: "sessions" },
+            { label: "Applications", value: "applications" },
             ...(webauthnAvailable ? [{ label: "Passkeys", value: "passkeys" as Tab }] : []),
           ] as { label: string; value: Tab }[]
         ).map(({ label, value }) => (
@@ -244,6 +255,21 @@ export default async function AccountSettingsPage({
                 !sessionsResult.ok && !sessionsResult.unavailable && sessionsResult.status !== 403
               }
             />
+          </div>
+        </div>
+      )}
+
+      {/* Applications tab */}
+      {tab === "applications" && consentsResult && (
+        <div className="bg-white border border-stone-200 rounded-[1.5rem] shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-stone-100">
+            <p className="text-sm font-semibold text-sky-950">Applications</p>
+            <p className="text-xs text-stone-400 mt-0.5">
+              Applications you allowed to use your account, and what each can see.
+            </p>
+          </div>
+          <div className="px-6 py-2">
+            <ApplicationsSection result={consentsResult} />
           </div>
         </div>
       )}

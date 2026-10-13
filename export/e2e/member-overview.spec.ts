@@ -1,16 +1,17 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { login, orgUserAccount } from "./export-login";
 
-// UI-0912-A (C4), owner Q4 b and Q5 a: the member Overview shows three link
-// cards (Profile, Security, Sessions), no Applications card and no "Coming
-// soon"; the member menu carries the same three items and marks the current
-// one. The live test signs in as the run's org_user (e2e-full); the
+// UI-0912-A (C4), owner Q4 b and Q5 a: the member Overview shows link cards
+// (Profile, Security, Sessions; Applications since v0.9.13 D3, its own spec
+// is applications.spec.ts) and no "Coming soon"; the member menu carries the
+// same items and marks the current one. The live test signs in as the run's org_user (e2e-full); the
 // fake-boundary tests run wherever the export is served.
 
 const CARDS = [
   { title: "Profile", tab: "profile", link: "Edit profile" },
   { title: "Security", tab: "password", link: "Manage security" },
   { title: "Sessions", tab: "sessions", link: "See devices and sign out" },
+  { title: "Applications", tab: "applications", link: "Review" },
 ] as const;
 
 const NOT_LOADED = "We could not load this right now. Open the page to see it.";
@@ -30,18 +31,17 @@ function menu(page: Page): Locator {
 async function checkOverview(page: Page): Promise<void> {
   await page.goto("/dashboard");
   await expect(page.getByTestId("home")).toHaveText("Overview");
-  await expect(cards(page)).toHaveCount(3);
+  await expect(cards(page)).toHaveCount(CARDS.length);
   for (const c of CARDS) {
     const el = card(page, c.title);
     await expect(el).toHaveAttribute("href", `/account/settings?tab=${c.tab}`);
     await expect(el.getByText(c.link, { exact: true })).toBeVisible();
   }
   await expect(page.getByText(/coming soon/i)).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Applications", exact: true })).toHaveCount(0);
 
   // The member menu: Overview is current here.
   const nav = menu(page);
-  for (const name of ["Overview", "Profile", "Security", "Sessions"]) {
+  for (const name of ["Overview", "Profile", "Security", "Sessions", "Applications"]) {
     await expect(nav.getByRole("link", { name, exact: true })).toBeVisible();
   }
   await expect(nav.locator("[aria-current='page']")).toHaveText("Overview");
@@ -60,6 +60,7 @@ async function checkOverview(page: Page): Promise<void> {
     ["Profile", "profile"],
     ["Security", "password"],
     ["Sessions", "sessions"],
+    ["Applications", "applications"],
   ] as const) {
     await menu(page).getByRole("link", { name, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/account/settings\\?tab=${tab}$`));
@@ -74,7 +75,7 @@ async function checkNarrow(page: Page): Promise<void> {
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/dashboard");
-    await expect(cards(page)).toHaveCount(3);
+    await expect(cards(page)).toHaveCount(CARDS.length);
     const added = await cards(page)
       .first()
       .evaluate((first) => {
@@ -90,7 +91,7 @@ async function checkNarrow(page: Page): Promise<void> {
   }
 }
 
-test("org_user Overview in the binary: three cards, member menu, keyboard", async ({ page }) => {
+test("org_user Overview in the binary: the cards, member menu, keyboard", async ({ page }) => {
   const account = orgUserAccount();
   // Inside e2e-full the fixture is required: a skip there would read green
   // having proven nothing.
@@ -135,6 +136,8 @@ async function fakeMember(page: Page, opts: { failSessions?: boolean } = {}): Pr
       json = USER;
     } else if (path === "/api/v1/me/mfa/status") {
       json = { mfa_enabled: true, recovery_codes_remaining_count: 2 };
+    } else if (path === "/api/v1/me/consents") {
+      json = { consents: [], access_token_lifetime_seconds: 3600 };
     } else if (path === "/api/v1/sessions") {
       status = opts.failSessions ? 503 : 200;
       json = opts.failSessions
@@ -167,13 +170,16 @@ async function fakeMember(page: Page, opts: { failSessions?: boolean } = {}): Pr
   );
 }
 
-test("member Overview: three cards with their facts, menu and keyboard", async ({ page }) => {
+test("member Overview: the cards with their facts, menu and keyboard", async ({ page }) => {
   await fakeMember(page);
   await page.goto("/dashboard");
   await expect(card(page, "Profile")).toContainText("Name: Member Fixture");
   await expect(card(page, "Security")).toContainText("Two-step sign-in: On");
   await expect(card(page, "Security")).toContainText("Only 2 backup codes left. Make new ones.");
   await expect(card(page, "Sessions")).toContainText("Signed in on 2 devices.");
+  await expect(card(page, "Applications")).toContainText(
+    "You have not allowed any applications yet."
+  );
   await checkOverview(page);
 });
 

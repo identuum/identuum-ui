@@ -107,6 +107,8 @@ export function PasswordForm({
         setServerError(
           "Your account is waiting for an administrator's approval. You can sign in once it is approved."
         );
+      } else if (err instanceof ApiError && err.message === "PASSWORD_EXPIRED") {
+        setServerError("This password has expired. Ask your administrator for a new reset link.");
       } else if (err instanceof ApiError && err.message === "LOGIN_THROTTLED") {
         // Repeated failures slow sign-in down; the IdP says how long.
         setServerError(loginWaitMessage(err));

@@ -220,6 +220,7 @@ async function renderOverview(): Promise<string> {
   vi.doMock("@/lib/idp-account-client", () => ({
     getOwnMfaStatus: async () => ({ ok: false, unavailable: true }),
     listOwnSessions: async () => ({ ok: true, sessions: [] }),
+    listOwnConsents: async () => ({ ok: true, consents: [], accessTokenLifetimeSeconds: 3600 }),
     sendOwnVerificationEmail: async () => ({ outcome: "sent" }),
   }));
   const Page = (await import("@/app/dashboard/page")).default;

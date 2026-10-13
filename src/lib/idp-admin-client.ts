@@ -1018,6 +1018,13 @@ export async function createPasswordResetLink(
       cannot_reset_self: "Use Account settings to change your own password.",
       cannot_reset_site_admin: "A site administrator's password cannot be reset here.",
       user_disabled: "Enable the user before creating a reset link.",
+      // v0.9.13 (identuum-idp-oss serves the reset link too).
+      user_not_activated:
+        "This person has not activated the account yet. Send an invitation instead.",
+      no_local_password: "This person signs in with a provider and has no password here.",
+      local_password_not_allowed: "Members of this organization can only sign in with a provider.",
+      reset_link_unavailable:
+        "This server cannot create reset links yet. Ask the operator to set the console address.",
       not_found: "User not found.",
       // G3: older OSS user routes spell the 404 code with a space.
       "not found": "User not found.",

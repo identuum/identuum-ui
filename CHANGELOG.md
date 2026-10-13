@@ -13,6 +13,29 @@ to `v0.6.2` were written when the artifact was the container image
 
 ## Unreleased
 
+- **See and remove the apps that use your account.** Account settings has
+  a new "Applications" tab, also in the member menu. It lists each app you
+  allowed, what it can see in plain words (for example "your email
+  address" or "stay signed in") and the day you allowed it. "Remove
+  access" asks first: the app will have to ask you again, and it may keep
+  working for a short time, which the page states from the server's own
+  setting. The Overview has an "Applications" card with the count and a
+  "Review" link. A server without this feature says "Not available on
+  this server."
+- **Reset links say why they cannot be made.** When a reset link is
+  refused, the user page now says why in plain words: the person has not
+  activated the account, signs in only with a provider, belongs to an
+  organization that allows only provider sign-in, or the server cannot
+  make reset links yet. A "Done" button closes the link, and it is not
+  shown again. The button follows the server's own setting on every
+  edition.
+- **An expired password is named at sign-in.** When a password set by an
+  administrator has expired, the sign-in page says so and tells the person
+  to ask for a new reset link, instead of "Invalid credentials".
+- **A taken domain is named.** When a new organization cannot be created
+  because its domain may already be in use, the Domain field says so,
+  instead of "The backend returned an error".
+
 - **The console works on a phone.** On screens narrower than 768 px the
   menu at the left is hidden, so pages no longer scroll sideways. A
   "Menu" button at the top opens the same menu, with Sign out, from the

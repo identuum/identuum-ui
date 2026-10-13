@@ -56,21 +56,22 @@ describe("Account Settings — tab inventory invariant", () => {
   // edits the caller's own OIDC §5.1 profile fields via PUT /api/v1/profile.
   // The contract is raised deliberately from four to five tabs; the union,
   // the whitelist and the nav are pinned END-ANCHORED so a sixth tab fires.
-  it("page.tsx declares the closed Tab enum 'password' | 'sessions' | 'passkeys' | 'mfa' | 'profile'", () => {
+  // v0.9.13 D3 (owner Q5 a) raises it deliberately to six: Applications.
+  it("page.tsx declares the closed Tab enum 'password' | 'sessions' | 'passkeys' | 'mfa' | 'profile' | 'applications'", () => {
     expect(page).toMatch(
-      /type\s+Tab\s*=\s*"password"\s*\|\s*"sessions"\s*\|\s*"passkeys"\s*\|\s*"mfa"\s*\|\s*"profile"\s*;/
+      /type\s+Tab\s*=\s*"password"\s*\|\s*"sessions"\s*\|\s*"passkeys"\s*\|\s*"mfa"\s*\|\s*"profile"\s*\|\s*"applications"\s*;/
     );
   });
 
-  it("parseTab whitelists exactly the five tab values", () => {
+  it("parseTab whitelists exactly the six tab values", () => {
     expect(page).toMatch(
-      /s\s*===\s*"password"\s*\|\|\s*s\s*===\s*"sessions"\s*\|\|\s*s\s*===\s*"passkeys"\s*\|\|\s*s\s*===\s*"mfa"\s*\|\|\s*s\s*===\s*"profile"\s*\)/
+      /s\s*===\s*"password"\s*\|\|\s*s\s*===\s*"sessions"\s*\|\|\s*s\s*===\s*"passkeys"\s*\|\|\s*s\s*===\s*"mfa"\s*\|\|\s*s\s*===\s*"profile"\s*\|\|\s*s\s*===\s*"applications"\s*\)/
     );
   });
 
-  it("page.tsx renders exactly the five documented tab nav entries", () => {
+  it("page.tsx renders exactly the six documented tab nav entries", () => {
     // Catch a regression that adds a UI tab without harness coverage.
-    for (const value of ["password", "profile", "mfa", "sessions", "passkeys"]) {
+    for (const value of ["password", "profile", "mfa", "sessions", "applications", "passkeys"]) {
       expect(page).toMatch(new RegExp(`value:\\s*"${value}"`));
     }
     // Negative: no sixth tab label sneaks in. We pin only the label
@@ -81,7 +82,7 @@ describe("Account Settings — tab inventory invariant", () => {
     // regex tolerates the optional annotation.
     const labelLines =
       page.match(/\{\s*label:\s*"[^"]+",\s*value:\s*"[a-z]+"(?:\s+as\s+Tab)?\s*\}/g) ?? [];
-    expect(labelLines.length).toBe(5);
+    expect(labelLines.length).toBe(6);
   });
 
   it("default tab when no tab+reason is provided is 'password'", () => {

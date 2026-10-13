@@ -12,7 +12,8 @@
  * Security, Sessions — each one link to its tab of /account/settings with the
  * facts the member's own reads return. Each card reads on its own, so one
  * failed read does not hide the others; a card that cannot read says so and
- * still links. No Applications card (owner Q4 b); no "Coming soon".
+ * still links. No "Coming soon". UI-0913-B (D3): a fourth card, Applications,
+ * counts the apps the member has allowed and links to its tab.
  */
 
 import type { Metadata } from "next";
@@ -20,6 +21,7 @@ import { memberEmailStatus } from "@/lib/email-verification";
 import {
   getOwnMfaStatus,
   type ListSessionsResult,
+  listOwnConsents,
   listOwnSessions,
   type MfaStatusResult,
 } from "@/lib/idp-account-client";
@@ -27,6 +29,7 @@ import { getOwnProfile } from "@/lib/idp-admin-client";
 import { mailCeremoniesAvailable } from "@/lib/mail-capabilities";
 import { getServerSession } from "@/lib/server-session";
 import type { UserProfile } from "@/lib/types";
+import { ApplicationFacts } from "./application-facts";
 import { EmailStatus } from "./email-status";
 
 const NOT_LOADED = "We could not load this right now. Open the page to see it.";
@@ -35,12 +38,13 @@ export const metadata: Metadata = { title: "Dashboard — Identuum" };
 
 export default async function DashboardPage() {
   // getServerSession() is cached per-request — the layout already called it.
-  const [session, profile, mfa, sessions, mailCeremonies] = await Promise.all([
+  const [session, profile, mfa, sessions, mailCeremonies, consents] = await Promise.all([
     getServerSession(),
     getOwnProfile(),
     getOwnMfaStatus(),
     listOwnSessions(),
     mailCeremoniesAvailable(),
+    listOwnConsents(),
   ]);
 
   // Layout guarantees session exists and role is org_user at this point.
@@ -142,6 +146,9 @@ export default async function DashboardPage() {
           link="See devices and sign out"
         >
           <SessionFacts sessions={sessions} />
+        </LinkCard>
+        <LinkCard title="Applications" href="/account/settings?tab=applications" link="Review">
+          <ApplicationFacts result={consents} />
         </LinkCard>
       </div>
     </div>

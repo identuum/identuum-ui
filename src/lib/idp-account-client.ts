@@ -173,6 +173,91 @@ export async function revokeSessionById(id: string): Promise<AccountMutationResu
   }
 }
 
+/** One application the caller has allowed (identuum-idp-oss D3). */
+export interface OwnConsent {
+  clientId: string;
+  name: string;
+  scopes: string[];
+  firstGrantedAt: string;
+}
+
+export type ListConsentsResult =
+  | { ok: true; consents: OwnConsent[]; accessTokenLifetimeSeconds: number }
+  | { ok: false; status: number; unavailable: boolean };
+
+/**
+ * Lists the applications the caller has allowed: GET /api/v1/me/consents
+ * (identuum-idp-oss v0.9.13). identuum-idp-ce and older binaries do not
+ * mount it (404); a 503 is a server that did not answer, not a missing route.
+ * access_token_lifetime_seconds says how long an app may keep working after
+ * its access is removed; it is passed through, never assumed.
+ */
+export async function listOwnConsents(): Promise<ListConsentsResult> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) return { ok: false, status: 503, unavailable: false };
+  try {
+    const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/me/consents`, {
+      method: "GET",
+      headers: await idpAuthHeaders(),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: res.status,
+        unavailable: res.status === 404 || res.status === 501,
+      };
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: raw API response before sanitization
+    const data: any = await res.json();
+    const lifetime = Number(data?.access_token_lifetime_seconds);
+    if (!Number.isFinite(lifetime) || lifetime <= 0) {
+      return { ok: false, status: res.status, unavailable: false };
+    }
+    const raw = Array.isArray(data?.consents) ? (data.consents as Record<string, unknown>[]) : [];
+    const consents: OwnConsent[] = raw
+      .filter((c) => typeof c.client_id === "string" && c.client_id)
+      .map((c) => ({
+        clientId: String(c.client_id),
+        name: typeof c.name === "string" && c.name ? c.name : String(c.client_id),
+        scopes: Array.isArray(c.scopes) ? c.scopes.map(String) : [],
+        firstGrantedAt: String(c.first_granted_at ?? ""),
+      }));
+    return { ok: true, consents, accessTokenLifetimeSeconds: lifetime };
+  } catch {
+    return { ok: false, status: 0, unavailable: false };
+  }
+}
+
+export type RevokeConsentOutcome = "removed" | "gone" | "unavailable" | "failed";
+
+/**
+ * Removes one application's access: DELETE /api/v1/me/consents/:client_id.
+ * 404 {"error":"not_found"} means the app already has no access ("gone"); a
+ * 404 without that code is a binary that does not mount the route.
+ */
+export async function revokeOwnConsent(
+  clientId: string
+): Promise<{ outcome: RevokeConsentOutcome; status: number }> {
+  const cfg = loadRuntimeConfig();
+  if (!cfg || !cfg.idp.enabled) return { outcome: "failed", status: 503 };
+  try {
+    const res = await idpFetch(
+      `${idpBaseUrl(cfg)}/api/v1/me/consents/${encodeURIComponent(clientId)}`,
+      { method: "DELETE", headers: await idpAuthHeaders(), cache: "no-store" }
+    );
+    if (res.ok) return { outcome: "removed", status: res.status };
+    if (res.status === 404) {
+      const code = await serverErrorCode(res);
+      return { outcome: code === "not_found" ? "gone" : "unavailable", status: 404 };
+    }
+    if (res.status === 501) return { outcome: "unavailable", status: 501 };
+    return { outcome: "failed", status: res.status };
+  } catch {
+    return { outcome: "failed", status: 0 };
+  }
+}
+
 export interface MfaStatus {
   mfa_enabled: boolean;
   totp_enrolled: boolean;

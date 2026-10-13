@@ -153,6 +153,12 @@ export async function login(payload: LoginPayload): Promise<LoginOutcome> {
     throw new ApiError(res.status, "REGISTRATION_PENDING");
   }
 
+  // v0.9.13 (G2): an admin-set password not changed within its lifetime.
+  // The password was right; the user needs a new reset link.
+  if (res.status === 401 && body?.error === "password_expired") {
+    throw new ApiError(res.status, "PASSWORD_EXPIRED");
+  }
+
   // identuum-idp-oss v0.9.5: the account-wide slow-down after repeated
   // failed sign-ins (from any address) — a short wait, never a lock. Since
   // v0.9.6 a held per-address bound answers the same way (FUNC-M2), with a

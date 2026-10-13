@@ -27,6 +27,7 @@ vi.mock("@/lib/idp-admin-client", () => ({
 vi.mock("@/lib/idp-account-client", () => ({
   getOwnMfaStatus: async () => h.mfa,
   listOwnSessions: async () => ({ ok: true, sessions: [] }),
+  listOwnConsents: async () => ({ ok: true, consents: [], accessTokenLifetimeSeconds: 3600 }),
 }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",

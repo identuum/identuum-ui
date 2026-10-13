@@ -162,6 +162,17 @@ export async function createOrgAction(
     if (result.status === 403) {
       redirect("/login?reason=unauthorized");
     }
+    // V2-002: identuum-idp-oss answers a taken domain 400 "invalid request"
+    // (its create handler drops the repository's ErrOrganizationAlreadyExists),
+    // and the fields were already checked here, so the domain is the likely cause.
+    if (result.status === 400) {
+      return {
+        fieldErrors: {
+          domain:
+            "This domain may already belong to another organization. Check it, or use another domain.",
+        },
+      };
+    }
     return {
       error: "Could not create the organization. The backend returned an error. Try again.",
     };

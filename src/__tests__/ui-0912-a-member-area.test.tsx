@@ -3,8 +3,8 @@
  *
  * - The member Overview showed four "Coming soon" cards. It now shows three
  *   working cards — Profile, Security, Sessions — each one link, each with
- *   real facts or a plain line when they cannot be read. Applications is not
- *   shown (owner Q4 b).
+ *   real facts or a plain line when they cannot be read. Applications was not
+ *   shown (owner Q4 b) until v0.9.13 D3 added its card (ui-0913-b-early).
  * - The member menu has Overview, Profile, Security and Sessions in BOTH
  *   layouts that show it (owner Q5 a), through one shared component.
  * - A visitor who presented no credential at all is sent to the plain
@@ -36,6 +36,7 @@ vi.mock("@/lib/idp-admin-client", () => ({ getOwnProfile: async () => h.profile 
 vi.mock("@/lib/idp-account-client", () => ({
   getOwnMfaStatus: async () => h.mfa,
   listOwnSessions: async () => h.sessions,
+  listOwnConsents: async () => ({ ok: true, consents: [], accessTokenLifetimeSeconds: 3600 }),
 }));
 vi.mock("next/navigation", () => ({
   usePathname: () => h.pathname,
@@ -86,10 +87,10 @@ async function overview(): Promise<string> {
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
 describe("member Overview", () => {
-  it("has no 'Coming soon', no Applications card, and three links to the right tabs", async () => {
+  it("has no 'Coming soon', and links to the right tabs (Applications since v0.9.13 D3)", async () => {
     const html = await overview();
     expect(html).not.toContain("Coming soon");
-    expect(text(html)).not.toContain("Applications");
+    expect(html).toContain('href="/account/settings?tab=applications"');
     expect(html).toContain('href="/account/settings?tab=profile"');
     expect(html).toContain('href="/account/settings?tab=password"');
     expect(html).toContain('href="/account/settings?tab=sessions"');
