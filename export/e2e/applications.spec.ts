@@ -138,7 +138,9 @@ test("Applications tab: keyboard opens and answers the question", async ({ page 
   await page.keyboard.press("Enter");
   await expect(row(page, "Second App").getByText(/will have to ask you again/)).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(row(page, "Second App").getByRole("button", { name: "Remove access" })).toBeFocused();
+  await expect(
+    row(page, "Second App").getByRole("button", { name: "Remove access" })
+  ).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("status")).toHaveText("Access removed for Second App.");
   expect(fake.deletes.map((d) => d.path)).toEqual(["/api/v1/me/consents/app-2"]);
