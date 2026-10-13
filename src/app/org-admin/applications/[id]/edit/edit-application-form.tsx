@@ -35,7 +35,7 @@
  *     skip_consent (D-018) is, for a confidential client only.
  */
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { type UpdateApplicationState, updateApplicationAction } from "../../actions";
 import { FirstPartyField } from "../../first-party-field";
@@ -89,12 +89,6 @@ function Form({
 }) {
   // D4: someone changed the application since this page read it.
   const changed = state.phase === "error" ? state.changed : undefined;
-  // The Save button that was pressed may be far below: focus goes to the
-  // banner so its two choices come next (UI-0913-A-EARLY-FIX F5).
-  const bannerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (changed) bannerRef.current?.focus();
-  }, [changed]);
   // A changed application has its own banner below, not this line.
   const errorMessage = state.phase === "error" && !state.changed ? state.error : null;
   const fieldErrors = state.phase === "error" ? (state.fieldErrors ?? {}) : {};
@@ -120,7 +114,12 @@ function Form({
       )}
       {changed && (
         <div
-          ref={bannerRef}
+          // The Save button that was pressed may be far below: focus goes to
+          // the banner so its two choices come next (UI-0913-A-EARLY-FIX F5).
+          // A ref callback, not an effect: the form keeps no client state. The
+          // key mounts it again, and so focuses it again, on a further conflict.
+          key={changed.latestUpdatedAt ?? "changed"}
+          ref={focusOnMount}
           role="alert"
           tabIndex={-1}
           data-testid="client-changed"
@@ -303,6 +302,10 @@ function Form({
       </div>
     </form>
   );
+}
+
+function focusOnMount(el: HTMLElement | null) {
+  el?.focus();
 }
 
 function SuccessPanel({

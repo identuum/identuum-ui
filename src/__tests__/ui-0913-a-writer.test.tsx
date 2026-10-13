@@ -725,7 +725,7 @@ describe("EARLY-FIX F5: the conflict banner takes focus; tap targets are 44 px",
       expect(button).not.toContain("h-8");
     }
     expect(src("src/app/org-admin/applications/[id]/edit/edit-application-form.tsx")).toMatch(
-      /if \(changed\) bannerRef\.current\?\.focus\(\);/
+      /ref=\{focusOnMount\}[\s\S]*function focusOnMount\(el: HTMLElement \| null\) \{\s*el\?\.focus\(\);/
     );
   });
 
