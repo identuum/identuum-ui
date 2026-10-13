@@ -456,18 +456,14 @@ test.describe("/org-admin/service-accounts/[id] — link to OAuth client (dynami
       await confirmInput.fill("UNLINK");
       const submitUnlink = page.getByRole("button", { name: /^Unlink OAuth client$/ }).last();
       await submitUnlink.click();
-      // The server action's revalidatePath() invalidates the SA detail
-      // route, so Next.js re-renders the server components with fresh
-      // server data (listServiceAccountOAuthClients now returns []).
-      // The persistent LinkedStatePanel unmounts → the "Currently
-      // linked OAuth client." copy disappears, and the link Form
-      // re-renders in its place. The disappearance + Form reappearance
-      // are jointly proof that the unlink succeeded — observed
-      // entirely from server state, with NO useActionState dependence.
-      await expect(page.getByText("Currently linked OAuth client.", { exact: true })).toHaveCount(
-        0,
-        { timeout: 15_000 }
-      );
+      // The card keeps the linked list of its first render, so the row
+      // shows its result line although revalidatePath() makes the server
+      // list empty (UI-0913-SA-CARD-FIX, V3-027). The reload in step 8
+      // proves the unlink from server state.
+      await expect(page.getByText("OAuth client unlinked.", { exact: true })).toBeVisible({
+        timeout: 15_000,
+      });
+      await page.getByRole("button", { name: "Link another OAuth client" }).click();
       await expect(page.locator('select[name="oauth_client_id"]')).toBeVisible({ timeout: 15_000 });
       // Defence-in-depth no-credential scan over the post-unlink
       // <main>. Scope is <main> (not <body>) to avoid false positives
