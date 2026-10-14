@@ -4,7 +4,8 @@
  * OSS sends a refused upstream callback back to the sign-in page with its
  * reason code (owner Q-A1 a, OSS-0913-A), and the sign-in reason banner shows
  * these words. An unknown code shows nothing, never the raw code. The keys
- * are OSS's closed list of eight (OSS ef4ced9, unchanged at 3e1fa09).
+ * are OSS's closed list of eight (OSS ef4ced9, unchanged at 3e1fa09), and
+ * the two v0.9.14 adds for an administrator-set password (OSS 92936bf).
  */
 const UPSTREAM_REFUSALS: Record<string, string> = {
   sign_in_failed: "Sign-in with the provider did not work. Try again.",
@@ -15,6 +16,9 @@ const UPSTREAM_REFUSALS: Record<string, string> = {
   registration_pending: "Your account is waiting for an administrator's approval.",
   provider_unavailable: "The sign-in provider could not be reached. Try again in a moment.",
   sign_in_unavailable: "Sign-in is not available right now. Try again in a moment.",
+  password_change_required:
+    "Sign in with the password your administrator gave you and choose a new one.",
+  password_expired: "This password has expired. Ask your administrator for a new reset link.",
 };
 
 export function upstreamRefusalText(code: string | null): string | null {

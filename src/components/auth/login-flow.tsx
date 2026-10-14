@@ -228,6 +228,21 @@ export function LoginFlow({ onSuccess, mailCeremonies = true }: LoginFlowProps) 
       // biome-ignore lint/suspicious/noExplicitAny: raw login response before typing
       const finishData: any = await finishRes.json().catch(() => ({}));
 
+      // D-017 / G2 (identuum-idp-oss v0.9.14): the passkey finish answers an
+      // owed password change and an expired admin-set password as password
+      // sign-in does. The change step comes first, with its handle.
+      if (finishData.password_change_required === true) {
+        const sid = finishData.session_id;
+        if (typeof sid === "string" && sid.length > 0) {
+          setEmail(currentEmail);
+          handlePasswordChangeRequired(sid);
+          return;
+        }
+      }
+      if (finishRes.status === 401 && finishData.error === "password_expired") {
+        throw new Error("This password has expired. Ask your administrator for a new reset link.");
+      }
+
       // Handle MFA required (same shape as password login).
       if (finishData.mfa_required === true) {
         const sid = finishData.session_id;
