@@ -39,7 +39,7 @@ test.describe("/login — provider-only organization (mocked backend)", () => {
     );
   });
 
-  test("a member's Continue still goes to the provider [IDPONLY-MEMBER-1]", async ({ page }) => {
+  test("a member's Continue still goes to the provider", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Email or domain").fill("member@acme.example");
     await page.getByRole("button", { name: "Continue" }).click();
@@ -47,7 +47,7 @@ test.describe("/login — provider-only organization (mocked backend)", () => {
     await expect(page.getByText("provider stub")).toBeVisible();
   });
 
-  test("an administrator reaches the password step [IDPONLY-ADMIN-1]", async ({ page }) => {
+  test("an administrator reaches the password step", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Email or domain").fill("admin@acme.example");
     const choice = page.getByRole("button", { name: "Administrator? Sign in with password" });
@@ -58,7 +58,7 @@ test.describe("/login — provider-only organization (mocked backend)", () => {
     expect(new URL(page.url()).pathname).toBe("/login");
   });
 
-  test("the email step is the same for every address [IDPONLY-NOENUM-1]", async ({ page }) => {
+  test("the email step is the same for every address", async ({ page }) => {
     await page.goto("/login");
     const choice = page.getByRole("button", { name: "Administrator? Sign in with password" });
     await expect(choice).toBeVisible();
