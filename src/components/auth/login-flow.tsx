@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { orgLookup } from "@/lib/idp-client";
 import { IDP_PATHS } from "@/lib/idp-paths";
+import { routeAfterLookup } from "@/lib/login-route";
 import { ssoLoginDestination } from "@/lib/safe-destination";
 import type { OrgConfig, PublicIDPInfo, UserRole } from "@/lib/types";
 import { MFAEnrollForm } from "./mfa-enroll-form";
@@ -80,7 +81,7 @@ export function LoginFlow({ onSuccess, mailCeremonies = true }: LoginFlowProps) 
     resolver: zodResolver(emailSchema),
   });
 
-  const onEmailSubmit = async (data: EmailData) => {
+  const onEmailSubmit = async (data: EmailData, passwordChosen = false) => {
     setServerError(null);
     setPasskeyError(null);
     setEmail(data.email);
@@ -91,50 +92,12 @@ export function LoginFlow({ onSuccess, mailCeremonies = true }: LoginFlowProps) 
       const found = await orgLookup(domain);
       setOrgConfig(found);
 
-      if (!found) {
-        setStep("PASSWORD");
+      const route = routeAfterLookup(found, data.email, passwordChosen);
+      if (route.kind === "sso") {
+        handleSSORedirect(route.loginUrl);
         return;
       }
-
-      if (found.auth_policy === "idp_only") {
-        if (found.identity_providers && found.identity_providers.length === 1) {
-          handleSSORedirect(found.identity_providers[0].login_url);
-          return;
-        }
-        if (found.identity_providers && found.identity_providers.length > 1) {
-          const emailDomain = data.email.includes("@")
-            ? data.email.split("@")[1].toLowerCase()
-            : "";
-          if (emailDomain) {
-            const matched = found.identity_providers.find((idp) =>
-              idp.email_domains?.includes(emailDomain)
-            );
-            if (matched) {
-              handleSSORedirect(matched.login_url);
-              return;
-            }
-          }
-          setStep("SSO_SELECT");
-          return;
-        }
-      }
-
-      if (found.auth_policy === "mixed" && found.identity_providers?.length) {
-        const emailDomain = data.email.includes("@") ? data.email.split("@")[1].toLowerCase() : "";
-        if (emailDomain) {
-          const matched = found.identity_providers.find((idp) =>
-            idp.email_domains?.includes(emailDomain)
-          );
-          if (matched) {
-            handleSSORedirect(matched.login_url);
-            return;
-          }
-        }
-        setStep("SSO_SELECT");
-        return;
-      }
-
-      setStep("PASSWORD");
+      setStep(route.kind === "select" ? "SSO_SELECT" : "PASSWORD");
     } catch {
       // THE-STALE-COOKIE defence in depth: the org lookup is a ROUTING
       // OPTIMIZATION (pick the friendlier SSO redirect early), not an
@@ -303,7 +266,7 @@ export function LoginFlow({ onSuccess, mailCeremonies = true }: LoginFlowProps) 
 
   if (step === "EMAIL") {
     return (
-      <form onSubmit={handleSubmit(onEmailSubmit)} className="space-y-5">
+      <form onSubmit={handleSubmit((d) => onEmailSubmit(d))} className="space-y-5">
         <Input
           id="email"
           label="Email or domain"
@@ -346,6 +309,18 @@ export function LoginFlow({ onSuccess, mailCeremonies = true }: LoginFlowProps) 
             {passkeyLoading ? "Follow your device prompt…" : "Sign in with passkey"}
           </Button>
         )}
+        {/* V0913-012: under idp_only administrators keep password sign-in, so
+            a broken provider cannot lock them out. Offered to every address
+            alike (the lookup knows the domain only); the server decides. */}
+        <Button
+          type="button"
+          variant="ghost"
+          className="w-full"
+          disabled={isSubmitting}
+          onClick={handleSubmit((d) => onEmailSubmit(d, true))}
+        >
+          Administrator? Sign in with password
+        </Button>
       </form>
     );
   }
