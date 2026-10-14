@@ -11,6 +11,19 @@ that export. The release body is this file's section for the tag. Entries up
 to `v0.6.2` were written when the artifact was the container image
 `ghcr.io/identuum/identuum-ui`, retired by owner ruling D-019 (2026-09-30).
 
+## Unreleased
+
+- **Invite user says when an address already has an account.** An invite of
+  an address another account holds showed "This user already accepted their
+  invitation" for every 409. Now `email_exists` shows "This email address
+  already has an account. Use another address."; `user_not_pending` keeps
+  its words, and any other 409 gets the general invite failure.
+- **Passkey and provider sign-in show the required password change.** A
+  passkey sign-in that owes a password change opens the change step, as
+  password sign-in does; an expired administrator-set password shows the
+  same expiry words. The sign-in banner has plain words for the two new
+  provider refusal reasons.
+
 ## `v0.9.13`
 
 The static console export for identuum-idp-oss `v0.9.13`: your connected
