@@ -1,5 +1,11 @@
 {
   "schema_version": "ledger-amendments.v1",
-  "base_commit": "181361c1389af81a85bf9dedcca3a52b1a122257",
-  "changes": []
+  "base_commit": "4aa55db16d0d9497b4da73d349a3026364df575f",
+  "changes": [
+    {
+      "rule_id": "ORG-USERS-TRUNCATION-1",
+      "change_class": "test_fingerprint_changed",
+      "reason": "OSS-0913-PAGESIZE-FIX (2026-10-14, V3-039, reviewed OSS-0913-PAGESIZE-REVIEW): the console asks the IdP for 100 users a page (the server's cap) and counts pages from the page_size the server answers. The rule's test now pins page_size to the ORG_USERS_PAGE_SIZE constant of 100 and the page count to the served page size, instead of 200; stricter, the rule sentence is unchanged."
+    }
+  ]
 }
