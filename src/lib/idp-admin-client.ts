@@ -869,6 +869,9 @@ export async function getOwnProfile(): Promise<UserProfile | null> {
 
 // ── Org-admin user list ──────────────────────────────────────────────────────
 
+// The IdP serves at most 100 users a page (repository.NewPagination).
+const ORG_USERS_PAGE_SIZE = 100;
+
 /**
  * Fetches the user list for the authenticated org_admin's organization.
  *
@@ -883,9 +886,10 @@ export async function getOwnProfile(): Promise<UserProfile | null> {
  * backend's full count: when it exceeds users.length the page received a
  * TRUNCATED window and must say so — never render silence as completeness.
  *
- * Wire contract: the backend reads page/page_size (page_size caps at 200)
- * and paginates 1-based. Sort is DELIBERATELY not sent: the backend
- * hardcodes created_at descending and reads no sort/order params — sending
+ * Wire contract: the backend reads page/page_size and paginates 1-based; it
+ * serves at most 100 rows a page and answers with the page_size it used, so
+ * `pageSize` is the server's answer and the caller counts pages from it.
+ * Sort is DELIBERATELY not sent: the backend hardcodes created_at descending and reads no sort/order params — sending
  * them was inert. Cost accepted: the display order now explicitly depends
  * on that server default; if the server default ever changes, this list
  * reorders with it.
@@ -893,7 +897,7 @@ export async function getOwnProfile(): Promise<UserProfile | null> {
 export async function listOrgUsers(opts?: {
   /** 1-based page, matching the backend's pagination. Defaults to 1. */
   page?: number;
-}): Promise<{ users: OrgUserItem[]; total: number } | null> {
+}): Promise<{ users: OrgUserItem[]; total: number; pageSize: number } | null> {
   const cfg = loadRuntimeConfig();
   if (!cfg || !cfg.idp.enabled) return null;
 
@@ -901,7 +905,7 @@ export async function listOrgUsers(opts?: {
 
   const params = new URLSearchParams();
   params.set("page", String(page));
-  params.set("page_size", "200");
+  params.set("page_size", String(ORG_USERS_PAGE_SIZE));
 
   try {
     const res = await idpFetch(`${idpBaseUrl(cfg)}/api/v1/users?${params.toString()}`, {
@@ -935,7 +939,15 @@ export async function listOrgUsers(opts?: {
         banned: Boolean(u.banned),
       })
     );
-    return { users: mapped, total: Number(data.total ?? mapped.length) };
+    const answered = Number(data.page_size);
+    return {
+      users: mapped,
+      total: Number(data.total ?? mapped.length),
+      pageSize:
+        Number.isInteger(answered) && answered > 0
+          ? Math.min(answered, ORG_USERS_PAGE_SIZE)
+          : ORG_USERS_PAGE_SIZE,
+    };
   } catch {
     return null;
   }

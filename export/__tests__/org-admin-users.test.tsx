@@ -97,7 +97,7 @@ describe("overview, users list and user detail in the export", () => {
     expect(html).toContain('data-testid="user-list"');
     expect(html).toContain(`href="/org-admin/users/${OTHER_ID}"`);
     expect(html).toContain("member@tenant-a.test");
-    expect(env.calls.map((c) => c.path)).toContain("/api/v1/users?page=1&page_size=200");
+    expect(env.calls.map((c) => c.path)).toContain("/api/v1/users?page=1&page_size=100");
     expect(everyApiCallThroughTheBoundary(env.calls)).toBe(true);
   });
 

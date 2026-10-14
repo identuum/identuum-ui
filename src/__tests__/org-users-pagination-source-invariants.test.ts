@@ -4,7 +4,7 @@
  * THE-THREE-PARKED (2026-08-26), Part A: the org-admin users list pages on
  * the 1-based page/page_size contract the backend already speaks
  * (HandleListUsers reads page and page_size via parsePositiveQuery,
- * page_size cap 200). Before this, the page fetched exactly one 200-row
+ * at most 100 rows a page). Before this, the page fetched exactly one 200-row
  * window and users beyond it were UNREACHABLE — an amber notice admitted
  * the truncation but offered no way through it.
  *

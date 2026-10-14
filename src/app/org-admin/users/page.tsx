@@ -33,8 +33,6 @@ export const metadata: Metadata = { title: "Users — Identuum Org Admin" };
 
 type StatusFilter = "all" | "active" | "pending" | "pending_approval" | "disabled";
 
-const USERS_PAGE_SIZE = 200;
-
 function parseUsersPage(raw: string | undefined): number {
   const n = Number(raw ?? "");
   if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1 || n > 65536) return 1;
@@ -85,9 +83,10 @@ export default async function OrgAdminUsersPage({
   // Every user is REACHABLE BY PAGING on the backend's 1-based
   // page/page_size contract; the window is never presented as the whole —
   // when more than one page exists, the counts are labeled page-scoped and
-  // pagination controls expose the rest.
+  // pagination controls expose the rest. The page count uses the page size
+  // the server answered with: it may serve fewer rows than were asked for.
   const totalUsers = listResult?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(totalUsers / USERS_PAGE_SIZE));
+  const totalPages = listResult ? Math.max(1, Math.ceil(totalUsers / listResult.pageSize)) : 1;
   const paginated = users !== null && totalPages > 1;
 
   // Count active org_admins to know if the sole admin protection applies
