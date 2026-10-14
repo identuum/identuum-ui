@@ -27,7 +27,7 @@
 import { readFileSync } from "node:fs";
 import { resolve as resolvePath } from "node:path";
 import { expect, test } from "@playwright/test";
-import { api, expectStatus } from "../e2e/helpers/appliance-fixture";
+import { api, expectStatus, observeRaw } from "../e2e/helpers/appliance-fixture";
 import { loadOrgAdminFixture, loadOrgUserFixture } from "../e2e/helpers/fixture";
 import {
   refusedAfterFreshStepMessage,
@@ -642,6 +642,7 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
       body?: Record<string, unknown>;
       bearer?: string;
       ok: number[]; // acceptable statuses — a fault (5xx) never counts
+      location?: string; // a redirect row: probed without following, Location must equal this
       label: string;
     };
     const probes: P[] = [
@@ -964,9 +965,13 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
         label: "idp-login anon (unknown idp)",
       },
       {
+        // Since v0.9.13 (Q-A1) every refused upstream callback is a 302 to
+        // the console sign-in page with a reason code; a callback with no
+        // state is sign_in_expired, before any provider lookup.
         method: "GET",
         path: `/api/v1/auth/idp/${RAND}/callback`,
-        ok: [302, 400, 404],
+        ok: [302],
+        location: "/login?reason=sign_in_expired",
         label: "idp-callback anon (unknown idp)",
       },
     ];
@@ -976,6 +981,22 @@ test.describe("static census rows, asserted live every run (opt-in phase)", () =
 
     const faults: string[] = [];
     for (const pr of probes) {
+      if (pr.location !== undefined) {
+        // api() follows redirects, so a redirect row is probed unfollowed
+        // and observed for the role matrix the way consent-ceremony does.
+        const raw = await fetch(`${IDP_BASE}${pr.path}`, {
+          method: pr.method,
+          redirect: "manual",
+        });
+        observeRaw(pr.method, pr.path, raw.status);
+        const location = raw.headers.get("location");
+        if (!pr.ok.includes(raw.status) || location !== pr.location) {
+          faults.push(
+            `${pr.label}: ${pr.method} ${pr.path} → ${raw.status} Location ${location} (wanted ${pr.ok.join("/")} Location ${pr.location})`
+          );
+        }
+        continue;
+      }
       const res = await api(IDP_BASE, pr.method, pr.path, pr.body, pr.bearer);
       if (!pr.ok.includes(res.status)) {
         faults.push(
