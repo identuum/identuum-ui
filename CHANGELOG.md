@@ -11,7 +11,12 @@ that export. The release body is this file's section for the tag. Entries up
 to `v0.6.2` were written when the artifact was the container image
 `ghcr.io/identuum/identuum-ui`, retired by owner ruling D-019 (2026-09-30).
 
-## Unreleased
+## `v0.9.14`
+
+The static console export for identuum-idp-oss `v0.9.14`: the Invite user
+form names an address that already has an account, and passkey and provider
+sign-in show the password change an administrator requested. It needs
+identuum-idp-oss v0.9.14, which gives the answers below.
 
 - **Invite user says when an address already has an account.** An invite of
   an address another account holds showed "This user already accepted their
