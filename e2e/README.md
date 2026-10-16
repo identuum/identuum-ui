@@ -206,7 +206,7 @@ long-lived credentials kept in `.env.playwright.idp-oss.local`.
 > is shown once. Never print or commit the credential file. Repeated wrong
 > attempts can trip the login lockout.
 >
-> Since OSS v0.9.15, a run that resets the row also attempts to write
+> Since OSS v0.9.14, a run that resets the row also attempts to write
 > `site_admin_credentials_reset` in the system organization's audit log,
 > with actor `system`, `via: cli`, `sessions_revoked` and the refresh-token
 > count when known. `success` requires both revocations to complete.

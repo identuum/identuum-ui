@@ -62,7 +62,7 @@ IDENTUUM_TEST_ORG_ADMIN_TOTP_SECRET=...   # optional; omit when MFA not enrolled
 > file before running site_admin specs. The new TOTP seed is shown once.
 > Never print or commit the credential file.
 >
-> Since OSS v0.9.15, a run that resets the row also attempts to write
+> Since OSS v0.9.14, a run that resets the row also attempts to write
 > `site_admin_credentials_reset` in the system organization's audit log,
 > with actor `system`, `via: cli`, `sessions_revoked` and the refresh-token
 > count when known. `success` requires both revocations to complete.
