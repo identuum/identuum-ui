@@ -195,16 +195,27 @@ Durable env mode is the fallback path for org_admin authentication and
 the only supported path for `site_admin` authentication. It uses
 long-lived credentials kept in `.env.playwright.idp-oss.local`.
 
-> **Staleness warning:** an appliance-side credential reset invalidates
-> these values in place. In particular `recover-site-admin` (see
-> identuum-idp-oss `docs/OPERATOR-GUIDE.md` → "Reset the site_admin
-> password" → "What this invalidates") rewrites the password AND wipes
-> the MFA enrolment — `IDENTUUM_TEST_SITE_ADMIN_PASSWORD` and
-> `IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET` are both wrong the moment it
-> returns, and the new TOTP seed is shown once, at the forced
-> re-enrolment on the next login. Update this file before the next
-> Playwright run, or site_admin specs fail (and repeated wrong attempts
-> can trip the login lockout).
+> **Staleness warning:** `recover-site-admin` changes the site_admin
+> password, clears MFA enrolment and revokes that administrator's sessions,
+> refresh tokens and their linked access tokens. The old
+> `IDENTUUM_TEST_SITE_ADMIN_PASSWORD` and
+> `IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET` values are no longer valid after
+> the credential update, even if a later step fails. An authorized operator
+> must complete recovery, re-enrol MFA on the next login, and update the
+> local credential file before another Playwright run. The new TOTP seed
+> is shown once. Never print or commit the credential file. Repeated wrong
+> attempts can trip the login lockout.
+>
+> Since OSS v0.9.15, a run that resets the row also attempts to write
+> `site_admin_credentials_reset` in the system organization's audit log,
+> with actor `system`, `via: cli`, `sessions_revoked` and the refresh-token
+> count when known. `success` requires both revocations to complete.
+> A refused run records no recovery event. A revocation or audit-write
+> failure exits non-zero after the credentials may have changed; resolve
+> the reported fault and rerun recovery. Until revocation succeeds, treat
+> the old sessions as live. The event contains no password or password hash.
+> See identuum-idp-oss `docs/OPERATOR-GUIDE.md` → "Reset the site_admin
+> password" → "What this invalidates" for the full procedure.
 
 ### 1. Create `.env.playwright.idp-oss.local`
 

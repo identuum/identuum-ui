@@ -52,14 +52,26 @@ IDENTUUM_TEST_ORG_ADMIN_PASSWORD=...
 IDENTUUM_TEST_ORG_ADMIN_TOTP_SECRET=...   # optional; omit when MFA not enrolled
 ```
 
-> **Staleness warning:** these are live credentials, not fixtures — an
-> appliance-side reset invalidates them in place. `recover-site-admin`
-> (identuum-idp-oss `docs/OPERATOR-GUIDE.md` → "Reset the site_admin
-> password" → "What this invalidates") rewrites the site_admin password
-> and wipes its MFA enrolment: `IDENTUUM_TEST_SITE_ADMIN_PASSWORD` and
-> `IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET` go stale the moment it returns.
-> Capture the new TOTP seed at the forced re-enrolment on the next login
-> (shown once) and update this file before running site_admin specs.
+> **Staleness warning:** these are live credentials, not fixtures.
+> `recover-site-admin` changes the site_admin password, clears MFA enrolment
+> and revokes that administrator's sessions, refresh tokens and their linked
+> access tokens. `IDENTUUM_TEST_SITE_ADMIN_PASSWORD` and
+> `IDENTUUM_TEST_SITE_ADMIN_TOTP_SECRET` become stale after the credential
+> update, even if a later step fails. An authorized operator must complete
+> recovery, re-enrol MFA on the next login, and update the local credential
+> file before running site_admin specs. The new TOTP seed is shown once.
+> Never print or commit the credential file.
+>
+> Since OSS v0.9.15, a run that resets the row also attempts to write
+> `site_admin_credentials_reset` in the system organization's audit log,
+> with actor `system`, `via: cli`, `sessions_revoked` and the refresh-token
+> count when known. `success` requires both revocations to complete.
+> A refused run records no recovery event. A revocation or audit-write
+> failure exits non-zero after the credentials may have changed; resolve
+> the reported fault and rerun recovery. Until revocation succeeds, treat
+> the old sessions as live. The event contains no password or password hash.
+> See identuum-idp-oss `docs/OPERATOR-GUIDE.md` → "Reset the site_admin
+> password" → "What this invalidates" for the full procedure.
 
 Authenticated specs self-skip when the required credentials are absent from
 both the dynamic envelope and these env vars.
