@@ -122,6 +122,15 @@ describe("C1/C2/C3/C5/C6: exact claim action answers", () => {
     expect(JSON.stringify(state).includes(DIAGNOSTIC)).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe("https://idp.test/api/v1/auth/claim");
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST");
+    expect(
+      fetchMock.mock.calls[0][1].body ===
+        JSON.stringify({
+          token: "claim-fixture",
+          email: "admin@example.test",
+          password: "fixture-password",
+        })
+    ).toBe(true);
     if (status) expect(json).not.toHaveBeenCalled();
   });
 
@@ -278,6 +287,20 @@ describe("C4/P1/P2: one consume followed by one login probe", () => {
       "/api/v1/auth/claim",
       "/api/v1/auth/login",
     ]);
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST");
+    expect(
+      fetchMock.mock.calls[0][1].body ===
+        JSON.stringify({
+          token: "claim-fixture",
+          email: "admin@example.test",
+          password: "fixture-password",
+        })
+    ).toBe(true);
+    expect(fetchMock.mock.calls[1][1].method).toBe("POST");
+    expect(
+      fetchMock.mock.calls[1][1].body ===
+        JSON.stringify({ email: "admin@example.test", password: "fixture-password" })
+    ).toBe(true);
     const headers = new Headers(fetchMock.mock.calls[1][1].headers);
     expect(headers.get("X-Identuum-Login-Step-Status")).toBe("200");
   });

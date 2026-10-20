@@ -387,7 +387,7 @@ describe("M1-M4: shared MFA continuation inside the claim page", () => {
 
   it.each([
     { label: "400 invalid_request", status: 400, error: "invalid_request" },
-    { label: "401 invalid_code (including expired handle)", status: 401, error: "invalid_code" },
+    { label: "401 invalid_code", status: 401, error: "invalid_code" },
     { label: "403 csrf_failed", status: 403, error: "csrf_failed" },
     { label: "429 login_throttled", status: 429, error: "login_throttled" },
     { label: "500 internal_error", status: 500, error: "internal_error" },
