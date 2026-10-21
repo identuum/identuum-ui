@@ -11,6 +11,21 @@ that export. The release body is this file's section for the tag. Entries up
 to `v0.6.2` were written when the artifact was the container image
 `ghcr.io/identuum/identuum-ui`, retired by owner ruling D-019 (2026-09-30).
 
+## `v0.9.15`
+
+This release updates recovery documentation and adds unit coverage for the
+existing public claim flow. Console runtime behavior is unchanged.
+
+- **Recovery documentation explains revocation and failure outcomes.** The
+  local Playwright guides describe the sessions and tokens invalidated by
+  site administrator recovery, and what an authorized operator must do if
+  recovery fails after changing credentials. Recovery auditing started in
+  identuum-idp-oss v0.9.14.
+- **Claim answers and MFA continuation have characterization tests.** Mocked
+  unit tests cover validation and consume answers, request methods and
+  payloads, rendered outcomes, and the existing MFA continuation. These
+  tests do not certify browser or live-server behavior.
+
 ## `v0.9.14`
 
 The static console export for identuum-idp-oss `v0.9.14`: the Invite user
