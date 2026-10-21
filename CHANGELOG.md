@@ -13,18 +13,26 @@ to `v0.6.2` were written when the artifact was the container image
 
 ## `v0.9.15`
 
-This release updates recovery documentation and adds unit coverage for the
-existing public claim flow. Console runtime behavior is unchanged.
+This release explains what a site administrator recovery changes and adds
+tests for the existing account-claim screens. Console runtime behavior is
+unchanged.
 
 - **Recovery documentation explains revocation and failure outcomes.** The
-  local Playwright guides describe the sessions and tokens invalidated by
-  site administrator recovery, and what an authorized operator must do if
-  recovery fails after changing credentials. Recovery auditing started in
-  identuum-idp-oss v0.9.14.
+  local Playwright guides explain that a credential update makes saved
+  test credentials stale, even if a later recovery step fails. An authorized
+  operator must resolve the fault, complete recovery, enroll MFA again and
+  update the local credential file before another test run. Treat old
+  sessions as live until revocation succeeds. Recovery auditing started in
+  identuum-idp-oss v0.9.14; this release documents it.
 - **Claim answers and MFA continuation have characterization tests.** Mocked
   unit tests cover validation and consume answers, request methods and
   payloads, rendered outcomes, and the existing MFA continuation. These
   tests do not certify browser or live-server behavior.
+
+The console is delivered as an embedded static export. There is no new
+setting or separate UI service to deploy for these changes. Final server
+and export compatibility still needs the release checks; these unit tests
+do not establish it.
 
 ## `v0.9.14`
 
