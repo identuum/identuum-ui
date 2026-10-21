@@ -428,10 +428,11 @@ export-sbom:
 	@test -n "$(SBOM_OUT)" || { echo "usage: make export-sbom SBOM_OUT=<file.spdx.json>" >&2; exit 2; }; \
 	for t in pnpm syft; do command -v "$$t" >/dev/null 2>&1 || { echo "export-sbom: $$t is not installed — cannot write the SBOM; refusing to pass silently" >&2; exit 2; }; done; \
 	out="$(abspath $(SBOM_OUT))"; \
+	store=$$(pnpm store path) || { echo "export-sbom: cannot resolve the checkout's pnpm store" >&2; exit 2; }; \
 	tmp=$$(mktemp -d "$${TMPDIR:-/tmp}/ui-sbom.XXXXXX") && [ -d "$$tmp" ] || { echo "export-sbom: mktemp gave no scratch directory — refusing to install anywhere else" >&2; exit 2; }; \
 	trap 'rm -rf "$$tmp"' EXIT; \
 	cp package.json pnpm-lock.yaml pnpm-workspace.yaml "$$tmp"/; \
-	( cd "$$tmp" && pnpm install --prod --frozen-lockfile --offline --ignore-scripts >"$$tmp.install.log" 2>&1 ) || { echo "export-sbom: the production install failed:" >&2; tail -20 "$$tmp.install.log" >&2; rm -f "$$tmp.install.log"; exit 1; }; \
+	( cd "$$tmp" && pnpm install --store-dir "$$store" --prod --frozen-lockfile --offline --ignore-scripts >"$$tmp.install.log" 2>&1 ) || { echo "export-sbom: the production install failed:" >&2; tail -20 "$$tmp.install.log" >&2; rm -f "$$tmp.install.log"; exit 1; }; \
 	rm -f "$$tmp.install.log"; \
 	syft scan "dir:$$tmp" -q --exclude ./pnpm-lock.yaml --override-default-catalogers javascript-package-cataloger -o "spdx-json=$$out" || { echo "export-sbom: syft could not write $$out" >&2; exit 1; }; \
 	echo "export-sbom: $$(node -p "require('$$out').packages.length") packages -> $(SBOM_OUT) (syft $$(syft version | awk '/^Version:/{print $$2}'))"
