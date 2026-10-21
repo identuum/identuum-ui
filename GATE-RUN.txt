@@ -1,19 +1,19 @@
 schema: gate-run.v1
 gate: identuum-ui make verify
 note: evidence lines are the tools' own summary lines; a summary format this script does not match is recorded only as an exit code
-repo-head: 3fab1c8
-started: 2026-10-20T12:04:27Z
+repo-head: 52e627a
+started: 2026-10-21T19:12:47Z
 plan: tool-versions witness-parity tracked-binary-check credential-transparency workflow-yaml workflow-yaml-parity frozen-lockfile advisory ci-witness toolchain-parity rulefloor ledger-diff-gate role-matrix-denominator sbom-scan biome tsc vitest
-tool: node       v26.8.1  /Users/odemir/.local/state/fnm_multishells/62803_1792403695767/bin/node
-tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/62803_1792403695767/bin/pnpm
+tool: node       v26.8.1  /Users/odemir/.local/state/fnm_multishells/22531_1792524400162/bin/node
+tool: pnpm       11.3.0  /Users/odemir/.local/state/fnm_multishells/22531_1792524400162/bin/pnpm
 tool: rulefloor  {"schema_version":"rulefloor.version.v1","version":"v0.9.1","toolchain_version":"v0.9.1","version_agreement":"pass"}  /opt/homebrew/bin/rulefloor
 tool: yq         v4.54.1  /opt/homebrew/bin/yq
-elapsed: tool-versions 0s
+elapsed: tool-versions 1s
 target: tool-versions exit=0
 evidence: [witness-parity] check OK: witness-parity witness block md5 2e107f86a44d0fff59fc01659f1f2535 matches the shared pin
 elapsed: witness-parity 0s
 target: witness-parity exit=0
-elapsed: tracked-binary-check 4s
+elapsed: tracked-binary-check 9s
 target: tracked-binary-check exit=0
 elapsed: credential-transparency 0s
 target: credential-transparency exit=0
@@ -27,31 +27,31 @@ elapsed: frozen-lockfile 0s
 target: frozen-lockfile exit=0
 elapsed: advisory 1s
 target: advisory exit=0
-evidence: [ci-witness] check OK: ci-witness identuum-ui CI build-and-test (node 26) green, 13 planned target(s) all exit=0, ties commit 6a18b0d, 509 commit(s) behind HEAD — the CI claim covers that tree, not this one, run https://github.com/identuum/identuum-ui/actions/runs/35397115955 attempt=1 sha=6a18b0d3067a5bcdf89b2f9b96d50f34b340e35b
+evidence: [ci-witness] check OK: ci-witness identuum-ui CI build-and-test (node 26) green, 13 planned target(s) all exit=0, ties commit 6a18b0d, 520 commit(s) behind HEAD — the CI claim covers that tree, not this one, run https://github.com/identuum/identuum-ui/actions/runs/35397115955 attempt=1 sha=6a18b0d3067a5bcdf89b2f9b96d50f34b340e35b
 elapsed: ci-witness 1s
 target: ci-witness exit=0
-evidence: [toolchain-parity] check OK: toolchain-parity 13 pins agree (node 26 in matrix [26 ], engines/@types/node 26/26, local node 26, pnpm 11.3.0, go 1.27.2, rulefloor v0.9.1, yq v4.54.1, syft v1.52.0, both vendored digests)
+evidence: [toolchain-parity] check OK: toolchain-parity 13 pins agree (node 26 in matrix [26 ], engines/@types/node 26/26, local node 26, pnpm 11.3.0, go 1.27.3, rulefloor v0.9.1, yq v4.54.1, syft v1.52.0, both vendored digests)
 elapsed: toolchain-parity 0s
 target: toolchain-parity exit=0
 evidence: [rulefloor] check OK: 73 rows (73 armed), FLOOR 73, RED-PROOFS 70 (measured 70)
-elapsed: rulefloor 0s
+elapsed: rulefloor 1s
 target: rulefloor exit=0
-evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=8974dfe173dfb71e2c642fade6579c15c61a0975 status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=2f18ff857a0c33c4785049bba057fcf49e28814f2e73735616633a525c5efcb0
-elapsed: ledger-diff-gate 1s
+evidence: [ledger-diff-gate] check OK: ledger-diff reconciled base=0b8d4a403b36d7600530941173f1dfb397805020 status=same rule_changes=0 classes=none header_changes=none ledger_diff_sha256=7355a8ef306a41a37cb1f14b68f3e08cdaf690b7f5b0172d504d17ecf06db7a2
+elapsed: ledger-diff-gate 0s
 target: ledger-diff-gate exit=0
 evidence: [role-matrix-denominator] check OK: role-matrix denominator 166/109/36 (total/role/class endpoints) matches the golden
 elapsed: role-matrix-denominator 0s
 target: role-matrix-denominator exit=0
-evidence: [sbom-scan] check OK: grype-gate matches=0 fixable=0 allowlisted=0 unfixable=0 severe=0 — subject sbom:identuum-ui-export.spdx.json sha256:4bbb5cdcca743705d90bb7a17f404177dde9d0c7c86bba90cf4dd883bdc5afd7; config: not applicable (sbom subject: no directory declaration to compare); coverage: not applicable (sbom subject: no gitignored tree to enumerate)
-elapsed: sbom-scan 66s
+evidence: [sbom-scan] check OK: grype-gate matches=0 fixable=0 allowlisted=0 unfixable=0 severe=0 — subject sbom:identuum-ui-export.spdx.json sha256:38010a0f1fab9cb3f02a135baa61ecb4bc1e8d251c2c7c04e14d887fea7cb5f5; config: not applicable (sbom subject: no directory declaration to compare); coverage: not applicable (sbom subject: no gitignored tree to enumerate)
+elapsed: sbom-scan 21s
 target: sbom-scan exit=0
 elapsed: biome 1s
 target: biome exit=0
-elapsed: tsc 2s
+elapsed: tsc 0s
 target: tsc exit=0
-evidence: [vitest] [2m Test Files [22m [1m[32m243 passed[39m[22m[90m (243)[39m
-elapsed: vitest 107s
+evidence: [vitest] [2m Test Files [22m [1m[32m246 passed[39m[22m[90m (246)[39m
+elapsed: vitest 167s
 target: vitest exit=0
-finished: 2026-10-20T12:07:30Z
-tree: sha256=e036055e45b09cca4bcbd418a6a3a3a23e77fdf7d82d67c8ac383054ccbb800e
+finished: 2026-10-21T19:16:09Z
+tree: sha256=1f89be714771deb0ccafd87a38ec524daec471e09acf311ef28a5793811253b8
 result: green
