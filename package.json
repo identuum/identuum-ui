@@ -51,7 +51,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "7.0.2",
     "vite": "^8.2.4",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   },
   "dependencyNotes": {
     "@types/node": "Tracks the `engines` floor (>=26.0.0), never the newest local runtime - newer types would admit APIs the supported minimum lacks. The 22.x hold (THE-TS-SEVEN 2026-08-26) was LIFTED by the owner ruling of THE-UI-NODE-26-LATEST (2026-09-06): the published runner is cgr.dev/chainguard/node at a digest measured to ship Node v26.8.1, the build stages are node:26-bookworm-slim, the CI matrix is 26. Bump together with engines, the Dockerfile's node-major annotation and the CI matrix; toolchain-parity refuses any of them left behind."
