@@ -424,7 +424,20 @@ exit 0
 
 const roots: string[] = [];
 afterAll(() => {
-  for (const r of roots) rmSync(r, { recursive: true, force: true });
+  expect(roots).toHaveLength(0);
+});
+
+describe.sequential("offline fixture cleanup", () => {
+  let previousRoot: string;
+
+  it("creates a private runner layout", () => {
+    previousRoot = layout(SAFE_CONFIG).root;
+    expect(existsSync(previousRoot)).toBe(true);
+  });
+
+  it("removes the previous test's layout before the next test", () => {
+    expect(existsSync(previousRoot)).toBe(false);
+  });
 });
 
 function realBash(): string {
@@ -1725,6 +1738,14 @@ afterEach(() => {
   stdoutSpy?.mockRestore();
   for (const k of Object.keys(process.env)) if (!(k in savedEnv)) delete process.env[k];
   Object.assign(process.env, savedEnv);
+  // Delete each test's layouts while they are small, rather than accumulating
+  // the whole suite's trees in one bounded afterAll hook.
+  while (roots.length) {
+    const root = roots[roots.length - 1];
+    rmSync(root, { recursive: true, force: true });
+    expect(existsSync(root), "the offline fixture tree was removed").toBe(false);
+    roots.pop();
+  }
 });
 
 async function loadLifecycle() {
